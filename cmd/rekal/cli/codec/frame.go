@@ -174,7 +174,7 @@ func NewEncoder() (*Encoder, error) {
 
 // Close releases encoder resources.
 func (e *Encoder) Close() {
-	e.zw.Close()
+	_ = e.zw.Close()
 }
 
 // EncodeSessionFrame encodes a session frame to bytes (envelope + compressed payload).

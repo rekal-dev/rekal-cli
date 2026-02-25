@@ -265,6 +265,6 @@ func BenchmarkBodyAppendAndScan(b *testing.B) {
 		for j := 0; j < 100; j++ {
 			body = AppendFrame(body, frame)
 		}
-		ScanFrames(body)
+		_, _ = ScanFrames(body)
 	}
 }

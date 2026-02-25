@@ -415,6 +415,6 @@ func BenchmarkDecodeSessionFrame(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		dec.DecodeSessionFrame(compressed)
+		_, _ = dec.DecodeSessionFrame(compressed)
 	}
 }

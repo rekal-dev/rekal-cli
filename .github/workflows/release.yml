@@ -10,7 +10,19 @@ permissions:
   contents: write
 
 jobs:
+  # Gate: don't release if tests or lint fail
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - name: Tests
+        run: mise run test:ci
+      - name: Lint
+        run: mise run lint
+
   release:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

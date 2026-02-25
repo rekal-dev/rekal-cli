@@ -3,9 +3,9 @@ version: "2"
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+# gofmt is a formatter; we run it in mise run lint (shell) before this. Don't enable it here (golangci-lint v2).
 linters:
   enable:
-    - gofmt
     - govet
     - errcheck
     - ineffassign

@@ -8,12 +8,16 @@ description = "Run gofmt"
 run = "gofmt -s -w ."
 
 [tasks.test]
-description = "Run tests"
+description = "Run unit tests"
 run = "go test ./..."
 
+[tasks."test:integration"]
+description = "Run integration tests only"
+run = "go test -tags=integration ./cmd/rekal/cli/integration_test/..."
+
 [tasks."test:ci"]
-description = "Run all tests with race detection"
-run = "go test -race ./..."
+description = "Run all tests (unit + integration) with race detection"
+run = "go test -tags=integration -race ./..."
 
 [tasks.lint]
 description = "Run linters (gofmt check + golangci-lint)"

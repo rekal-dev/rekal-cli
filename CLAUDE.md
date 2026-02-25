@@ -12,7 +12,7 @@ This repo contains the CLI for Rekal — gives your agent precise memory.
 ## Key Directories
 
 ### Commands (`cmd/rekal/`)
-- `main.go`: Entry point with signal handling and error management
+- `main.go`: Entry point
 - `cli/`: Core CLI package
   - `root.go`: Root command (recall) + command registration
   - `errors.go`: SilentError pattern for clean error output
@@ -28,8 +28,9 @@ This repo contains the CLI for Rekal — gives your agent precise memory.
   - `version.go`: Version constant (set via ldflags)
   - `versioncheck/`: Auto-update notification
   - `db/`: DuckDB backend (open, close, schema)
+  - `integration_test/`: Integration tests (`//go:build integration`)
 
-### Specifications (`doc/spec/`)
+### Specifications (`docs/spec/`)
 - `preconditions.md`: Shared checks for all commands
 - `command/`: One file per command with full behavior spec
 
@@ -48,9 +49,12 @@ This repo contains the CLI for Rekal — gives your agent precise memory.
 
 ### Running Tests
 ```bash
-mise run test          # Unit tests
-mise run test:ci       # Unit tests with race detection (CI mode)
+mise run test              # Unit tests only
+mise run test:integration  # Integration tests only
+mise run test:ci           # All tests (unit + integration) with race detection
 ```
+
+Integration tests use the `//go:build integration` build tag and are located in `cmd/rekal/cli/integration_test/`.
 
 ### Linting and Formatting
 ```bash
@@ -75,9 +79,22 @@ Or combined: `mise run fmt && mise run lint && mise run test:ci`
 mise run build         # Build binary with version from git tag
 ```
 
+### Test Organization
+
+**Unit tests** (`_test.go` next to source, same package):
+- `errors_test.go` — SilentError type behavior
+- `preconditions_test.go` — git root and init checks
+- `version_test.go` — version constant
+- `db/db_test.go` — DuckDB connectivity and schema
+
+**Integration tests** (`integration_test/`, `//go:build integration`):
+- `commands_test.go` — full command flows (init, clean, stubs) using `TestEnv`
+- Uses `TestEnv` pattern: creates isolated temp git repos per test
+- Tests public API only (separate package `integration`)
+
 ### Test Parallelization
 
-**Always use `t.Parallel()` in tests.** Every top-level test function and subtest should call `t.Parallel()` unless it modifies process-global state (e.g., `os.Chdir()`).
+**Always use `t.Parallel()` in unit tests.** Integration tests that use `os.Chdir` cannot be parallelized.
 
 ```go
 func TestFeature_Foo(t *testing.T) {
@@ -94,16 +111,16 @@ The CLI uses the SilentError pattern to avoid duplicated error output.
 
 **How it works:**
 - `root.go` sets `SilenceErrors: true` globally — Cobra never prints errors
-- `main.go` prints errors to stderr, unless the error is a `SilentError`
+- `Run()` in `root.go` prints errors to stderr, unless the error is a `SilentError`
 - Commands return `NewSilentError(err)` when they've already printed a custom message
 
 **When to use `SilentError`:**
 Use `NewSilentError()` when you print a user-friendly message before returning:
 
 ```go
-if err := preconditions.EnsureGitRoot(); err != nil {
+if err := EnsureGitRoot(); err != nil {
     cmd.SilenceUsage = true
-    fmt.Fprintln(cmd.ErrOrStderr(), "Not a git repository. Run from a git repo.")
+    fmt.Fprintln(cmd.ErrOrStderr(), err)
     return NewSilentError(err)
 }
 ```
@@ -118,18 +135,6 @@ All commands except `init` and `clean` must call both:
 2. `EnsureInitDone(gitRoot)` — verifies `.rekal/` exists with expected layout
 
 `init` calls only `EnsureGitRoot()`. `clean` calls only `EnsureGitRoot()`.
-
-```go
-gitRoot, err := EnsureGitRoot()
-if err != nil {
-    fmt.Fprintln(cmd.ErrOrStderr(), err)
-    return NewSilentError(err)
-}
-if err := EnsureInitDone(gitRoot); err != nil {
-    fmt.Fprintln(cmd.ErrOrStderr(), err)
-    return NewSilentError(err)
-}
-```
 
 ### DuckDB Backend
 
@@ -169,19 +174,6 @@ func newFooCmd() *cobra.Command {
     }
     return cmd
 }
-```
-
-### Logging vs User Output
-
-- **User-facing output**: Use `fmt.Fprint*(cmd.OutOrStdout(), ...)` or `cmd.ErrOrStderr()`
-- **No logging framework yet** — add structured logging when needed
-
-### Git Operations
-
-Use `os/exec` to call git CLI directly. Avoid go-git for now (simpler, CGO-free).
-
-```go
-cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 ```
 
 ## Go Code Style

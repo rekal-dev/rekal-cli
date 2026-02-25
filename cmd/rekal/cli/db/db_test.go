@@ -66,7 +66,7 @@ func TestInitDataSchema(t *testing.T) {
 	}
 
 	// Verify tables exist.
-	tables := []string{"sessions", "checkpoints", "files_touched", "checkpoint_sessions"}
+	tables := []string{"sessions", "checkpoints", "files_touched", "checkpoint_sessions", "turns", "tool_calls"}
 	for _, table := range tables {
 		var count int
 		err := db.QueryRow("SELECT count(*) FROM " + table).Scan(&count)
@@ -91,17 +91,8 @@ func TestInitIndexSchema(t *testing.T) {
 	}
 	defer db.Close()
 
+	// Index schema is placeholder — just verify no error on empty DDL.
 	if err := InitIndexSchema(db); err != nil {
 		t.Fatalf("InitIndexSchema: %v", err)
-	}
-
-	// Verify tables exist.
-	tables := []string{"turns_ft", "tool_calls_index", "files_index", "session_facets", "file_cooccurrence"}
-	for _, table := range tables {
-		var count int
-		err := db.QueryRow("SELECT count(*) FROM " + table).Scan(&count)
-		if err != nil {
-			t.Errorf("table %s should exist: %v", table, err)
-		}
 	}
 }

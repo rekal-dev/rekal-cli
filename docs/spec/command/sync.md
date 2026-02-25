@@ -40,9 +40,13 @@ Sync does not replace the data DB. It merges: remote rows are applied with idemp
 
 ---
 
-## No flags
+## Flags
 
-No user-facing flags. Same behaviour every run: fetch all rekal branches, merge into data DB, rebuild index.
+### `--self`
+
+Only fetch your own rekal branch from the remote, not the whole team. Useful when working across multiple machines with distributed git — e.g. pulling your own context from your work laptop to your home machine without syncing the whole team's data.
+
+When `--self` is set, sync fetches only `rekal/<your_email>` instead of `rekal/*`. The merge and index rebuild steps are the same; only the fetch scope changes.
 
 ---
 

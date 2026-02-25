@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 const rekalHookMarker = "# managed by rekal"
 
 func newInitCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize Rekal in the current git repository",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -27,12 +28,9 @@ func newInitCmd() *cobra.Command {
 
 			rekalDir := RekalDir(gitRoot)
 
-			// Re-run = clean + reinit.
 			if _, err := os.Stat(rekalDir); err == nil {
-				if err := runClean(gitRoot); err != nil {
-					fmt.Fprintln(cmd.ErrOrStderr(), err)
-					return NewSilentError(err)
-				}
+				fmt.Fprintln(cmd.OutOrStdout(), "Rekal is already initialized. Run 'rekal clean' first to reinitialize.")
+				return nil
 			}
 
 			// Create .rekal/ directory.
@@ -72,10 +70,17 @@ func newInitCmd() *cobra.Command {
 				return fmt.Errorf("install hooks: %w", err)
 			}
 
+			// Create local orphan branch for checkpoint data.
+			if err := ensureOrphanBranch(gitRoot); err != nil {
+				return fmt.Errorf("create rekal branch: %w", err)
+			}
+
 			fmt.Fprintln(cmd.OutOrStdout(), "Rekal initialized.")
 			return nil
 		},
 	}
+
+	return cmd
 }
 
 func ensureGitignore(gitRoot string) error {
@@ -137,4 +142,66 @@ func writeHook(path, content string) error {
 		return nil // not our hook; do not overwrite
 	}
 	return os.WriteFile(path, []byte(content), 0o755)
+}
+
+// rekalBranchName returns the orphan branch name for the current user.
+// Format: rekal/<user_email>
+func rekalBranchName() string {
+	email := strings.TrimSpace(gitConfigValue("user.email"))
+	if email == "" {
+		email = "local"
+	}
+	return "rekal/" + email
+}
+
+// gitConfigValue reads a git config value.
+func gitConfigValue(key string) string {
+	out, err := exec.Command("git", "config", key).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// ensureOrphanBranch creates or fetches the local rekal orphan branch.
+// If the branch exists locally, it's left as-is.
+// If it exists on the remote, it's fetched.
+// Otherwise, a new orphan branch is created with an empty initial commit.
+func ensureOrphanBranch(gitRoot string) error {
+	branch := rekalBranchName()
+
+	// Check if local branch already exists.
+	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branch).Run(); err == nil {
+		return nil // already exists locally
+	}
+
+	// Check if remote branch exists and fetch it.
+	remote := "origin"
+	remoteBranch := remote + "/" + branch
+	// Fetch the specific branch (ignore errors — remote may not exist or branch may not exist).
+	_ = exec.Command("git", "-C", gitRoot, "fetch", remote, branch).Run()
+
+	// If remote branch now exists locally as a remote-tracking branch, create local from it.
+	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", remoteBranch).Run(); err == nil {
+		return exec.Command("git", "-C", gitRoot, "branch", branch, remoteBranch).Run()
+	}
+
+	// Create new orphan branch with an empty initial commit.
+	// We use git commands that don't affect the working tree or current branch.
+	// Create an empty tree, commit it, and point the branch ref at it.
+	emptyTree, err := exec.Command("git", "-C", gitRoot, "hash-object", "-t", "tree", "/dev/null").Output()
+	if err != nil {
+		return fmt.Errorf("create empty tree: %w", err)
+	}
+	treeHash := strings.TrimSpace(string(emptyTree))
+
+	commitOut, err := exec.Command("git", "-C", gitRoot,
+		"commit-tree", treeHash, "-m", "rekal: initialize checkpoint branch",
+	).Output()
+	if err != nil {
+		return fmt.Errorf("create initial commit: %w", err)
+	}
+	commitHash := strings.TrimSpace(string(commitOut))
+
+	return exec.Command("git", "-C", gitRoot, "update-ref", "refs/heads/"+branch, commitHash).Run()
 }

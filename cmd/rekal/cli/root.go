@@ -8,6 +8,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const gettingStarted = `
+
+Getting Started:
+  rekal init          Initialize Rekal in a git repository
+  rekal checkpoint    Capture the current session
+  rekal push          Share context with the team
+  rekal sync          Pull team context
+  rekal "query"       Recall sessions by keyword
+`
+
 // NewRootCmd returns the root command for the rekal CLI.
 func NewRootCmd() *cobra.Command {
 	var (
@@ -22,9 +32,13 @@ func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "rekal [filters...] [query]",
 		Short:         "Rekal — gives your agent precise memory",
-		Long:          "Rekal gives your agent precise memory — the exact context it needs for what it's working on.",
+		Long:          "Rekal gives your agent precise memory — the exact context it needs for what it's working on." + gettingStarted,
 		SilenceErrors: true,
+		SilenceUsage:  true,
 		Args:          cobra.ArbitraryArgs,
+		CompletionOptions: cobra.CompletionOptions{
+			HiddenDefaultCmd: true,
+		},
 		PersistentPostRun: func(cmd *cobra.Command, _ []string) {
 			versioncheck.CheckAndNotify(cmd.OutOrStdout(), Version)
 		},
@@ -36,8 +50,6 @@ func NewRootCmd() *cobra.Command {
 			}
 
 			// Recall: preconditions required.
-			cmd.SilenceUsage = true
-
 			gitRoot, err := EnsureGitRoot()
 			if err != nil {
 				fmt.Fprintln(cmd.ErrOrStderr(), err)
@@ -61,27 +73,53 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
-	// Recall filter flags on root command.
+	// Recall filter flags on root command — hidden until recall is implemented.
 	cmd.Flags().StringVar(&fileFilter, "file", "", "Filter by file path (regex)")
 	cmd.Flags().StringVar(&commitFilter, "commit", "", "Filter by git commit SHA")
 	cmd.Flags().StringVar(&checkpointFilter, "checkpoint", "", "Query as of checkpoint ref")
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (0 = no limit)")
+	cmd.Flags().MarkHidden("file")       //nolint:errcheck
+	cmd.Flags().MarkHidden("commit")     //nolint:errcheck
+	cmd.Flags().MarkHidden("checkpoint") //nolint:errcheck
+	cmd.Flags().MarkHidden("author")     //nolint:errcheck
+	cmd.Flags().MarkHidden("actor")      //nolint:errcheck
+	cmd.Flags().MarkHidden("limit")      //nolint:errcheck
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version
 
-	// Register all subcommands.
-	cmd.AddCommand(newVersionCmd())
-	cmd.AddCommand(newInitCmd())
-	cmd.AddCommand(newCleanCmd())
-	cmd.AddCommand(newCheckpointCmd())
-	cmd.AddCommand(newPushCmd())
-	cmd.AddCommand(newIndexCmd())
-	cmd.AddCommand(newLogCmd())
-	cmd.AddCommand(newQueryCmd())
-	cmd.AddCommand(newSyncCmd())
+	// Command groups.
+	coreGroup := &cobra.Group{ID: "core", Title: "Core Commands:"}
+	workflowGroup := &cobra.Group{ID: "workflow", Title: "Workflow Commands:"}
+	advancedGroup := &cobra.Group{ID: "advanced", Title: "Advanced Commands:"}
+	cmd.AddGroup(coreGroup, workflowGroup, advancedGroup)
+
+	initCmd := newInitCmd()
+	initCmd.GroupID = "core"
+	cleanCmd := newCleanCmd()
+	cleanCmd.GroupID = "core"
+	versionCmd := newVersionCmd()
+	versionCmd.GroupID = "core"
+
+	checkpointCmd := newCheckpointCmd()
+	checkpointCmd.GroupID = "workflow"
+	pushCmd := newPushCmd()
+	pushCmd.GroupID = "workflow"
+	syncCmd := newSyncCmd()
+	syncCmd.GroupID = "workflow"
+	logCmd := newLogCmd()
+	logCmd.GroupID = "workflow"
+
+	queryCmd := newQueryCmd()
+	queryCmd.GroupID = "advanced"
+	indexCmd := newIndexCmd()
+	indexCmd.GroupID = "advanced"
+
+	cmd.AddCommand(initCmd, cleanCmd, versionCmd)
+	cmd.AddCommand(checkpointCmd, pushCmd, syncCmd, logCmd)
+	cmd.AddCommand(queryCmd, indexCmd)
 
 	return cmd
 }

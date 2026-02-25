@@ -1,0 +1,23 @@
+# Built binary
+rekal
+rekal-old
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+/coverage.out
+/vendor/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Local config (optional; uncomment if you don't want to track)
+# .config/

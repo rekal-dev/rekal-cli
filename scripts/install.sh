@@ -91,7 +91,8 @@ main() {
 
     local tmp_dir
     tmp_dir=$(mktemp -d)
-    trap 'rm -rf "$tmp_dir"' EXIT
+    REKAL_TMP_DIR="$tmp_dir"
+    trap 'rm -rf "${REKAL_TMP_DIR:-}"' EXIT
 
     info "Downloading ${archive_name}..."
     download_file "$download_url" "${tmp_dir}/${archive_name}" || error "Download failed: $download_url"

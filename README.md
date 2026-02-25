@@ -37,6 +37,12 @@ mise run test:ci      # run tests with -race
 mise run build        # build rekal binary
 ```
 
+**Run test and lint before push:** install the pre-push hook so CI-style checks run locally before each `git push`:
+
+```bash
+./scripts/install-hooks.sh
+```
+
 CI runs `mise run test:ci` on push/PR; lint and license-check run as separate workflows.
 
 ## License

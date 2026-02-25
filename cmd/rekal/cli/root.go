@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rekal-dev/cli/cmd/rekal/cli/versioncheck"
 	"github.com/spf13/cobra"
 )
 
@@ -13,6 +14,9 @@ func NewRootCmd() *cobra.Command {
 		Use:   "rekal",
 		Short: "Rekal — gives your agent precise memory",
 		Long:  "Rekal gives your agent precise memory — the exact context it needs for what it's working on.",
+		PersistentPostRun: func(cmd *cobra.Command, _ []string) {
+			versioncheck.CheckAndNotify(cmd.OutOrStdout(), Version)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// M0: no default behavior; show usage
 			return cmd.Help()

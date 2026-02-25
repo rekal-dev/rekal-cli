@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Pre-push hook: run test:ci and lint before allowing git push.
+# Install with: ./scripts/install-hooks.sh
+
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "Running test:ci and lint before push..."
+if command -v mise &>/dev/null; then
+  mise run test:ci
+  mise run lint
+else
+  go test -race ./...
+  unformatted=$(gofmt -l -s .)
+  if [ -n "$unformatted" ]; then
+    echo "These files need formatting. Run: gofmt -s -w ."
+    echo "$unformatted"
+    exit 1
+  fi
+  golangci-lint run --timeout=5m ./...
+fi
+echo "Pre-push checks passed."

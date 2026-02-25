@@ -55,11 +55,15 @@ type rawMessage struct {
 }
 
 // contentBlock represents a single block in an assistant message's content array.
+// Also used for tool_result blocks in user messages.
 type contentBlock struct {
-	Type  string          `json:"type"`
-	Text  string          `json:"text"`
-	Name  string          `json:"name"`
-	Input json.RawMessage `json:"input"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Name      string          `json:"name"`
+	ID        string          `json:"id"`          // tool_use block ID
+	ToolUseID string          `json:"tool_use_id"` // tool_result reference
+	Input     json.RawMessage `json:"input"`
+	Content   json.RawMessage `json:"content"` // tool_result content (string or array)
 }
 
 // toolInput holds common fields from tool_use input blocks.
@@ -77,6 +81,10 @@ func ParseTranscript(data []byte) (*SessionPayload, error) {
 	payload := &SessionPayload{
 		ActorType: "human",
 	}
+
+	// pendingPlanReads tracks tool_use IDs for Read calls targeting .claude/plans/ files.
+	// When the corresponding tool_result arrives in a user message, we extract the plan text.
+	pendingPlanReads := make(map[string]bool)
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	// Increase scanner buffer for large lines (tool results can be huge).
@@ -114,21 +122,22 @@ func ParseTranscript(data []byte) (*SessionPayload, error) {
 
 		switch raw.Type {
 		case "user":
-			turn, err := parseUserTurn(raw.Message, ts)
+			turns, err := parseUserTurn(raw.Message, ts, pendingPlanReads)
 			if err != nil {
 				continue
 			}
-			if turn != nil {
-				payload.Turns = append(payload.Turns, *turn)
-			}
+			payload.Turns = append(payload.Turns, turns...)
 
 		case "assistant":
-			turns, toolCalls, err := parseAssistantMessage(raw.Message, ts)
+			turns, toolCalls, planReadIDs, err := parseAssistantMessage(raw.Message, ts)
 			if err != nil {
 				continue
 			}
 			payload.Turns = append(payload.Turns, turns...)
 			payload.ToolCalls = append(payload.ToolCalls, toolCalls...)
+			for _, id := range planReadIDs {
+				pendingPlanReads[id] = true
+			}
 		}
 	}
 
@@ -141,8 +150,10 @@ func ParseTranscript(data []byte) (*SessionPayload, error) {
 }
 
 // parseUserTurn extracts the text content from a user message.
-// It skips tool_result blocks (which contain file bodies, command outputs).
-func parseUserTurn(msgRaw json.RawMessage, ts time.Time) (*Turn, error) {
+// It skips tool_result blocks (which contain file bodies, command outputs),
+// except for tool_results matching pendingPlanReads — those contain plan file
+// content that should be indexed.
+func parseUserTurn(msgRaw json.RawMessage, ts time.Time, pendingPlanReads map[string]bool) ([]Turn, error) {
 	if len(msgRaw) == 0 {
 		return nil, nil
 	}
@@ -156,37 +167,48 @@ func parseUserTurn(msgRaw json.RawMessage, ts time.Time) (*Turn, error) {
 		return nil, nil
 	}
 
-	text := extractTextContent(msg.Content)
-	if text == "" {
-		return nil, nil
+	var turns []Turn
+
+	// Extract plan content from tool_result blocks matching pending plan reads.
+	if len(pendingPlanReads) > 0 {
+		planTurns := extractPlanToolResults(msg.Content, ts, pendingPlanReads)
+		turns = append(turns, planTurns...)
 	}
 
-	return &Turn{
-		Role:      "human",
-		Content:   text,
-		Timestamp: ts,
-	}, nil
+	text := extractTextContent(msg.Content)
+	if text != "" {
+		turns = append(turns, Turn{
+			Role:      "human",
+			Content:   text,
+			Timestamp: ts,
+		})
+	}
+
+	return turns, nil
 }
 
 // parseAssistantMessage extracts text turns and tool calls from an assistant message.
 // It discards thinking blocks and tool results.
-func parseAssistantMessage(msgRaw json.RawMessage, ts time.Time) ([]Turn, []ToolCall, error) {
+// It also returns IDs of Read tool_use blocks targeting .claude/plans/ files,
+// so the caller can match them against subsequent tool_result blocks.
+func parseAssistantMessage(msgRaw json.RawMessage, ts time.Time) ([]Turn, []ToolCall, []string, error) {
 	if len(msgRaw) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	var msg rawMessage
 	if err := json.Unmarshal(msgRaw, &msg); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if msg.Role != "assistant" {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	// Content can be a string or an array of blocks.
 	var turns []Turn
 	var toolCalls []ToolCall
+	var planReadIDs []string
 
 	// Try as string first.
 	var textContent string
@@ -198,13 +220,13 @@ func parseAssistantMessage(msgRaw json.RawMessage, ts time.Time) ([]Turn, []Tool
 				Timestamp: ts,
 			})
 		}
-		return turns, nil, nil
+		return turns, nil, nil, nil
 	}
 
 	// Parse as array of content blocks.
 	var blocks []contentBlock
 	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var textParts []string
@@ -225,6 +247,10 @@ func parseAssistantMessage(msgRaw json.RawMessage, ts time.Time) ([]Turn, []Tool
 					Timestamp: ts,
 				})
 			}
+			// Track Read calls targeting plan files.
+			if id := extractPlanReadID(b); id != "" {
+				planReadIDs = append(planReadIDs, id)
+			}
 			// Discard: "thinking", "tool_result", etc.
 		}
 	}
@@ -244,7 +270,7 @@ func parseAssistantMessage(msgRaw json.RawMessage, ts time.Time) ([]Turn, []Tool
 		})
 	}
 
-	return turns, toolCalls, nil
+	return turns, toolCalls, planReadIDs, nil
 }
 
 // extractTextContent pulls text from a message content field.
@@ -339,6 +365,105 @@ func extractPlanContent(b contentBlock) string {
 	}
 
 	return inp.Content
+}
+
+// extractPlanReadID returns the tool_use ID if this is a Read tool call
+// targeting a .claude/plans/ file. The caller uses this to match the
+// corresponding tool_result in the next user message.
+func extractPlanReadID(b contentBlock) string {
+	if b.Name != "Read" {
+		return ""
+	}
+	if len(b.Input) == 0 || b.ID == "" {
+		return ""
+	}
+
+	var inp toolInput
+	if err := json.Unmarshal(b.Input, &inp); err != nil {
+		return ""
+	}
+
+	path := inp.FilePath
+	if path == "" {
+		path = inp.Path
+	}
+	if !strings.Contains(path, ".claude/plans/") {
+		return ""
+	}
+
+	return b.ID
+}
+
+// extractPlanToolResults scans user message content blocks for tool_result
+// blocks whose tool_use_id matches a pending plan read. For each match, it
+// extracts the text and emits it as an assistant turn (the content originated
+// from the assistant's Read call). Matched IDs are removed from the map.
+func extractPlanToolResults(content json.RawMessage, ts time.Time, pending map[string]bool) []Turn {
+	if len(content) == 0 {
+		return nil
+	}
+
+	var blocks []contentBlock
+	if err := json.Unmarshal(content, &blocks); err != nil {
+		return nil
+	}
+
+	var turns []Turn
+	for _, b := range blocks {
+		if b.Type != "tool_result" {
+			continue
+		}
+		if !pending[b.ToolUseID] {
+			continue
+		}
+
+		text := extractToolResultText(b.Content)
+		if text != "" {
+			turns = append(turns, Turn{
+				Role:      "assistant",
+				Content:   text,
+				Timestamp: ts,
+			})
+		}
+		delete(pending, b.ToolUseID)
+	}
+	return turns
+}
+
+// extractToolResultText extracts text from a tool_result content field,
+// which can be a plain string or an array of content blocks.
+func extractToolResultText(content json.RawMessage) string {
+	if len(content) == 0 {
+		return ""
+	}
+
+	// Try string.
+	var s string
+	if err := json.Unmarshal(content, &s); err == nil {
+		return s
+	}
+
+	// Try array of blocks.
+	var blocks []contentBlock
+	if err := json.Unmarshal(content, &blocks); err != nil {
+		return ""
+	}
+
+	var parts []string
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text != "" {
+			parts = append(parts, b.Text)
+		}
+	}
+
+	combined := ""
+	for i, p := range parts {
+		if i > 0 {
+			combined += "\n"
+		}
+		combined += p
+	}
+	return combined
 }
 
 func truncate(s string, maxLen int) string {

@@ -175,6 +175,66 @@ func TestParseTranscript_PlanContentCaptured(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_PlanReadCaptured(t *testing.T) {
+	t.Parallel()
+
+	// Simulate: assistant reads a plan file, then user message contains the tool_result with plan content.
+	input := `{"uuid":"pr1","sessionId":"s5","timestamp":"2025-01-15T10:00:00Z","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me read the plan."},{"type":"tool_use","id":"tu-read-plan","name":"Read","input":{"file_path":"/home/user/.claude/plans/my-plan.md"}}]},"gitBranch":"main"}
+{"uuid":"pr2","sessionId":"s5","timestamp":"2025-01-15T10:00:01Z","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu-read-plan","content":"# Plan\n\n## Step 1\nDo the thing.\n\n## Step 2\nDo the other thing."}]},"gitBranch":"main"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+
+	// Expect 2 turns: assistant text + plan content extracted from tool_result.
+	if len(payload.Turns) != 2 {
+		t.Fatalf("len(Turns) = %d, want 2", len(payload.Turns))
+	}
+
+	// Plan content comes first (extracted from user tool_result, emitted as assistant turn).
+	wantPlan := "# Plan\n\n## Step 1\nDo the thing.\n\n## Step 2\nDo the other thing."
+	if payload.Turns[0].Role != "assistant" {
+		t.Errorf("Turns[0].Role = %q, want assistant", payload.Turns[0].Role)
+	}
+	if payload.Turns[0].Content != "Let me read the plan." {
+		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+
+	if payload.Turns[1].Role != "assistant" {
+		t.Errorf("Turns[1].Role = %q, want assistant", payload.Turns[1].Role)
+	}
+	if payload.Turns[1].Content != wantPlan {
+		t.Errorf("Turns[1].Content = %q, want %q", payload.Turns[1].Content, wantPlan)
+	}
+
+	// Tool call should still be captured.
+	if len(payload.ToolCalls) != 1 {
+		t.Fatalf("len(ToolCalls) = %d, want 1", len(payload.ToolCalls))
+	}
+	if payload.ToolCalls[0].Tool != "Read" {
+		t.Errorf("ToolCalls[0].Tool = %q, want Read", payload.ToolCalls[0].Tool)
+	}
+}
+
+func TestParseTranscript_PlanReadNonPlanIgnored(t *testing.T) {
+	t.Parallel()
+
+	// Read of a non-plan file should NOT capture the tool_result.
+	input := `{"uuid":"nr1","sessionId":"s6","timestamp":"2025-01-15T10:00:00Z","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu-read-src","name":"Read","input":{"file_path":"src/main.go"}}]},"gitBranch":"main"}
+{"uuid":"nr2","sessionId":"s6","timestamp":"2025-01-15T10:00:01Z","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu-read-src","content":"package main\nfunc main() {}"}]},"gitBranch":"main"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+
+	// No turns — non-plan Read result should be discarded, no text blocks.
+	if len(payload.Turns) != 0 {
+		t.Fatalf("len(Turns) = %d, want 0", len(payload.Turns))
+	}
+}
+
 func TestParseTranscript_NonPlanWriteNotCaptured(t *testing.T) {
 	t.Parallel()
 

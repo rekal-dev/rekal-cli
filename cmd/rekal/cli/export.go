@@ -255,8 +255,16 @@ func commitWireFormat(gitRoot string, bodyData, dictData []byte) (string, error)
 	}
 	treeHash := strings.TrimSpace(string(treeOut))
 
+	// Use the HEAD commit message from the main branch.
+	msg := "rekal: checkpoint"
+	if headMsg, err := exec.Command("git", "-C", gitRoot, "log", "-1", "--format=%s", "HEAD").Output(); err == nil {
+		if m := strings.TrimSpace(string(headMsg)); m != "" {
+			msg = m
+		}
+	}
+
 	commitOut, err := exec.Command("git", "-C", gitRoot,
-		"commit-tree", treeHash, "-p", parent, "-m", "rekal: checkpoint",
+		"commit-tree", treeHash, "-p", parent, "-m", msg,
 	).Output()
 	if err != nil {
 		return "", fmt.Errorf("commit-tree: %w", err)

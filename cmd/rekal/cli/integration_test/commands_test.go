@@ -37,6 +37,16 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("git init: %v", err)
 	}
+	// Set local git user config (required for git commit-tree in ensureOrphanBranch).
+	for _, kv := range [][2]string{
+		{"user.email", "test@rekal.dev"},
+		{"user.name", "Rekal Test"},
+	} {
+		c := exec.Command("git", "-C", dir, "config", kv[0], kv[1])
+		if err := c.Run(); err != nil {
+			t.Fatalf("git config %s: %v", kv[0], err)
+		}
+	}
 	return &TestEnv{T: t, RepoDir: dir}
 }
 
@@ -136,8 +146,8 @@ func TestInit_Reinit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reinit: %v", err)
 	}
-	if !strings.Contains(stdout, "Rekal initialized.") {
-		t.Error("reinit should print success message")
+	if !strings.Contains(stdout, "already initialized") {
+		t.Errorf("reinit should say already initialized, got: %q", stdout)
 	}
 }
 
@@ -251,7 +261,7 @@ func TestStubCommands_RequireInit(t *testing.T) {
 }
 
 func TestStubCommands_NotYetImplemented(t *testing.T) {
-	commands := []string{"checkpoint", "push", "index", "log", "sync"}
+	commands := []string{"push", "index", "log", "sync"}
 
 	for _, name := range commands {
 		name := name
@@ -280,16 +290,16 @@ func TestQuery_RequiresArg(t *testing.T) {
 	}
 }
 
-func TestQuery_NotYetImplemented(t *testing.T) {
+func TestQuery_ExecutesSQL(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
-	_, stderr, err := env.RunCLI("query", "SELECT 1")
+	stdout, _, err := env.RunCLI("query", "SELECT 1 AS val")
 	if err != nil {
-		t.Fatalf("query should succeed (stub): %v", err)
+		t.Fatalf("query should succeed: %v", err)
 	}
-	if !strings.Contains(stderr, "not yet implemented") {
-		t.Errorf("expected 'not yet implemented', got: %q", stderr)
+	if !strings.Contains(stdout, "val") {
+		t.Errorf("expected query result with 'val', got: %q", stdout)
 	}
 }
 

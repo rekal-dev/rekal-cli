@@ -23,9 +23,9 @@ const (
 	lsaWeight2Way  = 0.6
 
 	// 3-way weights (full hybrid with nomic).
-	bm25Weight3Way  = 0.3
-	lsaWeight3Way   = 0.2
-	nomicWeight3Way = 0.5
+	bm25Weight3Way  = 0.35 // Keyword precision
+	lsaWeight3Way   = 0.10 // Corpus-specific co-occurrence
+	nomicWeight3Way = 0.55 // Semantic understanding
 )
 
 // RecallFilters holds the search parameters for the recall command.

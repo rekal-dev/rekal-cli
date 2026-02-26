@@ -33,7 +33,7 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 2. **LSA search** — Rebuild LSA model from session content, project query into embedding space, compute cosine similarity against stored session embeddings. Non-fatal if LSA fails.
 3. **Nomic search** — Deep semantic similarity using nomic-embed-text embeddings. Loads stored nomic vectors from index DB, embeds query with "search_query: " prefix, computes cosine similarity. Non-fatal if nomic is unavailable (unsupported platform) or fails.
 4. **Group by session** — Pick the best-scoring turn per session.
-5. **Normalize and combine** — Normalize all scores to [0,1]. When nomic is available: 3-way scoring (BM25: 0.3, LSA: 0.2, Nomic: 0.5). When nomic is unavailable: 2-way fallback (BM25: 0.4, LSA: 0.6).
+5. **Normalize and combine** — Normalize all scores to [0,1]. When nomic is available: 3-way scoring (BM25: 0.35 keyword precision, Nomic: 0.55 semantic understanding, LSA: 0.10 corpus co-occurrence). When nomic is unavailable: 2-way fallback (BM25: 0.4, LSA: 0.6).
 6. **Apply filters** — Actor, author, commit, file regex — all ANDed.
 7. **Return top N** — Sorted by hybrid score descending.
 

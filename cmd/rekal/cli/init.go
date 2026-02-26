@@ -109,6 +109,11 @@ imported into the local data DB automatically.`,
 				return fmt.Errorf("install skill: %w", err)
 			}
 
+			// Run initial checkpoint to capture any existing sessions.
+			if err := doCheckpoint(gitRoot, cmd.ErrOrStderr()); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: initial checkpoint failed: %v\n", err)
+			}
+
 			fmt.Fprintln(cmd.OutOrStdout(), "Rekal initialized.")
 			return nil
 		},

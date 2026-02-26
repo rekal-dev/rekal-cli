@@ -1,13 +1,67 @@
 package db
 
 import (
+	"bytes"
+	"compress/gzip"
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
-// LoadFTSExtension installs and loads the DuckDB FTS extension.
+// LoadFTSExtension loads the DuckDB FTS extension.
+// On supported platforms (darwin/arm64, linux/amd64) the extension is embedded
+// in the binary and extracted to a local cache — no network access required.
+// On other platforms it falls back to downloading from the HTTPS repository.
 func LoadFTSExtension(d *sql.DB) error {
+	if len(ftsExtensionGZ) > 0 {
+		return loadEmbeddedFTS(d)
+	}
+	return loadRemoteFTS(d)
+}
+
+func loadEmbeddedFTS(d *sql.DB) error {
+	cacheDir, err := ftsCacheDir()
+	if err != nil {
+		return fmt.Errorf("fts cache dir: %w", err)
+	}
+	extPath := filepath.Join(cacheDir, "fts.duckdb_extension")
+
+	// Only extract if not already cached.
+	if _, err := os.Stat(extPath); os.IsNotExist(err) {
+		gz, err := gzip.NewReader(bytes.NewReader(ftsExtensionGZ))
+		if err != nil {
+			return fmt.Errorf("decompress fts extension: %w", err)
+		}
+		defer gz.Close()
+
+		data, err := io.ReadAll(gz)
+		if err != nil {
+			return fmt.Errorf("read fts extension: %w", err)
+		}
+
+		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+			return fmt.Errorf("create fts cache dir: %w", err)
+		}
+		if err := os.WriteFile(extPath, data, 0o644); err != nil {
+			return fmt.Errorf("write fts extension: %w", err)
+		}
+	}
+
+	// LOAD from explicit path — no INSTALL or network needed.
+	escaped := strings.ReplaceAll(extPath, "'", "''")
+	if _, err := d.Exec(fmt.Sprintf("LOAD '%s'", escaped)); err != nil {
+		return fmt.Errorf("load fts: %w", err)
+	}
+	return nil
+}
+
+func loadRemoteFTS(d *sql.DB) error {
+	if _, err := d.Exec("SET custom_extension_repository='https://extensions.duckdb.org'"); err != nil {
+		return fmt.Errorf("set extension repository: %w", err)
+	}
 	if _, err := d.Exec("INSTALL fts"); err != nil {
 		return fmt.Errorf("install fts: %w", err)
 	}
@@ -15,6 +69,15 @@ func LoadFTSExtension(d *sql.DB) error {
 		return fmt.Errorf("load fts: %w", err)
 	}
 	return nil
+}
+
+// ftsCacheDir returns a directory for caching the extracted FTS extension.
+func ftsCacheDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".cache", "rekal", "extensions"), nil
 }
 
 // DropIndexTables drops all index tables for a clean rebuild.

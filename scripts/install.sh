@@ -75,6 +75,17 @@ verify_checksum() {
 main() {
     command -v curl &>/dev/null || error "curl is required. Install curl and try again."
 
+    # Require Claude Code — check binary on PATH or config directory.
+    if ! command -v claude &>/dev/null && [[ ! -d "${HOME}/.claude" ]]; then
+        echo ""
+        echo -e "${RED}Error:${NC} Rekal requires Claude Code, which was not detected on this system."
+        echo "For the beta release, only Claude Code is supported. Other coding agents will be supported in a future release."
+        echo ""
+        echo "  Install Claude Code: https://docs.anthropic.com/en/docs/claude-code"
+        echo "  Rekal docs:          https://github.com/rekal-dev/cli"
+        exit 1
+    fi
+
     # Parse arguments.
     local target_dir="" version_arg=""
     while [[ $# -gt 0 ]]; do

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/rekal-dev/cli/cmd/rekal/cli/versioncheck"
 	"github.com/spf13/cobra"
@@ -60,32 +61,28 @@ func NewRootCmd() *cobra.Command {
 				return NewSilentError(err)
 			}
 
-			// Suppress unused warnings — these will be used when recall is implemented.
-			_ = fileFilter
-			_ = commitFilter
-			_ = checkpointFilter
-			_ = authorFilter
-			_ = actorFilter
-			_ = limitFlag
+			filters := RecallFilters{
+				Query:  strings.Join(args, " "),
+				File:   fileFilter,
+				Commit: commitFilter,
+				Author: authorFilter,
+				Actor:  actorFilter,
+				Limit:  limitFlag,
+			}
 
-			fmt.Fprintln(cmd.ErrOrStderr(), "rekal recall: not yet implemented")
-			return nil
+			_ = checkpointFilter // reserved for future use
+
+			return runRecall(cmd, gitRoot, filters)
 		},
 	}
 
-	// Recall filter flags on root command — hidden until recall is implemented.
+	// Recall filter flags on root command.
 	cmd.Flags().StringVar(&fileFilter, "file", "", "Filter by file path (regex)")
 	cmd.Flags().StringVar(&commitFilter, "commit", "", "Filter by git commit SHA")
 	cmd.Flags().StringVar(&checkpointFilter, "checkpoint", "", "Query as of checkpoint ref")
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (0 = no limit)")
-	cmd.Flags().MarkHidden("file")       //nolint:errcheck
-	cmd.Flags().MarkHidden("commit")     //nolint:errcheck
-	cmd.Flags().MarkHidden("checkpoint") //nolint:errcheck
-	cmd.Flags().MarkHidden("author")     //nolint:errcheck
-	cmd.Flags().MarkHidden("actor")      //nolint:errcheck
-	cmd.Flags().MarkHidden("limit")      //nolint:errcheck
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

@@ -267,7 +267,7 @@ func TestStubCommands_RequireInit(t *testing.T) {
 }
 
 func TestStubCommands_NotYetImplemented(t *testing.T) {
-	commands := []string{"index", "sync"}
+	commands := []string{"sync"}
 
 	for _, name := range commands {
 		name := name
@@ -309,16 +309,16 @@ func TestQuery_ExecutesSQL(t *testing.T) {
 	}
 }
 
-func TestRecall_NotYetImplemented(t *testing.T) {
+func TestRecall_ProducesJSON(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
-	_, stderr, err := env.RunCLI("--file", "foo", "JWT")
+	stdout, _, err := env.RunCLI("--file", "foo", "JWT")
 	if err != nil {
-		t.Fatalf("recall should succeed (stub): %v", err)
+		t.Fatalf("recall should succeed: %v", err)
 	}
-	if !strings.Contains(stderr, "not yet implemented") {
-		t.Errorf("expected 'not yet implemented', got: %q", stderr)
+	if !strings.Contains(stdout, `"results"`) {
+		t.Errorf("expected JSON output with 'results', got: %q", stdout)
 	}
 }
 

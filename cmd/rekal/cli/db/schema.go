@@ -80,5 +80,72 @@ CREATE TABLE IF NOT EXISTS checkpoint_state (
 );
 `
 
-// Index DDL is placeholder — will be defined when index is implemented.
-const indexDDL = ``
+// Index DDL defines the derived index tables — rebuilt from data DB.
+const indexDDL = `
+CREATE TABLE IF NOT EXISTS turns_ft (
+	id              VARCHAR PRIMARY KEY,
+	session_id      VARCHAR NOT NULL,
+	turn_index      INTEGER NOT NULL,
+	role            VARCHAR NOT NULL,
+	content         VARCHAR NOT NULL,
+	ts              VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS tool_calls_index (
+	id              VARCHAR PRIMARY KEY,
+	session_id      VARCHAR NOT NULL,
+	call_order      INTEGER NOT NULL,
+	tool            VARCHAR NOT NULL,
+	path            VARCHAR,
+	cmd_prefix      VARCHAR
+);
+CREATE INDEX IF NOT EXISTS idx_tci_tool ON tool_calls_index(tool);
+CREATE INDEX IF NOT EXISTS idx_tci_path ON tool_calls_index(path);
+CREATE INDEX IF NOT EXISTS idx_tci_session ON tool_calls_index(session_id);
+
+CREATE TABLE IF NOT EXISTS files_index (
+	checkpoint_id   VARCHAR NOT NULL,
+	session_id      VARCHAR NOT NULL,
+	file_path       VARCHAR NOT NULL,
+	change_type     VARCHAR NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fi_path ON files_index(file_path);
+CREATE INDEX IF NOT EXISTS idx_fi_session ON files_index(session_id);
+
+CREATE TABLE IF NOT EXISTS session_facets (
+	session_id      VARCHAR PRIMARY KEY,
+	user_email      VARCHAR,
+	git_branch      VARCHAR,
+	actor_type      VARCHAR NOT NULL,
+	agent_id        VARCHAR,
+	captured_at     TIMESTAMP NOT NULL,
+	turn_count      INTEGER NOT NULL DEFAULT 0,
+	tool_call_count INTEGER NOT NULL DEFAULT 0,
+	file_count      INTEGER NOT NULL DEFAULT 0,
+	checkpoint_id   VARCHAR,
+	git_sha         VARCHAR
+);
+CREATE INDEX IF NOT EXISTS idx_sf_email ON session_facets(user_email);
+CREATE INDEX IF NOT EXISTS idx_sf_actor ON session_facets(actor_type);
+CREATE INDEX IF NOT EXISTS idx_sf_branch ON session_facets(git_branch);
+CREATE INDEX IF NOT EXISTS idx_sf_sha ON session_facets(git_sha);
+
+CREATE TABLE IF NOT EXISTS file_cooccurrence (
+	file_a          VARCHAR NOT NULL,
+	file_b          VARCHAR NOT NULL,
+	count           INTEGER NOT NULL DEFAULT 1,
+	PRIMARY KEY (file_a, file_b)
+);
+
+CREATE TABLE IF NOT EXISTS session_embeddings (
+	session_id      VARCHAR PRIMARY KEY,
+	embedding       FLOAT[],
+	model           VARCHAR NOT NULL,
+	generated_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS index_state (
+	key             VARCHAR PRIMARY KEY,
+	value           VARCHAR NOT NULL
+);
+`

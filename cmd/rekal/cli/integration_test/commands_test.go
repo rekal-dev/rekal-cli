@@ -266,25 +266,7 @@ func TestStubCommands_RequireInit(t *testing.T) {
 	}
 }
 
-func TestStubCommands_NotYetImplemented(t *testing.T) {
-	commands := []string{"sync"}
-
-	for _, name := range commands {
-		name := name
-		t.Run(name, func(t *testing.T) {
-			env := NewTestEnv(t)
-			env.Init()
-
-			_, stderr, err := env.RunCLI(name)
-			if err != nil {
-				t.Fatalf("%s should succeed (stub): %v", name, err)
-			}
-			if !strings.Contains(stderr, "not yet implemented") {
-				t.Errorf("%s: expected 'not yet implemented', got: %q", name, stderr)
-			}
-		})
-	}
-}
+// TestStubCommands_NotYetImplemented was removed — all commands are now implemented.
 
 func TestQuery_RequiresArg(t *testing.T) {
 	env := NewTestEnv(t)

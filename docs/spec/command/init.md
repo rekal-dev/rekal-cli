@@ -1,41 +1,36 @@
-# rekal init (bootstrap)
+# rekal init
 
-**Role:** The only command a developer must run once per repo. No options, no choices. Sets up everything the system needs.
+**Role:** Bootstrap Rekal in a git repository. The only command a developer must run once per repo.
+
+**Invocation:** `rekal init`.
 
 ---
 
 ## Preconditions
 
-- Must be run inside a git repository. Otherwise exit with a clear error (e.g. "not a git repository").
-
----
-
-## Re-run = clean + reinit
-
-If `.rekal/` already exists, treat re-run as **clean then init**: remove `.rekal/`, remove Rekal hooks, then perform a fresh init. So the developer always gets a clean slate when re-running init.
+- Must be run inside a git repository. Otherwise exit with "not a git repository".
 
 ---
 
 ## What init does
 
 1. **Resolve git root** — Exit if not in a git repo.
-2. **Clean slate (if already initialized)** — If `.rekal/` exists, run `rekal clean`, then continue as fresh init.
-3. **Create `.rekal/`** — Directory and whatever the system needs (config, placeholder for data DB path).
-5. **Remote branch** — Check if remote has branch `rekal/<user_email>` (or chosen naming). If not, create it with scaffold (e.g. initial commit so the branch exists).
-6. **Hooks** — Install two hooks (idempotent; overwrite if present, same Rekal marker):
-   - **post-commit** — runs `rekal checkpoint`.
-   - **pre-push** — runs `rekal push` when the user runs `git push`; must print status like git while doing it (e.g. "Pushing rekal to rekal/<user>…", progress, "done").
-7. **`.gitignore`** — Ensure `.rekal/` is in `.gitignore`; append if missing.
-8. **Exit** — Print success message only (e.g. "Rekal initialized.").
+2. **Check if already initialized** — If `.rekal/` exists, print "already initialized" and exit. User must run `rekal clean` first to reinitialize.
+3. **Create `.rekal/`** — Directory for local databases.
+4. **Create data DB** — Open `.rekal/data.db`, run data DDL (sessions, turns, tool_calls, checkpoints, files_touched, checkpoint_sessions, checkpoint_state).
+5. **Create index DB** — Open `.rekal/index.db`, run index DDL (turns_ft, tool_calls_index, files_index, session_facets, file_cooccurrence, session_embeddings, index_state).
+6. **Update `.gitignore`** — Append `.rekal/` if not already present.
+7. **Install hooks:**
+   - `post-commit` — runs `rekal checkpoint`
+   - `pre-push` — runs `rekal push`
+   - Hooks contain the marker `# managed by rekal`. Existing non-Rekal hooks are not overwritten.
+8. **Create orphan branch** — `rekal/<email>` with empty `rekal.body` and `dict.bin`. If the branch exists on the remote, fetch it. If it exists locally, leave it.
+9. **Import existing data** — If the orphan branch has data (body > 9 bytes), import sessions and checkpoints into data DB.
+10. **Install Claude Code skill** — Write `.claude/skills/rekal/SKILL.md` for agent integration.
+11. **Print** — `Rekal initialized.`
 
 ---
 
 ## No flags
 
-No user-facing flags. Non-interactive only (env-only identity).
-
----
-
-## Dependency for other commands
-
-All other commands use the **shared preconditions**: they check init is done and that the run is in a git repo. See [preconditions.md](../preconditions.md).
+No user-facing flags. Non-interactive.

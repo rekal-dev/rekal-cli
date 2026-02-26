@@ -1,23 +1,31 @@
 # rekal log
 
-**Role:** Show recent checkpoints, like git log. List rows from the checkpoints table (data DB) — checkpoint id, git_sha, author, date (or equivalent). No filters. Nice and simple.
+**Role:** Show recent checkpoints, like `git log`. Lists checkpoints from the data DB with session counts.
 
-**Invocation:** Subcommand only — `rekal log [--limit <n>]`.
+**Invocation:** `rekal log [--limit N]`.
 
 ---
 
 ## Preconditions
 
-See [preconditions.md](../preconditions.md): git repo, init done. Log reads from the data DB (checkpoints table); no index required.
+See [preconditions.md](../preconditions.md): git repo, init done. Reads from data DB; no index required.
 
 ---
 
 ## What log does
 
 1. **Run shared preconditions** — Git root, init done.
-2. **Read checkpoints** — Query the `checkpoints` table in `.rekal/data.db` (e.g. order by ts desc). No filters.
-3. **Apply limit** — Show at most `--limit` entries (default: implementation-defined, e.g. 20).
-4. **Output** — Print the list (e.g. checkpoint id / git_sha, author, date). Git-log style. One line per checkpoint or implementation-defined.
+2. **Query checkpoints** — `SELECT` from `checkpoints` joined with `checkpoint_sessions` for session count, ordered by `ts DESC`.
+3. **Apply limit** — Show at most `--limit` entries (default: 20).
+4. **Output** — Git-log style, one block per checkpoint:
+   ```
+   checkpoint <ULID>
+   Date:     2026-02-25T10:00:00Z
+   Commit:   abc123...
+   Branch:   main
+   Author:   alice@example.com
+   Sessions: 2
+   ```
 
 ---
 
@@ -25,7 +33,7 @@ See [preconditions.md](../preconditions.md): git repo, init done. Log reads from
 
 | Flag | Meaning |
 |------|--------|
-| `--limit <n>` | Max entries to show (default: e.g. 20). |
+| `--limit <n>` | Max entries to show (default: 20) |
 
 ---
 

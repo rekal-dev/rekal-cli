@@ -1,68 +1,93 @@
 # rekal (root) — recall
 
-**Role:** The main search. Root invocation is recall — no `search` subcommand. When `rekal` is called with a query and no recognised subcommand, it runs recall against the index DB. **Primary consumer is the agent.** Output is for machine consumption (tool result); we do not intend for users to read it directly.
+**Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. When `rekal` is called with a query or filter flags and no recognised subcommand, it runs recall against the index DB. Primary consumer is the agent.
 
-**Invocation:** Root only — `rekal [filters...] [query]`. Subcommands (init, clean, checkpoint, push, etc.) take precedence when present.
-
-**Soul:** Simplify. One search path (fulltext + semantic combined inside the implementation; the user does not choose). Filters are structured, one flag per dimension, like `grep` / `git log` / `gh search`: combine with AND. Minimal surface: no `search` subcommand, few flags.
-
-**Reference: openclaw** — We align with openclaw memory search (ref-projects/openclaw): one search command, no "fulltext vs semantic" mode exposed; implementation uses semantic/vector + fulltext as appropriate. Openclaw CLI: `openclaw memory search "<query>"` with `--agent`, `--max-results`, `--min-score`, `--json`. Rekal will do similar semantic/vector + fulltext under the hood; this spec focuses on the interface (filters + result shaping + output format).
+**Invocation:** `rekal [filters...] [query]`. Subcommands (init, clean, checkpoint, etc.) take precedence when present.
 
 ---
 
 ## Preconditions
 
-See [preconditions.md](../preconditions.md): git repo, init done. Index DB existence is part of preconditions (init creates it; if missing or empty we run index). No separate "run rekal index" in recall.
+See [preconditions.md](../preconditions.md): git repo, init done. If the index is not populated, recall auto-rebuilds it before searching.
 
 ---
 
 ## What recall does
 
-1. **Run shared preconditions** — Git root, init done, index exists (run index if missing/empty).
-2. **Resolve query** — Single positional argument: keywords or short phrase for semantic/fulltext search. (The agent translates user questions into this form; that is documented in the skill.)
-3. **Apply filters** — All given filter flags are ANDed. See table below.
-4. **Run recall** — Read-only against `.rekal/index.db`. Never modifies data DB or index DB.
-5. **Output** — Structured for machine consumption (e.g. JSON). Intended as tool result for the agent; not designed for human reading. Compact JSON is token-efficient compared to prose (no "Here are the results:" etc.); Claude receives this as Bash tool stdout and parses it.
+1. **Run shared preconditions** — Git root, init done.
+2. **Open index DB** — Load FTS extension. If index is empty (`last_indexed_at` not set), run a full index rebuild automatically.
+3. **Dispatch search mode:**
+   - **With query text** → Hybrid search (BM25 + LSA combined scoring).
+   - **Without query text** → Filter-only search (latest sessions matching filters).
+4. **Output** — Structured JSON to stdout. Fields: `results`, `query`, `filters`, `mode`, `total`.
 
 ---
 
-## Filters (structured, grep / gh style)
+## Search modes
 
-One flag per dimension. Multiple filters = AND. Same idea as `git log --author=... --since=...` or `gh search issues --author ... --label ...`.
+### Hybrid search (query provided)
 
-| Flag | Meaning |
-|------|--------|
-| `--file <regex>` | Sessions that touched a file whose path matches the regex. Paths are git-root-relative. See path semantics below. |
-| `--commit <sha>` | Sessions linked to this git commit |
-| `--checkpoint <ref>` | Query as of this historical snapshot (git ref on rekal orphan branch: SHA, HEAD~n, @{date}). See [push.md](push.md#checkpoint-id--orphan-branch-commit-sha). |
-| `--author <email>` | Sessions by this committer / author (e.g. session facet `user_email`) |
-| `--actor <human\|agent>` | Actor type (default: both; use `human` or `agent` to restrict) |
+1. **BM25 search** — Full-text search on `turns_ft.content`. Returns up to 200 candidate hits scored by BM25.
+2. **LSA search** — Rebuild LSA model from session content, project query into embedding space, compute cosine similarity against stored session embeddings. Non-fatal if LSA fails.
+3. **Group by session** — Pick the best-scoring turn per session.
+4. **Normalize and combine** — Normalize BM25 and LSA scores to [0,1], combine with weights (BM25: 0.4, LSA: 0.6).
+5. **Apply filters** — Actor, author, commit, file regex — all ANDed.
+6. **Return top N** — Sorted by hybrid score descending.
 
-**`--file` path semantics:** The value is a **regex** applied to stored file paths (all paths are **git-root-relative**). E.g. `--file '^src/auth/'` = folder; `--file 'src/auth/middleware\.go'` = exact file (escape `.`); `--file '.*_test\.go'` = all test files. No separate `-r` flag — regex only.
+### Filter search (no query)
 
-**Result shaping:**
-
-| Flag | Meaning |
-|------|--------|
-| `-n`, `--limit <n>` | Cap at N results. **Default: no limit** — return all matching results when omitted. Use `-n` only when the agent wants to bound result size (e.g. token budget). |
-
-Output format is structured (e.g. JSON) by default — for tool result, not for human reading. No separate human-readable mode.
-
-**How the agent knows what to set:** The Rekal skill (`.claude/rekal.md`, installed by `rekal init`) documents when to pass `-n`. Default is all; limit is opt-in.
-
-Optional later: `--min-score <n>`. Omit from first version.
+Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`. Returns the first snippet from each session.
 
 ---
 
-## Read-only
+## Filters
 
-Recall never modifies `.rekal/data.db` or `.rekal/index.db`.
+| Flag | Description |
+|------|-------------|
+| `--file <regex>` | Sessions that touched a file matching the regex (git-root-relative paths) |
+| `--commit <sha>` | Sessions linked to a git commit (SHA prefix match) |
+| `--checkpoint <ref>` | Reserved for future use |
+| `--author <email>` | Sessions by this author email |
+| `--actor <human\|agent>` | Filter by actor type |
+| `-n`, `--limit <n>` | Max results (default: 20) |
+
+Multiple filters = AND.
+
+---
+
+## Output format
+
+```json
+{
+  "results": [
+    {
+      "session_id": "...",
+      "score": 0.85,
+      "snippet": "...",
+      "snippet_turn_index": 3,
+      "snippet_role": "assistant",
+      "session": {
+        "author": "alice@example.com",
+        "actor": "human",
+        "branch": "main",
+        "captured_at": "2026-02-25T10:00:00Z",
+        "commit": "abc123...",
+        "turn_count": 12,
+        "tool_call_count": 5,
+        "files": ["src/auth.go", "src/auth_test.go"]
+      }
+    }
+  ],
+  "query": "JWT expiry",
+  "filters": {"file": "", "actor": "", "commit": "", "author": ""},
+  "mode": "hybrid",
+  "total": 3
+}
+```
 
 ---
 
 ## Examples
-
-Query is keywords or short phrase (semantic/fulltext). Translation from user questions is a skill concern.
 
 ```bash
 rekal "JWT"
@@ -72,6 +97,5 @@ rekal --file '^src/auth/' "JWT"
 rekal --commit a3f9b12 "JWT"
 rekal --author alice@example.com "refactor"
 rekal --file src/auth.go --actor human "auth"
-rekal "JWT" --checkpoint HEAD~5
 rekal "JWT" -n 10
 ```

@@ -1,6 +1,6 @@
 # rekal query
 
-**Role:** Raw SQL over the Rekal data model. Run a single SQL statement against the data DB (default) or the index DB (`--index`). For power users and agents that need schema-level access. Tight to the table schema — no abstraction above SQL.
+**Role:** Raw SQL over the Rekal data model. Run a single SQL statement against the data DB (default) or the index DB (`--index`). For power users and agents that need schema-level access.
 
 **Invocation:** `rekal query "<sql>"` or `rekal query --index "<sql>"`.
 
@@ -8,16 +8,16 @@
 
 ## Preconditions
 
-See [preconditions.md](../preconditions.md): git repo, init done. If using `--index`, the index DB must exist (same as recall; preconditions ensure it or run index if missing).
+See [preconditions.md](../preconditions.md): git repo, init done.
 
 ---
 
 ## What query does
 
-1. **Run shared preconditions** — Git root, init done. If `--index`, ensure index exists (run index if missing/empty).
+1. **Run shared preconditions** — Git root, init done.
 2. **Choose target** — Data DB (`.rekal/data.db`) by default; index DB (`.rekal/index.db`) if `--index`.
-3. **Execute** — Run the given SQL as a single statement against the chosen DB. Read-only (SELECT only; no INSERT/UPDATE/DELETE/DDL).
-4. **Output** — Result rows in a machine-friendly form (e.g. JSON or tab-separated). Same soul as recall: for tool result.
+3. **Execute** — Run the given SQL as a single statement. Read-only (SELECT only).
+4. **Output** — Tab-separated results with column headers.
 
 ---
 
@@ -25,42 +25,35 @@ See [preconditions.md](../preconditions.md): git repo, init done. If using `--in
 
 | Flag | Meaning |
 |------|--------|
-| `--index` | Run SQL against the **index DB** instead of the data DB. |
-
-Default (no flag) = data DB.
+| `--index` | Run SQL against the **index DB** instead of the data DB |
 
 ---
 
-## Tied to the data model
+## Schema
 
-Queries run against the actual table schema. No views or stored procedures; the schema is the contract.
-
-**Data DB** (default): `.rekal/data.db`
+**Data DB** (default):
 
 | Table | Purpose |
 |-------|--------|
-| `sessions` | One row per captured session (ULID, session_hash, payload JSON, captured_at, …). Append-only. |
-| `checkpoints` | One row per git commit (id, git_sha, git_branch, user_email, ts, actor_type, agent_id). |
-| `files_touched` | Files changed per checkpoint (checkpoint_id, file_path, change_type). |
-| `checkpoint_sessions` | Junction: checkpoint_id → session_id (which sessions at which commit). |
+| `sessions` | One row per captured session (id, session_hash, captured_at, actor_type, agent_id, user_email, branch) |
+| `turns` | Conversation turns (id, session_id, turn_index, role, content, ts) |
+| `tool_calls` | Tool invocations (id, session_id, call_order, tool, path, cmd_prefix) |
+| `checkpoints` | Git commit anchors (id, git_sha, git_branch, user_email, ts, actor_type, agent_id, exported) |
+| `files_touched` | Files changed per checkpoint (id, checkpoint_id, file_path, change_type) |
+| `checkpoint_sessions` | Junction: checkpoint_id → session_id |
+| `checkpoint_state` | Incremental state cache (file_path, byte_size, file_hash) |
 
-**Index DB** (`--index`): `.rekal/index.db`
+**Index DB** (`--index`):
 
 | Table | Purpose |
 |-------|--------|
-| `turns_ft` | Turn-level fulltext (session_id, turn_index, role, content, …). FTS on content. |
-| `tool_calls_index` | Tool calls per session (tool, path, cmd_prefix, call_order). |
-| `files_index` | File paths per checkpoint (checkpoint_id, file_path). |
-| `session_facets` | Session metadata (user_email, git_branch, turn_count, actor_type, agent_id, …). |
-| `file_cooccurrence` | (file_a, file_b, count) — files that change together. |
-
-Authoritative schema: system design doc (data DB §8.1, index DB §8.8). This spec summarizes for the command; implementation uses the same DDL.
-
----
-
-## Read-only
-
-Only SELECT is allowed. No INSERT, UPDATE, DELETE, or DDL. Prevents accidental mutation of shared or local state.
+| `turns_ft` | Turn-level full-text search (id, session_id, turn_index, role, content, ts) |
+| `tool_calls_index` | Tool calls per session (id, session_id, call_order, tool, path, cmd_prefix) |
+| `files_index` | Files per checkpoint (checkpoint_id, session_id, file_path, change_type) |
+| `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha) |
+| `file_cooccurrence` | Files that change together (file_a, file_b, count) |
+| `session_embeddings` | LSA vectors (session_id, embedding, model, generated_at) |
+| `index_state` | Key-value state (key, value) |
 
 ---
 

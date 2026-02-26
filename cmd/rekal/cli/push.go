@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 
@@ -27,7 +28,7 @@ func newPushCmd() *cobra.Command {
 				return NewSilentError(err)
 			}
 
-			return runPush(cmd, gitRoot, force)
+			return doPush(gitRoot, cmd.ErrOrStderr(), force)
 		},
 	}
 
@@ -35,18 +36,20 @@ func newPushCmd() *cobra.Command {
 	return cmd
 }
 
-func runPush(cmd *cobra.Command, gitRoot string, force bool) error {
+// doPush pushes Rekal data to the remote orphan branch.
+// Extracted so sync can call it without a cobra.Command.
+func doPush(gitRoot string, w io.Writer, force bool) error {
 	branch := rekalBranchName()
 
 	// Check if local branch exists — if not, nothing to push.
 	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branch).Run(); err != nil {
-		fmt.Fprintln(cmd.ErrOrStderr(), "rekal: no data to push (run 'rekal checkpoint' first)")
+		fmt.Fprintln(w, "rekal: no data to push (run 'rekal checkpoint' first)")
 		return nil
 	}
 
 	// Check if remote is configured.
 	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run(); err != nil {
-		fmt.Fprintln(cmd.ErrOrStderr(), "rekal: no remote 'origin' configured — skipping push")
+		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
 		return nil
 	}
 
@@ -60,7 +63,7 @@ func runPush(cmd *cobra.Command, gitRoot string, force bool) error {
 			return fmt.Errorf("commit to rekal branch: %w", err)
 		}
 	} else {
-		fmt.Fprintln(cmd.ErrOrStderr(), "rekal: no new checkpoints to export")
+		fmt.Fprintln(w, "rekal: no new checkpoints to export")
 	}
 
 	// Compare local SHA vs remote tracking SHA — skip if identical.
@@ -70,7 +73,7 @@ func runPush(cmd *cobra.Command, gitRoot string, force bool) error {
 	}
 	remoteSHA, err := exec.Command("git", "-C", gitRoot, "rev-parse", "origin/"+branch).Output()
 	if err == nil && strings.TrimSpace(string(localSHA)) == strings.TrimSpace(string(remoteSHA)) {
-		fmt.Fprintln(cmd.ErrOrStderr(), "rekal: already up to date")
+		fmt.Fprintln(w, "rekal: already up to date")
 		return nil
 	}
 
@@ -78,10 +81,10 @@ func runPush(cmd *cobra.Command, gitRoot string, force bool) error {
 		forceCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "--force", "origin", branch)
 		forceCmd.Stdin = nil
 		if output, err := forceCmd.CombinedOutput(); err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: force push failed: %s\n", strings.TrimSpace(string(output)))
+			fmt.Fprintf(w, "rekal: force push failed: %s\n", strings.TrimSpace(string(output)))
 			return nil
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: force pushed to origin/%s\n", branch)
+		fmt.Fprintf(w, "rekal: force pushed to origin/%s\n", branch)
 		return nil
 	}
 
@@ -91,15 +94,15 @@ func runPush(cmd *cobra.Command, gitRoot string, force bool) error {
 	output, err := pushCmd.CombinedOutput()
 	if err != nil {
 		if isNonFastForward(string(output)) {
-			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: push rejected (non-fast-forward) for origin/%s\n", branch)
-			fmt.Fprintln(cmd.ErrOrStderr(), "rekal: your remote branch has diverged from local — review and run 'rekal push --force' to overwrite remote with local data")
+			fmt.Fprintf(w, "rekal: push rejected (non-fast-forward) for origin/%s\n", branch)
+			fmt.Fprintln(w, "rekal: your remote branch has diverged from local — review and run 'rekal push --force' to overwrite remote with local data")
 			return nil
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: push failed: %s\n", strings.TrimSpace(string(output)))
+		fmt.Fprintf(w, "rekal: push failed: %s\n", strings.TrimSpace(string(output)))
 		return nil
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "rekal: pushed to origin/%s\n", branch)
+	fmt.Fprintf(w, "rekal: pushed to origin/%s\n", branch)
 	return nil
 }
 

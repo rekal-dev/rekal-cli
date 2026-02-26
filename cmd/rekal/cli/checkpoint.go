@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -39,6 +40,12 @@ func newCheckpointCmd() *cobra.Command {
 }
 
 func runCheckpoint(cmd *cobra.Command, gitRoot string) error {
+	return doCheckpoint(gitRoot, cmd.ErrOrStderr())
+}
+
+// doCheckpoint captures the current session after a commit.
+// Extracted so sync can call it without a cobra.Command.
+func doCheckpoint(gitRoot string, w io.Writer) error {
 	// Find session directory for this repo.
 	sessionDir := session.FindSessionDir(gitRoot)
 	if sessionDir == "" {
@@ -195,7 +202,7 @@ func runCheckpoint(cmd *cobra.Command, gitRoot string) error {
 		}
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "rekal: %d session(s) captured\n", inserted)
+	fmt.Fprintf(w, "rekal: %d session(s) captured\n", inserted)
 	return nil
 }
 

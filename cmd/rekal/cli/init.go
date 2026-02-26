@@ -39,6 +39,13 @@ imported into the local data DB automatically.`,
 				return NewSilentError(err)
 			}
 
+			if err := ensureClaudeInstalled(); err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), "rekal requires Claude Code, which was not detected on this system.")
+				fmt.Fprintln(cmd.ErrOrStderr(), "For the beta release, only Claude Code is supported. Other coding agents will be supported in a future release.")
+				fmt.Fprintln(cmd.ErrOrStderr(), "Install Claude Code from https://docs.anthropic.com/en/docs/claude-code then run 'rekal init' again.")
+				return NewSilentError(err)
+			}
+
 			rekalDir := RekalDir(gitRoot)
 
 			if _, err := os.Stat(rekalDir); err == nil {
@@ -322,4 +329,23 @@ func ensureClaudeGitignore(gitRoot string) error {
 	}
 
 	return appendGitignoreEntry(gitRoot, entry)
+}
+
+// ensureClaudeInstalled checks that Claude Code is installed.
+// Looks for the "claude" binary on PATH or the ~/.claude/ config directory.
+func ensureClaudeInstalled() error {
+	// Check PATH first.
+	if _, err := exec.LookPath("claude"); err == nil {
+		return nil
+	}
+
+	// Fall back to config directory.
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if _, err := os.Stat(filepath.Join(home, ".claude")); err == nil {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("claude code not detected")
 }

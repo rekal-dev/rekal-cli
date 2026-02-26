@@ -160,6 +160,123 @@ func TestQuery_SessionAndSQL_MutuallyExclusive(t *testing.T) {
 	}
 }
 
+func TestQuery_SessionPagination(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedData(t, env)
+
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--limit", "2")
+	if err != nil {
+		t.Fatalf("query --session --limit should succeed: %v", err)
+	}
+
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	turns, ok := output["turns"].([]interface{})
+	if !ok {
+		t.Fatal("expected turns array")
+	}
+	if len(turns) != 2 {
+		t.Errorf("expected 2 turns, got %d", len(turns))
+	}
+
+	if total, _ := output["total_turns"].(float64); int(total) != 4 {
+		t.Errorf("expected total_turns=4, got %v", output["total_turns"])
+	}
+
+	if hasMore, _ := output["has_more"].(bool); !hasMore {
+		t.Error("expected has_more=true")
+	}
+}
+
+func TestQuery_SessionPagination_Offset(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedData(t, env)
+
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--offset", "2", "--limit", "2")
+	if err != nil {
+		t.Fatalf("query --session --offset --limit should succeed: %v", err)
+	}
+
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	turns, ok := output["turns"].([]interface{})
+	if !ok {
+		t.Fatal("expected turns array")
+	}
+	if len(turns) != 2 {
+		t.Errorf("expected 2 turns, got %d", len(turns))
+	}
+
+	if hasMore, _ := output["has_more"].(bool); hasMore {
+		t.Error("expected has_more=false")
+	}
+
+	// Verify these are the last 2 turns (index 2 and 3).
+	first := turns[0].(map[string]interface{})
+	if idx, _ := first["index"].(float64); int(idx) != 2 {
+		t.Errorf("expected first turn index=2, got %v", first["index"])
+	}
+}
+
+func TestQuery_SessionRoleFilter(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedData(t, env)
+
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--role", "human")
+	if err != nil {
+		t.Fatalf("query --session --role should succeed: %v", err)
+	}
+
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	turns, ok := output["turns"].([]interface{})
+	if !ok {
+		t.Fatal("expected turns array")
+	}
+
+	// Session 1 has 2 human turns (index 0 and 2).
+	if len(turns) != 2 {
+		t.Errorf("expected 2 human turns, got %d", len(turns))
+	}
+
+	for _, turn := range turns {
+		m := turn.(map[string]interface{})
+		if m["role"] != "human" {
+			t.Errorf("expected role=human, got %v", m["role"])
+		}
+	}
+
+	// total_turns should reflect the filtered count.
+	if total, _ := output["total_turns"].(float64); int(total) != 2 {
+		t.Errorf("expected total_turns=2 (human only), got %v", output["total_turns"])
+	}
+}
+
+func TestQuery_SessionPaginationRequiresSession(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	_, _, err := env.RunCLI("query", "--offset", "1", "SELECT 1")
+	if err == nil {
+		t.Error("expected error for --offset without --session")
+	}
+}
+
 // seedData inserts test sessions, turns, tool_calls, checkpoints into the data DB.
 func seedData(t *testing.T, env *TestEnv) {
 	t.Helper()
@@ -178,6 +295,12 @@ func seedData(t *testing.T, env *TestEnv) {
 		t.Fatalf("insert turn: %v", err)
 	}
 	if err := db.InsertTurn(dataDB, "turn-2", "test-session-1", 1, "assistant", "Let me read the JWT middleware file to understand the expiry logic.", "2026-02-25T10:01:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-2b", "test-session-1", 2, "human", "Now fix the token refresh endpoint too.", "2026-02-25T10:02:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-2c", "test-session-1", 3, "assistant", "I'll update the refresh endpoint to use the new expiry configuration.", "2026-02-25T10:03:00Z"); err != nil {
 		t.Fatalf("insert turn: %v", err)
 	}
 	if err := db.InsertToolCall(dataDB, "tc-1", "test-session-1", 0, "Read", "src/auth/middleware.go", ""); err != nil {

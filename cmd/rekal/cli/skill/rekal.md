@@ -39,12 +39,26 @@ rekal -n 5 "error handling"            # limit results
 
 Output is scored JSON with session IDs, snippets, and metadata.
 
-### 2. Drill down — read the full conversation
+### 2. Drill down — progressive context loading
+
+Always start small to minimize token cost, then load more only when needed.
 
 ```bash
-rekal query --session 01JNQX...        # turns only
-rekal query --session 01JNQX... --full # turns + tool calls + files touched
+# Step 1: Start with human turns only — understand the intent cheaply
+rekal query --session 01JNQX... --role human
+
+# Step 2: If you need more detail, fetch a small page around a relevant turn
+# (search results include turn indices — use them as offset)
+rekal query --session 01JNQX... --offset 5 --limit 5
+
+# Step 3: Only fetch full output when you actually need tool calls and files
+rekal query --session 01JNQX... --full
 ```
+
+Output includes `total_turns`, `offset`, `limit`, and `has_more` for navigation.
+
+Do NOT load all turns or use `--full` by default. The search results from step 1 give you
+enough context to decide what slice to load next.
 
 ### 3. Raw SQL — for edge cases
 

@@ -109,6 +109,7 @@ When a newer release is available, the CLI prints an update notice after each co
 | `rekal log [--limit N]` | Show recent checkpoints |
 | `rekal [filters...] [query]` | Recall — hybrid search (BM25 + LSA + Nomic) over sessions |
 | `rekal query --session <id> [--full]` | Drill into a session (turns, tool calls, files) |
+| `rekal query --session <id> --limit N [--offset N] [--role human\|assistant]` | Paginate session turns |
 | `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 
 ### Recall Filters (root command)
@@ -136,6 +137,9 @@ rekal --file src/auth/ "token refresh"  # Recall with file filter
 rekal --actor agent "migration"         # Show only agent-initiated sessions
 rekal query --session 01JNQX...        # Full turns for a specific session
 rekal query --session 01JNQX... --full # Include tool calls and files
+rekal query --session 01JNQX... --limit 5           # First 5 turns
+rekal query --session 01JNQX... --offset 5 --limit 5 # Next 5 turns
+rekal query --session 01JNQX... --role human         # Human turns only
 rekal query "SELECT * FROM sessions LIMIT 5"
 rekal clean                             # Remove Rekal from this repo
 ```

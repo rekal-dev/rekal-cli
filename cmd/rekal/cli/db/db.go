@@ -265,6 +265,56 @@ func QuerySession(d *sql.DB, id string) (*SessionRow, error) {
 	return r, nil
 }
 
+// TurnPageOptions controls pagination and filtering for QueryTurnsPage.
+type TurnPageOptions struct {
+	Offset int
+	Limit  int
+	Role   string // "" = all, "human", "assistant"
+}
+
+// QueryTurnsPage returns a page of turns for a session with optional role filtering.
+// It returns the matching turns, the total count (respecting the role filter), and any error.
+func QueryTurnsPage(d *sql.DB, sessionID string, opts TurnPageOptions) ([]TurnRow, int, error) {
+	// Build WHERE clause.
+	where := "session_id = $1"
+	args := []interface{}{sessionID}
+	if opts.Role != "" {
+		where += " AND role = $2"
+		args = append(args, opts.Role)
+	}
+
+	// Count total matching turns.
+	var total int
+	if err := d.QueryRow("SELECT COUNT(*) FROM turns WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count turns: %w", err)
+	}
+
+	// Build paginated query.
+	q := "SELECT turn_index, role, content, COALESCE(CAST(ts AS VARCHAR), '') FROM turns WHERE " + where + " ORDER BY turn_index"
+	if opts.Limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d", opts.Limit)
+	}
+	if opts.Offset > 0 {
+		q += fmt.Sprintf(" OFFSET %d", opts.Offset)
+	}
+
+	rows, err := d.Query(q, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query turns page: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var result []TurnRow
+	for rows.Next() {
+		var r TurnRow
+		if err := rows.Scan(&r.TurnIndex, &r.Role, &r.Content, &r.Ts); err != nil {
+			return nil, 0, fmt.Errorf("scan turn: %w", err)
+		}
+		result = append(result, r)
+	}
+	return result, total, rows.Err()
+}
+
 // QueryTurns returns turns for a session, ordered by turn_index.
 func QueryTurns(d *sql.DB, sessionID string) ([]TurnRow, error) {
 	rows, err := d.Query(

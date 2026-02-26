@@ -15,15 +15,19 @@ func newQueryCmd() *cobra.Command {
 		useIndex  bool
 		sessionID string
 		full      bool
+		offset    int
+		limit     int
+		role      string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "query [<sql> | --session <id>]",
+		Use:   "query [<sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant]]",
 		Short: "Run raw SQL or drill into a session",
 		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
 
 Session drill-down (--session) returns the full conversation as JSON. Add --full
-to include tool calls and files touched.
+to include tool calls and files touched. Use --offset, --limit, and --role to
+paginate through turns or filter by role.
 
 Raw SQL mode accepts SELECT statements only. Output is one JSON object per row.
 Use --index to query the index DB instead of the data DB.
@@ -55,6 +59,14 @@ INDEX DB SCHEMA (.rekal/index.db):
 
   # Drill into a session (turns + tool calls + files)
   rekal query --session 01JNQX... --full
+
+  # Paginate through turns
+  rekal query --session 01JNQX... --limit 5
+  rekal query --session 01JNQX... --offset 5 --limit 5
+
+  # Filter by role
+  rekal query --session 01JNQX... --role human
+  rekal query --session 01JNQX... --role human --limit 5
 
   # Recent sessions
   rekal query "SELECT id, user_email, branch, captured_at FROM sessions ORDER BY captured_at DESC LIMIT 5"
@@ -89,8 +101,18 @@ INDEX DB SCHEMA (.rekal/index.db):
 				return fmt.Errorf("--session and SQL argument are mutually exclusive")
 			}
 
+			// --offset, --limit, --role require --session.
+			if sessionID == "" && (offset != 0 || limit != 0 || role != "") {
+				return fmt.Errorf("--offset, --limit, and --role require --session")
+			}
+
+			// --role must be "human" or "assistant" if set.
+			if role != "" && role != "human" && role != "assistant" {
+				return fmt.Errorf("--role must be \"human\" or \"assistant\"")
+			}
+
 			if sessionID != "" {
-				return runSessionDrilldown(cmd, gitRoot, sessionID, full)
+				return runSessionDrilldown(cmd, gitRoot, sessionID, full, offset, limit, role)
 			}
 
 			if len(args) == 0 {
@@ -104,6 +126,9 @@ INDEX DB SCHEMA (.rekal/index.db):
 	cmd.Flags().BoolVar(&useIndex, "index", false, "Run SQL against the index DB instead of the data DB")
 	cmd.Flags().StringVar(&sessionID, "session", "", "Show session conversation by ID")
 	cmd.Flags().BoolVar(&full, "full", false, "Include tool calls and files in session output")
+	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
+	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
+	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human or assistant (requires --session)")
 	return cmd
 }
 
@@ -114,6 +139,10 @@ type sessionOutput struct {
 	Actor      string           `json:"actor"`
 	Branch     string           `json:"branch"`
 	CapturedAt string           `json:"captured_at"`
+	TotalTurns int              `json:"total_turns"`
+	Offset     int              `json:"offset,omitempty"`
+	Limit      int              `json:"limit,omitempty"`
+	HasMore    bool             `json:"has_more,omitempty"`
 	Turns      []turnOutput     `json:"turns"`
 	ToolCalls  []toolCallOutput `json:"tool_calls,omitempty"`
 	Files      []string         `json:"files_touched,omitempty"`
@@ -132,7 +161,7 @@ type toolCallOutput struct {
 	Path  string `json:"path,omitempty"`
 }
 
-func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full bool) error {
+func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full bool, offset, limit int, role string) error {
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open data db: %w", err)
@@ -144,7 +173,11 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 		return fmt.Errorf("session not found: %w", err)
 	}
 
-	turns, err := db.QueryTurns(dataDB, sessionID)
+	turns, total, err := db.QueryTurnsPage(dataDB, sessionID, db.TurnPageOptions{
+		Offset: offset,
+		Limit:  limit,
+		Role:   role,
+	})
 	if err != nil {
 		return fmt.Errorf("query turns: %w", err)
 	}
@@ -155,6 +188,14 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 		Actor:      session.ActorType,
 		Branch:     session.Branch,
 		CapturedAt: session.CapturedAt,
+		TotalTurns: total,
+		Offset:     offset,
+		Limit:      limit,
+	}
+
+	// has_more is true when there are more turns beyond this page.
+	if limit > 0 {
+		output.HasMore = offset+len(turns) < total
 	}
 
 	for _, t := range turns {

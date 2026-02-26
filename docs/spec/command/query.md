@@ -2,7 +2,7 @@
 
 **Role:** Two modes: raw SQL over the Rekal data model, or session drill-down. The `--session` flag is the second step in progressive context loading — after recall returns snippets, the agent drills into specific sessions for full turns.
 
-**Invocation:** `rekal query "<sql>"`, `rekal query --index "<sql>"`, or `rekal query --session <id> [--full]`.
+**Invocation:** `rekal query "<sql>"`, `rekal query --index "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant]`.
 
 ---
 
@@ -27,11 +27,22 @@ Run a single SELECT statement against the data DB or index DB.
 Returns the full conversation for a specific session. This is the progressive loading drill-down — after `rekal <query>` returns scored snippets, the agent calls `rekal query --session <id>` to get full turns.
 
 1. **Query session** — Fetch session metadata from `sessions` table.
-2. **Query turns** — Fetch all turns ordered by `turn_index`.
-3. **If `--full`** — Also fetch tool calls and files touched.
-4. **Output** — Single JSON object with session metadata, turns, and optionally tool calls and files.
+2. **Query turns** — Fetch turns ordered by `turn_index`, applying `--role` filter if set.
+3. **Count total** — Run a COUNT query (respecting `--role` filter) to populate `total_turns`.
+4. **Paginate** — Apply `--offset` and `--limit` to the turn query.
+5. **If `--full`** — Also fetch tool calls and files touched.
+6. **Output** — Single JSON object with session metadata, pagination fields, turns, and optionally tool calls and files.
 
-`--session` and positional SQL are mutually exclusive.
+`--session` and positional SQL are mutually exclusive. `--offset`, `--limit`, and `--role` require `--session`.
+
+#### Pagination output fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_turns` | int | Total turns matching the role filter (always present) |
+| `offset` | int | Number of turns skipped (omitted when 0) |
+| `limit` | int | Max turns returned (omitted when 0 / no limit) |
+| `has_more` | bool | True when more turns exist beyond this page (omitted when false or no limit) |
 
 ---
 
@@ -42,6 +53,9 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `--index` | Run SQL against the **index DB** instead of the data DB |
 | `--session <id>` | Show session conversation by ID (drill-down mode) |
 | `--full` | Include tool calls and files in session output (requires `--session`) |
+| `--offset <n>` | Skip first N turns (default: 0, requires `--session`) |
+| `--limit <n>` | Max turns to return, 0 = no limit (default: 0, requires `--session`) |
+| `--role <human\|assistant>` | Filter turns by role (requires `--session`) |
 
 ---
 
@@ -76,6 +90,13 @@ Returns the full conversation for a specific session. This is the progressive lo
 ## Examples
 
 ```bash
+# Session drill-down with pagination
+rekal query --session 01JNQX... --limit 5           # first 5 turns
+rekal query --session 01JNQX... --offset 5 --limit 5 # next 5 turns
+rekal query --session 01JNQX... --role human         # human turns only
+rekal query --session 01JNQX... --role human --limit 3 # first 3 human turns
+
+# Raw SQL
 rekal query "SELECT id, git_sha, user_email FROM checkpoints ORDER BY ts DESC LIMIT 5"
 rekal query "SELECT session_id, file_path FROM files_touched WHERE file_path LIKE '%auth%'"
 rekal query --index "SELECT file_a, file_b, count FROM file_cooccurrence WHERE file_a = 'src/auth/middleware.go' ORDER BY count DESC LIMIT 10"

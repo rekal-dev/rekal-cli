@@ -279,13 +279,41 @@ func QueryEmbeddings(d *sql.DB, model string) (map[string][]float64, error) {
 	result := make(map[string][]float64)
 	for rows.Next() {
 		var sid string
-		var emb []float64
-		if err := rows.Scan(&sid, &emb); err != nil {
+		var raw interface{}
+		if err := rows.Scan(&sid, &raw); err != nil {
 			return nil, fmt.Errorf("scan embedding: %w", err)
+		}
+		emb, err := toFloat64Slice(raw)
+		if err != nil {
+			return nil, fmt.Errorf("convert embedding for %s: %w", sid, err)
 		}
 		result[sid] = emb
 	}
 	return result, rows.Err()
+}
+
+// toFloat64Slice converts a DuckDB FLOAT[] result (returned as []interface{})
+// into a []float64.
+func toFloat64Slice(v interface{}) ([]float64, error) {
+	switch arr := v.(type) {
+	case []float64:
+		return arr, nil
+	case []interface{}:
+		out := make([]float64, len(arr))
+		for i, elem := range arr {
+			switch n := elem.(type) {
+			case float64:
+				out[i] = n
+			case float32:
+				out[i] = float64(n)
+			default:
+				return nil, fmt.Errorf("unexpected element type %T at index %d", elem, i)
+			}
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unexpected embedding type %T", v)
+	}
 }
 
 // PopulateIndexIncremental adds new sessions to the index without a full rebuild.

@@ -13,6 +13,11 @@ func newLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log",
 		Short: "Show recent checkpoints",
+		Long: `Show recent checkpoints from the data DB, newest first.
+
+Each entry shows the checkpoint ID, timestamp, git commit SHA, branch,
+author email, and number of sessions captured. Use --limit to control
+how many entries are shown.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

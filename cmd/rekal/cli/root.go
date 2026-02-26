@@ -11,12 +11,18 @@ import (
 
 const gettingStarted = `
 
+Workflow:
+  rekal "keyword"                   Search sessions (BM25 + LSA hybrid)
+  rekal --file auth "token refresh" Filter by file path
+  rekal query --session <id>        Drill into a session (full turns)
+  rekal query --session <id> --full Include tool calls and files
+  rekal query "SELECT ..."          Raw SQL for edge cases
+
 Getting Started:
-  rekal init          Initialize Rekal in a git repository
-  rekal checkpoint    Capture the current session
-  rekal push          Share context with the team
-  rekal sync          Pull team context
-  rekal "query"       Recall sessions by keyword
+  rekal init                        Initialize Rekal in a git repository
+  rekal checkpoint                  Capture the current session
+  rekal push                        Share context with the team
+  rekal sync                        Pull team context
 `
 
 // NewRootCmd returns the root command for the rekal CLI.

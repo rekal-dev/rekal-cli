@@ -1,8 +1,10 @@
 # rekal (root) — recall
 
-**Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. When `rekal` is called with a query or filter flags and no recognised subcommand, it runs recall against the index DB. Primary consumer is the agent.
+**Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. Returns scored snippets and metadata — just enough for the agent to decide what matters. For full session content, use `rekal show <session_id>`.
 
 **Invocation:** `rekal [filters...] [query]`. Subcommands (init, clean, checkpoint, etc.) take precedence when present.
+
+**Progressive loading:** Recall is the first step in a two-step context loading model. The agent calls `rekal <query>` to get lightweight results (snippets + metadata), then calls `rekal query --session <id>` for full turns on the sessions that matter. This keeps token usage tight — the agent controls how much context it loads.
 
 ---
 

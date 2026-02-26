@@ -25,7 +25,7 @@ Your agent starts every session knowing *why* the code looks the way it does.
 - **Team-shared memory** — `rekal push` and `rekal sync` share session context across your entire team through git. Every developer's agent benefits from every other developer's prior sessions.
 - **Git-native** — No external infrastructure. Rekal data lives on standard orphan branches, syncs through your existing remote, and uses git's object store for point-in-time recovery. Every checkpoint is anchored to a commit SHA.
 - **DuckDB-powered** — Full-text search (BM25), LSA vector embeddings, and file co-occurrence graphs built on DuckDB. The index is local-only and rebuilt on demand from the shared data.
-- **Agent-first** — `rekal <query>` is the primary interface. Output is structured JSON designed for machine consumption. The agent calls `rekal` directly and gets precise memory back — no human-readable wrappers needed.
+- **Agent-first** — Progressive context loading. `rekal <query>` returns scored snippets and metadata — just enough for the agent to decide what matters. `rekal query --session <id>` drills into a specific session for full turns. The agent controls how much context it loads.
 - **Signal, not bulk** — A 2-10 MB session file becomes a ~300 byte payload. The wire format is a custom binary codec with zstd compression, string interning via varint references, and append-only framing.
 
 ## How It Works
@@ -79,8 +79,9 @@ When a newer release is available, the CLI prints an update notice after each co
 | `rekal sync [--self]` | Sync team context from remote rekal branches |
 | `rekal index` | Rebuild the index DB from the data DB |
 | `rekal log [--limit N]` | Show recent checkpoints |
-| `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 | `rekal [filters...] [query]` | Recall — hybrid search (BM25 + LSA) over sessions |
+| `rekal query --session <id> [--full]` | Drill into a session (turns, tool calls, files) |
+| `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 
 ### Recall Filters (root command)
 
@@ -105,6 +106,8 @@ rekal log                               # Show recent checkpoints
 rekal "JWT expiry"                      # Recall sessions mentioning JWT
 rekal --file src/auth/ "token refresh"  # Recall with file filter
 rekal --actor agent "migration"         # Show only agent-initiated sessions
+rekal query --session 01JNQX...        # Full turns for a specific session
+rekal query --session 01JNQX... --full # Include tool calls and files
 rekal query "SELECT * FROM sessions LIMIT 5"
 rekal clean                             # Remove Rekal from this repo
 ```

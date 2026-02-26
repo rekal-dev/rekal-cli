@@ -136,6 +136,29 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		return fmt.Errorf("populate files_index: %w", err)
 	}
 
+	// files_index — supplement from file-modifying tool_calls for existing data
+	// that was checkpointed before the capture-time fix.
+	gitRootPrefix := gitRoot + "/"
+	if _, err := d.Exec(`
+		INSERT INTO files_index (checkpoint_id, session_id, file_path, change_type)
+		SELECT DISTINCT cs.checkpoint_id, tc.session_id,
+			replace(tc.path, $1, ''),
+			'T'
+		FROM data_db.tool_calls tc
+		JOIN data_db.checkpoint_sessions cs ON cs.session_id = tc.session_id
+		WHERE tc.tool IN ('Write', 'Edit', 'NotebookEdit')
+		  AND tc.path IS NOT NULL AND length(tc.path) > 0
+		  AND tc.path LIKE ($1 || '%')
+		  AND NOT EXISTS (
+			SELECT 1 FROM files_index fi
+			WHERE fi.checkpoint_id = cs.checkpoint_id
+			  AND fi.session_id = tc.session_id
+			  AND fi.file_path = replace(tc.path, $1, '')
+		  )
+	`, gitRootPrefix); err != nil {
+		return fmt.Errorf("populate files_index from tool_calls: %w", err)
+	}
+
 	// session_facets — aggregation
 	if _, err := d.Exec(`
 		INSERT INTO session_facets (
@@ -186,7 +209,7 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 
 // CreateFTSIndex creates the DuckDB full-text search index on turns_ft.
 func CreateFTSIndex(d *sql.DB) error {
-	_, err := d.Exec(`PRAGMA create_fts_index('turns_ft', 'id', 'content', stemmer='english', stopwords='english')`)
+	_, err := d.Exec(`PRAGMA create_fts_index('turns_ft', 'id', 'content', stemmer='english', stopwords='english', overwrite=1)`)
 	if err != nil {
 		return fmt.Errorf("create fts index: %w", err)
 	}
@@ -214,21 +237,35 @@ func WriteIndexState(d *sql.DB, key, value string) error {
 
 // StoreEmbeddings bulk-inserts session embeddings into the index DB.
 func StoreEmbeddings(d *sql.DB, vectors map[string][]float64, model string) error {
-	stmt, err := d.Prepare(`
-		INSERT INTO session_embeddings (session_id, embedding, model, generated_at)
-		VALUES ($1, $2, $3, now())
-	`)
-	if err != nil {
-		return fmt.Errorf("prepare embedding insert: %w", err)
-	}
-	defer stmt.Close() //nolint:errcheck
-
 	for sessionID, vec := range vectors {
-		if _, err := stmt.Exec(sessionID, vec, model); err != nil {
+		// Inline the array literal because the database/sql driver cannot
+		// bind a string to a FLOAT[] column, even with a cast.
+		query := fmt.Sprintf(
+			`INSERT INTO session_embeddings (session_id, embedding, model, generated_at)
+			 VALUES ($1, %s::FLOAT[], $2, now())`,
+			float64SliceToDuckDB(vec),
+		)
+		if _, err := d.Exec(query, sessionID, model); err != nil {
 			return fmt.Errorf("insert embedding for %s: %w", sessionID, err)
 		}
 	}
 	return nil
+}
+
+// float64SliceToDuckDB serializes a float64 slice as a DuckDB list literal
+// (e.g. "[0.1, 0.2, 0.3]") because the database/sql driver does not support
+// passing Go slices for FLOAT[] columns.
+func float64SliceToDuckDB(v []float64) string {
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, f := range v {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%g", f)
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 // QuerySessionContent returns session_id → concatenated turn content for LSA.

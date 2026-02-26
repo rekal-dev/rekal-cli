@@ -3,13 +3,18 @@ name: rekal
 description: |
   Use this skill when working in a repo with Rekal initialized (.rekal/ exists).
   Rekal gives you memory of prior AI sessions — who changed what, why, and when.
-  Use `rekal query` to search conversation history, tool calls, and file changes
-  before making decisions about code you're modifying.
+  Start with `rekal "keyword"` to search, then drill into sessions with
+  `rekal query --session <id>`. Run `rekal <command> --help` for full details.
 ---
 
 # Rekal — Session Memory
 
 Rekal captures AI coding sessions (conversation turns, tool calls, file changes) and stores them in a local DuckDB database. Use it to understand prior context before modifying code.
+
+## Binary
+
+If `rekal` is not on PATH, run `export PATH="$HOME/.local/bin:$PATH"` first.
+The presence of this skill file means the binary is installed.
 
 ## When to Use
 
@@ -18,110 +23,64 @@ Rekal captures AI coding sessions (conversation turns, tool calls, file changes)
 - When the user asks about prior session history
 - When working on files that were recently changed by AI agents
 
-## How to Query
+## Workflow
 
-Run SQL against the data DB:
+### 1. Search — find relevant sessions
 
 ```bash
-rekal query "SELECT ..."
+rekal "JWT expiry"                      # keyword search (BM25 + LSA hybrid)
+rekal --file src/auth/ "token refresh"  # filter by file path (regex)
+rekal --actor agent "migration"         # filter by actor type
+rekal --author alice@co.com "billing"   # filter by author
+rekal -n 5 "error handling"            # limit results
 ```
 
-Read-only (SELECT only). Output is one JSON object per row.
+Output is scored JSON with session IDs, snippets, and metadata.
 
-## Schema
+### 2. Drill down — read the full conversation
 
-### `sessions` — one row per captured session
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | VARCHAR PK | ULID |
-| `parent_session_id` | VARCHAR | Parent session (for subagents) |
-| `session_hash` | VARCHAR | SHA-256 of raw session file |
-| `captured_at` | TIMESTAMP | When captured |
-| `actor_type` | VARCHAR | `"human"` or `"agent"` |
-| `agent_id` | VARCHAR | Agent ID if actor_type is agent |
-| `user_email` | VARCHAR | Git user.email |
-| `branch` | VARCHAR | Git branch |
-
-### `turns` — conversation turns
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | VARCHAR PK | ULID |
-| `session_id` | VARCHAR FK | → sessions.id |
-| `turn_index` | INTEGER | 0-based position |
-| `role` | VARCHAR | `"human"` (prompt) or `"assistant"` (response) |
-| `content` | VARCHAR | Text content |
-| `ts` | TIMESTAMP | Timestamp |
-
-### `tool_calls` — tool invocations
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | VARCHAR PK | ULID |
-| `session_id` | VARCHAR FK | → sessions.id |
-| `call_order` | INTEGER | 0-based position |
-| `tool` | VARCHAR | Write, Edit, Read, Bash, Glob, Grep, Task, etc. |
-| `path` | VARCHAR | File path (if applicable) |
-| `cmd_prefix` | VARCHAR | First 100 chars of Bash command |
-
-### `checkpoints` — linked to git commits
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | VARCHAR PK | Orphan branch commit SHA |
-| `git_sha` | VARCHAR | Main repo HEAD at checkpoint |
-| `git_branch` | VARCHAR | Main repo branch |
-| `user_email` | VARCHAR | Git user.email |
-| `ts` | TIMESTAMP | Checkpoint time |
-
-### `files_touched` — files changed per checkpoint
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | VARCHAR PK | ULID |
-| `checkpoint_id` | VARCHAR FK | → checkpoints.id |
-| `file_path` | VARCHAR | Relative path |
-| `change_type` | VARCHAR | A (added), M (modified), D (deleted) |
-
-### `checkpoint_sessions` — junction
-
-| Column | Type |
-|--------|------|
-| `checkpoint_id` | VARCHAR FK → checkpoints.id |
-| `session_id` | VARCHAR FK → sessions.id |
-
-## Common Queries
-
-**What sessions touched a file:**
 ```bash
-rekal query "SELECT DISTINCT t.session_id, s.user_email, s.captured_at FROM tool_calls t JOIN sessions s ON t.session_id = s.id WHERE t.path LIKE '%auth%' ORDER BY s.captured_at DESC"
+rekal query --session 01JNQX...        # turns only
+rekal query --session 01JNQX... --full # turns + tool calls + files touched
 ```
 
-**What was discussed about a file:**
+### 3. Raw SQL — for edge cases
+
 ```bash
-rekal query "SELECT tu.role, tu.content FROM turns tu JOIN tool_calls tc ON tu.session_id = tc.session_id WHERE tc.path LIKE '%login.tsx%' AND tu.role = 'human' ORDER BY tu.turn_index"
+rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
+rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC"
 ```
 
-**Recent sessions:**
-```bash
-rekal query "SELECT id, user_email, branch, captured_at FROM sessions ORDER BY captured_at DESC LIMIT 5"
-```
+Run `rekal query --help` for the full data DB and index DB schemas.
 
-**What tools were used most:**
-```bash
-rekal query "SELECT tool, count(*) as cnt FROM tool_calls GROUP BY tool ORDER BY cnt DESC"
-```
+## Filters (root command)
 
-**Files most frequently edited by AI:**
-```bash
-rekal query "SELECT path, count(*) as cnt FROM tool_calls WHERE tool IN ('Write', 'Edit') AND path IS NOT NULL GROUP BY path ORDER BY cnt DESC LIMIT 10"
-```
+| Flag | Description |
+|------|-------------|
+| `--file <regex>` | Filter by file path (regex, git-root-relative) |
+| `--commit <sha>` | Filter by git commit SHA |
+| `--author <email>` | Filter by author email |
+| `--actor <human\|agent>` | Filter by actor type |
+| `-n`, `--limit <n>` | Max results (default: 20, 0 = no limit) |
+
+## Self-Service
+
+Run `rekal <command> --help` for detailed help on any command, including
+the full DB schemas (`rekal query --help`).
 
 ## Guidelines
 
-- Query before modifying files that have prior session history
-- Use `LIKE '%filename%'` for fuzzy file matching
-- Join `turns` with `tool_calls` via `session_id` to get context around file changes
+- Search before modifying files that have prior session history
+- Start with `rekal "keyword"` — only drop to raw SQL when the search workflow doesn't cover your need
 - Human turns contain the intent; assistant turns contain the reasoning
-- `actor_type` distinguishes human sessions from automated agent sessions
+- `actor_type` distinguishes human-initiated sessions from automated agent sessions
+- Join `turns` with `tool_calls` via `session_id` to get context around file changes
+
+## Data Model Notes
+
+- `files_touched` (shown in `--full` output) comes from git diff AND session tool_calls — it includes files that were committed as well as files Written/Edited during the session. Change type `T` (touched) marks entries derived from tool_calls rather than git-native types (M/A/D/R).
+- `tool_calls` in `--full` output includes a `path` field (absolute) for file-targeting tools — this is the most complete source for "what files did this session interact with."
+- If `files_touched` seems incomplete for a session, query tool_calls directly:
+  ```bash
+  rekal query "SELECT DISTINCT path FROM tool_calls WHERE session_id = '<id>' AND path IS NOT NULL AND length(path) > 0"
+  ```

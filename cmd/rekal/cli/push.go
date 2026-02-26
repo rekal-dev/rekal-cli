@@ -15,6 +15,16 @@ func newPushCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Push Rekal data to the remote branch",
+		Long: `Export new checkpoints to the wire format and push to the remote orphan branch.
+
+Unexported checkpoints in data.db are encoded into the compact binary wire
+format (rekal.body + dict.bin) and committed to the local orphan branch
+(rekal/<email>). The branch is then pushed to origin.
+
+Use --force to overwrite the remote branch when it has diverged from local
+(e.g. after a rebuild or conflict).
+
+Normally runs automatically via the pre-push hook installed by 'rekal init'.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

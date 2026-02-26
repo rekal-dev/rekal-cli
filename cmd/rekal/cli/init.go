@@ -19,6 +19,17 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize Rekal in the current git repository",
+		Long: `Initialize Rekal in the current git repository.
+
+Creates:
+  .rekal/           Local directory (gitignored) with data.db and index.db
+  post-commit hook   Runs 'rekal checkpoint' after each commit
+  pre-push hook      Runs 'rekal push' before each push
+  orphan branch      rekal/<email> for wire format storage
+  agent skill        .claude/skills/rekal/SKILL.md for Claude Code
+
+If the remote already has data on your rekal branch, it is fetched and
+imported into the local data DB automatically.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

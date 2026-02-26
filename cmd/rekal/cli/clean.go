@@ -13,6 +13,15 @@ func newCleanCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clean",
 		Short: "Remove Rekal setup from this repository (local only)",
+		Long: `Remove Rekal setup from this repository. Local only — does not touch
+the remote branch or .gitignore.
+
+Removes:
+  .rekal/           Data DB, index DB, and all local state
+  post-commit hook   Only if it contains the rekal marker
+  pre-push hook      Only if it contains the rekal marker
+
+Run 'rekal init' to reinitialize after cleaning.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

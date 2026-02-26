@@ -13,6 +13,17 @@ func newIndexCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "index",
 		Short: "Rebuild the index DB from the data DB",
+		Long: `Drop and rebuild the index DB (.rekal/index.db) from the data DB.
+
+The index is local-only and never synced. It contains:
+  - Full-text search index (BM25) over conversation turns
+  - LSA vector embeddings for semantic similarity
+  - Session facets (author, branch, actor, counts) for fast filtering
+  - File co-occurrence graph
+  - Tool call indexes
+
+Rebuild when the index is out of date or after importing new data.
+'rekal sync' rebuilds the index automatically.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

@@ -20,7 +20,53 @@ func newQueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query [<sql> | --session <id>]",
 		Short: "Run raw SQL or drill into a session",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
+
+Session drill-down (--session) returns the full conversation as JSON. Add --full
+to include tool calls and files touched.
+
+Raw SQL mode accepts SELECT statements only. Output is one JSON object per row.
+Use --index to query the index DB instead of the data DB.
+
+DATA DB SCHEMA (.rekal/data.db):
+
+  sessions        id, parent_session_id, session_hash, captured_at, actor_type,
+                  agent_id, user_email, branch
+  turns           id, session_id, turn_index, role, content, ts
+  tool_calls      id, session_id, call_order, tool, path, cmd_prefix
+  checkpoints     id, git_sha, git_branch, user_email, ts, actor_type, agent_id,
+                  exported
+  files_touched   id, checkpoint_id, file_path, change_type
+  checkpoint_sessions  checkpoint_id, session_id
+
+INDEX DB SCHEMA (.rekal/index.db):
+
+  turns_ft             id, session_id, turn_index, role, content, ts
+  tool_calls_index     id, session_id, call_order, tool, path, cmd_prefix
+  files_index          checkpoint_id, session_id, file_path, change_type
+  session_facets       session_id, user_email, git_branch, actor_type, agent_id,
+                       captured_at, turn_count, tool_call_count, file_count,
+                       checkpoint_id, git_sha
+  file_cooccurrence    file_a, file_b, count
+  session_embeddings   session_id, embedding, model, generated_at`,
+		Example: `  # Drill into a session (turns only)
+  rekal query --session 01JNQX...
+
+  # Drill into a session (turns + tool calls + files)
+  rekal query --session 01JNQX... --full
+
+  # Recent sessions
+  rekal query "SELECT id, user_email, branch, captured_at FROM sessions ORDER BY captured_at DESC LIMIT 5"
+
+  # Sessions that touched a file
+  rekal query "SELECT DISTINCT s.id, s.user_email, s.captured_at FROM tool_calls t JOIN sessions s ON t.session_id = s.id WHERE t.path LIKE '%auth%'"
+
+  # Most-edited files
+  rekal query "SELECT path, count(*) as n FROM tool_calls WHERE tool IN ('Write','Edit') AND path IS NOT NULL GROUP BY path ORDER BY n DESC LIMIT 10"
+
+  # File co-occurrence (index DB)
+  rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC LIMIT 10"`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 

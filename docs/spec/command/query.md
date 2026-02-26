@@ -1,8 +1,8 @@
 # rekal query
 
-**Role:** Raw SQL over the Rekal data model. Run a single SQL statement against the data DB (default) or the index DB (`--index`). For power users and agents that need schema-level access.
+**Role:** Two modes: raw SQL over the Rekal data model, or session drill-down. The `--session` flag is the second step in progressive context loading — after recall returns snippets, the agent drills into specific sessions for full turns.
 
-**Invocation:** `rekal query "<sql>"` or `rekal query --index "<sql>"`.
+**Invocation:** `rekal query "<sql>"`, `rekal query --index "<sql>"`, or `rekal query --session <id> [--full]`.
 
 ---
 
@@ -12,20 +12,36 @@ See [preconditions.md](../preconditions.md): git repo, init done.
 
 ---
 
-## What query does
+## Two modes
 
-1. **Run shared preconditions** — Git root, init done.
-2. **Choose target** — Data DB (`.rekal/data.db`) by default; index DB (`.rekal/index.db`) if `--index`.
-3. **Execute** — Run the given SQL as a single statement. Read-only (SELECT only).
-4. **Output** — Tab-separated results with column headers.
+### SQL mode (default)
+
+Run a single SELECT statement against the data DB or index DB.
+
+1. **Choose target** — Data DB (`.rekal/data.db`) by default; index DB (`.rekal/index.db`) if `--index`.
+2. **Execute** — Read-only (SELECT only). Rejects non-SELECT statements.
+3. **Output** — One JSON object per row (NDJSON).
+
+### Session drill-down (`--session <id>`)
+
+Returns the full conversation for a specific session. This is the progressive loading drill-down — after `rekal <query>` returns scored snippets, the agent calls `rekal query --session <id>` to get full turns.
+
+1. **Query session** — Fetch session metadata from `sessions` table.
+2. **Query turns** — Fetch all turns ordered by `turn_index`.
+3. **If `--full`** — Also fetch tool calls and files touched.
+4. **Output** — Single JSON object with session metadata, turns, and optionally tool calls and files.
+
+`--session` and positional SQL are mutually exclusive.
 
 ---
 
-## Flag
+## Flags
 
 | Flag | Meaning |
 |------|--------|
 | `--index` | Run SQL against the **index DB** instead of the data DB |
+| `--session <id>` | Show session conversation by ID (drill-down mode) |
+| `--full` | Include tool calls and files in session output (requires `--session`) |
 
 ---
 

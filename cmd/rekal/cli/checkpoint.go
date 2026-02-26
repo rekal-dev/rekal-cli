@@ -21,6 +21,15 @@ func newCheckpointCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "checkpoint",
 		Short: "Capture the current session after a commit",
+		Long: `Snapshot the active AI session into the local data DB.
+
+Reads session transcript files (conversation turns, tool calls, file changes)
+from the agent's session directory, deduplicates by content hash, and inserts
+into .rekal/data.db. Each checkpoint is linked to the current HEAD commit and
+records which files were changed.
+
+Normally runs automatically via the post-commit hook installed by 'rekal init'.
+Run manually to capture a session without committing.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
@@ -83,6 +92,8 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 
 	var sessionIDs []string
 	var inserted int
+	// Collect unique relative file paths from file-modifying tool_calls across all sessions.
+	toolCallPaths := make(map[string]struct{})
 
 	for _, f := range files {
 		// Incremental: check checkpoint_state to skip unchanged files.
@@ -159,6 +170,24 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			}
 		}
 
+		// Collect file-modifying tool_call paths for files_touched supplementation.
+		for _, tc := range payload.ToolCalls {
+			if tc.Path == "" {
+				continue
+			}
+			switch tc.Tool {
+			case "Write", "Edit", "NotebookEdit":
+			default:
+				continue
+			}
+			rel := strings.TrimPrefix(tc.Path, gitRoot+"/")
+			if rel == tc.Path {
+				// Path is not under gitRoot — external file, skip.
+				continue
+			}
+			toolCallPaths[rel] = struct{}{}
+		}
+
 		// Update checkpoint state cache.
 		_ = db.UpsertCheckpointState(dataDB, f, info.Size(), hash)
 
@@ -184,14 +213,26 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 		return fmt.Errorf("insert checkpoint: %w", err)
 	}
 
-	// Insert files_touched.
+	// Insert files_touched from git diff.
+	gitTouchedSet := make(map[string]struct{})
 	for _, ft := range filesTouched {
 		parts := strings.SplitN(ft, "\t", 2)
 		if len(parts) != 2 {
 			continue
 		}
+		gitTouchedSet[parts[1]] = struct{}{}
 		if err := db.InsertFileTouched(dataDB, newID(), checkpointID, parts[1], parts[0]); err != nil {
 			return fmt.Errorf("insert file_touched: %w", err)
+		}
+	}
+
+	// Supplement files_touched with file-modifying tool_call paths not already covered by git diff.
+	for p := range toolCallPaths {
+		if _, exists := gitTouchedSet[p]; exists {
+			continue
+		}
+		if err := db.InsertFileTouched(dataDB, newID(), checkpointID, p, "T"); err != nil {
+			return fmt.Errorf("insert file_touched (tool_call): %w", err)
 		}
 	}
 

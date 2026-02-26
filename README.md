@@ -14,6 +14,7 @@ Your agent starts every session knowing *why* the code looks the way it does.
 - [Commands Reference](#commands-reference)
 - [Typical Workflow](#typical-workflow)
 - [Architecture](#architecture)
+- [Benchmarks](#benchmarks)
 - [Development](#development)
 - [Getting Help](#getting-help)
 - [License](#license)
@@ -30,11 +31,37 @@ Your agent starts every session knowing *why* the code looks the way it does.
 
 ## How It Works
 
-```
-  You code with an AI agent          Rekal captures the session
-  ─────────────────────────          ──────────────────────────
-  prompt → response → commit   ───►  conversation, tool calls,
-                                     reasoning — linked to the commit
+```mermaid
+flowchart TB
+    subgraph capture ["Capture (post-commit hook)"]
+        A["AI Session<br/>prompts, responses,<br/>tool calls, files"] -->|"rekal checkpoint"| B["data.db<br/><i>DuckDB — append-only</i>"]
+    end
+
+    subgraph index ["Index (local-only, rebuilt on demand)"]
+        B -->|"rekal index"| C["index.db<br/><i>DuckDB — derived</i>"]
+        C --- D["BM25 full-text search"]
+        C --- E["LSA vector embeddings"]
+        C --- F["File co-occurrence graph"]
+        C --- G["Session facets &amp; filters"]
+    end
+
+    subgraph transport ["Transport (git orphan branches)"]
+        B -->|"rekal push"| H["Wire Format<br/><i>rekal.body + dict.bin</i><br/>zstd · varint interning · append-only"]
+        H -->|"git push origin<br/>rekal/&lt;email&gt;"| I["Remote<br/><i>per-user orphan branch</i>"]
+        I -->|"rekal sync"| C
+    end
+
+    subgraph query ["Query (agent-driven)"]
+        J["rekal 'keyword'"] -->|"hybrid BM25 + LSA"| C
+        C -->|"scored JSON"| K["Agent"]
+        K -->|"rekal query --session &lt;id&gt;"| B
+        B -->|"full conversation"| K
+    end
+
+    style capture fill:#1a1a2e,stroke:#e94560,color:#eee
+    style index fill:#1a1a2e,stroke:#0f3460,color:#eee
+    style transport fill:#1a1a2e,stroke:#16213e,color:#eee
+    style query fill:#1a1a2e,stroke:#533483,color:#eee
 ```
 
 When you commit, Rekal automatically snapshots your active AI session into a local DuckDB database. `rekal push` shares it with your team on a per-user orphan branch — your git history stays clean.
@@ -50,8 +77,6 @@ When you commit, Rekal automatically snapshots your active AI session into a loc
 # Install
 curl -fsSL https://raw.githubusercontent.com/rekal-dev/cli/main/scripts/install.sh | bash
 
-# Or with a specific version
-REKAL_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/rekal-dev/cli/main/scripts/install.sh | bash
 ```
 
 Install location: `~/.local/bin` (override with `REKAL_INSTALL_DIR`).
@@ -148,6 +173,37 @@ git show rekal/alice@example.com:dict.bin | xxd | head   # string dictionary
 
 Schema documentation: [docs/db/README.md](docs/db/README.md).
 Wire format rationale: [docs/git-transportation.md](docs/git-transportation.md).
+
+## Benchmarks
+
+Measured on two real repositories. All times in seconds, wall clock, macOS/arm64.
+
+### Dataset Size
+
+| Metric | 165 sessions | 57 sessions |
+|--------|-------------|------------|
+| Turns | 14,019 | 3,929 |
+| data.db | 13 MB | 7.3 MB |
+| index.db | 18 MB | 10 MB |
+
+### Operation Timing
+
+| Operation | 165 sessions | 57 sessions |
+|-----------|-------------|------------|
+| init (cold) | 4.60s | 0.98s |
+| checkpoint (cold) | 0.50s | 2.66s |
+| checkpoint (incremental) | 0.51s | 0.23s |
+| index | 0.85s | 0.61s |
+| push | 0.18s | 1.93s |
+| sync | 2.06s | 1.78s |
+| search "authentication" | 0.15s | 0.13s |
+| search "database migration" | 0.17s | 0.14s |
+| search "error handling" | 0.16s | 0.13s |
+| query | 0.14s | 0.10s |
+| log | 0.14s | 0.10s |
+| clean | 0.13s | 0.10s |
+
+Search latency stays under 200ms even at 14k turns. The wire format keeps push times low — 0.18s for 165 sessions worth of data.
 
 ## Development
 

@@ -6,10 +6,10 @@ package nomic
 #cgo CFLAGS: -I${SRCDIR}/../../../../.deps/llama.cpp/include -I${SRCDIR}/../../../../.deps/llama.cpp/ggml/include
 #cgo LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/src -lllama
 #cgo LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/ggml/src -lggml -lggml-base -lggml-cpu
-#cgo LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/ggml/src/ggml-metal -lggml-metal
-#cgo LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/ggml/src/ggml-blas -lggml-blas
 #cgo LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/common -lcommon
 #cgo LDFLAGS: -lstdc++ -lm
+#cgo darwin LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/ggml/src/ggml-metal -lggml-metal
+#cgo darwin LDFLAGS: -L${SRCDIR}/../../../../.deps/llama.cpp/build/ggml/src/ggml-blas -lggml-blas
 #cgo darwin LDFLAGS: -framework Foundation -framework Metal -framework MetalKit -framework Accelerate
 #include "embed.h"
 #include <stdlib.h>

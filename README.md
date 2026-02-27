@@ -44,7 +44,7 @@ Install:
 curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | bash
 ```
 
-Default location: `~/.local/bin`. Override with `--target <dir>` or `REKAL_INSTALL_DIR`.
+Default location: `~/.local/bin`. Override with `--target <dir>`.
 
 Uninstall:
 

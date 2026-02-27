@@ -2,7 +2,7 @@
 set -euo pipefail
 
 GITHUB_REPO="rekal-dev/rekal-cli"
-DEFAULT_INSTALL_DIR="${REKAL_INSTALL_DIR:-$HOME/.local/bin}"
+DEFAULT_INSTALL_DIR="$HOME/.local/bin"
 
 # Colors (disabled in non-interactive mode)
 if [[ -t 1 ]]; then

@@ -17,12 +17,23 @@ func newSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync team context from remote rekal branches",
-		Long: `Fetch rekal branches from the remote and merge into the local search index.
+		Long: `Fetch team session data from remote rekal branches and import into the local database.
+
+This is a manual, deliberate operation — it is NOT automated via git hooks.
+Run it when you want to pull your team's session history before starting work.
+
+Imported data includes conversation turns, tool calls, and file change metadata
+from your teammates' AI coding sessions. Imported checkpoints are marked as
+exported so they are never re-pushed to your own branch.
 
 By default, fetches all rekal/* branches (whole team). Use --self to fetch
 only your own rekal branch — useful when syncing across your own machines
-(e.g. pulling context from your work laptop to your home machine) without
-fetching the whole team's data.`,
+(e.g. pulling context from your work laptop to your home machine).
+
+Typical usage:
+  Developer:  Run 'rekal sync' at the start of the day
+  Agent:      Run 'rekal sync' at the start of a session if team context matters
+  Ad-hoc:     Run 'rekal sync --self' to pull your own data from another machine`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

@@ -130,15 +130,56 @@ flowchart LR
     style query fill:#faf5ff,stroke:#a855f7,color:#333
 ```
 
-The flow: commit, capture, push, sync, recall.
+The flow: commit → capture → push → sync → recall.
 
-1. **Commit.** You commit code as usual. The post-commit hook runs `rekal checkpoint`, which snapshots your active AI session into `data.db`. Append-only — nothing is ever modified or deleted.
+### Developer touchpoints
 
-2. **Push.** `rekal push` encodes your data into a compact wire format (zstd compression, string interning) and writes it to your personal orphan branch `rekal/<your-email>`. Your git history stays clean — rekal data lives on a separate branch.
+| You do | Rekal does |
+|--------|------------|
+| `rekal init` (once per repo) | Creates `.rekal/`, installs git hooks, writes agent skill file |
+| `git commit` | Hook runs `rekal checkpoint` — snapshots your active AI session into `data.db` (append-only) |
+| `git push` | Hook runs `rekal push` — encodes only your unexported data into compact wire format (zstd + string interning) and pushes to your orphan branch `rekal/<email>` |
+| `rekal sync` (manual, when you want team context) | Fetches teammates' orphan branches, imports their sessions into your local DB and rebuilds the search index |
+| `rekal clean` (if needed) | Removes `.rekal/` and hooks from the repo |
 
-3. **Sync.** `rekal sync` pulls your teammates' orphan branches and imports their session data into your local index.
+Day-to-day: commit and push as normal. Everything else is automatic.
 
-4. **Recall.** `rekal "query"` runs a three-signal hybrid search (BM25 full-text, LSA embeddings, Nomic deep semantic embeddings) and returns scored results. The agent picks what matters.
+### Agent touchpoints
+
+| Agent does | Rekal does |
+|------------|------------|
+| `rekal "auth middleware"` | Runs hybrid search (BM25 + LSA + Nomic), returns scored JSON with `snippet_turn_index` pointing to the best-matching turn |
+| `rekal query --session <id> --offset N --limit 5` | Returns a small window of turns around the relevant part of the conversation, with `has_more` for pagination |
+| `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
+| `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |
+| `rekal --file src/billing/ "discount"` | Scoped search filtered by file path |
+| `rekal sync` (optional, at session start) | Pulls team context before the agent starts working |
+
+The agent controls how much context it loads. Search first, drill down progressively, full sessions only when needed.
+
+```bash
+# Agent touches src/billing/ — first, recall prior context
+rekal --file src/billing/ "discount logic"
+
+# Agent finds a relevant session, drills into the matching turn
+rekal query --session 01JNQX... --offset 10 --limit 5
+
+# Agent loads full detail only if needed
+rekal query --session 01JNQX... --full
+```
+
+### Ad-hoc usage
+
+```bash
+# Raw SQL for edge cases
+rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
+
+# Rebuild the search index after manual DB changes
+rekal index
+
+# View recent checkpoints
+rekal log
+```
 
 ### Two databases
 
@@ -153,27 +194,6 @@ Thin on the wire, rich on the machine.
 ### Orphan branches
 
 Rekal data lives on git orphan branches named `rekal/<email>`. These branches have no common ancestor with your code branches — they do not appear in your project history, do not affect merges, and do not clutter your working tree. Standard git push and fetch move the data.
-
-## Using Rekal with your agent
-
-Rekal is agent-first. The agent is the primary consumer.
-
-When you run `rekal init`, it installs a Claude Code skill that teaches the agent how to use Rekal. The agent learns to search for prior context before modifying files, load sessions progressively to stay within token budgets, and use the structured output to make informed decisions.
-
-The agent workflow:
-
-```bash
-# Agent touches src/billing/ — first, recall prior context
-rekal --file src/billing/ "discount logic"
-
-# Agent finds a relevant session, drills in
-rekal query --session 01JNQX... --limit 5
-
-# Agent loads more detail if needed
-rekal query --session 01JNQX... --full
-```
-
-The agent controls how much context it loads. Lightweight search first, full sessions only when needed.
 
 ## Commands reference
 

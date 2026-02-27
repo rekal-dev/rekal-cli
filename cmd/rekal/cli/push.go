@@ -17,14 +17,19 @@ func newPushCmd() *cobra.Command {
 		Short: "Push Rekal data to the remote branch",
 		Long: `Export new checkpoints to the wire format and push to the remote orphan branch.
 
-Unexported checkpoints in data.db are encoded into the compact binary wire
-format (rekal.body + dict.bin) and committed to the local orphan branch
-(rekal/<email>). The branch is then pushed to origin.
+Only YOUR unexported checkpoints are pushed — team data imported via 'rekal sync'
+is never re-exported. Each user pushes to their own branch (rekal/<email>).
+
+Checkpoints contain sessions (conversation turns, tool calls) and file change
+metadata anchored to git commits. They are encoded into a compact binary wire
+format (rekal.body + dict.bin) using zstd compression and string interning —
+a 2-10 MB session compresses to ~300 bytes on the wire.
 
 Use --force to overwrite the remote branch when it has diverged from local
 (e.g. after a rebuild or conflict).
 
-Normally runs automatically via the pre-push hook installed by 'rekal init'.`,
+Normally runs automatically via the pre-push git hook installed by 'rekal init'.
+You do not need to run this manually.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

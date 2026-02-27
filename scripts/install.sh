@@ -167,8 +167,8 @@ main() {
     local install_path="${install_dir}/rekal"
 
     chmod +x "$binary_path"
-    mkdir -p "$install_dir"
-    [[ -w "$install_dir" ]] || error "Cannot write to ${install_dir}."
+    mkdir -p "$install_dir" 2>/dev/null || true
+    [[ -d "$install_dir" && -w "$install_dir" ]] || error "Cannot write to ${install_dir}. Try: sudo mkdir -p ${install_dir} && sudo chown \$(whoami) ${install_dir}"
     mv "$binary_path" "$install_path"
 
     if "$install_path" version &>/dev/null; then

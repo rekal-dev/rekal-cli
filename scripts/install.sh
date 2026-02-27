@@ -203,7 +203,7 @@ main() {
 
         local export_line="export PATH=\"${install_dir}:\$PATH\""
 
-        if [[ -t 0 && -n "$shell_profile" ]]; then
+        if [[ -c /dev/tty && -n "$shell_profile" ]]; then
             echo ""
             printf '  %b rekal is not on your PATH. Add it to %b%s%b? [Y/n] ' \
                 "${DIM}▸${NC}" "${BOLD}" "$shell_profile" "${NC}"

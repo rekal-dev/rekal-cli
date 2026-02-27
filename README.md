@@ -1,5 +1,7 @@
 # Rekal
 
+[Website](https://rekal.dev) · [GitHub](https://github.com/rekal-dev/rekal-cli) · [Discord](https://discord.gg/eNNabp4b)
+
 > **Beta** — Works with Claude Code. More agents coming.
 
 ## Two problems

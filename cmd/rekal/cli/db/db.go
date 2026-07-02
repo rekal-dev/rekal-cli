@@ -59,13 +59,20 @@ func QuerySessionIDByHash(d *sql.DB, hash string) (string, error) {
 
 // InsertSession inserts a new session row into the data DB.
 func InsertSession(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source string) error {
+	return InsertSessionMeta(d, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source, "", "")
+}
+
+// InsertSessionMeta is InsertSession with team/workflow metadata for sessions
+// captured from Claude Code teammates runs or dynamic workflows.
+func InsertSessionMeta(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source, teamName, workflowName string) error {
 	if source == "" {
 		source = "claude"
 	}
 	_, err := d.Exec(
-		`INSERT INTO sessions (id, parent_session_id, session_hash, captured_at, actor_type, agent_id, user_email, branch, source)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		`INSERT INTO sessions (id, parent_session_id, session_hash, captured_at, actor_type, agent_id, user_email, branch, source, team_name, workflow_name)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		id, nullIfEmpty(parentSessionID), hash, capturedAt, actorType, agentID, userEmail, branch, source,
+		nullIfEmpty(teamName), nullIfEmpty(workflowName),
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)

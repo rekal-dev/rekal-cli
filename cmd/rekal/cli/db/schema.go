@@ -13,15 +13,20 @@ func InitDataSchema(d *sql.DB) error {
 
 // MigrateDataSchema applies forward-only migrations to an existing data DB.
 // Safe to call multiple times — each migration checks before applying.
+// Migrations must stay additive: data.db is append-only and shared via git,
+// so DBs written by older rekal versions must keep opening cleanly.
 func MigrateDataSchema(d *sql.DB) error {
 	// Migration: add source column if missing (existing DBs pre-multi-agent).
-	var count int
-	err := d.QueryRow(`SELECT count(*) FROM information_schema.columns
-		WHERE table_name = 'sessions' AND column_name = 'source'`).Scan(&count)
-	if err == nil && count == 0 {
-		if _, err := d.Exec(`ALTER TABLE sessions ADD COLUMN source VARCHAR NOT NULL DEFAULT 'claude'`); err != nil {
-			return err
-		}
+	if err := addColumnIfMissing(d, "sessions", "source", `VARCHAR NOT NULL DEFAULT 'claude'`); err != nil {
+		return err
+	}
+	// Migration: team/workflow metadata for Claude Code teammates and
+	// dynamic workflows (existing DBs pre-subagent-indexing).
+	if err := addColumnIfMissing(d, "sessions", "team_name", "VARCHAR"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(d, "sessions", "workflow_name", "VARCHAR"); err != nil {
+		return err
 	}
 	return nil
 }
@@ -32,7 +37,50 @@ func InitIndexSchema(d *sql.DB) error {
 	if indexDDL == "" {
 		return nil
 	}
+	// Migrate before running the DDL: on an index DB created by an older
+	// rekal the CREATE TABLE statements are no-ops, and the CREATE INDEX
+	// statements reference columns that only exist after migration.
+	if err := MigrateIndexSchema(d); err != nil {
+		return err
+	}
 	_, err := d.Exec(indexDDL)
+	return err
+}
+
+// MigrateIndexSchema applies forward-only migrations to an existing index DB.
+// The index can always be rebuilt from the data DB, but incremental indexing
+// runs against pre-existing index files, so columns are added in place.
+func MigrateIndexSchema(d *sql.DB) error {
+	for _, col := range []struct{ name, typ string }{
+		{"parent_session_id", "VARCHAR"},
+		{"team_name", "VARCHAR"},
+		{"workflow_name", "VARCHAR"},
+	} {
+		if err := addColumnIfMissing(d, "session_facets", col.name, col.typ); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// addColumnIfMissing adds a column to a table when the table exists but the
+// column does not. A missing table is a no-op — the CREATE TABLE DDL will
+// create it with the full current column set.
+func addColumnIfMissing(d *sql.DB, table, column, colType string) error {
+	var tables int
+	err := d.QueryRow(`SELECT count(*) FROM information_schema.tables
+		WHERE table_name = $1`, table).Scan(&tables)
+	if err != nil || tables == 0 {
+		return nil //nolint:nilerr // best-effort check; later DDL surfaces real problems
+	}
+
+	var count int
+	err = d.QueryRow(`SELECT count(*) FROM information_schema.columns
+		WHERE table_name = $1 AND column_name = $2`, table, column).Scan(&count)
+	if err != nil || count > 0 {
+		return nil //nolint:nilerr // best-effort check; later DDL surfaces real problems
+	}
+	_, err = d.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + colType)
 	return err
 }
 
@@ -46,7 +94,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 	agent_id          VARCHAR,
 	user_email        VARCHAR,
 	branch            VARCHAR,
-	source            VARCHAR NOT NULL DEFAULT 'claude'
+	source            VARCHAR NOT NULL DEFAULT 'claude',
+	team_name         VARCHAR,
+	workflow_name     VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS turns (
@@ -131,22 +181,28 @@ CREATE INDEX IF NOT EXISTS idx_fi_path ON files_index(file_path);
 CREATE INDEX IF NOT EXISTS idx_fi_session ON files_index(session_id);
 
 CREATE TABLE IF NOT EXISTS session_facets (
-	session_id      VARCHAR PRIMARY KEY,
-	user_email      VARCHAR,
-	git_branch      VARCHAR,
-	actor_type      VARCHAR NOT NULL,
-	agent_id        VARCHAR,
-	captured_at     TIMESTAMP NOT NULL,
-	turn_count      INTEGER NOT NULL DEFAULT 0,
-	tool_call_count INTEGER NOT NULL DEFAULT 0,
-	file_count      INTEGER NOT NULL DEFAULT 0,
-	checkpoint_id   VARCHAR,
-	git_sha         VARCHAR
+	session_id        VARCHAR PRIMARY KEY,
+	user_email        VARCHAR,
+	git_branch        VARCHAR,
+	actor_type        VARCHAR NOT NULL,
+	agent_id          VARCHAR,
+	captured_at       TIMESTAMP NOT NULL,
+	turn_count        INTEGER NOT NULL DEFAULT 0,
+	tool_call_count   INTEGER NOT NULL DEFAULT 0,
+	file_count        INTEGER NOT NULL DEFAULT 0,
+	checkpoint_id     VARCHAR,
+	git_sha           VARCHAR,
+	parent_session_id VARCHAR,
+	team_name         VARCHAR,
+	workflow_name     VARCHAR
 );
 CREATE INDEX IF NOT EXISTS idx_sf_email ON session_facets(user_email);
 CREATE INDEX IF NOT EXISTS idx_sf_actor ON session_facets(actor_type);
 CREATE INDEX IF NOT EXISTS idx_sf_branch ON session_facets(git_branch);
 CREATE INDEX IF NOT EXISTS idx_sf_sha ON session_facets(git_sha);
+CREATE INDEX IF NOT EXISTS idx_sf_parent ON session_facets(parent_session_id);
+CREATE INDEX IF NOT EXISTS idx_sf_team ON session_facets(team_name);
+CREATE INDEX IF NOT EXISTS idx_sf_workflow ON session_facets(workflow_name);
 
 CREATE TABLE IF NOT EXISTS file_cooccurrence (
 	file_a          VARCHAR NOT NULL,

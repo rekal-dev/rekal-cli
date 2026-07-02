@@ -187,10 +187,10 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			}
 
 			// Insert session into DuckDB.
-			if err := db.InsertSession(
+			if err := db.InsertSessionMeta(
 				dataDB, sessionID, parentSessionID, hash,
 				payload.ActorType, payload.AgentID, email, payload.Branch, capturedAt.Format(time.RFC3339),
-				payload.Source,
+				payload.Source, payload.TeamName, payload.WorkflowName,
 			); err != nil {
 				return fmt.Errorf("insert session: %w", err)
 			}

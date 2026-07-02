@@ -80,6 +80,21 @@ func ftsCacheDir() (string, error) {
 	return filepath.Join(home, ".cache", "rekal", "extensions"), nil
 }
 
+// migrateDataAt opens the data DB read-write just long enough to apply
+// forward-only schema migrations, so index population can rely on the
+// current column set even for data DBs written by older rekal versions.
+func migrateDataAt(gitRoot string) error {
+	dataDB, err := OpenData(gitRoot)
+	if err != nil {
+		return fmt.Errorf("open data db for migration: %w", err)
+	}
+	defer dataDB.Close() //nolint:errcheck
+	if err := MigrateDataSchema(dataDB); err != nil {
+		return fmt.Errorf("migrate data db: %w", err)
+	}
+	return nil
+}
+
 // DropIndexTables drops all index tables for a clean rebuild.
 func DropIndexTables(d *sql.DB) error {
 	tables := []string{
@@ -102,6 +117,12 @@ func DropIndexTables(d *sql.DB) error {
 // PopulateIndex attaches the data DB and bulk-populates all index tables.
 func PopulateIndex(d *sql.DB, gitRoot string) error {
 	dataPath := filepath.Join(gitRoot, ".rekal", "data.db")
+
+	// The data DB may have been written by an older rekal (it is shared via
+	// git); make sure schema migrations ran before querying new columns.
+	if err := migrateDataAt(gitRoot); err != nil {
+		return err
+	}
 
 	if _, err := d.Exec(fmt.Sprintf("ATTACH '%s' AS data_db (READ_ONLY)", dataPath)); err != nil {
 		return fmt.Errorf("attach data_db: %w", err)
@@ -164,7 +185,7 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		INSERT INTO session_facets (
 			session_id, user_email, git_branch, actor_type, agent_id,
 			captured_at, turn_count, tool_call_count, file_count,
-			checkpoint_id, git_sha
+			checkpoint_id, git_sha, parent_session_id, team_name, workflow_name
 		)
 		SELECT
 			s.id,
@@ -177,7 +198,10 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 			(SELECT count(*) FROM data_db.tool_calls tc WHERE tc.session_id = s.id),
 			COALESCE(fc.file_count, 0),
 			c.id,
-			c.git_sha
+			c.git_sha,
+			s.parent_session_id,
+			s.team_name,
+			s.workflow_name
 		FROM data_db.sessions s
 		LEFT JOIN data_db.checkpoint_sessions cs ON cs.session_id = s.id
 		LEFT JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id
@@ -321,6 +345,11 @@ func toFloat64Slice(v interface{}) ([]float64, error) {
 func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, checkpointID string) error {
 	dataPath := filepath.Join(gitRoot, ".rekal", "data.db")
 
+	// See PopulateIndex: migrate before querying new columns.
+	if err := migrateDataAt(gitRoot); err != nil {
+		return err
+	}
+
 	if _, err := d.Exec(fmt.Sprintf("ATTACH '%s' AS data_db (READ_ONLY)", dataPath)); err != nil {
 		return fmt.Errorf("attach data_db: %w", err)
 	}
@@ -350,7 +379,7 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 			INSERT INTO session_facets (
 				session_id, user_email, git_branch, actor_type, agent_id,
 				captured_at, turn_count, tool_call_count, file_count,
-				checkpoint_id, git_sha
+				checkpoint_id, git_sha, parent_session_id, team_name, workflow_name
 			)
 			SELECT
 				s.id, s.user_email,
@@ -359,7 +388,8 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 				(SELECT count(*) FROM data_db.turns t WHERE t.session_id = s.id),
 				(SELECT count(*) FROM data_db.tool_calls tc WHERE tc.session_id = s.id),
 				COALESCE(fc.cnt, 0),
-				c.id, c.git_sha
+				c.id, c.git_sha,
+				s.parent_session_id, s.team_name, s.workflow_name
 			FROM data_db.sessions s
 			LEFT JOIN data_db.checkpoint_sessions cs ON cs.session_id = s.id
 			LEFT JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id

@@ -155,6 +155,73 @@ func TestMigrateIndexSchema_OldIndexDB(t *testing.T) {
 	}
 }
 
+// TestPopulateIndex_OptionalMetadataAcrossAgents verifies that sessions
+// without harness metadata (Codex etc.) index cleanly with NULLs while
+// sessions with metadata carry it into session_facets — no per-agent
+// special-casing.
+func TestPopulateIndex_OptionalMetadataAcrossAgents(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	// A Codex session: no team/workflow/parent/agent metadata.
+	if err := InsertSession(dataDB, "codex1", "", "h1", "human", "", "frank@example.com", "main", "2026-07-01T10:00:00Z", "codex"); err != nil {
+		t.Fatalf("InsertSession codex: %v", err)
+	}
+	// A Claude workflow transcript with full metadata.
+	if err := InsertSessionMeta(dataDB, "wf1", "codex1", "h2", "agent", "step1",
+		"frank@example.com", "main", "2026-07-01T11:00:00Z", "claude", "perf-team", "release-flow"); err != nil {
+		t.Fatalf("InsertSessionMeta: %v", err)
+	}
+	for _, sid := range []string{"codex1", "wf1"} {
+		if err := InsertTurn(dataDB, sid+":0", sid, 0, "human", "hello from "+sid, ""); err != nil {
+			t.Fatalf("InsertTurn %s: %v", sid, err)
+		}
+	}
+	dataDB.Close()
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close()
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	var team, workflow, parent string
+	if err := indexDB.QueryRow(
+		`SELECT COALESCE(team_name,''), COALESCE(workflow_name,''), COALESCE(parent_session_id,'')
+		 FROM session_facets WHERE session_id = 'codex1'`,
+	).Scan(&team, &workflow, &parent); err != nil {
+		t.Fatalf("read codex facets: %v", err)
+	}
+	if team != "" || workflow != "" || parent != "" {
+		t.Errorf("codex facets = %q/%q/%q, want all empty", team, workflow, parent)
+	}
+
+	if err := indexDB.QueryRow(
+		`SELECT COALESCE(team_name,''), COALESCE(workflow_name,''), COALESCE(parent_session_id,'')
+		 FROM session_facets WHERE session_id = 'wf1'`,
+	).Scan(&team, &workflow, &parent); err != nil {
+		t.Fatalf("read workflow facets: %v", err)
+	}
+	if team != "perf-team" || workflow != "release-flow" || parent != "codex1" {
+		t.Errorf("workflow facets = %q/%q/%q, want perf-team/release-flow/codex1", team, workflow, parent)
+	}
+}
+
 // TestInsertSession_BackwardCompatibleWrapper ensures the pre-metadata insert
 // path still works unchanged (used by import and older call sites).
 func TestInsertSession_BackwardCompatibleWrapper(t *testing.T) {

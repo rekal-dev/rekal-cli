@@ -166,6 +166,96 @@ func TestSessionDrilldown_DataSessionStillWorks(t *testing.T) {
 	}
 }
 
+// TestSessionDrilldown_MetadataOmittedForPlainSessions guards cross-agent
+// consistency: a session without harness metadata (Codex, old captures, …)
+// must not gain the optional keys in its JSON output at all.
+func TestSessionDrilldown_MetadataOmittedForPlainSessions(t *testing.T) {
+	t.Parallel()
+
+	root := setupDrilldownRepo(t)
+	const sessionID = "01CODEXSESSION"
+
+	dataDB, err := db.OpenData(root)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer dataDB.Close()
+
+	// Legacy insert path, codex source, no team/workflow/parent/agent.
+	if err := db.InsertSession(dataDB, sessionID, "", "hashx", "human", "", "frank@example.com", "main", "2026-06-30 09:00:00", "codex"); err != nil {
+		t.Fatalf("InsertSession: %v", err)
+	}
+	if _, err := dataDB.Exec(
+		`INSERT INTO turns (id, session_id, turn_index, role, content) VALUES
+		 ($1 || ':0', $1, 0, 'human', 'codex question')`,
+		sessionID,
+	); err != nil {
+		t.Fatalf("insert turns: %v", err)
+	}
+
+	cmd := &cobra.Command{}
+	var out strings.Builder
+	cmd.SetOut(&out)
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, ""); err != nil {
+		t.Fatalf("runSessionDrilldown: %v", err)
+	}
+
+	raw := out.String()
+	for _, key := range []string{"team_name", "workflow_name", "parent_session_id", "agent_id"} {
+		if strings.Contains(raw, key) {
+			t.Errorf("output contains %q, want it omitted for a session without harness metadata:\n%s", key, raw)
+		}
+	}
+}
+
+// TestSessionDrilldown_SubagentMetadataShown checks that harness metadata is
+// carried in the drill-down output when present.
+func TestSessionDrilldown_SubagentMetadataShown(t *testing.T) {
+	t.Parallel()
+
+	root := setupDrilldownRepo(t)
+	const parentID = "01TRUNK"
+	const sessionID = "01WORKFLOWSTEP"
+
+	dataDB, err := db.OpenData(root)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer dataDB.Close()
+
+	if err := db.InsertSession(dataDB, parentID, "", "hashp", "human", "", "frank@example.com", "main", "2026-06-30 09:00:00", "claude"); err != nil {
+		t.Fatalf("InsertSession parent: %v", err)
+	}
+	if err := db.InsertSessionMeta(dataDB, sessionID, parentID, "hashw", "agent", "step1",
+		"frank@example.com", "main", "2026-06-30 09:05:00", "claude", "perf-team", "release-flow"); err != nil {
+		t.Fatalf("InsertSessionMeta: %v", err)
+	}
+	if _, err := dataDB.Exec(
+		`INSERT INTO turns (id, session_id, turn_index, role, content) VALUES
+		 ($1 || ':0', $1, 0, 'assistant', 'step output')`,
+		sessionID,
+	); err != nil {
+		t.Fatalf("insert turns: %v", err)
+	}
+
+	cmd := &cobra.Command{}
+	var out strings.Builder
+	cmd.SetOut(&out)
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, ""); err != nil {
+		t.Fatalf("runSessionDrilldown: %v", err)
+	}
+
+	var got sessionOutput
+	if err := json.Unmarshal([]byte(out.String()), &got); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if got.TeamName != "perf-team" || got.WorkflowName != "release-flow" ||
+		got.ParentSessionID != parentID || got.AgentID != "step1" {
+		t.Errorf("metadata = %q/%q/%q/%q, want perf-team/release-flow/%s/step1",
+			got.TeamName, got.WorkflowName, got.ParentSessionID, got.AgentID, parentID)
+	}
+}
+
 // TestSessionDrilldown_NotFoundAnywhere ensures a clear error when the
 // session is in neither DB.
 func TestSessionDrilldown_NotFoundAnywhere(t *testing.T) {

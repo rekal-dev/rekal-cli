@@ -70,14 +70,20 @@ func (a *ClaudeAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 }
 
 // FindSessionDir returns the Claude Code session directory for the given repo path.
-// Returns ~/.claude/projects/<sanitized-repo-path>/.
+// It honors CLAUDE_CONFIG_DIR when set (Claude Code's supported way to move
+// storage off ~/.claude); otherwise it defaults to
+// ~/.claude/projects/<sanitized-repo-path>/.
 func FindSessionDir(repoPath string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if configDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		configDir = filepath.Join(home, ".claude")
 	}
 	sanitized := SanitizeRepoPath(repoPath)
-	return filepath.Join(home, ".claude", "projects", sanitized)
+	return filepath.Join(configDir, "projects", sanitized)
 }
 
 // FindSessionFiles lists all top-level .jsonl session files in the given directory.

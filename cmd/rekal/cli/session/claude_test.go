@@ -6,6 +6,31 @@ import (
 	"testing"
 )
 
+func TestFindSessionDir_DefaultsToDotClaude(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := FindSessionDir("/Users/frank/projects/rekal/rekal-cli")
+	want := filepath.Join(home, ".claude", "projects", "-Users-frank-projects-rekal-rekal-cli")
+	if got != want {
+		t.Errorf("FindSessionDir() = %q, want %q", got, want)
+	}
+}
+
+func TestFindSessionDir_RespectsClaudeConfigDir(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "/custom/claude-home")
+
+	got := FindSessionDir("/Users/frank/projects/rekal/rekal-cli")
+	want := "/custom/claude-home/projects/-Users-frank-projects-rekal-rekal-cli"
+	if got != want {
+		t.Errorf("FindSessionDir() = %q, want %q", got, want)
+	}
+}
+
 func TestFindSessionFiles_TopLevelOnly(t *testing.T) {
 	t.Parallel()
 

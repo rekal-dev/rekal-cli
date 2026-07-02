@@ -301,6 +301,28 @@ func TestParseTranscript_QueueOperationEnqueueCaptured(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_QueueOperationDedupedAgainstLaterUserEntry(t *testing.T) {
+	t.Parallel()
+
+	// Verified against real ~/.claude/projects/*.jsonl session files: Claude
+	// Code writes the steering message once as queue-operation/enqueue, then
+	// again as an ordinary "user" entry with identical text once delivered.
+	// Only one turn should be indexed.
+	input := `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-07-02T12:20:03.322Z","sessionId":"sess-q3","content":"Do it for me."}
+{"uuid":"u1","sessionId":"sess-q3","timestamp":"2026-07-02T12:20:05Z","type":"user","message":{"role":"user","content":"Do it for me."},"gitBranch":"main"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(payload.Turns) != 1 {
+		t.Fatalf("len(Turns) = %d, want 1 (deduped)", len(payload.Turns))
+	}
+	if payload.Turns[0].Content != "Do it for me." {
+		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+}
+
 func TestParseTranscript_QueueOperationDequeueIgnored(t *testing.T) {
 	t.Parallel()
 

@@ -276,6 +276,47 @@ func TestParseTranscript_CmdPrefixTruncation(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_QueueOperationEnqueueCaptured(t *testing.T) {
+	t.Parallel()
+
+	// Format verified against real ~/.claude/projects/*.jsonl session files:
+	// "enqueue" carries the out-of-band steering message as top-level
+	// "content"; the matching "dequeue" carries no content.
+	input := `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-07-02T12:20:03.322Z","sessionId":"sess-q1","content":"Also clean up the stale lock files."}
+{"type":"queue-operation","operation":"dequeue","timestamp":"2026-07-02T12:20:03.344Z","sessionId":"sess-q1"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+
+	if len(payload.Turns) != 1 {
+		t.Fatalf("len(Turns) = %d, want 1", len(payload.Turns))
+	}
+	if payload.Turns[0].Role != "human" {
+		t.Errorf("Turns[0].Role = %q, want human", payload.Turns[0].Role)
+	}
+	if payload.Turns[0].Content != "Also clean up the stale lock files." {
+		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+}
+
+func TestParseTranscript_QueueOperationDequeueIgnored(t *testing.T) {
+	t.Parallel()
+
+	// A "dequeue" with no matching prior "enqueue" in this transcript slice
+	// (e.g. truncated log) must not produce a turn.
+	input := `{"type":"queue-operation","operation":"dequeue","timestamp":"2026-07-02T12:20:03.344Z","sessionId":"sess-q2"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(payload.Turns) != 0 {
+		t.Fatalf("len(Turns) = %d, want 0", len(payload.Turns))
+	}
+}
+
 func TestParseTranscriptWithOptions_IncludeSidechain(t *testing.T) {
 	t.Parallel()
 

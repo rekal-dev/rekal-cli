@@ -52,6 +52,15 @@ type rawLine struct {
 
 	// isSidechain lines are filtered out
 	IsSidechain bool `json:"isSidechain"`
+
+	// Operation and Content are only populated on "queue-operation" lines.
+	// Verified directly against real ~/.claude/projects/*.jsonl session
+	// files: "enqueue" carries an out-of-band user steering message typed
+	// while the agent was working (Content is the message text); "dequeue"
+	// fires when it's delivered and carries no content. Content is
+	// RawMessage because it can be a plain string or a content-block array.
+	Operation string          `json:"operation"`
+	Content   json.RawMessage `json:"content"`
 }
 
 // rawMessage is the message field within a JSONL line.
@@ -91,7 +100,8 @@ type TranscriptOptions struct {
 // ParseTranscript parses raw JSONL bytes into a SessionPayload.
 // It extracts conversation turns and tool calls, discarding tool results,
 // thinking blocks, system content, file-history-snapshots, and sidechain
-// messages.
+// messages. Out-of-band steering messages (queue-operation/enqueue) are
+// extracted as human turns.
 func ParseTranscript(data []byte) (*SessionPayload, error) {
 	return ParseTranscriptWithOptions(data, TranscriptOptions{})
 }
@@ -156,6 +166,22 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 			payload.ToolCalls = append(payload.ToolCalls, toolCalls...)
 			for _, id := range planReadIDs {
 				pendingPlanReads[id] = true
+			}
+
+		case "queue-operation":
+			// "enqueue" carries an out-of-band user steering message typed
+			// while the agent was working; "dequeue" fires once it's
+			// delivered and carries no content of its own.
+			if raw.Operation != "enqueue" {
+				continue
+			}
+			// Content can be a plain string or a content-block array.
+			if text := extractTextContent(raw.Content); text != "" {
+				payload.Turns = append(payload.Turns, Turn{
+					Role:      "human",
+					Content:   text,
+					Timestamp: ts,
+				})
 			}
 		}
 	}

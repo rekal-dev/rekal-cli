@@ -20,6 +20,15 @@ type SessionPayload struct {
 	ActorType  string     `json:"actor_type"` // "human" | "agent"
 	AgentID    string     `json:"agent_id"`   // empty for human
 
+	// TeamName is the active team name when the session was part of a
+	// Claude Code teammates run (from the entries' teamName field or the
+	// subagent meta sidecar).
+	TeamName string `json:"team_name,omitempty"`
+
+	// WorkflowName is the dynamic-workflow name for transcripts found under
+	// subagents/workflows/<name>/; empty otherwise.
+	WorkflowName string `json:"workflow_name,omitempty"`
+
 	// ParentSessionPath is the local path of the trunk session file when this
 	// payload was parsed from a subagent transcript. Checkpoint uses it to
 	// link the subagent session to its parent row; never serialized.
@@ -56,6 +65,12 @@ type rawLine struct {
 	// isMeta marks harness-injected user turns (e.g. skill bodies, command
 	// wrappers) rather than real human input. Filtered out.
 	IsMeta bool `json:"isMeta"`
+
+	// TeamName is the active team name on entries written during a
+	// teammates run; AgentID is transcript membership (which agent's
+	// transcript this entry belongs to). Absent in older session files.
+	TeamName string `json:"teamName"`
+	AgentID  string `json:"agentId"`
 
 	// Operation and Content are only populated on "queue-operation" lines.
 	// Verified directly against real ~/.claude/projects/*.jsonl session
@@ -105,7 +120,8 @@ type TranscriptOptions struct {
 // It extracts conversation turns and tool calls, discarding tool results,
 // thinking blocks, system content, file-history-snapshots, sidechain messages,
 // and harness-injected (isMeta) user turns. Out-of-band steering messages
-// (queue-operation/enqueue) are extracted as human turns.
+// (queue-operation/enqueue) are extracted as human turns; the later ordinary
+// "user" entry carrying the same delivered text is deduplicated against it.
 func ParseTranscript(data []byte) (*SessionPayload, error) {
 	return ParseTranscriptWithOptions(data, TranscriptOptions{})
 }
@@ -119,6 +135,13 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 	// pendingPlanReads tracks tool_use IDs for Read calls targeting .claude/plans/ files.
 	// When the corresponding tool_result arrives in a user message, we extract the plan text.
 	pendingPlanReads := make(map[string]bool)
+
+	// pendingQueueTexts tracks steering message text already emitted from a
+	// queue-operation/enqueue line. Claude Code also writes the same text as
+	// an ordinary "user" entry once the message is delivered (verified
+	// against real session files); when that entry arrives we skip
+	// re-emitting it as a duplicate turn.
+	pendingQueueTexts := make(map[string]bool)
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	// Increase scanner buffer for large lines (tool results can be huge).
@@ -156,6 +179,12 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 		if payload.Branch == "" && raw.GitBranch != "" {
 			payload.Branch = raw.GitBranch
 		}
+		if payload.TeamName == "" && raw.TeamName != "" {
+			payload.TeamName = raw.TeamName
+		}
+		if payload.AgentID == "" && raw.AgentID != "" {
+			payload.AgentID = raw.AgentID
+		}
 
 		ts := parseTimestamp(raw.Timestamp)
 
@@ -165,7 +194,13 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 			if err != nil {
 				continue
 			}
-			payload.Turns = append(payload.Turns, turns...)
+			for _, t := range turns {
+				if t.Role == "human" && pendingQueueTexts[t.Content] {
+					delete(pendingQueueTexts, t.Content)
+					continue
+				}
+				payload.Turns = append(payload.Turns, t)
+			}
 
 		case "assistant":
 			turns, toolCalls, planReadIDs, err := parseAssistantMessage(raw.Message, ts)
@@ -187,6 +222,7 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 			}
 			// Content can be a plain string or a content-block array.
 			if text := extractTextContent(raw.Content); text != "" {
+				pendingQueueTexts[text] = true
 				payload.Turns = append(payload.Turns, Turn{
 					Role:      "human",
 					Content:   text,

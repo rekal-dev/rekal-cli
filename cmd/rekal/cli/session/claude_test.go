@@ -203,15 +203,19 @@ func TestSubagentID(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		path string
-		want string
+		path         string
+		want         string
+		wantWorkflow string
 	}{
-		{"/x/sess1/subagents/agent-x1.jsonl", "x1"},
-		{"/x/sess1/subagents/workflows/release-flow/step1.jsonl", "workflow:release-flow/step1"},
+		{"/x/sess1/subagents/agent-x1.jsonl", "x1", ""},
+		{"/x/sess1/subagents/workflows/release-flow/step1.jsonl", "step1", "release-flow"},
 	}
 	for _, tt := range tests {
 		if got := subagentID(tt.path); got != tt.want {
 			t.Errorf("subagentID(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+		if got := workflowName(tt.path); got != tt.wantWorkflow {
+			t.Errorf("workflowName(%q) = %q, want %q", tt.path, got, tt.wantWorkflow)
 		}
 	}
 }

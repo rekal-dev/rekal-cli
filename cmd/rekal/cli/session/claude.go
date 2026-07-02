@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,10 +64,48 @@ func (a *ClaudeAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 
 	if ref.ParentPath != "" {
 		payload.ActorType = "agent"
-		payload.AgentID = subagentID(ref.Path)
 		payload.ParentSessionPath = ref.ParentPath
+		payload.WorkflowName = workflowName(ref.Path)
+
+		// Agent identity precedence: meta.json sidecar (authoritative),
+		// then the transcript entries' agentId, then the filename.
+		if meta := readSubagentMeta(ref.Path); meta != nil {
+			if meta.AgentID != "" {
+				payload.AgentID = meta.AgentID
+			}
+			if payload.TeamName == "" && meta.TeamName != "" {
+				payload.TeamName = meta.TeamName
+			}
+		}
+		if payload.AgentID == "" {
+			payload.AgentID = subagentID(ref.Path)
+		}
 	}
 	return payload, nil
+}
+
+// subagentMeta is the agent-<id>.meta.json sidecar Claude Code writes next to
+// a subagent transcript. toolUseId is the spawning Task/Agent tool_use in the
+// trunk transcript.
+type subagentMeta struct {
+	AgentID   string `json:"agentId"`
+	ToolUseID string `json:"toolUseId"`
+	TeamName  string `json:"teamName"`
+}
+
+// readSubagentMeta loads the meta sidecar for a subagent transcript, if
+// present. Older session formats have no sidecars; returns nil.
+func readSubagentMeta(transcriptPath string) *subagentMeta {
+	metaPath := strings.TrimSuffix(transcriptPath, ".jsonl") + ".meta.json"
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return nil
+	}
+	var m subagentMeta
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil
+	}
+	return &m
 }
 
 // FindSessionDir returns the Claude Code session directory for the given repo path.
@@ -111,6 +150,12 @@ func FindSessionFiles(sessionDir string) ([]string, error) {
 // transcripts as subagents/workflows/<name>/*.jsonl, where <session-stem> is
 // the parent session filename without .jsonl. Each ref carries ParentPath
 // pointing at the trunk session file so the payload can be linked to it.
+//
+// This directory layout could not be confirmed against real local session
+// data (no subagent/workflow transcripts were present in the sessions
+// available for verification); it is implemented defensively so it degrades
+// to a no-op when absent, and should be re-validated against a real subagent
+// transcript when one becomes available.
 func findSubagentRefs(sessionDir string) []SessionRef {
 	var refs []SessionRef
 
@@ -145,14 +190,21 @@ func findSubagentRefs(sessionDir string) []SessionRef {
 	return refs
 }
 
-// subagentID derives a stable agent identifier from a subagent transcript path.
+// subagentID derives a fallback agent identifier from a subagent transcript
+// path when no meta sidecar or entry-level agentId is available.
 // subagents/agent-<id>.jsonl → <id>; subagents/workflows/<name>/<file>.jsonl →
-// workflow:<name>/<file>.
+// <file> (the workflow name is stored separately as first-class metadata).
 func subagentID(path string) string {
 	base := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	return strings.TrimPrefix(base, "agent-")
+}
+
+// workflowName returns the dynamic-workflow name for transcripts under
+// subagents/workflows/<name>/, or "" for ordinary subagent transcripts.
+func workflowName(path string) string {
 	dir := filepath.Dir(path)
 	if filepath.Base(filepath.Dir(dir)) == "workflows" {
-		return "workflow:" + filepath.Base(dir) + "/" + base
+		return filepath.Base(dir)
 	}
-	return strings.TrimPrefix(base, "agent-")
+	return ""
 }

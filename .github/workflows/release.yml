@@ -19,7 +19,7 @@ jobs:
       - uses: jdx/mise-action@v3
       - name: Build llama.cpp
         run: |
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
+          git clone --depth 1 --branch b8157 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
           cd .deps/llama.cpp
           cmake -B build \
             -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
@@ -39,6 +39,9 @@ jobs:
           - runner: ubuntu-latest
             goos: linux
             goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
           - runner: macos-latest
             goos: darwin
             goarch: arm64
@@ -61,7 +64,7 @@ jobs:
 
       - name: Build llama.cpp
         run: |
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
+          git clone --depth 1 --branch b8157 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
           cd .deps/llama.cpp
           CMAKE_ARGS="-DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release"
           if [ "${{ matrix.goos }}" = "darwin" ]; then

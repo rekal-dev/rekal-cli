@@ -1,3 +1,5 @@
+//go:build (darwin && arm64) || (linux && amd64) || (linux && arm64)
+
 #include "embed.h"
 #include "llama.h"
 #include "ggml.h"

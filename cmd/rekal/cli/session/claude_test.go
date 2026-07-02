@@ -175,6 +175,114 @@ func TestClaudeAdapter_Parse_SubagentTranscriptTaggedAsAgent(t *testing.T) {
 	}
 }
 
+func TestClaudeAdapter_Parse_SubagentMetaSidecar(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	parentPath := filepath.Join(dir, "sess1.jsonl")
+	if err := writeTestFile(parentPath, "{}"); err != nil {
+		t.Fatal(err)
+	}
+
+	subDir := filepath.Join(dir, "sess1", "subagents")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agentFile := filepath.Join(subDir, "agent-x1.jsonl")
+	content := `{"uuid":"a1","sessionId":"sub-1","timestamp":"2026-06-01T10:00:00Z","type":"assistant","message":{"role":"assistant","content":"done"},"isSidechain":true}`
+	if err := writeTestFile(agentFile, content); err != nil {
+		t.Fatal(err)
+	}
+	// The sidecar is authoritative for agent identity and carries team name.
+	meta := `{"agentId":"researcher-2","toolUseId":"toolu_01","teamName":"perf-team"}`
+	if err := writeTestFile(filepath.Join(subDir, "agent-x1.meta.json"), meta); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := &ClaudeAdapter{}
+	payload, err := adapter.Parse(SessionRef{Path: agentFile, ParentPath: parentPath})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if payload.AgentID != "researcher-2" {
+		t.Errorf("AgentID = %q, want researcher-2 (from sidecar)", payload.AgentID)
+	}
+	if payload.TeamName != "perf-team" {
+		t.Errorf("TeamName = %q, want perf-team", payload.TeamName)
+	}
+	if payload.WorkflowName != "" {
+		t.Errorf("WorkflowName = %q, want empty for plain subagent", payload.WorkflowName)
+	}
+}
+
+func TestClaudeAdapter_Parse_WorkflowTranscriptMetadata(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	parentPath := filepath.Join(dir, "sess1.jsonl")
+	if err := writeTestFile(parentPath, "{}"); err != nil {
+		t.Fatal(err)
+	}
+
+	wfDir := filepath.Join(dir, "sess1", "subagents", "workflows", "release-flow")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wfFile := filepath.Join(wfDir, "step1.jsonl")
+	content := `{"uuid":"w1","sessionId":"wf-1","timestamp":"2026-06-01T10:00:00Z","type":"assistant","message":{"role":"assistant","content":"step done"},"isSidechain":true,"teamName":"build-team"}`
+	if err := writeTestFile(wfFile, content); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := &ClaudeAdapter{}
+	payload, err := adapter.Parse(SessionRef{Path: wfFile, ParentPath: parentPath})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if payload.WorkflowName != "release-flow" {
+		t.Errorf("WorkflowName = %q, want release-flow", payload.WorkflowName)
+	}
+	if payload.AgentID != "step1" {
+		t.Errorf("AgentID = %q, want step1 (file stem, no sidecar)", payload.AgentID)
+	}
+	if payload.TeamName != "build-team" {
+		t.Errorf("TeamName = %q, want build-team (from entry)", payload.TeamName)
+	}
+}
+
+// TestClaudeAdapter_Parse_OldFormatNoNewMetadata guards backwards
+// compatibility: pre-subagent session files (no sidecars, no teamName/agentId
+// fields) must parse exactly as before with all new metadata empty.
+func TestClaudeAdapter_Parse_OldFormatNoNewMetadata(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "old.jsonl")
+	content := `{"uuid":"a1","sessionId":"sess-old","timestamp":"2025-01-15T10:00:00Z","type":"user","message":{"role":"user","content":"Add a login page"},"cwd":"/tmp/repo","gitBranch":"main"}
+{"uuid":"a2","sessionId":"sess-old","timestamp":"2025-01-15T10:00:05Z","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done."},{"type":"tool_use","name":"Write","input":{"file_path":"src/login.tsx"}}]},"cwd":"/tmp/repo","gitBranch":"main"}`
+	if err := writeTestFile(path, content); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := &ClaudeAdapter{}
+	payload, err := adapter.Parse(SessionRef{Path: path})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if payload.SessionID != "sess-old" || payload.Branch != "main" {
+		t.Errorf("metadata = %q/%q, want sess-old/main", payload.SessionID, payload.Branch)
+	}
+	if payload.ActorType != "human" || payload.AgentID != "" {
+		t.Errorf("actor = %q/%q, want human with empty agent", payload.ActorType, payload.AgentID)
+	}
+	if payload.TeamName != "" || payload.WorkflowName != "" {
+		t.Errorf("new metadata = %q/%q, want empty for old format", payload.TeamName, payload.WorkflowName)
+	}
+	if len(payload.Turns) != 2 || len(payload.ToolCalls) != 1 {
+		t.Fatalf("turns=%d toolCalls=%d, want 2/1", len(payload.Turns), len(payload.ToolCalls))
+	}
+}
+
 func TestClaudeAdapter_Parse_TrunkSessionStillDropsSidechain(t *testing.T) {
 	t.Parallel()
 

@@ -31,7 +31,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 3. **Count total** — Run a COUNT query (respecting `--role` filter) to populate `total_turns`.
 4. **Paginate** — Apply `--offset` and `--limit` to the turn query.
 5. **If `--full`** — Also fetch tool calls and files touched.
-6. **Output** — Single JSON object with session metadata, pagination fields, turns, and optionally tool calls and files.
+6. **Output** — Single JSON object with session metadata, pagination fields, turns, and optionally tool calls and files. Optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) is included when present and omitted for sessions from agents without the concept — see [agent-metadata.md](../../agent-metadata.md).
 
 `--session` and positional SQL are mutually exclusive. `--offset`, `--limit`, and `--role` require `--session`.
 

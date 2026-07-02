@@ -258,6 +258,11 @@ type SessionRow struct {
 	AgentID    string
 	Email      string
 	Branch     string
+
+	// Optional harness metadata — empty for agents without the concept.
+	TeamName        string
+	WorkflowName    string
+	ParentSessionID string
 }
 
 // TurnRow represents a turn from the turns table.
@@ -280,9 +285,11 @@ type ToolCallRow struct {
 func QuerySession(d *sql.DB, id string) (*SessionRow, error) {
 	r := &SessionRow{}
 	err := d.QueryRow(
-		`SELECT id, session_hash, captured_at, actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(branch, '')
+		`SELECT id, session_hash, captured_at, actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(branch, ''),
+		        COALESCE(team_name, ''), COALESCE(workflow_name, ''), COALESCE(parent_session_id, '')
 		 FROM sessions WHERE id = $1`, id,
-	).Scan(&r.ID, &r.Hash, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch)
+	).Scan(&r.ID, &r.Hash, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch,
+		&r.TeamName, &r.WorkflowName, &r.ParentSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query session: %w", err)
 	}
@@ -297,9 +304,11 @@ func QuerySession(d *sql.DB, id string) (*SessionRow, error) {
 func QuerySessionFromIndex(d *sql.DB, id string) (*SessionRow, error) {
 	r := &SessionRow{}
 	err := d.QueryRow(
-		`SELECT session_id, CAST(captured_at AS VARCHAR), actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(git_branch, '')
+		`SELECT session_id, CAST(captured_at AS VARCHAR), actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(git_branch, ''),
+		        COALESCE(team_name, ''), COALESCE(workflow_name, ''), COALESCE(parent_session_id, '')
 		 FROM session_facets WHERE session_id = $1`, id,
-	).Scan(&r.ID, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch)
+	).Scan(&r.ID, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch,
+		&r.TeamName, &r.WorkflowName, &r.ParentSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query session from index: %w", err)
 	}

@@ -35,7 +35,9 @@ Use --index to query the index DB instead of the data DB.
 DATA DB SCHEMA (.rekal/data.db):
 
   sessions        id, parent_session_id, session_hash, captured_at, actor_type,
-                  agent_id, user_email, branch
+                  agent_id, user_email, branch, source, team_name, workflow_name
+                  (team_name/workflow_name/parent_session_id are optional
+                  harness metadata — NULL for agents without the concept)
   turns           id, session_id, turn_index, role, content, ts
   tool_calls      id, session_id, call_order, tool, path, cmd_prefix
   checkpoints     id, git_sha, git_branch, user_email, ts, actor_type, agent_id,
@@ -50,7 +52,8 @@ INDEX DB SCHEMA (.rekal/index.db):
   files_index          checkpoint_id, session_id, file_path, change_type
   session_facets       session_id, user_email, git_branch, actor_type, agent_id,
                        captured_at, turn_count, tool_call_count, file_count,
-                       checkpoint_id, git_sha
+                       checkpoint_id, git_sha, parent_session_id, team_name,
+                       workflow_name
   file_cooccurrence    file_a, file_b, count
   session_embeddings   session_id, embedding, model, generated_at
                        PK: (session_id, model). Models: lsa-v1, nomic-v1.5`,
@@ -79,6 +82,9 @@ INDEX DB SCHEMA (.rekal/index.db):
 
   # File co-occurrence (index DB)
   rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC LIMIT 10"
+
+  # Transcripts of one dynamic workflow, grouped under their trunk session (index DB)
+  rekal query --index "SELECT session_id, agent_id, parent_session_id FROM session_facets WHERE workflow_name = 'release-flow'"
 
   # Embedding model counts
   rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"`,
@@ -134,11 +140,19 @@ INDEX DB SCHEMA (.rekal/index.db):
 
 // sessionOutput is the JSON structure for session drill-down.
 type sessionOutput struct {
-	SessionID  string           `json:"session_id"`
-	Author     string           `json:"author"`
-	Actor      string           `json:"actor"`
-	Branch     string           `json:"branch"`
-	CapturedAt string           `json:"captured_at"`
+	SessionID  string `json:"session_id"`
+	Author     string `json:"author"`
+	Actor      string `json:"actor"`
+	Branch     string `json:"branch"`
+	CapturedAt string `json:"captured_at"`
+
+	// Optional harness metadata — omitted for agents without the concept
+	// (see docs/agent-metadata.md).
+	AgentID         string `json:"agent_id,omitempty"`
+	TeamName        string `json:"team_name,omitempty"`
+	WorkflowName    string `json:"workflow_name,omitempty"`
+	ParentSessionID string `json:"parent_session_id,omitempty"`
+
 	TotalTurns int              `json:"total_turns"`
 	Offset     int              `json:"offset,omitempty"`
 	Limit      int              `json:"limit,omitempty"`
@@ -189,6 +203,12 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 	}
 	defer dataDB.Close()
 
+	// The data DB may have been written by an older rekal (shared via git);
+	// migrations are additive and idempotent.
+	if err := db.MigrateDataSchema(dataDB); err != nil {
+		return fmt.Errorf("migrate data db: %w", err)
+	}
+
 	session, dataErr := db.QuerySession(dataDB, sessionID)
 	if dataErr == nil {
 		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role)
@@ -201,6 +221,10 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
 	defer indexDB.Close()
+
+	if err := db.MigrateIndexSchema(indexDB); err != nil {
+		return fmt.Errorf("migrate index db: %w", err)
+	}
 
 	session, err = db.QuerySessionFromIndex(indexDB, sessionID)
 	if err != nil {
@@ -230,6 +254,13 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		TotalTurns: total,
 		Offset:     offset,
 		Limit:      limit,
+
+		// Optional harness metadata; empty (and omitted from JSON) for
+		// agents without the concept.
+		AgentID:         session.AgentID,
+		TeamName:        session.TeamName,
+		WorkflowName:    session.WorkflowName,
+		ParentSessionID: session.ParentSessionID,
 	}
 
 	// has_more is true when there are more turns beyond this page.

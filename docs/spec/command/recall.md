@@ -21,7 +21,7 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 3. **Dispatch search mode:**
    - **With query text** → Hybrid search (BM25 + LSA + Nomic combined scoring).
    - **Without query text** → Filter-only search (latest sessions matching filters).
-4. **Output** — Structured JSON to stdout. Fields: `results`, `query`, `filters`, `mode`, `total`.
+4. **Output** — Structured JSON to stdout. Fields: `results`, `query`, `filters`, `mode`, `total`. Each result's `session` detail carries optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) when present, omitted otherwise — grouping/drill-down data, deliberately not a filter surface (see [agent-metadata.md](../../agent-metadata.md)).
 
 ---
 

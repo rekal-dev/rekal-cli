@@ -57,6 +57,15 @@ type sessionDetail struct {
 	TurnCount  int      `json:"turn_count"`
 	ToolCalls  int      `json:"tool_call_count"`
 	Files      []string `json:"files"`
+
+	// Optional harness metadata. Present only for sessions whose agent
+	// harness has the concept (Claude Code subagents/teams/workflows);
+	// omitted for everything else. Grouping/drill-down data for the agent —
+	// deliberately not a CLI filter (see docs/agent-metadata.md).
+	AgentID         string `json:"agent_id,omitempty"`
+	TeamName        string `json:"team_name,omitempty"`
+	WorkflowName    string `json:"workflow_name,omitempty"`
+	ParentSessionID string `json:"parent_session_id,omitempty"`
 }
 
 type searchOutput struct {
@@ -83,6 +92,12 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters RecallFilters) error 
 		return fmt.Errorf("open index db: %w", err)
 	}
 	defer indexDB.Close()
+
+	// The index may predate optional harness-metadata columns; migrations
+	// are additive and idempotent.
+	if err := db.MigrateIndexSchema(indexDB); err != nil {
+		return fmt.Errorf("migrate index db: %w", err)
+	}
 
 	// Load FTS extension.
 	if err := db.LoadFTSExtension(indexDB); err != nil {
@@ -259,7 +274,7 @@ func filterSearch(indexDB *sql.DB, filters RecallFilters, limit int) ([]searchRe
 	// Build WHERE clause from filters.
 	where, args := buildFilterWhere(filters)
 
-	query := "SELECT session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha FROM session_facets"
+	query := "SELECT " + sessionFacetCols + " FROM session_facets"
 	if where != "" {
 		query += " WHERE " + where
 	}
@@ -274,7 +289,7 @@ func filterSearch(indexDB *sql.DB, filters RecallFilters, limit int) ([]searchRe
 	var results []searchResult
 	for rows.Next() {
 		var sf sessionFacetRow
-		if err := rows.Scan(&sf.sessionID, &sf.email, &sf.branch, &sf.actorType, &sf.capturedAt, &sf.turnCount, &sf.toolCallCount, &sf.fileCount, &sf.checkpointID, &sf.gitSHA); err != nil {
+		if err := sf.scan(rows); err != nil {
 			return nil, fmt.Errorf("scan facet: %w", err)
 		}
 
@@ -287,20 +302,15 @@ func filterSearch(indexDB *sql.DB, filters RecallFilters, limit int) ([]searchRe
 			Snippet:        snippet,
 			SnippetTurnIdx: turnIdx,
 			SnippetRole:    role,
-			Session: sessionDetail{
-				Author:     nullStr(sf.email),
-				Actor:      sf.actorType,
-				Branch:     nullStr(sf.branch),
-				CapturedAt: sf.capturedAt,
-				Commit:     nullStr(sf.gitSHA),
-				TurnCount:  sf.turnCount,
-				ToolCalls:  sf.toolCallCount,
-				Files:      files,
-			},
+			Session:        sf.detail(files),
 		})
 	}
 	return results, rows.Err()
 }
+
+// sessionFacetCols is the column list matching sessionFacetRow.scan. The
+// harness-metadata columns are nullable — NULL for agents without the concept.
+const sessionFacetCols = "session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, agent_id, team_name, workflow_name, parent_session_id"
 
 type sessionFacetRow struct {
 	sessionID     string
@@ -313,6 +323,42 @@ type sessionFacetRow struct {
 	fileCount     int
 	checkpointID  sql.NullString
 	gitSHA        sql.NullString
+
+	// Optional harness metadata — NULL for agents without the concept.
+	agentID         sql.NullString
+	teamName        sql.NullString
+	workflowName    sql.NullString
+	parentSessionID sql.NullString
+}
+
+// scanner abstracts *sql.Row and *sql.Rows for sessionFacetRow.scan.
+type scanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func (sf *sessionFacetRow) scan(s scanner) error {
+	return s.Scan(&sf.sessionID, &sf.email, &sf.branch, &sf.actorType, &sf.capturedAt,
+		&sf.turnCount, &sf.toolCallCount, &sf.fileCount, &sf.checkpointID, &sf.gitSHA,
+		&sf.agentID, &sf.teamName, &sf.workflowName, &sf.parentSessionID)
+}
+
+// detail builds the JSON session detail; optional metadata fields are only
+// set when present so they are omitted from output for agents without them.
+func (sf *sessionFacetRow) detail(files []string) sessionDetail {
+	return sessionDetail{
+		Author:          nullStr(sf.email),
+		Actor:           sf.actorType,
+		Branch:          nullStr(sf.branch),
+		CapturedAt:      sf.capturedAt,
+		Commit:          nullStr(sf.gitSHA),
+		TurnCount:       sf.turnCount,
+		ToolCalls:       sf.toolCallCount,
+		Files:           files,
+		AgentID:         nullStr(sf.agentID),
+		TeamName:        nullStr(sf.teamName),
+		WorkflowName:    nullStr(sf.workflowName),
+		ParentSessionID: nullStr(sf.parentSessionID),
+	}
 }
 
 func buildFilterWhere(filters RecallFilters) (string, []interface{}) {
@@ -463,11 +509,11 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 
 		// Load session facets.
 		var sf sessionFacetRow
-		err := indexDB.QueryRow(
-			"SELECT session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha FROM session_facets WHERE session_id = $1",
+		row := indexDB.QueryRow(
+			"SELECT "+sessionFacetCols+" FROM session_facets WHERE session_id = $1",
 			s.sessionID,
-		).Scan(&sf.sessionID, &sf.email, &sf.branch, &sf.actorType, &sf.capturedAt, &sf.turnCount, &sf.toolCallCount, &sf.fileCount, &sf.checkpointID, &sf.gitSHA)
-		if err != nil {
+		)
+		if err := sf.scan(row); err != nil {
 			continue // session not in facets (shouldn't happen)
 		}
 
@@ -516,16 +562,7 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 			Snippet:        snippet,
 			SnippetTurnIdx: snippetIdx,
 			SnippetRole:    snippetRole,
-			Session: sessionDetail{
-				Author:     nullStr(sf.email),
-				Actor:      sf.actorType,
-				Branch:     nullStr(sf.branch),
-				CapturedAt: sf.capturedAt,
-				Commit:     nullStr(sf.gitSHA),
-				TurnCount:  sf.turnCount,
-				ToolCalls:  sf.toolCallCount,
-				Files:      files,
-			},
+			Session:        sf.detail(files),
 		})
 	}
 

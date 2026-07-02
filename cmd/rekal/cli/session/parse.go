@@ -53,6 +53,10 @@ type rawLine struct {
 	// isSidechain lines are filtered out
 	IsSidechain bool `json:"isSidechain"`
 
+	// isMeta marks harness-injected user turns (e.g. skill bodies, command
+	// wrappers) rather than real human input. Filtered out.
+	IsMeta bool `json:"isMeta"`
+
 	// Operation and Content are only populated on "queue-operation" lines.
 	// Verified directly against real ~/.claude/projects/*.jsonl session
 	// files: "enqueue" carries an out-of-band user steering message typed
@@ -99,9 +103,9 @@ type TranscriptOptions struct {
 
 // ParseTranscript parses raw JSONL bytes into a SessionPayload.
 // It extracts conversation turns and tool calls, discarding tool results,
-// thinking blocks, system content, file-history-snapshots, and sidechain
-// messages. Out-of-band steering messages (queue-operation/enqueue) are
-// extracted as human turns.
+// thinking blocks, system content, file-history-snapshots, sidechain messages,
+// and harness-injected (isMeta) user turns. Out-of-band steering messages
+// (queue-operation/enqueue) are extracted as human turns.
 func ParseTranscript(data []byte) (*SessionPayload, error) {
 	return ParseTranscriptWithOptions(data, TranscriptOptions{})
 }
@@ -139,6 +143,12 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 		if raw.Type == "file-history-snapshot" {
 			continue
 		}
+		// isMeta user turns are harness-injected (skill bodies, command
+		// wrappers), not real human input.
+		if raw.Type == "user" && raw.IsMeta {
+			continue
+		}
+
 		// Capture session metadata from first line that has it.
 		if payload.SessionID == "" && raw.SessionID != "" {
 			payload.SessionID = raw.SessionID

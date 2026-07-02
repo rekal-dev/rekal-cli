@@ -317,6 +317,27 @@ func TestParseTranscript_QueueOperationDequeueIgnored(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_IsMetaUserTurnFiltered(t *testing.T) {
+	t.Parallel()
+
+	// isMeta:true marks harness-injected user turns (skill bodies, command
+	// wrappers) rather than real human input.
+	input := `{"uuid":"m1","sessionId":"sess-m1","timestamp":"2025-01-15T10:00:00Z","type":"user","isMeta":true,"message":{"role":"user","content":"<command-name>foo</command-name>\n<command-message>bar</command-message>"},"gitBranch":"main"}
+{"uuid":"m2","sessionId":"sess-m1","timestamp":"2025-01-15T10:00:01Z","type":"user","message":{"role":"user","content":"Actually run the tests first"},"gitBranch":"main"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+
+	if len(payload.Turns) != 1 {
+		t.Fatalf("len(Turns) = %d, want 1 (isMeta turn filtered)", len(payload.Turns))
+	}
+	if payload.Turns[0].Content != "Actually run the tests first" {
+		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+}
+
 func TestParseTranscriptWithOptions_IncludeSidechain(t *testing.T) {
 	t.Parallel()
 

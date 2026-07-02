@@ -268,6 +268,23 @@ func QuerySession(d *sql.DB, id string) (*SessionRow, error) {
 	return r, nil
 }
 
+// QuerySessionFromIndex returns a session's metadata from the index DB
+// (session_facets). Teammate sessions pulled via `rekal sync` exist only in
+// the index — data.db is owner-only by design — so drill-down falls back to
+// this lookup when a session is not in the data DB. The content hash is not
+// stored in session_facets, so Hash is empty.
+func QuerySessionFromIndex(d *sql.DB, id string) (*SessionRow, error) {
+	r := &SessionRow{}
+	err := d.QueryRow(
+		`SELECT session_id, CAST(captured_at AS VARCHAR), actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(git_branch, '')
+		 FROM session_facets WHERE session_id = $1`, id,
+	).Scan(&r.ID, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch)
+	if err != nil {
+		return nil, fmt.Errorf("query session from index: %w", err)
+	}
+	return r, nil
+}
+
 // TurnPageOptions controls pagination and filtering for QueryTurnsPage.
 type TurnPageOptions struct {
 	Offset int
@@ -278,6 +295,16 @@ type TurnPageOptions struct {
 // QueryTurnsPage returns a page of turns for a session with optional role filtering.
 // It returns the matching turns, the total count (respecting the role filter), and any error.
 func QueryTurnsPage(d *sql.DB, sessionID string, opts TurnPageOptions) ([]TurnRow, int, error) {
+	return queryTurnsPageFrom(d, "turns", sessionID, opts)
+}
+
+// QueryTurnsPageFromIndex is QueryTurnsPage against the index DB (turns_ft),
+// used for remote/teammate sessions that are not present in the data DB.
+func QueryTurnsPageFromIndex(d *sql.DB, sessionID string, opts TurnPageOptions) ([]TurnRow, int, error) {
+	return queryTurnsPageFrom(d, "turns_ft", sessionID, opts)
+}
+
+func queryTurnsPageFrom(d *sql.DB, table, sessionID string, opts TurnPageOptions) ([]TurnRow, int, error) {
 	// Build WHERE clause.
 	where := "session_id = $1"
 	args := []interface{}{sessionID}
@@ -288,12 +315,12 @@ func QueryTurnsPage(d *sql.DB, sessionID string, opts TurnPageOptions) ([]TurnRo
 
 	// Count total matching turns.
 	var total int
-	if err := d.QueryRow("SELECT COUNT(*) FROM turns WHERE "+where, args...).Scan(&total); err != nil {
+	if err := d.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE "+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count turns: %w", err)
 	}
 
 	// Build paginated query.
-	q := "SELECT turn_index, role, content, COALESCE(CAST(ts AS VARCHAR), '') FROM turns WHERE " + where + " ORDER BY turn_index"
+	q := "SELECT turn_index, role, content, COALESCE(CAST(ts AS VARCHAR), '') FROM " + table + " WHERE " + where + " ORDER BY turn_index"
 	if opts.Limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d", opts.Limit)
 	}
@@ -342,9 +369,19 @@ func QueryTurns(d *sql.DB, sessionID string) ([]TurnRow, error) {
 
 // QueryToolCalls returns tool calls for a session, ordered by call_order.
 func QueryToolCalls(d *sql.DB, sessionID string) ([]ToolCallRow, error) {
+	return queryToolCallsFrom(d, "tool_calls", sessionID)
+}
+
+// QueryToolCallsFromIndex is QueryToolCalls against the index DB
+// (tool_calls_index), used for remote/teammate sessions.
+func QueryToolCallsFromIndex(d *sql.DB, sessionID string) ([]ToolCallRow, error) {
+	return queryToolCallsFrom(d, "tool_calls_index", sessionID)
+}
+
+func queryToolCallsFrom(d *sql.DB, table, sessionID string) ([]ToolCallRow, error) {
 	rows, err := d.Query(
 		`SELECT call_order, tool, COALESCE(path, ''), COALESCE(cmd_prefix, '')
-		 FROM tool_calls WHERE session_id = $1 ORDER BY call_order`, sessionID,
+		 FROM `+table+` WHERE session_id = $1 ORDER BY call_order`, sessionID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query tool_calls: %w", err)

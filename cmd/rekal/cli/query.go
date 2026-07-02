@@ -161,6 +161,27 @@ type toolCallOutput struct {
 	Path  string `json:"path,omitempty"`
 }
 
+// drilldownSource selects the queries used to render a session drill-down.
+// Own sessions live in the data DB; teammate sessions pulled via `rekal sync`
+// exist only in the index DB (data.db is owner-only by design).
+type drilldownSource struct {
+	turns     func(*sql.DB, string, db.TurnPageOptions) ([]db.TurnRow, int, error)
+	toolCalls func(*sql.DB, string) ([]db.ToolCallRow, error)
+	files     func(*sql.DB, string) ([]string, error)
+}
+
+var dataDrilldownSource = drilldownSource{
+	turns:     db.QueryTurnsPage,
+	toolCalls: db.QueryToolCalls,
+	files:     querySessionFilesFromData,
+}
+
+var indexDrilldownSource = drilldownSource{
+	turns:     db.QueryTurnsPageFromIndex,
+	toolCalls: db.QueryToolCallsFromIndex,
+	files:     querySessionFilesFromIndex,
+}
+
 func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full bool, offset, limit int, role string) error {
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
@@ -168,12 +189,30 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 	}
 	defer dataDB.Close()
 
-	session, err := db.QuerySession(dataDB, sessionID)
-	if err != nil {
-		return fmt.Errorf("session not found: %w", err)
+	session, dataErr := db.QuerySession(dataDB, sessionID)
+	if dataErr == nil {
+		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role)
 	}
 
-	turns, total, err := db.QueryTurnsPage(dataDB, sessionID, db.TurnPageOptions{
+	// Not in the data DB — fall back to the index DB, where teammate
+	// sessions from `rekal sync` live.
+	indexDB, err := db.OpenIndex(gitRoot)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", dataErr)
+	}
+	defer indexDB.Close()
+
+	session, err = db.QuerySessionFromIndex(indexDB, sessionID)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", dataErr)
+	}
+	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role)
+}
+
+func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role string) error {
+	sessionID := session.ID
+
+	turns, total, err := src.turns(d, sessionID, db.TurnPageOptions{
 		Offset: offset,
 		Limit:  limit,
 		Role:   role,
@@ -208,7 +247,7 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 	}
 
 	if full {
-		toolCalls, err := db.QueryToolCalls(dataDB, sessionID)
+		toolCalls, err := src.toolCalls(d, sessionID)
 		if err != nil {
 			return fmt.Errorf("query tool_calls: %w", err)
 		}
@@ -220,8 +259,8 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 			})
 		}
 
-		// Get files from checkpoint_sessions → files_touched.
-		files, err := querySessionFilesFromData(dataDB, sessionID)
+		// Get files touched by this session.
+		files, err := src.files(d, sessionID)
 		if err != nil {
 			return fmt.Errorf("query files: %w", err)
 		}
@@ -243,6 +282,31 @@ func querySessionFilesFromData(dataDB *sql.DB, sessionID string) ([]string, erro
 		JOIN files_touched ft ON ft.checkpoint_id = cs.checkpoint_id
 		WHERE cs.session_id = $1
 		ORDER BY ft.file_path
+	`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var files []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
+}
+
+// querySessionFilesFromIndex returns files touched by a session from the
+// index DB (files_index) — used for remote/teammate sessions.
+func querySessionFilesFromIndex(indexDB *sql.DB, sessionID string) ([]string, error) {
+	rows, err := indexDB.Query(`
+		SELECT DISTINCT file_path
+		FROM files_index
+		WHERE session_id = $1
+		ORDER BY file_path
 	`, sessionID)
 	if err != nil {
 		return nil, err

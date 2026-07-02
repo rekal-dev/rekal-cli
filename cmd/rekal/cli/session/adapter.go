@@ -15,6 +15,11 @@ type Adapter interface {
 type SessionRef struct {
 	Path string // file path for JSONL/JSON agents
 	DBID string // session ID for DB-based agents
+
+	// ParentPath is the trunk session file this ref belongs to when the ref
+	// points at a subagent transcript (Claude Code subagents/ directory).
+	// Empty for top-level sessions.
+	ParentPath string
 }
 
 // Adapters is the registry of all known agent adapters.

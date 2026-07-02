@@ -19,6 +19,11 @@ type SessionPayload struct {
 	CapturedAt time.Time  `json:"captured_at"`
 	ActorType  string     `json:"actor_type"` // "human" | "agent"
 	AgentID    string     `json:"agent_id"`   // empty for human
+
+	// ParentSessionPath is the local path of the trunk session file when this
+	// payload was parsed from a subagent transcript. Checkpoint uses it to
+	// link the subagent session to its parent row; never serialized.
+	ParentSessionPath string `json:"-"`
 }
 
 // Turn represents a single conversation turn (human prompt or assistant reply).
@@ -75,10 +80,24 @@ type toolInput struct {
 	Content  string `json:"content"`
 }
 
+// TranscriptOptions controls transcript parsing behavior.
+type TranscriptOptions struct {
+	// IncludeSidechain keeps isSidechain entries. Trunk transcripts drop
+	// them (legacy inline subagent duplicates); subagent transcript files
+	// consist of them and must keep them.
+	IncludeSidechain bool
+}
+
 // ParseTranscript parses raw JSONL bytes into a SessionPayload.
 // It extracts conversation turns and tool calls, discarding tool results,
-// thinking blocks, system content, file-history-snapshots, and sidechain messages.
+// thinking blocks, system content, file-history-snapshots, and sidechain
+// messages.
 func ParseTranscript(data []byte) (*SessionPayload, error) {
+	return ParseTranscriptWithOptions(data, TranscriptOptions{})
+}
+
+// ParseTranscriptWithOptions is ParseTranscript with explicit options.
+func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPayload, error) {
 	payload := &SessionPayload{
 		ActorType: "human",
 	}
@@ -104,13 +123,12 @@ func ParseTranscript(data []byte) (*SessionPayload, error) {
 		}
 
 		// Discard filtered line types.
-		if raw.IsSidechain {
+		if raw.IsSidechain && !opts.IncludeSidechain {
 			continue
 		}
 		if raw.Type == "file-history-snapshot" {
 			continue
 		}
-
 		// Capture session metadata from first line that has it.
 		if payload.SessionID == "" && raw.SessionID != "" {
 			payload.SessionID = raw.SessionID

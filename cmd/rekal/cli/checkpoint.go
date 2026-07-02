@@ -85,6 +85,11 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 	// Collect unique relative file paths from file-modifying tool_calls across all sessions.
 	toolCallPaths := make(map[string]struct{})
 
+	// trunkSessionIDs maps trunk session file paths inserted in this run to
+	// their DB session IDs, so subagent sessions (which Discover returns
+	// after their trunk) can link to the parent row via parent_session_id.
+	trunkSessionIDs := make(map[string]string)
+
 	// Iterate all adapters to discover sessions from all known agents.
 	for _, adapter := range session.Adapters {
 		refs, err := adapter.Discover(gitRoot)
@@ -166,13 +171,31 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			sessionID := newID()
 			capturedAt := time.Now().UTC()
 
+			// Resolve the parent session for subagent transcripts: prefer a
+			// trunk inserted in this run, then fall back to looking up the
+			// trunk file's content hash from a previous capture.
+			parentSessionID := ""
+			if payload.ParentSessionPath != "" {
+				parentSessionID = trunkSessionIDs[payload.ParentSessionPath]
+				if parentSessionID == "" {
+					if trunkData, rdErr := os.ReadFile(payload.ParentSessionPath); rdErr == nil && len(trunkData) > 0 {
+						if id, qErr := db.QuerySessionIDByHash(dataDB, sha256Hex(trunkData)); qErr == nil {
+							parentSessionID = id
+						}
+					}
+				}
+			}
+
 			// Insert session into DuckDB.
 			if err := db.InsertSession(
-				dataDB, sessionID, "", hash,
+				dataDB, sessionID, parentSessionID, hash,
 				payload.ActorType, payload.AgentID, email, payload.Branch, capturedAt.Format(time.RFC3339),
 				payload.Source,
 			); err != nil {
 				return fmt.Errorf("insert session: %w", err)
+			}
+			if payload.ParentSessionPath == "" && ref.Path != "" {
+				trunkSessionIDs[ref.Path] = sessionID
 			}
 
 			// Insert turns into DuckDB.

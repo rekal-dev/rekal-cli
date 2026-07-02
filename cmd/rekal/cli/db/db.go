@@ -43,6 +43,20 @@ func SessionExistsByHash(d *sql.DB, hash string) (bool, error) {
 	return count > 0, nil
 }
 
+// QuerySessionIDByHash returns the ID of the most recently captured session
+// with the given content hash. Used to link subagent sessions to a trunk
+// session captured in an earlier checkpoint run.
+func QuerySessionIDByHash(d *sql.DB, hash string) (string, error) {
+	var id string
+	err := d.QueryRow(
+		`SELECT id FROM sessions WHERE session_hash = $1 ORDER BY captured_at DESC LIMIT 1`, hash,
+	).Scan(&id)
+	if err != nil {
+		return "", fmt.Errorf("query session by hash: %w", err)
+	}
+	return id, nil
+}
+
 // InsertSession inserts a new session row into the data DB.
 func InsertSession(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source string) error {
 	if source == "" {

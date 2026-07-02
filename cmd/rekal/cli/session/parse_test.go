@@ -275,3 +275,31 @@ func TestParseTranscript_CmdPrefixTruncation(t *testing.T) {
 		t.Errorf("CmdPrefix length = %d, want 100", len(payload.ToolCalls[0].CmdPrefix))
 	}
 }
+
+func TestParseTranscriptWithOptions_IncludeSidechain(t *testing.T) {
+	t.Parallel()
+
+	input := `{"uuid":"s1","sessionId":"sub-1","timestamp":"2025-01-15T10:00:00Z","type":"assistant","message":{"role":"assistant","content":"Subagent finding: the bug is in parse.go."},"gitBranch":"main","isSidechain":true}`
+
+	// Default ParseTranscript drops sidechain content.
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(payload.Turns) != 0 {
+		t.Fatalf("ParseTranscript: len(Turns) = %d, want 0", len(payload.Turns))
+	}
+
+	// ParseTranscriptWithOptions(IncludeSidechain: true) keeps it, for
+	// parsing dedicated subagent transcript files.
+	payload, err = ParseTranscriptWithOptions([]byte(input), TranscriptOptions{IncludeSidechain: true})
+	if err != nil {
+		t.Fatalf("ParseTranscriptWithOptions: %v", err)
+	}
+	if len(payload.Turns) != 1 {
+		t.Fatalf("ParseTranscriptWithOptions: len(Turns) = %d, want 1", len(payload.Turns))
+	}
+	if payload.Turns[0].Content != "Subagent finding: the bug is in parse.go." {
+		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+}

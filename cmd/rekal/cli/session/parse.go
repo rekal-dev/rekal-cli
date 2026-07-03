@@ -78,6 +78,17 @@ type rawLine struct {
 	// while the agent was working (Content is the message text); "dequeue"
 	// fires when it's delivered and carries no content. Content is
 	// RawMessage because it can be a plain string or a content-block array.
+	//
+	// A queued message can also be cancelled/removed by the user before
+	// delivery (Claude Code's queue UI allows this). That variant's exact
+	// operation name and payload shape have not been observed in a captured
+	// transcript, so it is handled defensively in ParseTranscriptWithOptions:
+	// any operation other than "enqueue"/"dequeue" is treated as a
+	// removal and, if Content matches a pending enqueued message (same
+	// string-or-block-array shape as "enqueue"), the phantom human_steering
+	// turn already emitted for it is retracted. Without this, a cancelled
+	// draft would otherwise sit in the append-only ledger forever as if the
+	// user had actually typed it — worse, weighted up in recall ranking.
 	Operation string          `json:"operation"`
 	Content   json.RawMessage `json:"content"`
 }
@@ -122,6 +133,8 @@ type TranscriptOptions struct {
 // and harness-injected (isMeta) user turns. Out-of-band steering messages
 // (queue-operation/enqueue) are extracted as human turns; the later ordinary
 // "user" entry carrying the same delivered text is deduplicated against it.
+// A queue-operation that cancels/removes a message before delivery retracts
+// its steering turn instead of leaving a phantom entry in the ledger.
 func ParseTranscript(data []byte) (*SessionPayload, error) {
 	return ParseTranscriptWithOptions(data, TranscriptOptions{})
 }
@@ -142,6 +155,15 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 	// against real session files); when that entry arrives we skip
 	// re-emitting it as a duplicate turn.
 	pendingQueueTexts := make(map[string]bool)
+
+	// pendingQueueTurnIdx maps that same pending steering text to its index
+	// in payload.Turns, so a later cancel/remove queue-operation (see
+	// rawLine.Operation doc) can retract the turn instead of leaving a
+	// phantom human_steering entry for a message the user never actually
+	// sent. If the same text is queued more than once before either is
+	// resolved, only the most recent occurrence is tracked — an accepted
+	// edge case given real removal payloads have not been observed yet.
+	pendingQueueTurnIdx := make(map[string]int)
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	// Increase scanner buffer for large lines (tool results can be huge).
@@ -197,6 +219,7 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 			for _, t := range turns {
 				if t.Role == "human" && pendingQueueTexts[t.Content] {
 					delete(pendingQueueTexts, t.Content)
+					delete(pendingQueueTurnIdx, t.Content)
 					continue
 				}
 				payload.Turns = append(payload.Turns, t)
@@ -214,22 +237,52 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 			}
 
 		case "queue-operation":
-			// "enqueue" carries an out-of-band user steering message typed
-			// while the agent was working; "dequeue" fires once it's
-			// delivered and carries no content of its own.
-			if raw.Operation != "enqueue" {
-				continue
-			}
-			// Content can be a plain string or a content-block array. Tagged
-			// "human_steering" (distinct from "human") — it is the highest-
-			// intent text in the corpus and recall ranking boosts it.
-			if text := extractTextContent(raw.Content); text != "" {
-				pendingQueueTexts[text] = true
-				payload.Turns = append(payload.Turns, Turn{
-					Role:      "human_steering",
-					Content:   text,
-					Timestamp: ts,
-				})
+			switch raw.Operation {
+			case "enqueue":
+				// Content can be a plain string or a content-block array.
+				// Tagged "human_steering" (distinct from "human") — it is
+				// the highest-intent text in the corpus and recall ranking
+				// boosts it.
+				if text := extractTextContent(raw.Content); text != "" {
+					pendingQueueTexts[text] = true
+					payload.Turns = append(payload.Turns, Turn{
+						Role:      "human_steering",
+						Content:   text,
+						Timestamp: ts,
+					})
+					pendingQueueTurnIdx[text] = len(payload.Turns) - 1
+				}
+			case "dequeue":
+				// Fires once the queued message is delivered; carries no
+				// content of its own. The subsequent ordinary "user" entry
+				// with the same text is deduplicated above.
+			default:
+				// A queued message can be cancelled/removed before delivery
+				// — the operation name and payload shape for that case have
+				// not been observed in a real transcript (see rawLine.
+				// Operation doc), so any operation other than the two known
+				// values is treated defensively as a removal: try to
+				// extract text the same way "enqueue" does, and if it
+				// matches a pending steering turn, retract that turn
+				// instead of leaving a phantom human_steering entry for a
+				// message the user took back.
+				if text := extractTextContent(raw.Content); text != "" {
+					if idx, ok := pendingQueueTurnIdx[text]; ok {
+						payload.Turns = append(payload.Turns[:idx], payload.Turns[idx+1:]...)
+						delete(pendingQueueTurnIdx, text)
+						delete(pendingQueueTexts, text)
+						for k, v := range pendingQueueTurnIdx {
+							if v > idx {
+								pendingQueueTurnIdx[k] = v - 1
+							}
+						}
+					}
+				}
+				// If Content doesn't match any pending turn (unknown shape,
+				// or the real removal payload references the queued item
+				// by ID rather than text), there is nothing safe to
+				// retract — leaving the turn in place matches today's
+				// behavior rather than risking dropping a real message.
 			}
 		}
 	}

@@ -339,6 +339,74 @@ func TestParseTranscript_QueueOperationDequeueIgnored(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_QueueOperationRemoveRetractsPhantomTurn(t *testing.T) {
+	t.Parallel()
+
+	// The real operation name/payload shape for a cancelled queued message
+	// has not been observed in a captured transcript, so the parser treats
+	// any operation other than "enqueue"/"dequeue" as a removal and matches
+	// it defensively by content text, the same shape "enqueue" uses. Without
+	// this, the enqueue below would leave a permanent phantom human_steering
+	// turn for a message the user cancelled before it was ever delivered.
+	input := `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-07-02T12:20:03.322Z","sessionId":"sess-q4","content":"actually scratch that, cancel it"}
+{"type":"queue-operation","operation":"remove","timestamp":"2026-07-02T12:20:04Z","sessionId":"sess-q4","content":"actually scratch that, cancel it"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(payload.Turns) != 0 {
+		t.Fatalf("len(Turns) = %d, want 0 (cancelled message retracted), got %+v", len(payload.Turns), payload.Turns)
+	}
+}
+
+func TestParseTranscript_QueueOperationRemoveOnlyRetractsMatchingTurn(t *testing.T) {
+	t.Parallel()
+
+	// Two distinct queued messages; only the second is cancelled. The first
+	// must survive, and turn ordering/content must stay correct after the
+	// retraction splices payload.Turns.
+	input := `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-07-02T12:20:01Z","sessionId":"sess-q5","content":"keep this one"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-07-02T12:20:02Z","sessionId":"sess-q5","content":"cancel this one"}
+{"type":"queue-operation","operation":"remove","timestamp":"2026-07-02T12:20:03Z","sessionId":"sess-q5","content":"cancel this one"}
+{"uuid":"u1","sessionId":"sess-q5","timestamp":"2026-07-02T12:20:05Z","type":"user","message":{"role":"user","content":"keep this one"},"gitBranch":"main"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(payload.Turns) != 1 {
+		t.Fatalf("len(Turns) = %d, want 1, got %+v", len(payload.Turns), payload.Turns)
+	}
+	if payload.Turns[0].Content != "keep this one" {
+		t.Errorf("Turns[0].Content = %q, want %q", payload.Turns[0].Content, "keep this one")
+	}
+	if payload.Turns[0].Role != "human_steering" {
+		t.Errorf("Turns[0].Role = %q, want human_steering", payload.Turns[0].Role)
+	}
+}
+
+func TestParseTranscript_QueueOperationRemoveWithNoMatchLeavesTurnsUnchanged(t *testing.T) {
+	t.Parallel()
+
+	// If a "remove"-like operation's content doesn't match any pending
+	// steering turn (unknown real shape, or content refers to the queued
+	// item by ID rather than text), nothing should be retracted.
+	input := `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-07-02T12:20:01Z","sessionId":"sess-q6","content":"still here"}
+{"type":"queue-operation","operation":"remove","timestamp":"2026-07-02T12:20:02Z","sessionId":"sess-q6","content":"unrelated-id-reference"}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+	if len(payload.Turns) != 1 {
+		t.Fatalf("len(Turns) = %d, want 1, got %+v", len(payload.Turns), payload.Turns)
+	}
+	if payload.Turns[0].Content != "still here" {
+		t.Errorf("Turns[0].Content = %q, want %q", payload.Turns[0].Content, "still here")
+	}
+}
+
 func TestParseTranscript_IsMetaUserTurnFiltered(t *testing.T) {
 	t.Parallel()
 

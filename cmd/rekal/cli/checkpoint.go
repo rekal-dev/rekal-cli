@@ -369,6 +369,12 @@ func updateIndexIncremental(gitRoot string, sessionIDs []string, checkpointID st
 	}
 	defer indexDB.Close()
 
+	// The index may predate optional harness-metadata columns; migrations
+	// are additive and idempotent.
+	if err := db.MigrateIndexSchema(indexDB); err != nil {
+		return fmt.Errorf("migrate index db: %w", err)
+	}
+
 	// Populate index tables for new sessions.
 	if err := db.PopulateIndexIncremental(indexDB, gitRoot, sessionIDs, checkpointID); err != nil {
 		return fmt.Errorf("populate index: %w", err)

@@ -1,6 +1,9 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 // InitDataSchema creates the data DB tables if they do not exist.
 // Data DB is the source of truth — append-only, never rebuilt.
@@ -66,6 +69,15 @@ func MigrateIndexSchema(d *sql.DB) error {
 // addColumnIfMissing adds a column to a table when the table exists but the
 // column does not. A missing table is a no-op — the CREATE TABLE DDL will
 // create it with the full current column set.
+//
+// DuckDB's ALTER TABLE ADD COLUMN rejects NOT NULL ("Adding columns with
+// constraints not yet supported"), so it is stripped from colType before
+// adding — DuckDB still backfills existing rows from the DEFAULT. NOT NULL
+// is not reapplied afterward: ALTER COLUMN ... SET NOT NULL fails once other
+// tables hold a foreign key into this one ("Cannot alter entry ... because
+// there are entries that depend on it"), which is always true here by the
+// time a migration runs. The column stays nullable on migrated (pre-existing)
+// DBs; new DBs get NOT NULL from the CREATE TABLE DDL directly.
 func addColumnIfMissing(d *sql.DB, table, column, colType string) error {
 	var tables int
 	err := d.QueryRow(`SELECT count(*) FROM information_schema.tables
@@ -80,7 +92,9 @@ func addColumnIfMissing(d *sql.DB, table, column, colType string) error {
 	if err != nil || count > 0 {
 		return nil //nolint:nilerr // best-effort check; later DDL surfaces real problems
 	}
-	_, err = d.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + colType)
+
+	addType := strings.TrimSpace(strings.Replace(colType, "NOT NULL", "", 1))
+	_, err = d.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + addType)
 	return err
 }
 

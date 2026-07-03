@@ -40,13 +40,23 @@ func gitShow(dir, ref, path string) []byte {
 	return out
 }
 
-// gitCommit stages all changes and creates a commit.
+// gitCommit stages all changes and creates a commit. The commit runs with a
+// sanitized environment so the post-commit hook installed by 'rekal init'
+// (which resolves 'rekal' via PATH, falling back to $HOME/.local/bin/rekal)
+// can't find and invoke whatever rekal build happens to be installed on the
+// machine running the test, double-capturing the session before the test's
+// own explicit checkpoint call.
 func gitCommit(t *testing.T, dir, msg string) {
 	t.Helper()
-	if err := exec.Command("git", "-C", dir, "add", "-A").Run(); err != nil {
+	env := append(os.Environ(), "HOME=/nonexistent", "PATH=/usr/bin:/bin")
+	addCmd := exec.Command("git", "-C", dir, "add", "-A")
+	addCmd.Env = env
+	if err := addCmd.Run(); err != nil {
 		t.Fatalf("git add: %v", err)
 	}
-	if err := exec.Command("git", "-C", dir, "commit", "--allow-empty", "-m", msg).Run(); err != nil {
+	commitCmd := exec.Command("git", "-C", dir, "commit", "--allow-empty", "-m", msg)
+	commitCmd.Env = env
+	if err := commitCmd.Run(); err != nil {
 		t.Fatalf("git commit: %v", err)
 	}
 }

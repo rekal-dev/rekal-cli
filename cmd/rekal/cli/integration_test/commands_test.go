@@ -38,9 +38,14 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		t.Fatalf("git init: %v", err)
 	}
 	// Set local git user config (required for git commit-tree in ensureOrphanBranch).
+	// gc.auto=0/receive.autogc=false: git forks a detached `git gc --auto`
+	// after commits/pushes once loose-object thresholds are crossed — see
+	// disableAutoGC's doc comment for why that matters for a t.TempDir().
 	for _, kv := range [][2]string{
 		{"user.email", "test@rekal.dev"},
 		{"user.name", "Rekal Test"},
+		{"gc.auto", "0"},
+		{"receive.autogc", "false"},
 	} {
 		c := exec.Command("git", "-C", dir, "config", kv[0], kv[1])
 		if err := c.Run(); err != nil {
@@ -48,6 +53,52 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		}
 	}
 	return &TestEnv{T: t, RepoDir: dir}
+}
+
+// initBareRemote creates a bare git repo at dir (for use as a `git push`
+// remote in tests) with automatic gc disabled — see disableAutoGC.
+func initBareRemote(t *testing.T, dir string) {
+	t.Helper()
+	if err := exec.Command("git", "init", "--bare", dir).Run(); err != nil {
+		t.Fatalf("git init --bare %s: %v", dir, err)
+	}
+	disableAutoGC(t, dir)
+}
+
+// disableAutoGC turns off git's automatic background maintenance for a repo
+// used in a test.
+//
+// This is the fix for a real, reproduced flake in TestPush_E2E_ExportAndPush:
+// receive-pack runs `git gc --auto` after a push once loose-object/pack
+// thresholds are crossed, and that gc forks and detaches — control returns to
+// the pushing `git push` (and so to RunCLI, and so to the test) before gc
+// necessarily finishes repacking/pruning the receiving repo's objects. A test
+// that pushes more than once in quick succession (this one does two
+// checkpoint→push cycles) is exactly the shape that crosses gc.auto's
+// thresholds. t.TempDir()'s cleanup (os.RemoveAll) then races that detached
+// process: if gc is still writing/removing pack or loose-object files when
+// RemoveAll walks the directory, RemoveAll can fail with ENOTEMPTY
+// ("directory not empty") because a file it already listed gets
+// removed/replaced out from under it, or a new file appears after it thought
+// the directory was empty. That is the exact failure signature CI hit:
+// "TempDir RemoveAll cleanup: unlinkat .../002: directory not empty" — path
+// "002" being the bare remote directory, the second t.TempDir() call in that
+// test.
+//
+// This is a test-lifecycle issue, not a product bug: a real user's repos are
+// never subject to a test harness deleting them out from under a background
+// gc a few milliseconds after a push returns. The fix belongs here, not in
+// rekal's own git invocations.
+func disableAutoGC(t *testing.T, dir string) {
+	t.Helper()
+	for _, kv := range [][2]string{
+		{"gc.auto", "0"},
+		{"receive.autogc", "false"},
+	} {
+		if err := exec.Command("git", "-C", dir, "config", kv[0], kv[1]).Run(); err != nil {
+			t.Fatalf("git -C %s config %s %s: %v", dir, kv[0], kv[1], err)
+		}
+	}
 }
 
 // NewTestEnvAt creates a TestEnv pointing at an existing git repo directory.

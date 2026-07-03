@@ -208,9 +208,7 @@ func TestPush_E2E_ExportAndPush(t *testing.T) {
 	// Create bare remote.
 	bareDir := t.TempDir()
 	bareDir, _ = filepath.EvalSymlinks(bareDir)
-	if err := exec.Command("git", "init", "--bare", bareDir).Run(); err != nil {
-		t.Fatalf("git init --bare: %v", err)
-	}
+	initBareRemote(t, bareDir)
 	if err := exec.Command("git", "-C", env.RepoDir, "remote", "add", "origin", bareDir).Run(); err != nil {
 		t.Fatalf("git remote add: %v", err)
 	}
@@ -384,9 +382,7 @@ func TestPush_E2E_ForceOnConflict(t *testing.T) {
 
 	bareDir := t.TempDir()
 	bareDir, _ = filepath.EvalSymlinks(bareDir)
-	if err := exec.Command("git", "init", "--bare", bareDir).Run(); err != nil {
-		t.Fatalf("git init --bare: %v", err)
-	}
+	initBareRemote(t, bareDir)
 	if err := exec.Command("git", "-C", env.RepoDir, "remote", "add", "origin", bareDir).Run(); err != nil {
 		t.Fatalf("git remote add: %v", err)
 	}
@@ -407,6 +403,7 @@ func TestPush_E2E_ForceOnConflict(t *testing.T) {
 	for _, kv := range [][2]string{
 		{"user.email", "other@rekal.dev"},
 		{"user.name", "Other User"},
+		{"gc.auto", "0"},
 	} {
 		exec.Command("git", "-C", cloneDir, "config", kv[0], kv[1]).Run()
 	}
@@ -568,9 +565,7 @@ func TestImport_E2E_RoundTrip(t *testing.T) {
 	// Create bare remote and push.
 	bareDir := t.TempDir()
 	bareDir, _ = filepath.EvalSymlinks(bareDir)
-	if err := exec.Command("git", "init", "--bare", bareDir).Run(); err != nil {
-		t.Fatalf("git init --bare: %v", err)
-	}
+	initBareRemote(t, bareDir)
 	if err := exec.Command("git", "-C", env.RepoDir, "remote", "add", "origin", bareDir).Run(); err != nil {
 		t.Fatalf("git remote add: %v", err)
 	}
@@ -596,6 +591,7 @@ func TestImport_E2E_RoundTrip(t *testing.T) {
 	for _, kv := range [][2]string{
 		{"user.email", "test@rekal.dev"},
 		{"user.name", "Test User"},
+		{"gc.auto", "0"},
 	} {
 		exec.Command("git", "-C", cloneDir, "config", kv[0], kv[1]).Run()
 	}
@@ -749,9 +745,7 @@ func TestPush_NoNewCheckpoints(t *testing.T) {
 
 	bareDir := t.TempDir()
 	bareDir, _ = filepath.EvalSymlinks(bareDir)
-	if err := exec.Command("git", "init", "--bare", bareDir).Run(); err != nil {
-		t.Fatalf("git init --bare: %v", err)
-	}
+	initBareRemote(t, bareDir)
 	if err := exec.Command("git", "-C", env.RepoDir, "remote", "add", "origin", bareDir).Run(); err != nil {
 		t.Fatalf("git remote add: %v", err)
 	}

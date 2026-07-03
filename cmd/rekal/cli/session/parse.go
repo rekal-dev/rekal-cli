@@ -29,6 +29,14 @@ type SessionPayload struct {
 	// subagents/workflows/<name>/; empty otherwise.
 	WorkflowName string `json:"workflow_name,omitempty"`
 
+	// AgentType, Description, and SpawnDepth come from a subagent's
+	// meta.json sidecar (agentType/description/spawnDepth — the real
+	// observed shape, see claude.go's subagentMeta doc). Empty/zero for
+	// non-subagent sessions or subagents captured without a sidecar.
+	AgentType   string `json:"agent_type,omitempty"`
+	Description string `json:"description,omitempty"`
+	SpawnDepth  int    `json:"spawn_depth,omitempty"`
+
 	// ParentSessionPath is the local path of the trunk session file when this
 	// payload was parsed from a subagent transcript. Checkpoint uses it to
 	// link the subagent session to its parent row; never serialized.

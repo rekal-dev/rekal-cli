@@ -227,7 +227,7 @@ func TestSessionDrilldown_SubagentMetadataShown(t *testing.T) {
 		t.Fatalf("InsertSession parent: %v", err)
 	}
 	if err := db.InsertSessionMeta(dataDB, sessionID, parentID, "hashw", "agent", "step1",
-		"frank@example.com", "main", "2026-06-30 09:05:00", "claude", "perf-team", "release-flow"); err != nil {
+		"frank@example.com", "main", "2026-06-30 09:05:00", "claude", db.SessionMetaFields{TeamName: "perf-team", WorkflowName: "release-flow"}); err != nil {
 		t.Fatalf("InsertSessionMeta: %v", err)
 	}
 	if _, err := dataDB.Exec(

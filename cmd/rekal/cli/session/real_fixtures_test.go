@@ -87,3 +87,42 @@ func TestRealFixtures_DiscoverAndParseWithoutError(t *testing.T) {
 		t.Error("expected at least one subagent transcript among real fixtures — that's the shape most likely to regress silently")
 	}
 }
+
+// TestRealFixtures_SubagentMetaSidecarFieldsCaptured pins the real meta.json
+// sidecar shape (agentType/description/spawnDepth — see claude.go's
+// subagentMeta doc) against one specific captured fixture, so a future
+// change to the sidecar field names silently reverting to the old, wrong
+// guess (agentId/teamName) would be caught here instead of only in a
+// hand-written unit test.
+func TestRealFixtures_SubagentMetaSidecarFieldsCaptured(t *testing.T) {
+	t.Parallel()
+
+	if _, err := os.Stat(realFixturesDir); os.IsNotExist(err) {
+		t.Skip("no real fixtures checked in yet — see testdata/real/README.md")
+	}
+
+	const agentFile = realFixturesDir + "/e4ff45ed-2313-4624-9a11-daf9582c4a20/subagents/agent-a2968f2134831a849.jsonl"
+	const parentPath = realFixturesDir + "/e4ff45ed-2313-4624-9a11-daf9582c4a20.jsonl"
+
+	if _, err := os.Stat(agentFile); os.IsNotExist(err) {
+		t.Skip("pinned fixture not present — real fixtures may have been refreshed without it")
+	}
+
+	adapter := &ClaudeAdapter{}
+	payload, err := adapter.Parse(SessionRef{Path: agentFile, ParentPath: parentPath})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if payload.AgentType != "general-purpose" {
+		t.Errorf("AgentType = %q, want general-purpose", payload.AgentType)
+	}
+	if payload.Description == "" {
+		t.Error("Description is empty, want the real captured description")
+	}
+	if payload.SpawnDepth != 1 {
+		t.Errorf("SpawnDepth = %d, want 1", payload.SpawnDepth)
+	}
+	if payload.TeamName != "" {
+		t.Errorf("TeamName = %q, want empty — this sidecar carries no teamName field", payload.TeamName)
+	}
+}

@@ -193,7 +193,13 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			if err := db.InsertSessionMeta(
 				dataDB, sessionID, parentSessionID, hash,
 				payload.ActorType, payload.AgentID, email, payload.Branch, capturedAt.Format(time.RFC3339),
-				payload.Source, payload.TeamName, payload.WorkflowName,
+				payload.Source, db.SessionMetaFields{
+					TeamName:     payload.TeamName,
+					WorkflowName: payload.WorkflowName,
+					AgentType:    payload.AgentType,
+					Description:  payload.Description,
+					SpawnDepth:   payload.SpawnDepth,
+				},
 			); err != nil {
 				return fmt.Errorf("insert session: %w", err)
 			}

@@ -66,6 +66,27 @@ filter surface.
   migrated in place on open. data.db is append-only and shared via git —
   teammates on older versions must keep working.
 
+## Addendum: `agent_type`, `description`, `spawn_depth` (2026-07)
+
+Three more optional columns, same treatment as the four above: nullable,
+output-enrichment-only, no CLI filter. They come from a Task subagent's
+`meta.json` sidecar (`cmd/rekal/cli/session/claude.go`'s `subagentMeta`) —
+`agentType` (e.g. `"general-purpose"`), `description` (the one-line task
+description passed to the subagent), and `spawnDepth` (nesting depth,
+subagents start at 1).
+
+This addendum exists because an earlier version of `subagentMeta` guessed
+the sidecar's shape wrong — it modeled `agentId`/`teamName` fields that
+don't exist in the real sidecar, so it silently contributed nothing (see
+`docs/REVIEW_2026-07-03.md`, finding P1-3). The real shape was confirmed
+against actual captured sidecars (`cmd/rekal/cli/session/testdata/real/`)
+before this addendum was written. Agent identity (`agent_id`) and team name
+(`team_name`) are unaffected — they were never sourced from the sidecar in
+practice (the transcript entries' own `agentId` field already covers
+identity; no `teamName` has been observed anywhere, sidecar or entry-level,
+since no real Claude Code teammates run was available to capture — that
+part stays unverified).
+
 ## Using the metadata in recall: grouping, weighting, budget
 
 **Status:** decided (2026-07). Implemented in `cmd/rekal/cli/recall.go`.

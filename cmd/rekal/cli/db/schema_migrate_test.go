@@ -97,7 +97,7 @@ func TestMigrateDataSchema_OldDataDB(t *testing.T) {
 
 	// New-style insert with team/workflow metadata works.
 	if err := InsertSessionMeta(d, "new1", "old1", "h2", "agent", "researcher-2",
-		"frank@example.com", "main", "2026-07-01T10:00:00Z", "claude", "perf-team", "release-flow"); err != nil {
+		"frank@example.com", "main", "2026-07-01T10:00:00Z", "claude", SessionMetaFields{TeamName: "perf-team", WorkflowName: "release-flow"}); err != nil {
 		t.Fatalf("InsertSessionMeta after migration: %v", err)
 	}
 	var gotTeam, gotWorkflow, gotParent string
@@ -179,7 +179,7 @@ func TestPopulateIndex_OptionalMetadataAcrossAgents(t *testing.T) {
 	}
 	// A Claude workflow transcript with full metadata.
 	if err := InsertSessionMeta(dataDB, "wf1", "codex1", "h2", "agent", "step1",
-		"frank@example.com", "main", "2026-07-01T11:00:00Z", "claude", "perf-team", "release-flow"); err != nil {
+		"frank@example.com", "main", "2026-07-01T11:00:00Z", "claude", SessionMetaFields{TeamName: "perf-team", WorkflowName: "release-flow"}); err != nil {
 		t.Fatalf("InsertSessionMeta: %v", err)
 	}
 	for _, sid := range []string{"codex1", "wf1"} {
@@ -371,6 +371,83 @@ func TestMigrateDataSchema_OldDataDBHasNoVersionRow(t *testing.T) {
 	}
 	if got != CurrentDataSchemaVersion {
 		t.Errorf("schema_version after migrating pre-versioning DB = %d, want %d", got, CurrentDataSchemaVersion)
+	}
+}
+
+// TestSubagentMeta_RoundTripsThroughDataAndIndex verifies the real-shape
+// meta.json fields (agent_type, description, spawn_depth) survive from
+// InsertSessionMeta through to session_facets via PopulateIndex, mirroring
+// the existing team_name/workflow_name coverage — this is the regression
+// test for the previous version of this struct silently discarding these
+// fields end to end.
+func TestSubagentMeta_RoundTripsThroughDataAndIndex(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+	if err := InsertSession(dataDB, "trunk1", "", "h1", "human", "", "frank@example.com", "main", "2026-07-03T10:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession trunk: %v", err)
+	}
+	if err := InsertSessionMeta(dataDB, "sub1", "trunk1", "h2", "agent", "a2968f2134831a849",
+		"frank@example.com", "main", "2026-07-03T10:05:00Z", "claude", SessionMetaFields{
+			AgentType:   "general-purpose",
+			Description: "Test quality and release config audit",
+			SpawnDepth:  1,
+		}); err != nil {
+		t.Fatalf("InsertSessionMeta sub: %v", err)
+	}
+	dataDB.Close()
+
+	dataDB, err = OpenData(dir)
+	if err != nil {
+		t.Fatalf("reopen OpenData: %v", err)
+	}
+	defer dataDB.Close()
+	row, err := QuerySession(dataDB, "sub1")
+	if err != nil {
+		t.Fatalf("QuerySession: %v", err)
+	}
+	if row.AgentType != "general-purpose" || row.Description != "Test quality and release config audit" || row.SpawnDepth != 1 {
+		t.Errorf("QuerySession subagent meta = %+v, want AgentType=general-purpose Description=%q SpawnDepth=1",
+			row, "Test quality and release config audit")
+	}
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close()
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	facetRow, err := QuerySessionFromIndex(indexDB, "sub1")
+	if err != nil {
+		t.Fatalf("QuerySessionFromIndex: %v", err)
+	}
+	if facetRow.AgentType != "general-purpose" || facetRow.Description != "Test quality and release config audit" || facetRow.SpawnDepth != 1 {
+		t.Errorf("session_facets subagent meta = %+v, want AgentType=general-purpose Description=%q SpawnDepth=1",
+			facetRow, "Test quality and release config audit")
+	}
+
+	// The trunk session has none of this metadata — must read back empty/zero,
+	// not leak the subagent's values.
+	trunkFacet, err := QuerySessionFromIndex(indexDB, "trunk1")
+	if err != nil {
+		t.Fatalf("QuerySessionFromIndex trunk: %v", err)
+	}
+	if trunkFacet.AgentType != "" || trunkFacet.Description != "" || trunkFacet.SpawnDepth != 0 {
+		t.Errorf("trunk session_facets meta = %+v, want all empty/zero", trunkFacet)
 	}
 }
 

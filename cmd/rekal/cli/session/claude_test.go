@@ -175,6 +175,13 @@ func TestClaudeAdapter_Parse_SubagentTranscriptTaggedAsAgent(t *testing.T) {
 	}
 }
 
+// TestClaudeAdapter_Parse_SubagentMetaSidecar uses the real observed
+// meta.json shape — {agentType, description, toolUseId, spawnDepth}, no
+// agentId or teamName — verified against actual
+// ~/.claude/projects/*/subagents/*.meta.json sidecars (see
+// cmd/rekal/cli/session/testdata/real). Agent identity comes from the
+// transcript entries' own agentId field (or the filename as a last-resort
+// fallback), never from the sidecar.
 func TestClaudeAdapter_Parse_SubagentMetaSidecar(t *testing.T) {
 	t.Parallel()
 
@@ -189,12 +196,11 @@ func TestClaudeAdapter_Parse_SubagentMetaSidecar(t *testing.T) {
 		t.Fatal(err)
 	}
 	agentFile := filepath.Join(subDir, "agent-x1.jsonl")
-	content := `{"uuid":"a1","sessionId":"sub-1","timestamp":"2026-06-01T10:00:00Z","type":"assistant","message":{"role":"assistant","content":"done"},"isSidechain":true}`
+	content := `{"uuid":"a1","sessionId":"sub-1","agentId":"x1","timestamp":"2026-06-01T10:00:00Z","type":"assistant","message":{"role":"assistant","content":"done"},"isSidechain":true}`
 	if err := writeTestFile(agentFile, content); err != nil {
 		t.Fatal(err)
 	}
-	// The sidecar is authoritative for agent identity and carries team name.
-	meta := `{"agentId":"researcher-2","toolUseId":"toolu_01","teamName":"perf-team"}`
+	meta := `{"agentType":"general-purpose","description":"Review the parser package","toolUseId":"toolu_01FqRcuaqk1TyzueLFS67LaZ","spawnDepth":1}`
 	if err := writeTestFile(filepath.Join(subDir, "agent-x1.meta.json"), meta); err != nil {
 		t.Fatal(err)
 	}
@@ -204,14 +210,56 @@ func TestClaudeAdapter_Parse_SubagentMetaSidecar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if payload.AgentID != "researcher-2" {
-		t.Errorf("AgentID = %q, want researcher-2 (from sidecar)", payload.AgentID)
+	if payload.AgentID != "x1" {
+		t.Errorf("AgentID = %q, want x1 (from transcript entry, not sidecar)", payload.AgentID)
 	}
-	if payload.TeamName != "perf-team" {
-		t.Errorf("TeamName = %q, want perf-team", payload.TeamName)
+	if payload.TeamName != "" {
+		t.Errorf("TeamName = %q, want empty — meta.json carries no teamName", payload.TeamName)
+	}
+	if payload.AgentType != "general-purpose" {
+		t.Errorf("AgentType = %q, want general-purpose", payload.AgentType)
+	}
+	if payload.Description != "Review the parser package" {
+		t.Errorf("Description = %q, want %q", payload.Description, "Review the parser package")
+	}
+	if payload.SpawnDepth != 1 {
+		t.Errorf("SpawnDepth = %d, want 1", payload.SpawnDepth)
 	}
 	if payload.WorkflowName != "" {
 		t.Errorf("WorkflowName = %q, want empty for plain subagent", payload.WorkflowName)
+	}
+}
+
+// TestClaudeAdapter_Parse_SubagentMetaSidecar_FallsBackToFilenameWhenNoEntryAgentID
+// covers subagent transcripts predating the entry-level agentId field: the
+// filename is the only remaining source of identity, since the sidecar
+// never carries one.
+func TestClaudeAdapter_Parse_SubagentMetaSidecar_FallsBackToFilenameWhenNoEntryAgentID(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	parentPath := filepath.Join(dir, "sess1.jsonl")
+	if err := writeTestFile(parentPath, "{}"); err != nil {
+		t.Fatal(err)
+	}
+
+	subDir := filepath.Join(dir, "sess1", "subagents")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agentFile := filepath.Join(subDir, "agent-x2.jsonl")
+	content := `{"uuid":"a1","sessionId":"sub-1","timestamp":"2026-06-01T10:00:00Z","type":"assistant","message":{"role":"assistant","content":"done"},"isSidechain":true}`
+	if err := writeTestFile(agentFile, content); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := &ClaudeAdapter{}
+	payload, err := adapter.Parse(SessionRef{Path: agentFile, ParentPath: parentPath})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if payload.AgentID != "x2" {
+		t.Errorf("AgentID = %q, want x2 (from filename fallback)", payload.AgentID)
 	}
 }
 

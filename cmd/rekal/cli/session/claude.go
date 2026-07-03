@@ -67,30 +67,43 @@ func (a *ClaudeAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 		payload.ParentSessionPath = ref.ParentPath
 		payload.WorkflowName = workflowName(ref.Path)
 
-		// Agent identity precedence: meta.json sidecar (authoritative),
-		// then the transcript entries' agentId, then the filename.
-		if meta := readSubagentMeta(ref.Path); meta != nil {
-			if meta.AgentID != "" {
-				payload.AgentID = meta.AgentID
-			}
-			if payload.TeamName == "" && meta.TeamName != "" {
-				payload.TeamName = meta.TeamName
-			}
-		}
+		// Agent identity: the transcript entries' own agentId field (set by
+		// Claude Code on every line of a real subagent transcript — verified
+		// directly against captured sessions), falling back to the filename
+		// for older formats that predate it. The meta.json sidecar carries
+		// no agentId/teamName of its own (see subagentMeta doc) — team name
+		// stays sourced purely from the entries' teamName field, same as
+		// before, which remains unverified against a real teammates run (no
+		// such run was available to capture; see docs/REVIEW_2026-07-03.md).
 		if payload.AgentID == "" {
 			payload.AgentID = subagentID(ref.Path)
+		}
+
+		if meta := readSubagentMeta(ref.Path); meta != nil {
+			payload.AgentType = meta.AgentType
+			payload.Description = meta.Description
+			payload.SpawnDepth = meta.SpawnDepth
 		}
 	}
 	return payload, nil
 }
 
 // subagentMeta is the agent-<id>.meta.json sidecar Claude Code writes next to
-// a subagent transcript. toolUseId is the spawning Task/Agent tool_use in the
-// trunk transcript.
+// a subagent transcript. Verified directly against real
+// ~/.claude/projects/*/subagents/*.meta.json sidecars (captured from Task
+// tool subagent runs — see cmd/rekal/cli/session/testdata/real): the shape
+// is {agentType, description, toolUseId, spawnDepth}. Notably it carries no
+// agentId or teamName field — an earlier version of this struct assumed
+// both existed, which meant the sidecar contributed nothing (silently, no
+// error) beyond a fallback that was already redundant with the transcript
+// entries' own agentId. Only Task-tool subagent sidecars have been observed;
+// whether a true Claude Code teammates run's sidecar (if one exists) carries
+// additional fields is still unverified.
 type subagentMeta struct {
-	AgentID   string `json:"agentId"`
-	ToolUseID string `json:"toolUseId"`
-	TeamName  string `json:"teamName"`
+	AgentType   string `json:"agentType"`
+	Description string `json:"description"`
+	ToolUseID   string `json:"toolUseId"`
+	SpawnDepth  int    `json:"spawnDepth"`
 }
 
 // readSubagentMeta loads the meta sidecar for a subagent transcript, if
@@ -151,11 +164,12 @@ func FindSessionFiles(sessionDir string) ([]string, error) {
 // the parent session filename without .jsonl. Each ref carries ParentPath
 // pointing at the trunk session file so the payload can be linked to it.
 //
-// This directory layout could not be confirmed against real local session
-// data (no subagent/workflow transcripts were present in the sessions
-// available for verification); it is implemented defensively so it degrades
-// to a no-op when absent, and should be re-validated against a real subagent
-// transcript when one becomes available.
+// The subagents/agent-<id>.jsonl layout and its .meta.json sidecar are now
+// verified directly against real captured Task-tool subagent transcripts
+// (cmd/rekal/cli/session/testdata/real); the workflows/<name>/ side-channel
+// layout remains unverified — no dynamic-workflow transcript was available
+// to capture — so it stays implemented defensively and degrades to a no-op
+// when absent.
 func findSubagentRefs(sessionDir string) []SessionRef {
 	var refs []SessionRef
 

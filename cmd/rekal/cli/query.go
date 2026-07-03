@@ -156,6 +156,13 @@ type sessionOutput struct {
 	WorkflowName    string `json:"workflow_name,omitempty"`
 	ParentSessionID string `json:"parent_session_id,omitempty"`
 
+	// Optional Task subagent meta.json sidecar fields — omitted for
+	// sessions that aren't a subagent transcript (see claude.go's
+	// subagentMeta doc).
+	AgentType   string `json:"agent_type,omitempty"`
+	Description string `json:"description,omitempty"`
+	SpawnDepth  int    `json:"spawn_depth,omitempty"`
+
 	// ChildSessionIDs are sessions whose parent_session_id points at this
 	// session — the grouped structure a recall result collapses. Lets an
 	// agent navigate from a trunk conversation into its subagent/workflow
@@ -273,6 +280,9 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		TeamName:        session.TeamName,
 		WorkflowName:    session.WorkflowName,
 		ParentSessionID: session.ParentSessionID,
+		AgentType:       session.AgentType,
+		Description:     session.Description,
+		SpawnDepth:      session.SpawnDepth,
 	}
 
 	if children, err := src.children(d, sessionID); err == nil {

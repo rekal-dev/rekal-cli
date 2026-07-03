@@ -410,7 +410,7 @@ func TestRecall_PerConversationBudgetCapsChildren(t *testing.T) {
 	// conversation cannot fill the whole children list unbounded.
 	for i := 0; i < 8; i++ {
 		sid := fmt.Sprintf("sweep-step-%d", i)
-		if err := db.InsertSessionMeta(dataDB, sid, "big-trunk", "hash-"+sid, "agent", fmt.Sprintf("agent-%d", i), "", "main", "2026-02-25T13:0"+fmt.Sprint(i+1)+":00Z", "", "", "security-sweep"); err != nil {
+		if err := db.InsertSessionMeta(dataDB, sid, "big-trunk", "hash-"+sid, "agent", fmt.Sprintf("agent-%d", i), "", "main", "2026-02-25T13:0"+fmt.Sprint(i+1)+":00Z", "", db.SessionMetaFields{WorkflowName: "security-sweep"}); err != nil {
 			t.Fatalf("insert step %s: %v", sid, err)
 		}
 		if err := db.InsertTurn(dataDB, "turn-"+sid, sid, 0, "assistant", "security sweep step: scanning service dependencies", "2026-02-25T13:0"+fmt.Sprint(i+1)+":00Z"); err != nil {
@@ -497,14 +497,14 @@ func seedWorkflowData(t *testing.T, env *TestEnv) {
 		t.Fatalf("insert turn: %v", err)
 	}
 
-	if err := db.InsertSessionMeta(dataDB, "workflow-step-1", "trunk-session", "hash-wf1", "agent", "agent-1", "", "main", "2026-02-25T09:02:00Z", "", "", "release-checklist"); err != nil {
+	if err := db.InsertSessionMeta(dataDB, "workflow-step-1", "trunk-session", "hash-wf1", "agent", "agent-1", "", "main", "2026-02-25T09:02:00Z", "", db.SessionMetaFields{WorkflowName: "release-checklist"}); err != nil {
 		t.Fatalf("insert workflow step 1: %v", err)
 	}
 	if err := db.InsertTurn(dataDB, "turn-w1", "workflow-step-1", 0, "assistant", "Running the release checklist: verifying CI is green.", "2026-02-25T09:02:00Z"); err != nil {
 		t.Fatalf("insert turn: %v", err)
 	}
 
-	if err := db.InsertSessionMeta(dataDB, "workflow-step-2", "trunk-session", "hash-wf2", "agent", "agent-2", "", "main", "2026-02-25T09:03:00Z", "", "", "release-checklist"); err != nil {
+	if err := db.InsertSessionMeta(dataDB, "workflow-step-2", "trunk-session", "hash-wf2", "agent", "agent-2", "", "main", "2026-02-25T09:03:00Z", "", db.SessionMetaFields{WorkflowName: "release-checklist"}); err != nil {
 		t.Fatalf("insert workflow step 2: %v", err)
 	}
 	if err := db.InsertTurn(dataDB, "turn-w2", "workflow-step-2", 0, "assistant", "Running the release checklist: tagging the release.", "2026-02-25T09:03:00Z"); err != nil {

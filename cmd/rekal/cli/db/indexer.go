@@ -185,7 +185,8 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		INSERT INTO session_facets (
 			session_id, user_email, git_branch, actor_type, agent_id,
 			captured_at, turn_count, tool_call_count, file_count,
-			checkpoint_id, git_sha, parent_session_id, team_name, workflow_name
+			checkpoint_id, git_sha, parent_session_id, team_name, workflow_name,
+			agent_type, description, spawn_depth
 		)
 		SELECT
 			s.id,
@@ -201,7 +202,10 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 			c.git_sha,
 			s.parent_session_id,
 			s.team_name,
-			s.workflow_name
+			s.workflow_name,
+			s.agent_type,
+			s.description,
+			s.spawn_depth
 		FROM data_db.sessions s
 		LEFT JOIN data_db.checkpoint_sessions cs ON cs.session_id = s.id
 		LEFT JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id
@@ -379,7 +383,8 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 			INSERT INTO session_facets (
 				session_id, user_email, git_branch, actor_type, agent_id,
 				captured_at, turn_count, tool_call_count, file_count,
-				checkpoint_id, git_sha, parent_session_id, team_name, workflow_name
+				checkpoint_id, git_sha, parent_session_id, team_name, workflow_name,
+				agent_type, description, spawn_depth
 			)
 			SELECT
 				s.id, s.user_email,
@@ -389,7 +394,8 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 				(SELECT count(*) FROM data_db.tool_calls tc WHERE tc.session_id = s.id),
 				COALESCE(fc.cnt, 0),
 				c.id, c.git_sha,
-				s.parent_session_id, s.team_name, s.workflow_name
+				s.parent_session_id, s.team_name, s.workflow_name,
+				s.agent_type, s.description, s.spawn_depth
 			FROM data_db.sessions s
 			LEFT JOIN data_db.checkpoint_sessions cs ON cs.session_id = s.id
 			LEFT JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id

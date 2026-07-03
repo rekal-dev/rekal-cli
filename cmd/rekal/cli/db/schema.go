@@ -85,6 +85,18 @@ func MigrateDataSchema(d *sql.DB) error {
 	if err := addColumnIfMissing(d, "sessions", "workflow_name", "VARCHAR"); err != nil {
 		return err
 	}
+	// Migration: subagent meta.json sidecar fields (agentType, description,
+	// spawnDepth — the real observed shape, see claude.go's subagentMeta doc;
+	// existing DBs predate this capture).
+	if err := addColumnIfMissing(d, "sessions", "agent_type", "VARCHAR"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(d, "sessions", "description", "VARCHAR"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(d, "sessions", "spawn_depth", "INTEGER"); err != nil {
+		return err
+	}
 
 	return writeSchemaVersion(d, "schema_meta", CurrentDataSchemaVersion)
 }
@@ -142,6 +154,9 @@ func MigrateIndexSchema(d *sql.DB) error {
 		{"parent_session_id", "VARCHAR"},
 		{"team_name", "VARCHAR"},
 		{"workflow_name", "VARCHAR"},
+		{"agent_type", "VARCHAR"},
+		{"description", "VARCHAR"},
+		{"spawn_depth", "INTEGER"},
 	} {
 		if err := addColumnIfMissing(d, "session_facets", col.name, col.typ); err != nil {
 			return err
@@ -254,7 +269,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 	branch            VARCHAR,
 	source            VARCHAR NOT NULL DEFAULT 'claude',
 	team_name         VARCHAR,
-	workflow_name     VARCHAR
+	workflow_name     VARCHAR,
+	agent_type        VARCHAR,
+	description       VARCHAR,
+	spawn_depth       INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS turns (
@@ -357,7 +375,10 @@ CREATE TABLE IF NOT EXISTS session_facets (
 	git_sha           VARCHAR,
 	parent_session_id VARCHAR,
 	team_name         VARCHAR,
-	workflow_name     VARCHAR
+	workflow_name     VARCHAR,
+	agent_type        VARCHAR,
+	description       VARCHAR,
+	spawn_depth       INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_sf_email ON session_facets(user_email);
 CREATE INDEX IF NOT EXISTS idx_sf_actor ON session_facets(actor_type);

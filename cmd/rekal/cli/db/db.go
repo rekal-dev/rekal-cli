@@ -57,22 +57,38 @@ func QuerySessionIDByHash(d *sql.DB, hash string) (string, error) {
 	return id, nil
 }
 
-// InsertSession inserts a new session row into the data DB.
-func InsertSession(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source string) error {
-	return InsertSessionMeta(d, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source, "", "")
+// SessionMetaFields bundles optional harness metadata for InsertSessionMeta:
+// team/workflow (Claude Code teammates runs and dynamic workflows) and
+// agent-type/description/spawn-depth (Task subagent meta.json sidecars —
+// see claude.go's subagentMeta doc for the real observed shape). Every field
+// is optional; the zero value means "not applicable for this harness or
+// session" and is stored as NULL, not as an empty string/zero.
+type SessionMetaFields struct {
+	TeamName     string
+	WorkflowName string
+	AgentType    string
+	Description  string
+	SpawnDepth   int // 0 means "not set" — real subagent depths start at 1
 }
 
-// InsertSessionMeta is InsertSession with team/workflow metadata for sessions
-// captured from Claude Code teammates runs or dynamic workflows.
-func InsertSessionMeta(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source, teamName, workflowName string) error {
+// InsertSession inserts a new session row into the data DB.
+func InsertSession(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source string) error {
+	return InsertSessionMeta(d, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source, SessionMetaFields{})
+}
+
+// InsertSessionMeta is InsertSession with optional harness metadata for
+// sessions captured from Claude Code teammates runs, dynamic workflows, or
+// Task subagents.
+func InsertSessionMeta(d *sql.DB, id, parentSessionID, hash, actorType, agentID, userEmail, branch, capturedAt, source string, meta SessionMetaFields) error {
 	if source == "" {
 		source = "claude"
 	}
 	_, err := d.Exec(
-		`INSERT INTO sessions (id, parent_session_id, session_hash, captured_at, actor_type, agent_id, user_email, branch, source, team_name, workflow_name)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		`INSERT INTO sessions (id, parent_session_id, session_hash, captured_at, actor_type, agent_id, user_email, branch, source, team_name, workflow_name, agent_type, description, spawn_depth)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		id, nullIfEmpty(parentSessionID), hash, capturedAt, actorType, agentID, userEmail, branch, source,
-		nullIfEmpty(teamName), nullIfEmpty(workflowName),
+		nullIfEmpty(meta.TeamName), nullIfEmpty(meta.WorkflowName),
+		nullIfEmpty(meta.AgentType), nullIfEmpty(meta.Description), nullIfZero(meta.SpawnDepth),
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -87,6 +103,15 @@ func nullIfEmpty(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+// nullIfZero returns nil if n is zero, otherwise n.
+// Used to store NULL in INTEGER columns instead of a misleading 0.
+func nullIfZero(n int) interface{} {
+	if n == 0 {
+		return nil
+	}
+	return n
 }
 
 // InsertTurn inserts a turn row into the data DB.
@@ -263,6 +288,12 @@ type SessionRow struct {
 	TeamName        string
 	WorkflowName    string
 	ParentSessionID string
+
+	// Optional Task subagent meta.json sidecar fields — empty for sessions
+	// that aren't a subagent transcript, or that predate this capture.
+	AgentType   string
+	Description string
+	SpawnDepth  int
 }
 
 // TurnRow represents a turn from the turns table.
@@ -286,10 +317,12 @@ func QuerySession(d *sql.DB, id string) (*SessionRow, error) {
 	r := &SessionRow{}
 	err := d.QueryRow(
 		`SELECT id, session_hash, captured_at, actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(branch, ''),
-		        COALESCE(team_name, ''), COALESCE(workflow_name, ''), COALESCE(parent_session_id, '')
+		        COALESCE(team_name, ''), COALESCE(workflow_name, ''), COALESCE(parent_session_id, ''),
+		        COALESCE(agent_type, ''), COALESCE(description, ''), COALESCE(spawn_depth, 0)
 		 FROM sessions WHERE id = $1`, id,
 	).Scan(&r.ID, &r.Hash, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch,
-		&r.TeamName, &r.WorkflowName, &r.ParentSessionID)
+		&r.TeamName, &r.WorkflowName, &r.ParentSessionID,
+		&r.AgentType, &r.Description, &r.SpawnDepth)
 	if err != nil {
 		return nil, fmt.Errorf("query session: %w", err)
 	}
@@ -305,10 +338,12 @@ func QuerySessionFromIndex(d *sql.DB, id string) (*SessionRow, error) {
 	r := &SessionRow{}
 	err := d.QueryRow(
 		`SELECT session_id, CAST(captured_at AS VARCHAR), actor_type, COALESCE(agent_id, ''), COALESCE(user_email, ''), COALESCE(git_branch, ''),
-		        COALESCE(team_name, ''), COALESCE(workflow_name, ''), COALESCE(parent_session_id, '')
+		        COALESCE(team_name, ''), COALESCE(workflow_name, ''), COALESCE(parent_session_id, ''),
+		        COALESCE(agent_type, ''), COALESCE(description, ''), COALESCE(spawn_depth, 0)
 		 FROM session_facets WHERE session_id = $1`, id,
 	).Scan(&r.ID, &r.CapturedAt, &r.ActorType, &r.AgentID, &r.Email, &r.Branch,
-		&r.TeamName, &r.WorkflowName, &r.ParentSessionID)
+		&r.TeamName, &r.WorkflowName, &r.ParentSessionID,
+		&r.AgentType, &r.Description, &r.SpawnDepth)
 	if err != nil {
 		return nil, fmt.Errorf("query session from index: %w", err)
 	}

@@ -93,6 +93,13 @@ type sessionDetail struct {
 	TeamName        string `json:"team_name,omitempty"`
 	WorkflowName    string `json:"workflow_name,omitempty"`
 	ParentSessionID string `json:"parent_session_id,omitempty"`
+
+	// Optional Task subagent meta.json sidecar fields — omitted for
+	// sessions that aren't a subagent transcript (see
+	// cmd/rekal/cli/session/claude.go's subagentMeta doc).
+	AgentType   string `json:"agent_type,omitempty"`
+	Description string `json:"description,omitempty"`
+	SpawnDepth  int    `json:"spawn_depth,omitempty"`
 }
 
 type searchOutput struct {
@@ -374,7 +381,7 @@ func filterSearch(indexDB *sql.DB, filters RecallFilters, limit int) ([]searchRe
 
 // sessionFacetCols is the column list matching sessionFacetRow.scan. The
 // harness-metadata columns are nullable — NULL for agents without the concept.
-const sessionFacetCols = "session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, agent_id, team_name, workflow_name, parent_session_id"
+const sessionFacetCols = "session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, agent_id, team_name, workflow_name, parent_session_id, agent_type, description, spawn_depth"
 
 type sessionFacetRow struct {
 	sessionID     string
@@ -393,6 +400,12 @@ type sessionFacetRow struct {
 	teamName        sql.NullString
 	workflowName    sql.NullString
 	parentSessionID sql.NullString
+
+	// Optional Task subagent meta.json sidecar fields — NULL for sessions
+	// that aren't a subagent transcript.
+	agentType   sql.NullString
+	description sql.NullString
+	spawnDepth  sql.NullInt64
 }
 
 // scanner abstracts *sql.Row and *sql.Rows for sessionFacetRow.scan.
@@ -403,7 +416,8 @@ type scanner interface {
 func (sf *sessionFacetRow) scan(s scanner) error {
 	return s.Scan(&sf.sessionID, &sf.email, &sf.branch, &sf.actorType, &sf.capturedAt,
 		&sf.turnCount, &sf.toolCallCount, &sf.fileCount, &sf.checkpointID, &sf.gitSHA,
-		&sf.agentID, &sf.teamName, &sf.workflowName, &sf.parentSessionID)
+		&sf.agentID, &sf.teamName, &sf.workflowName, &sf.parentSessionID,
+		&sf.agentType, &sf.description, &sf.spawnDepth)
 }
 
 // detail builds the JSON session detail; optional metadata fields are only
@@ -422,6 +436,9 @@ func (sf *sessionFacetRow) detail(files []string) sessionDetail {
 		TeamName:        nullStr(sf.teamName),
 		WorkflowName:    nullStr(sf.workflowName),
 		ParentSessionID: nullStr(sf.parentSessionID),
+		AgentType:       nullStr(sf.agentType),
+		Description:     nullStr(sf.description),
+		SpawnDepth:      int(sf.spawnDepth.Int64),
 	}
 }
 

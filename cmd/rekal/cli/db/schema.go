@@ -2,8 +2,40 @@ package db
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 )
+
+// CurrentDataSchemaVersion is the highest data.db schema version this rekal
+// build understands. Bump it whenever a change to dataDDL/MigrateDataSchema
+// is not purely additive-and-ignorable by older builds (see
+// SchemaVersionError doc for why this matters).
+const CurrentDataSchemaVersion = 1
+
+// CurrentIndexSchemaVersion is the index.db equivalent of
+// CurrentDataSchemaVersion.
+const CurrentIndexSchemaVersion = 1
+
+// SchemaVersionError means a DB's stamped schema version is newer than this
+// rekal build understands — see the forward-compatibility design note in
+// docs/db/ (data.db is append-only and shared via git, so a team routinely
+// has members on different rekal versions; someone on an older build must
+// get a clear error here, not a confusing failure three layers into a query
+// against columns/tables it doesn't know about).
+type SchemaVersionError struct {
+	DBName     string // "data.db" or "index.db"
+	DBVersion  int
+	MaxVersion int
+}
+
+func (e *SchemaVersionError) Error() string {
+	return fmt.Sprintf(
+		"%s was written by a newer rekal (schema v%d) — this build only understands up to v%d. Upgrade rekal to continue.",
+		e.DBName, e.DBVersion, e.MaxVersion,
+	)
+}
 
 // InitDataSchema creates the data DB tables if they do not exist.
 // Data DB is the source of truth — append-only, never rebuilt.
@@ -18,7 +50,29 @@ func InitDataSchema(d *sql.DB) error {
 // Safe to call multiple times — each migration checks before applying.
 // Migrations must stay additive: data.db is append-only and shared via git,
 // so DBs written by older rekal versions must keep opening cleanly.
+//
+// Before touching anything else, it checks the DB's stamped schema version
+// against CurrentDataSchemaVersion and refuses to proceed if the DB is
+// newer than this build understands (SchemaVersionError) — see the
+// forward-compatibility design note in docs/db/.
 func MigrateDataSchema(d *sql.DB) error {
+	// schema_meta may not exist yet on a data.db written before this
+	// version-stamping was added (every call site here reaches
+	// MigrateDataSchema directly, not through InitDataSchema's dataDDL, so
+	// this table must ensure its own existence rather than relying on the
+	// DDL constant below having run first).
+	if _, err := d.Exec(schemaMetaDDL); err != nil {
+		return fmt.Errorf("create schema_meta table: %w", err)
+	}
+
+	version, err := readSchemaVersion(d, "schema_meta")
+	if err != nil {
+		return err
+	}
+	if version > CurrentDataSchemaVersion {
+		return &SchemaVersionError{DBName: "data.db", DBVersion: version, MaxVersion: CurrentDataSchemaVersion}
+	}
+
 	// Migration: add source column if missing (existing DBs pre-multi-agent).
 	if err := addColumnIfMissing(d, "sessions", "source", `VARCHAR NOT NULL DEFAULT 'claude'`); err != nil {
 		return err
@@ -31,7 +85,8 @@ func MigrateDataSchema(d *sql.DB) error {
 	if err := addColumnIfMissing(d, "sessions", "workflow_name", "VARCHAR"); err != nil {
 		return err
 	}
-	return nil
+
+	return writeSchemaVersion(d, "schema_meta", CurrentDataSchemaVersion)
 }
 
 // InitIndexSchema creates the index DB tables if they do not exist.
@@ -46,14 +101,43 @@ func InitIndexSchema(d *sql.DB) error {
 	if err := MigrateIndexSchema(d); err != nil {
 		return err
 	}
-	_, err := d.Exec(indexDDL)
-	return err
+	if _, err := d.Exec(indexDDL); err != nil {
+		return err
+	}
+	// index_state is guaranteed to exist now (created by indexDDL above, or
+	// already existed) — stamp the current version so an older rekal
+	// opening this index.db later (e.g. after a local downgrade) detects
+	// the mismatch instead of silently misreading columns it predates.
+	return WriteIndexState(d, "schema_version", strconv.Itoa(CurrentIndexSchemaVersion))
 }
 
 // MigrateIndexSchema applies forward-only migrations to an existing index DB.
 // The index can always be rebuilt from the data DB, but incremental indexing
 // runs against pre-existing index files, so columns are added in place.
+//
+// index.db is local-only and always rebuildable, so a version mismatch here
+// is lower-stakes than data.db's — it can only happen after a local rekal
+// downgrade, never from a teammate's data. Still checked, for the same
+// reason a clear error beats a confusing one three layers into a query.
 func MigrateIndexSchema(d *sql.DB) error {
+	// index_state won't exist yet on a brand-new index.db (InitIndexSchema
+	// calls this before running indexDDL) — skip the version check/stamp
+	// entirely in that case; InitIndexSchema stamps the version itself once
+	// indexDDL has created the table.
+	stateTableExists, err := tableExists(d, "index_state")
+	if err != nil {
+		return err
+	}
+	if stateTableExists {
+		version, err := readSchemaVersion(d, "index_state")
+		if err != nil {
+			return err
+		}
+		if version > CurrentIndexSchemaVersion {
+			return &SchemaVersionError{DBName: "index.db", DBVersion: version, MaxVersion: CurrentIndexSchemaVersion}
+		}
+	}
+
 	for _, col := range []struct{ name, typ string }{
 		{"parent_session_id", "VARCHAR"},
 		{"team_name", "VARCHAR"},
@@ -63,8 +147,68 @@ func MigrateIndexSchema(d *sql.DB) error {
 			return err
 		}
 	}
+
+	if stateTableExists {
+		return WriteIndexState(d, "schema_version", strconv.Itoa(CurrentIndexSchemaVersion))
+	}
 	return nil
 }
+
+// tableExists reports whether the given table exists in d.
+func tableExists(d *sql.DB, table string) (bool, error) {
+	var count int
+	err := d.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_name = $1`, table).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("check %s existence: %w", table, err)
+	}
+	return count > 0, nil
+}
+
+// readSchemaVersion reads the 'schema_version' key from a key/value table
+// (schema_meta for data.db, index_state for index.db). The table must
+// already exist. A missing row (pre-versioning DB, or a table that was just
+// created and never stamped) reads as version 0 — the oldest possible,
+// always <= any CurrentXSchemaVersion, so old DBs keep opening cleanly.
+func readSchemaVersion(d *sql.DB, table string) (int, error) {
+	var value string
+	err := d.QueryRow(`SELECT value FROM ` + table + ` WHERE key = 'schema_version'`).Scan(&value)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read schema_version from %s: %w", table, err)
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid schema_version value %q in %s: %w", value, table, err)
+	}
+	return n, nil
+}
+
+// writeSchemaVersion stamps the 'schema_version' key/value row. The table
+// must already exist.
+func writeSchemaVersion(d *sql.DB, table string, version int) error {
+	_, err := d.Exec(
+		`INSERT INTO `+table+` (key, value) VALUES ('schema_version', $1)
+		 ON CONFLICT (key) DO UPDATE SET value = $1`,
+		strconv.Itoa(version),
+	)
+	if err != nil {
+		return fmt.Errorf("write schema_version to %s: %w", table, err)
+	}
+	return nil
+}
+
+// schemaMetaDDL creates data.db's key/value metadata table (schema_meta),
+// mirroring index.db's existing index_state table. Only holds
+// 'schema_version' today; a plain key/value shape leaves room for more
+// without another migration.
+const schemaMetaDDL = `
+CREATE TABLE IF NOT EXISTS schema_meta (
+	key             VARCHAR PRIMARY KEY,
+	value           VARCHAR NOT NULL
+);
+`
 
 // addColumnIfMissing adds a column to a table when the table exists but the
 // column does not. A missing table is a no-op — the CREATE TABLE DDL will
@@ -159,6 +303,11 @@ CREATE TABLE IF NOT EXISTS checkpoint_state (
 	file_path   VARCHAR PRIMARY KEY,
 	byte_size   BIGINT NOT NULL,
 	file_hash   VARCHAR NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS schema_meta (
+	key         VARCHAR PRIMARY KEY,
+	value       VARCHAR NOT NULL
 );
 `
 

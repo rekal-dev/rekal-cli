@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -219,6 +220,157 @@ func TestPopulateIndex_OptionalMetadataAcrossAgents(t *testing.T) {
 	}
 	if team != "perf-team" || workflow != "release-flow" || parent != "codex1" {
 		t.Errorf("workflow facets = %q/%q/%q, want perf-team/release-flow/codex1", team, workflow, parent)
+	}
+}
+
+// TestMigrateDataSchema_StampsVersionOnFreshDB verifies a brand-new data.db
+// records its schema version — the forward-compat check has nothing to
+// compare against on a DB that never recorded one, so a fresh DB must always
+// come out stamped.
+func TestMigrateDataSchema_StampsVersionOnFreshDB(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	got, err := readSchemaVersion(d, "schema_meta")
+	if err != nil {
+		t.Fatalf("readSchemaVersion: %v", err)
+	}
+	if got != CurrentDataSchemaVersion {
+		t.Errorf("schema_meta schema_version = %d, want %d", got, CurrentDataSchemaVersion)
+	}
+}
+
+// TestMigrateIndexSchema_StampsVersionOnFreshDB is the index.db equivalent.
+func TestMigrateIndexSchema_StampsVersionOnFreshDB(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+	d, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer d.Close()
+
+	if err := InitIndexSchema(d); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+
+	got, err := readSchemaVersion(d, "index_state")
+	if err != nil {
+		t.Fatalf("readSchemaVersion: %v", err)
+	}
+	if got != CurrentIndexSchemaVersion {
+		t.Errorf("index_state schema_version = %d, want %d", got, CurrentIndexSchemaVersion)
+	}
+}
+
+// TestMigrateDataSchema_RejectsNewerVersion is the core forward-compatibility
+// regression test: data.db is append-only and shared via git, so a team is
+// routinely on mixed rekal versions. An older build opening a data.db a
+// newer teammate already wrote to must get a clear, immediate error — never
+// a crash or silently wrong behavior from misunderstanding columns/tables it
+// predates.
+func TestMigrateDataSchema_RejectsNewerVersion(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+	// Simulate a future rekal version having already stamped a newer schema.
+	if err := writeSchemaVersion(d, "schema_meta", CurrentDataSchemaVersion+1); err != nil {
+		t.Fatalf("writeSchemaVersion: %v", err)
+	}
+
+	err = MigrateDataSchema(d)
+	if err == nil {
+		t.Fatal("expected an error opening a data.db from a newer schema version, got nil")
+	}
+	var verErr *SchemaVersionError
+	if !errors.As(err, &verErr) {
+		t.Fatalf("error = %v, want *SchemaVersionError", err)
+	}
+	if verErr.DBName != "data.db" || verErr.DBVersion != CurrentDataSchemaVersion+1 || verErr.MaxVersion != CurrentDataSchemaVersion {
+		t.Errorf("SchemaVersionError = %+v, want DBName=data.db DBVersion=%d MaxVersion=%d", verErr, CurrentDataSchemaVersion+1, CurrentDataSchemaVersion)
+	}
+}
+
+// TestMigrateIndexSchema_RejectsNewerVersion is the index.db equivalent —
+// lower-stakes (index.db is local and rebuildable) but still checked so a
+// local downgrade fails clearly instead of confusingly.
+func TestMigrateIndexSchema_RejectsNewerVersion(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+	d, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer d.Close()
+
+	if err := InitIndexSchema(d); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := writeSchemaVersion(d, "index_state", CurrentIndexSchemaVersion+1); err != nil {
+		t.Fatalf("writeSchemaVersion: %v", err)
+	}
+
+	err = MigrateIndexSchema(d)
+	if err == nil {
+		t.Fatal("expected an error opening an index.db from a newer schema version, got nil")
+	}
+	var verErr *SchemaVersionError
+	if !errors.As(err, &verErr) {
+		t.Fatalf("error = %v, want *SchemaVersionError", err)
+	}
+	if verErr.DBName != "index.db" || verErr.DBVersion != CurrentIndexSchemaVersion+1 || verErr.MaxVersion != CurrentIndexSchemaVersion {
+		t.Errorf("SchemaVersionError = %+v, want DBName=index.db DBVersion=%d MaxVersion=%d", verErr, CurrentIndexSchemaVersion+1, CurrentIndexSchemaVersion)
+	}
+}
+
+// TestMigrateDataSchema_OldDataDBHasNoVersionRow verifies a pre-versioning
+// data.db (no schema_meta table at all, exactly what TestMigrateDataSchema_
+// OldDataDB simulates) still opens cleanly — version 0 is always <= current.
+func TestMigrateDataSchema_OldDataDBHasNoVersionRow(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+
+	if _, err := d.Exec(oldDataSessionsDDL); err != nil {
+		t.Fatalf("create old schema: %v", err)
+	}
+	// No schema_meta table at all — exactly a pre-versioning data.db.
+	if err := MigrateDataSchema(d); err != nil {
+		t.Fatalf("MigrateDataSchema on pre-versioning DB: %v", err)
+	}
+
+	got, err := readSchemaVersion(d, "schema_meta")
+	if err != nil {
+		t.Fatalf("readSchemaVersion: %v", err)
+	}
+	if got != CurrentDataSchemaVersion {
+		t.Errorf("schema_version after migrating pre-versioning DB = %d, want %d", got, CurrentDataSchemaVersion)
 	}
 }
 

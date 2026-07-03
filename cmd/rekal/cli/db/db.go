@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/marcboeker/go-duckdb"
 )
@@ -23,13 +24,29 @@ func OpenIndex(gitRoot string) (*sql.DB, error) {
 func open(path string) (*sql.DB, error) {
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
-		return nil, fmt.Errorf("open database %s: %w", path, err)
+		return nil, wrapOpenError(path, err)
 	}
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("ping database %s: %w", path, err)
+		return nil, wrapOpenError(path, err)
 	}
 	return db, nil
+}
+
+// wrapOpenError translates a DuckDB open/ping failure into a clear message.
+// DuckDB is single-writer per file: a second rekal process (e.g. a
+// post-commit checkpoint hook firing while a manual `rekal index` runs)
+// opening the same data.db/index.db gets a raw driver error whose real cause
+// — "another process already has this file open" — is buried in DuckDB's
+// own wording. Detect that specific case and say so plainly; anything else
+// passes through unchanged rather than risk misinterpreting a genuinely
+// different failure (corrupt file, disk full, ...) as a lock conflict.
+func wrapOpenError(path string, err error) error {
+	msg := err.Error()
+	if strings.Contains(msg, "Could not set lock on file") || strings.Contains(msg, "Conflicting lock is held") {
+		return fmt.Errorf("rekal: another rekal process is already using %s — wait for it to finish and try again: %w", path, err)
+	}
+	return fmt.Errorf("open database %s: %w", path, err)
 }
 
 // SessionExistsByHash reports whether a session with the given content hash

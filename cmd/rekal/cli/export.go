@@ -12,20 +12,29 @@ import (
 
 // exportNewFrames reads existing wire format from the orphan branch, appends
 // frames for any unexported checkpoints from DuckDB, and returns the updated
-// body + dict. Returns (nil, nil, nil) if there are no unexported checkpoints.
-func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
+// body + dict plus the IDs of the checkpoints just encoded. Returns
+// (nil, nil, nil, nil) if there are no unexported checkpoints.
+//
+// It deliberately does NOT mark those checkpoints exported in data.db — the
+// caller must do that only after the returned body/dict are durably
+// committed (commitWireFormat). Marking them here, before the commit
+// succeeds, would let a git failure (or a killed process) between export and
+// commit permanently mark checkpoints "exported" that were never actually
+// written to the orphan branch — they would then never be picked up by a
+// later export, silently never reaching teammates.
+func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open data DB: %w", err)
+		return nil, nil, nil, fmt.Errorf("open data DB: %w", err)
 	}
 	defer dataDB.Close()
 
 	checkpoints, err := db.QueryUnexportedCheckpoints(dataDB)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query unexported checkpoints: %w", err)
+		return nil, nil, nil, fmt.Errorf("query unexported checkpoints: %w", err)
 	}
 	if len(checkpoints) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	// Load existing wire format from orphan branch.
@@ -47,7 +56,7 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
 
 	enc, err := codec.NewEncoder()
 	if err != nil {
-		return nil, nil, fmt.Errorf("create encoder: %w", err)
+		return nil, nil, nil, fmt.Errorf("create encoder: %w", err)
 	}
 	defer enc.Close()
 
@@ -57,7 +66,7 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
 		// Query sessions linked to this checkpoint.
 		sessionIDs, err := db.QuerySessionsByCheckpoint(dataDB, cp.ID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("query sessions for checkpoint %s: %w", cp.ID, err)
+			return nil, nil, nil, fmt.Errorf("query sessions for checkpoint %s: %w", cp.ID, err)
 		}
 
 		var sessionRefs []uint64
@@ -65,15 +74,15 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
 		for _, sid := range sessionIDs {
 			sess, err := db.QuerySession(dataDB, sid)
 			if err != nil {
-				return nil, nil, fmt.Errorf("query session %s: %w", sid, err)
+				return nil, nil, nil, fmt.Errorf("query session %s: %w", sid, err)
 			}
 			turns, err := db.QueryTurns(dataDB, sid)
 			if err != nil {
-				return nil, nil, fmt.Errorf("query turns for %s: %w", sid, err)
+				return nil, nil, nil, fmt.Errorf("query turns for %s: %w", sid, err)
 			}
 			toolCalls, err := db.QueryToolCalls(dataDB, sid)
 			if err != nil {
-				return nil, nil, fmt.Errorf("query tool_calls for %s: %w", sid, err)
+				return nil, nil, nil, fmt.Errorf("query tool_calls for %s: %w", sid, err)
 			}
 
 			sessRef := dict.LookupOrAdd(codec.NSSessions, sid)
@@ -170,7 +179,7 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
 		// Query files touched.
 		filesTouched, err := db.QueryFilesTouched(dataDB, cp.ID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("query files_touched for %s: %w", cp.ID, err)
+			return nil, nil, nil, fmt.Errorf("query files_touched for %s: %w", cp.ID, err)
 		}
 		var fileRecords []codec.FileTouchedRecord
 		for _, ft := range filesTouched {
@@ -220,12 +229,10 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
 	}
 	body = codec.AppendFrame(body, enc.EncodeMetaFrame(mf))
 
-	// Mark checkpoints as exported.
-	if err := db.MarkCheckpointsExported(dataDB, exportedIDs); err != nil {
-		return nil, nil, fmt.Errorf("mark exported: %w", err)
-	}
-
-	return body, dict.Encode(), nil
+	// Checkpoints are NOT marked exported here — see the doc comment above.
+	// The caller marks them only once commitWireFormat has durably committed
+	// this body/dict to the orphan branch.
+	return body, dict.Encode(), exportedIDs, nil
 }
 
 // commitWireFormat commits rekal.body and dict.bin to the orphan branch.

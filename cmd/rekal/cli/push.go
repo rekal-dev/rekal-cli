@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/spf13/cobra"
 )
 
@@ -69,13 +70,20 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 	}
 
 	// Export unexported checkpoints from DuckDB → wire format → orphan branch.
-	body, dict, err := exportNewFrames(gitRoot)
+	body, dict, exportedIDs, err := exportNewFrames(gitRoot)
 	if err != nil {
 		return fmt.Errorf("export: %w", err)
 	}
 	if body != nil {
 		if _, err := commitWireFormat(gitRoot, body, dict); err != nil {
 			return fmt.Errorf("commit to rekal branch: %w", err)
+		}
+		// Only mark checkpoints exported once the wire format is durably
+		// committed to the orphan branch — marking earlier risks a
+		// checkpoint being flagged exported but never actually written if
+		// commitWireFormat had failed (or the process died) in between.
+		if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
+			return fmt.Errorf("mark checkpoints exported: %w", err)
 		}
 	} else {
 		fmt.Fprintln(w, "rekal: no new checkpoints to export")
@@ -119,6 +127,22 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 
 	fmt.Fprintf(w, "rekal: pushed to origin/%s\n", branch)
 	return nil
+}
+
+// markCheckpointsExported opens data.db and flags the given checkpoint IDs as
+// exported. Called only after their wire-format bytes are durably committed
+// to the orphan branch (see doPush) — never before.
+func markCheckpointsExported(gitRoot string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	dataDB, err := db.OpenData(gitRoot)
+	if err != nil {
+		return fmt.Errorf("open data DB: %w", err)
+	}
+	defer dataDB.Close()
+
+	return db.MarkCheckpointsExported(dataDB, ids)
 }
 
 // isNonFastForward checks if git push output indicates a non-fast-forward rejection.

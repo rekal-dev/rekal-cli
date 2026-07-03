@@ -113,6 +113,13 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 			}
 			embeddingDim = model.Dim
 			fmt.Fprintf(w, "stored %d LSA embeddings (%d dimensions)\n", len(vectors), embeddingDim)
+
+			// Cache the query-projection state so recall doesn't refit the
+			// whole model on every call — non-fatal, recall falls back to
+			// rebuilding from raw content if this is missing.
+			if err := storeLSAProjection(indexDB, model); err != nil {
+				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
+			}
 		}
 
 		// Nomic pass (non-fatal).

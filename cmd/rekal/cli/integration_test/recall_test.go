@@ -56,6 +56,51 @@ func TestRecall_HybridSearch(t *testing.T) {
 	}
 }
 
+// TestIndex_CachesLSAProjection verifies `rekal index` persists the LSA
+// query-projection state, and that recall still returns correct results
+// using the cached path — the regression test for recall re-fitting the
+// whole LSA model (tokenizing every session, re-running SVD) on every
+// single query instead of reusing what `rekal index` already computed.
+func TestIndex_CachesLSAProjection(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedData(t, env)
+
+	if _, stderr, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("index failed: %v\nstderr: %s", err, stderr)
+	}
+
+	indexDB, err := db.OpenIndex(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open index db: %v", err)
+	}
+	defer indexDB.Close()
+
+	var value string
+	err = indexDB.QueryRow(`SELECT value FROM index_state WHERE key = 'lsa_projection'`).Scan(&value)
+	if err != nil {
+		t.Fatalf("expected lsa_projection to be cached in index_state after `rekal index`: %v", err)
+	}
+	if value == "" {
+		t.Error("lsa_projection value is empty")
+	}
+
+	// Recall must still work correctly using the cached projection.
+	stdout, _, err := env.RunCLI("JWT auth")
+	if err != nil {
+		t.Fatalf("recall should succeed: %v", err)
+	}
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+	results, _ := output["results"].([]interface{})
+	if len(results) == 0 {
+		t.Error("expected at least one recall result using the cached LSA projection")
+	}
+}
+
 func TestRecall_FilterOnly(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()

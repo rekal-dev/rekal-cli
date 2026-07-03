@@ -513,15 +513,27 @@ func lsaSearch(indexDB *sql.DB, query string) (map[string]float64, error) {
 		return nil, nil
 	}
 
-	// We need the LSA model to project the query. Rebuild from session content.
-	sessionContent, err := db.QuerySessionContent(indexDB)
+	// We need the LSA model to project the query. Prefer the projection
+	// state cached at index/sync time (storeLSAProjection) — rebuilding the
+	// whole model from raw content on every single recall call means
+	// re-tokenizing the entire corpus and re-running SVD per query, which
+	// gets slower as the corpus grows. Fall back to a full rebuild only for
+	// an index.db that predates this cache or never got one written (e.g.
+	// LSA build failed at index time but embeddings still exist from an
+	// earlier run).
+	model, err := loadLSAProjection(indexDB)
 	if err != nil {
-		return nil, err
+		model = nil // non-fatal — fall back to rebuilding
 	}
-
-	model, err := lsa.Build(sessionContent, lsa.DefaultDimension)
-	if err != nil || model == nil {
-		return nil, err
+	if model == nil {
+		sessionContent, cErr := db.QuerySessionContent(indexDB)
+		if cErr != nil {
+			return nil, cErr
+		}
+		model, err = lsa.Build(sessionContent, lsa.DefaultDimension)
+		if err != nil || model == nil {
+			return nil, err
+		}
 	}
 
 	queryVec := model.Embed(query)

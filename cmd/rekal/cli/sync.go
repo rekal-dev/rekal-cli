@@ -168,6 +168,12 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 				return fmt.Errorf("store embeddings: %w", err)
 			}
 			embeddingDim = model.Dim
+
+			// Cache the query-projection state so recall doesn't refit the
+			// whole model on every call — non-fatal.
+			if err := storeLSAProjection(indexDB, model); err != nil {
+				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
+			}
 		}
 
 		// 5d-ii: Nomic pass (non-fatal).

@@ -98,14 +98,7 @@ func (a *GeminiAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 			}
 			for _, tc := range msg.ToolCalls {
 				toolCall := ToolCall{Tool: tc.Name}
-				if p, ok := tc.Args["file_path"].(string); ok {
-					toolCall.Path = p
-				} else if p, ok := tc.Args["path"].(string); ok {
-					toolCall.Path = p
-				}
-				if cmd, ok := tc.Args["command"].(string); ok {
-					toolCall.CmdPrefix = truncate(cmd, 100)
-				}
+				toolCallArgsFromMap(&toolCall, tc.Args)
 				payload.ToolCalls = append(payload.ToolCalls, toolCall)
 			}
 		}

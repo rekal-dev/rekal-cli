@@ -107,14 +107,7 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 				if item.Arguments != "" {
 					var args map[string]interface{}
 					if err := json.Unmarshal([]byte(item.Arguments), &args); err == nil {
-						if p, ok := args["file_path"].(string); ok {
-							tc.Path = p
-						} else if p, ok := args["path"].(string); ok {
-							tc.Path = p
-						}
-						if cmd, ok := args["command"].(string); ok {
-							tc.CmdPrefix = truncate(cmd, 100)
-						}
+						toolCallArgsFromMap(&tc, args)
 					}
 				}
 				payload.ToolCalls = append(payload.ToolCalls, tc)

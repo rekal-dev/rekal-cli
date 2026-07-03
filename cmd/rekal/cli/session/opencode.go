@@ -127,14 +127,7 @@ func parseOpenCodeDB(dbPath, sessionID string) (*SessionPayload, error) {
 				if len(part.Input) > 0 {
 					var inp map[string]interface{}
 					if err := json.Unmarshal(part.Input, &inp); err == nil {
-						if p, ok := inp["file_path"].(string); ok {
-							tc.Path = p
-						} else if p, ok := inp["path"].(string); ok {
-							tc.Path = p
-						}
-						if cmd, ok := inp["command"].(string); ok {
-							tc.CmdPrefix = truncate(cmd, 100)
-						}
+						toolCallArgsFromMap(&tc, inp)
 					}
 				}
 				payload.ToolCalls = append(payload.ToolCalls, tc)

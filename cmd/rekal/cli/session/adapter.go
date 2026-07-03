@@ -30,3 +30,22 @@ var Adapters = []Adapter{
 	&GeminiAdapter{},
 	&OpenCodeAdapter{},
 }
+
+// toolCallArgsFromMap fills in tc.Path (preferring file_path, falling back
+// to path) and tc.CmdPrefix (truncated command) from a generic tool-call
+// argument map — the shape Codex, OpenCode, and Gemini's JSON tool-call
+// blocks all use (unlike Claude's, which has a more precisely known input
+// schema and uses a typed struct instead — see parse.go's extractToolCall).
+// Centralizing this here means a future change to path/command extraction
+// only needs to happen once for the three harnesses that share this shape,
+// instead of independently in each adapter.
+func toolCallArgsFromMap(tc *ToolCall, args map[string]interface{}) {
+	if p, ok := args["file_path"].(string); ok {
+		tc.Path = p
+	} else if p, ok := args["path"].(string); ok {
+		tc.Path = p
+	}
+	if cmd, ok := args["command"].(string); ok {
+		tc.CmdPrefix = truncate(cmd, 100)
+	}
+}

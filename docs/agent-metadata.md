@@ -177,3 +177,45 @@ SQL query.
 - **Generic across agent types:** `child_session_ids` is populated from
   `parent_session_id` alone, so it works (and is usually empty) for every
   adapter, not just Claude Code's.
+
+## Checkpoint cost: subagent fan-out must not slow down `git commit`
+
+**Status:** decided (2026-07). Implemented in `cmd/rekal/cli/checkpoint.go`.
+
+Recursive subagent/workflow discovery (`findSubagentRefs`) re-scans every
+`subagents/` directory on every checkpoint. New sessions found there —
+trunk and subagent alike — used to all get nomic-embedded synchronously
+inside `updateIndexIncremental`, which runs from the post-commit hook. On a
+machine with heavy multi-agent use, one commit can surface dozens of newly
+discovered subagent/workflow transcripts at once; embedding all of them
+synchronously makes checkpoint time (and therefore `git commit`) scale with
+subagent fan-out instead of with the size of the commit itself.
+
+**Decision:** incremental checkpoint nomic-embeds only trunk sessions
+(`parent_session_id IS NULL`) captured in that run. Subagent/workflow
+transcripts are still inserted into `turns_ft`/`tool_calls_index`/
+`session_facets` immediately — BM25 recall, grouping (§1), and drill-down
+see them right away — only their nomic vectors are deferred to the next
+full `rekal index` or `rekal sync` rebuild, which embeds everything
+unconditionally.
+
+- **Traces to:** *agent first* / *quiet* — "it runs in the background and
+  never interrupts." A `git commit` that hangs for minutes because of
+  agent activity elsewhere in the session tree is the opposite of quiet.
+- **Traces to:** *simple* — no new config flag, no priority queue, no
+  background worker. The fix is choosing which sessions the existing
+  synchronous call embeds.
+- **Why trunk-only, not "skip embeddings during checkpoint entirely" or "cap
+  at N embeddings per checkpoint":** the trunk session is always the
+  smallest, most important, and (with the down-weight in §2 above) already
+  the higher-ranked signal — it should never wait for a slow subsequent
+  `rekal index`. An arbitrary N-cap would still make checkpoint time
+  proportional to `min(N, fan-out)`, and would non-deterministically
+  embed some subagents but not others depending on discovery order. Zero
+  subagent embeddings during checkpoint is simpler and gives the same
+  worst-case bound (one trunk session) regardless of fan-out.
+- **Cost of the gap:** a subagent hit is BM25/LSA-only (no nomic signal)
+  until the next full index rebuild. Combined with `subagentDownweight`
+  (§2), this is a small, self-correcting gap, not a missing result —
+  the session is still found, just ranked by two of three signals instead
+  of three until reindexed.

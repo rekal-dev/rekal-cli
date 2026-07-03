@@ -662,6 +662,87 @@ func TestCheckpoint_Incremental(t *testing.T) {
 	assertQueryContains(t, env, "SELECT count(*) as n FROM checkpoint_state", `"n":1`)
 }
 
+// TestCheckpoint_SubagentEmbeddingDeferred verifies that incremental
+// checkpoint does not synchronously nomic-embed subagent/workflow
+// transcripts — only trunk sessions. Subagent fan-out (many new subagent
+// transcripts discovered in one checkpoint run, e.g. after a heavy
+// multi-agent session) must not make checkpoint time scale with the number
+// of subagents; embedding for them is deferred to the next 'rekal index'.
+// FTS indexing (BM25) still happens immediately for every session, so this
+// only exercises the nomic embedding gap.
+func TestCheckpoint_SubagentEmbeddingDeferred(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	if err := os.WriteFile(filepath.Join(env.RepoDir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, env.RepoDir, "initial")
+
+	// Trunk session, plus a subagent transcript discovered alongside it in
+	// the same checkpoint run.
+	cleanupTrunk := writeSessionFile(t, env.RepoDir, "session1.jsonl", testSessionJSONL)
+	defer cleanupTrunk()
+
+	sessionDir := session.FindSessionDir(env.RepoDir)
+	subagentsDir := filepath.Join(sessionDir, "session1", "subagents")
+	if err := os.MkdirAll(subagentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir subagents dir: %v", err)
+	}
+	subagentJSONL := `{"parentUuid":null,"isSidechain":true,"agentId":"sub-1","type":"user","message":{"role":"user","content":"investigate the flaky test"},"uuid":"su-1","timestamp":"2026-02-25T10:00:10Z","sessionId":"test-session-001"}
+{"parentUuid":"su-1","isSidechain":true,"agentId":"sub-1","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Found the race condition in the test setup."}]},"uuid":"su-2","timestamp":"2026-02-25T10:00:20Z","sessionId":"test-session-001"}
+`
+	if err := os.WriteFile(filepath.Join(subagentsDir, "agent-sub-1.jsonl"), []byte(subagentJSONL), 0o644); err != nil {
+		t.Fatalf("write subagent file: %v", err)
+	}
+	defer os.RemoveAll(filepath.Join(sessionDir, "session1"))
+
+	if err := os.WriteFile(filepath.Join(env.RepoDir, "login.go"), []byte("func login() error { return nil }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, env.RepoDir, "fix auth bug")
+
+	_, stderr, err := env.RunCLI("checkpoint")
+	if err != nil {
+		t.Fatalf("checkpoint: %v", err)
+	}
+	if !strings.Contains(stderr, "2 session(s) captured") {
+		t.Fatalf("expected '2 session(s) captured' (trunk + subagent), got: %q", stderr)
+	}
+
+	// Both sessions must be FTS-indexed immediately.
+	stdout, _, err := env.RunCLI("query", "--index", "SELECT count(*) as n FROM session_facets")
+	if err != nil {
+		t.Fatalf("query session_facets: %v", err)
+	}
+	if !strings.Contains(stdout, `"n":2`) {
+		t.Errorf("expected 2 session_facets rows, got: %s", stdout)
+	}
+
+	// Only the trunk session (null parent_session_id) should have a nomic
+	// embedding after this checkpoint; the subagent's is deferred.
+	trunkStdout, _, err := env.RunCLI("query", "--index",
+		"SELECT count(*) as n FROM session_embeddings e JOIN session_facets f ON f.session_id = e.session_id WHERE f.parent_session_id IS NULL AND e.model = 'nomic-v1.5'")
+	if err != nil {
+		t.Fatalf("query trunk embeddings: %v", err)
+	}
+	subStdout, _, err := env.RunCLI("query", "--index",
+		"SELECT count(*) as n FROM session_embeddings e JOIN session_facets f ON f.session_id = e.session_id WHERE f.parent_session_id IS NOT NULL AND e.model = 'nomic-v1.5'")
+	if err != nil {
+		t.Fatalf("query subagent embeddings: %v", err)
+	}
+
+	if !strings.Contains(subStdout, `"n":0`) {
+		t.Errorf("expected 0 subagent embeddings deferred to next full index, got: %s", subStdout)
+	}
+	// The trunk assertion is informative rather than required: on platforms
+	// without nomic support (nomic.Supported() == false) neither session
+	// gets an embedding, and that is not what this test is about.
+	if !strings.Contains(trunkStdout, `"n":0`) && !strings.Contains(trunkStdout, `"n":1`) {
+		t.Errorf("unexpected trunk embedding count: %s", trunkStdout)
+	}
+}
+
 func TestPush_NoNewCheckpoints(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()

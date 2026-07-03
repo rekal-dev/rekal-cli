@@ -81,6 +81,9 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 	}
 
 	var sessionIDs []string
+	// trunkOnlySessionIDs is the subset of sessionIDs with no parent — used to
+	// bound synchronous embedding work (see updateIndexIncremental).
+	var trunkOnlySessionIDs []string
 	var inserted int
 	// Collect unique relative file paths from file-modifying tool_calls across all sessions.
 	toolCallPaths := make(map[string]struct{})
@@ -197,6 +200,9 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			if payload.ParentSessionPath == "" && ref.Path != "" {
 				trunkSessionIDs[ref.Path] = sessionID
 			}
+			if parentSessionID == "" {
+				trunkOnlySessionIDs = append(trunkOnlySessionIDs, sessionID)
+			}
 
 			// Insert turns into DuckDB.
 			for i, t := range payload.Turns {
@@ -297,7 +303,7 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 	}
 
 	// Incrementally update the index for newly captured sessions.
-	if err := updateIndexIncremental(gitRoot, sessionIDs, checkpointID, w); err != nil {
+	if err := updateIndexIncremental(gitRoot, sessionIDs, trunkOnlySessionIDs, checkpointID, w); err != nil {
 		// Non-fatal — index can be rebuilt later with 'rekal index'.
 		fmt.Fprintf(w, "rekal: warning: incremental index update failed: %v\n", err)
 	}
@@ -356,7 +362,21 @@ func sha256Hex(data []byte) string {
 // files_index, and nomic embeddings. LSA is skipped (requires full corpus).
 // FTS pragma_create_fts_index is not re-run — new rows in turns_ft are
 // automatically indexed by DuckDB's FTS.
-func updateIndexIncremental(gitRoot string, sessionIDs []string, checkpointID string, w io.Writer) error {
+//
+// Nomic embedding is synchronous CGO work with real per-call cost, and
+// embeddableSessionIDs — not the full sessionIDs — bounds how much of it runs
+// here: only trunk sessions (no parent_session_id) are embedded during
+// checkpoint. A commit can discover many new subagent/workflow transcripts at
+// once (recursive discovery re-scans every subagents/ directory each run);
+// embedding all of them synchronously in the post-commit hook would make
+// checkpoint time scale with subagent fan-out instead of with the commit
+// itself. Subagent/workflow turns are still indexed into turns_ft in this
+// call — BM25 recall, grouping, and drill-down see them immediately — only
+// their nomic vectors are deferred to the next full 'rekal index' or
+// 'rekal sync' rebuild, which embeds everything. Recall already discounts
+// subagent-session scores relative to trunk turns (docs/agent-metadata.md),
+// so a temporarily BM25-only subagent hit is a small, self-correcting gap.
+func updateIndexIncremental(gitRoot string, sessionIDs, embeddableSessionIDs []string, checkpointID string, w io.Writer) error {
 	indexPath := filepath.Join(gitRoot, ".rekal", "index.db")
 	if _, err := os.Stat(indexPath); err != nil {
 		// No index DB yet — skip incremental update. Next 'rekal index' or 'rekal sync' will build it.
@@ -380,8 +400,11 @@ func updateIndexIncremental(gitRoot string, sessionIDs []string, checkpointID st
 		return fmt.Errorf("populate index: %w", err)
 	}
 
-	// Nomic embeddings for new sessions (non-fatal).
-	sessionContent, err := db.QuerySessionContentByIDs(indexDB, sessionIDs)
+	// Nomic embeddings for trunk sessions only (non-fatal).
+	if len(embeddableSessionIDs) == 0 {
+		return nil
+	}
+	sessionContent, err := db.QuerySessionContentByIDs(indexDB, embeddableSessionIDs)
 	if err != nil || len(sessionContent) == 0 {
 		return err
 	}

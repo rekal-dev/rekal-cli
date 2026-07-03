@@ -31,7 +31,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
    - Insert tool calls into `tool_calls_index`.
    - Insert session facets into `session_facets`.
    - Insert file entries into `files_index`.
-   - Generate nomic-embed-text embeddings for new sessions (on supported platforms).
+   - Generate nomic-embed-text embeddings for new **trunk** sessions only (on supported platforms) — subagent/workflow transcripts are still FTS-indexed immediately, but their embeddings are deferred to the next full `rekal index`/`rekal sync` rebuild, so checkpoint time doesn't scale with subagent fan-out (see [agent-metadata.md](../../agent-metadata.md)).
    - LSA embeddings are skipped (require full corpus rebuild via `rekal index`).
    - Non-fatal: if incremental update fails, a warning is printed and the index can be rebuilt later with `rekal index`.
 10. **Print summary** — `rekal: N session(s) captured` (silent if nothing new).

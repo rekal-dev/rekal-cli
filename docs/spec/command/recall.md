@@ -32,10 +32,11 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 1. **BM25 search** — Full-text search on `turns_ft.content`. Returns up to 200 candidate hits scored by BM25.
 2. **LSA search** — Rebuild LSA model from session content, project query into embedding space, compute cosine similarity against stored session embeddings. Non-fatal if LSA fails.
 3. **Nomic search** — Deep semantic similarity using nomic-embed-text embeddings. Loads stored nomic vectors from index DB, embeds query with "search_query: " prefix, computes cosine similarity. Non-fatal if nomic is unavailable (unsupported platform) or fails.
-4. **Group by session** — Pick the best-scoring turn per session.
-5. **Normalize and combine** — Normalize all scores to [0,1]. When nomic is available: 3-way scoring (BM25: 0.35 keyword precision, Nomic: 0.55 semantic understanding, LSA: 0.10 corpus co-occurrence). When nomic is unavailable: 2-way fallback (BM25: 0.4, LSA: 0.6).
+4. **Group by session** — Pick the best-scoring turn per session. A turn captured from a queue-operation/enqueue steering message (role `human_steering`) has its BM25 score boosted 1.3× before this comparison — it is the highest-intent text in the corpus (see [agent-metadata.md](../../agent-metadata.md)).
+5. **Normalize and combine** — Normalize all scores to [0,1]. When nomic is available: 3-way scoring (BM25: 0.35 keyword precision, Nomic: 0.55 semantic understanding, LSA: 0.10 corpus co-occurrence). When nomic is unavailable: 2-way fallback (BM25: 0.4, LSA: 0.6). Sessions with a non-null `parent_session_id` (subagent/workflow transcripts) then have their combined score discounted 0.7×, relative to trunk turns of equal textual relevance.
 6. **Apply filters** — Actor, author, commit, file regex — all ANDed.
-7. **Return top N** — Sorted by hybrid score descending.
+7. **Fold subagent/workflow hits under their trunk conversation** — Sessions are grouped by walking `parent_session_id` to the root. Each group becomes one top-level result (headed by the group's best-scoring turn, which may belong to a descendant transcript), with the rest nested under `children` — capped to 3 per group so one large workflow can't dominate the result budget. A session with no parent and no matching descendants is unaffected: `children` is omitted.
+8. **Return top N conversations** — Sorted by each group's best hybrid score descending.
 
 ### Filter search (no query)
 
@@ -78,7 +79,22 @@ Multiple filters = AND.
         "turn_count": 12,
         "tool_call_count": 5,
         "files": ["src/auth.go", "src/auth_test.go"]
-      }
+      },
+      "children": [
+        {
+          "session_id": "...",
+          "score": 0.62,
+          "snippet": "...",
+          "snippet_turn_index": 0,
+          "snippet_role": "assistant",
+          "session": {
+            "actor": "agent",
+            "agent_id": "a1b2c3",
+            "workflow_name": "release-checklist",
+            "parent_session_id": "..."
+          }
+        }
+      ]
     }
   ],
   "query": "JWT expiry",
@@ -87,6 +103,11 @@ Multiple filters = AND.
   "total": 3
 }
 ```
+
+`children` is present only when other matching transcripts (subagent runs,
+workflow steps, other agents in the same team) share this result's trunk
+conversation via `parent_session_id`; omitted otherwise. `total` counts
+top-level (grouped) results, not raw session hits.
 
 ---
 

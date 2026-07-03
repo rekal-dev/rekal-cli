@@ -27,7 +27,10 @@ func newQueryCmd() *cobra.Command {
 
 Session drill-down (--session) returns the full conversation as JSON. Add --full
 to include tool calls and files touched. Use --offset, --limit, and --role to
-paginate through turns or filter by role.
+paginate through turns or filter by role. Output always includes
+child_session_ids — subagent/workflow transcripts whose parent_session_id
+points at this session — so an agent can navigate from a trunk conversation
+into the transcript that actually matched.
 
 Raw SQL mode accepts SELECT statements only. Output is one JSON object per row.
 Use --index to query the index DB instead of the data DB.
@@ -153,6 +156,12 @@ type sessionOutput struct {
 	WorkflowName    string `json:"workflow_name,omitempty"`
 	ParentSessionID string `json:"parent_session_id,omitempty"`
 
+	// ChildSessionIDs are sessions whose parent_session_id points at this
+	// session — the grouped structure a recall result collapses. Lets an
+	// agent navigate from a trunk conversation into its subagent/workflow
+	// transcripts. Empty when this session has no children.
+	ChildSessionIDs []string `json:"child_session_ids,omitempty"`
+
 	TotalTurns int              `json:"total_turns"`
 	Offset     int              `json:"offset,omitempty"`
 	Limit      int              `json:"limit,omitempty"`
@@ -182,18 +191,21 @@ type drilldownSource struct {
 	turns     func(*sql.DB, string, db.TurnPageOptions) ([]db.TurnRow, int, error)
 	toolCalls func(*sql.DB, string) ([]db.ToolCallRow, error)
 	files     func(*sql.DB, string) ([]string, error)
+	children  func(*sql.DB, string) ([]string, error)
 }
 
 var dataDrilldownSource = drilldownSource{
 	turns:     db.QueryTurnsPage,
 	toolCalls: db.QueryToolCalls,
 	files:     querySessionFilesFromData,
+	children:  db.QueryChildSessionIDs,
 }
 
 var indexDrilldownSource = drilldownSource{
 	turns:     db.QueryTurnsPageFromIndex,
 	toolCalls: db.QueryToolCallsFromIndex,
 	files:     querySessionFilesFromIndex,
+	children:  db.QueryChildSessionIDsFromIndex,
 }
 
 func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full bool, offset, limit int, role string) error {
@@ -261,6 +273,10 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		TeamName:        session.TeamName,
 		WorkflowName:    session.WorkflowName,
 		ParentSessionID: session.ParentSessionID,
+	}
+
+	if children, err := src.children(d, sessionID); err == nil {
+		output.ChildSessionIDs = children
 	}
 
 	// has_more is true when there are more turns beyond this page.

@@ -26,6 +26,24 @@ const (
 	bm25Weight3Way  = 0.35 // Keyword precision
 	lsaWeight3Way   = 0.10 // Corpus-specific co-occurrence
 	nomicWeight3Way = 0.55 // Semantic understanding
+
+	// Signal weighting over harness metadata (docs/agent-metadata.md). Simple
+	// multipliers, not a re-ranking pass — applied where the existing hybrid
+	// score is already assembled.
+	//
+	// steeringBoost favors turns captured from queue-operation/enqueue: text
+	// typed by a human while an agent was already working is the highest-
+	// intent signal in the corpus (SOUL.md: "agent first").
+	steeringBoost = 1.3
+	// subagentDownweight discounts sessions that are not the trunk of their
+	// conversation (non-null parent_session_id) relative to trunk turns of
+	// equal textual relevance — a subagent's internal exploration matters
+	// less than what the trunk actually said or decided.
+	subagentDownweight = 0.7
+	// conversationChildBudget caps how many folded transcripts are nested
+	// under one collapsed conversation result, so a single large workflow
+	// cannot occupy the whole top-k result budget.
+	conversationChildBudget = 3
 )
 
 // RecallFilters holds the search parameters for the recall command.
@@ -46,6 +64,15 @@ type searchResult struct {
 	SnippetTurnIdx int           `json:"snippet_turn_index"`
 	SnippetRole    string        `json:"snippet_role"`
 	Session        sessionDetail `json:"session"`
+
+	// Children holds other matching transcripts folded under this one
+	// because they share the same trunk conversation (parent_session_id
+	// chain) — subagent runs, workflow steps, or other agents in the same
+	// team. Nil when this result has no conversation to fold with (the
+	// common case: null parent, no matching descendants), so ungrouped
+	// output is byte-identical to before grouping existed. Capped at
+	// conversationChildBudget.
+	Children []searchResult `json:"children,omitempty"`
 }
 
 type sessionDetail struct {
@@ -186,8 +213,14 @@ func hybridSearch(indexDB *sql.DB, filters RecallFilters, limit int, gitRoot str
 			sh = &sessionHit{}
 			sessions[hit.sessionID] = sh
 		}
-		if hit.score > sh.bm25Max {
-			sh.bm25Max = hit.score
+		// Steering turns (queue-operation captures) are the highest-intent
+		// text in the corpus — boost them so they win the best-turn slot.
+		weighted := hit.score
+		if hit.role == "human_steering" {
+			weighted *= steeringBoost
+		}
+		if weighted > sh.bm25Max {
+			sh.bm25Max = weighted
 			sh.bestHit = hit
 		}
 	}
@@ -237,6 +270,19 @@ func hybridSearch(indexDB *sql.DB, filters RecallFilters, limit int, gitRoot str
 		}
 	}
 
+	// Look up parent_session_id for every candidate session, once, so the
+	// subagent down-weight and conversation grouping below don't re-query
+	// per-session. Sessions without the concept (or without a parent) map
+	// to "" — same treatment as a top-level trunk session.
+	candidateIDs := make([]string, 0, len(sessions))
+	for sid := range sessions {
+		candidateIDs = append(candidateIDs, sid)
+	}
+	parentIDs, err := loadParentIDs(indexDB, candidateIDs)
+	if err != nil {
+		parentIDs = nil // non-fatal — falls back to no down-weighting/grouping
+	}
+
 	// Compute hybrid scores — 3-way when nomic available, 2-way fallback.
 	useNomic := len(nomicScores) > 0
 	var scoredResults []scored
@@ -260,14 +306,32 @@ func hybridSearch(indexDB *sql.DB, filters RecallFilters, limit int, gitRoot str
 		} else {
 			hybrid = bm25Weight2Way*bm25Norm + lsaWeight2Way*lsaNorm
 		}
+		// Subagent/workflow transcripts (non-null parent) are discounted
+		// relative to trunk turns of equal relevance.
+		if parentIDs[sid] != "" {
+			hybrid *= subagentDownweight
+		}
 		scoredResults = append(scoredResults, scored{sid, hybrid, sh})
 	}
 
 	// Sort by score descending.
 	sortScored(scoredResults)
 
-	// Apply filters and build results.
-	return buildResults(indexDB, scoredResults, filters, limit)
+	// Build more raw candidates than the requested limit: grouping folds
+	// several of them into one conversation result, so the pre-group pool
+	// must be wider than the post-group output for `limit` to still mean
+	// "limit conversations" rather than "limit raw hits".
+	candidatePool := (limit + 1) * (conversationChildBudget + 1)
+
+	// Apply filters and build candidate results.
+	results, err := buildResults(indexDB, scoredResults, filters, candidatePool)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fold subagent/workflow hits under their trunk conversation — one
+	// result per conversation, capped to `limit`.
+	return groupByConversation(indexDB, results, parentIDs, limit), nil
 }
 
 func filterSearch(indexDB *sql.DB, filters RecallFilters, limit int) ([]searchResult, error) {
@@ -567,6 +631,163 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 	}
 
 	return results, nil
+}
+
+// loadParentIDs batch-loads parent_session_id for a set of candidate
+// sessions. Sessions with no parent (or no harness concept of one) map to
+// "" — treated identically to a top-level trunk session downstream.
+func loadParentIDs(indexDB *sql.DB, sessionIDs []string) (map[string]string, error) {
+	result := make(map[string]string, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(sessionIDs))
+	args := make([]interface{}, len(sessionIDs))
+	for i, sid := range sessionIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = sid
+		result[sid] = "" // default: no parent, until proven otherwise
+	}
+
+	rows, err := indexDB.Query(
+		"SELECT session_id, parent_session_id FROM session_facets WHERE session_id IN ("+strings.Join(placeholders, ",")+")",
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load parent ids: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	for rows.Next() {
+		var sid string
+		var parent sql.NullString
+		if err := rows.Scan(&sid, &parent); err != nil {
+			return nil, fmt.Errorf("scan parent id: %w", err)
+		}
+		result[sid] = nullStr(parent)
+	}
+	return result, rows.Err()
+}
+
+// resolveRoot walks the parent_session_id chain to find the trunk
+// conversation for sid, memoizing lookups in cache across calls within one
+// search. A session with no parent is its own root.
+func resolveRoot(indexDB *sql.DB, sid string, cache map[string]string) string {
+	visited := make(map[string]bool)
+	cur := sid
+	for {
+		if visited[cur] {
+			return cur // cycle guard — should not happen, but never loop forever
+		}
+		visited[cur] = true
+
+		parent, ok := cache[cur]
+		if !ok {
+			var ns sql.NullString
+			err := indexDB.QueryRow(
+				"SELECT parent_session_id FROM session_facets WHERE session_id = $1", cur,
+			).Scan(&ns)
+			if err != nil {
+				cache[cur] = ""
+				return cur
+			}
+			parent = nullStr(ns)
+			cache[cur] = parent
+		}
+		if parent == "" {
+			return cur
+		}
+		cur = parent
+	}
+}
+
+// groupByConversation folds subagent/workflow transcript results under their
+// trunk conversation (docs/agent-metadata.md: grouping via parent_session_id,
+// generic across agent types). Results is assumed sorted by score descending.
+// One output entry per conversation, ordered by that conversation's best
+// score, capped to limit conversations and conversationChildBudget children
+// each.
+func groupByConversation(indexDB *sql.DB, results []searchResult, parentIDs map[string]string, limit int) []searchResult {
+	rootCache := make(map[string]string, len(parentIDs))
+	for sid, parent := range parentIDs {
+		rootCache[sid] = parent
+	}
+
+	type group struct {
+		root    string
+		members []searchResult
+	}
+
+	order := make([]string, 0, len(results))
+	groups := make(map[string]*group, len(results))
+
+	for _, r := range results {
+		root := resolveRoot(indexDB, r.SessionID, rootCache)
+		g, ok := groups[root]
+		if !ok {
+			g = &group{root: root}
+			groups[root] = g
+			order = append(order, root)
+		}
+		if len(g.members) < conversationChildBudget {
+			g.members = append(g.members, r)
+		}
+	}
+
+	out := make([]searchResult, 0, limit)
+	for _, root := range order {
+		if len(out) >= limit {
+			break
+		}
+		g := groups[root]
+		best := g.members[0]
+		children := g.members[1:]
+
+		if best.SessionID == root {
+			// The trunk conversation itself is the best match — present it
+			// as today, with any folded transcripts nested beneath.
+			best.Children = children
+			out = append(out, best)
+			continue
+		}
+
+		// The best match is a subagent/workflow transcript — surface the
+		// trunk conversation's identity at the top level (its content plus
+		// score/snippet inherited from the best-matching descendant), and
+		// fold every matching transcript, including the best one, beneath
+		// it so the agent can drill straight into it.
+		trunk, ok := loadSessionFacet(indexDB, root)
+		if !ok {
+			// Trunk not indexed (dangling parent_session_id) — fall back to
+			// presenting the best match ungrouped, same as before grouping.
+			best.Children = children
+			out = append(out, best)
+			continue
+		}
+		out = append(out, searchResult{
+			SessionID:      root,
+			Score:          best.Score,
+			Snippet:        best.Snippet,
+			SnippetTurnIdx: best.SnippetTurnIdx,
+			SnippetRole:    best.SnippetRole,
+			Session:        trunk,
+			Children:       g.members,
+		})
+	}
+	return out
+}
+
+// loadSessionFacet loads a session's facet row for use as a synthetic group
+// header when the trunk conversation itself did not match the query.
+func loadSessionFacet(indexDB *sql.DB, sessionID string) (sessionDetail, bool) {
+	var sf sessionFacetRow
+	row := indexDB.QueryRow("SELECT "+sessionFacetCols+" FROM session_facets WHERE session_id = $1", sessionID)
+	if err := sf.scan(row); err != nil {
+		return sessionDetail{}, false
+	}
+	files, _ := querySessionFiles(indexDB, sessionID)
+	return sf.detail(files), true
 }
 
 type scored struct {

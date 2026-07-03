@@ -45,7 +45,9 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 ### Core CLI (`cmd/rekal/cli/`)
 
 - `root.go`: Root command (recall is the default) + command registration
-- `recall.go`: Hybrid search — BM25 + LSA + Nomic ranking
+- `recall.go`: Hybrid search — BM25 + LSA + Nomic ranking, signal weighting
+  (steering-turn boost, subagent down-weight), and grouping subagent/workflow
+  hits under their trunk conversation (see `docs/agent-metadata.md`)
 - `checkpoint.go`: Capture session after commit
 - `push.go`: Push data to remote branch
 - `sync.go`: Sync team context

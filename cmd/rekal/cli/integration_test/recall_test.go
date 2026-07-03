@@ -4,6 +4,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -274,6 +275,240 @@ func TestQuery_SessionPaginationRequiresSession(t *testing.T) {
 	_, _, err := env.RunCLI("query", "--offset", "1", "SELECT 1")
 	if err == nil {
 		t.Error("expected error for --offset without --session")
+	}
+}
+
+func TestRecall_GroupsSubagentUnderTrunk(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedWorkflowData(t, env)
+
+	if _, _, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	stdout, _, err := env.RunCLI("release checklist")
+	if err != nil {
+		t.Fatalf("recall should succeed: %v", err)
+	}
+
+	var output struct {
+		Results []struct {
+			SessionID string `json:"session_id"`
+			Session   struct {
+				WorkflowName string `json:"workflow_name,omitempty"`
+			} `json:"session"`
+			Children []struct {
+				SessionID string `json:"session_id"`
+				Session   struct {
+					AgentID      string `json:"agent_id,omitempty"`
+					WorkflowName string `json:"workflow_name,omitempty"`
+				} `json:"session"`
+			} `json:"children,omitempty"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	// The trunk session and its two workflow-step transcripts all match
+	// "release checklist" — they must collapse into one top-level result,
+	// not three.
+	var trunkResults int
+	for _, r := range output.Results {
+		if r.SessionID == "trunk-session" {
+			trunkResults++
+			if len(r.Children) == 0 {
+				t.Errorf("expected trunk result to have folded children, got none")
+			}
+			for _, c := range r.Children {
+				if c.SessionID == "trunk-session" {
+					t.Errorf("trunk session should not appear in its own children")
+				}
+			}
+		}
+	}
+	if trunkResults != 1 {
+		t.Errorf("expected exactly 1 top-level result for trunk-session, got %d (results: %+v)", trunkResults, output.Results)
+	}
+}
+
+func TestRecall_SteeringTurnBoosted(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	dataDB, err := db.OpenData(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open data db: %v", err)
+	}
+
+	if err := db.InsertSession(dataDB, "steer-session", "", "hash-steer", "human", "", "carol@example.com", "main", "2026-02-25T12:00:00Z", ""); err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-s1", "steer-session", 0, "human", "look into the deploy pipeline", "2026-02-25T12:00:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-s2", "steer-session", 1, "assistant", "Checking the pipeline config now.", "2026-02-25T12:01:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	// A steering message mentions the search term directly — should win the
+	// best-turn slot over the plain human/assistant turns above.
+	if err := db.InsertTurn(dataDB, "turn-s3", "steer-session", 2, "human_steering", "actually skip the canary rollout entirely", "2026-02-25T12:02:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	dataDB.Close()
+
+	if _, _, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	stdout, _, err := env.RunCLI("canary rollout")
+	if err != nil {
+		t.Fatalf("recall should succeed: %v", err)
+	}
+
+	var output struct {
+		Results []struct {
+			SessionID   string `json:"session_id"`
+			SnippetRole string `json:"snippet_role"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	if len(output.Results) == 0 {
+		t.Fatal("expected at least one result")
+	}
+	if output.Results[0].SessionID != "steer-session" {
+		t.Fatalf("expected steer-session to be top result, got %s", output.Results[0].SessionID)
+	}
+	if output.Results[0].SnippetRole != "human_steering" {
+		t.Errorf("expected snippet_role=human_steering, got %s", output.Results[0].SnippetRole)
+	}
+}
+
+func TestRecall_PerConversationBudgetCapsChildren(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	dataDB, err := db.OpenData(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open data db: %v", err)
+	}
+
+	if err := db.InsertSession(dataDB, "big-trunk", "", "hash-big-trunk", "human", "", "erin@example.com", "main", "2026-02-25T13:00:00Z", ""); err != nil {
+		t.Fatalf("insert trunk session: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-bt", "big-trunk", 0, "human", "audit every service for the security sweep", "2026-02-25T13:00:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+
+	// A large dynamic workflow spawns many step transcripts, all matching
+	// the query — the budget must cap how many get nested, so this one
+	// conversation cannot fill the whole children list unbounded.
+	for i := 0; i < 8; i++ {
+		sid := fmt.Sprintf("sweep-step-%d", i)
+		if err := db.InsertSessionMeta(dataDB, sid, "big-trunk", "hash-"+sid, "agent", fmt.Sprintf("agent-%d", i), "", "main", "2026-02-25T13:0"+fmt.Sprint(i+1)+":00Z", "", "", "security-sweep"); err != nil {
+			t.Fatalf("insert step %s: %v", sid, err)
+		}
+		if err := db.InsertTurn(dataDB, "turn-"+sid, sid, 0, "assistant", "security sweep step: scanning service dependencies", "2026-02-25T13:0"+fmt.Sprint(i+1)+":00Z"); err != nil {
+			t.Fatalf("insert turn for %s: %v", sid, err)
+		}
+	}
+	dataDB.Close()
+
+	if _, _, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	stdout, _, err := env.RunCLI("security sweep")
+	if err != nil {
+		t.Fatalf("recall should succeed: %v", err)
+	}
+
+	var output struct {
+		Results []struct {
+			SessionID string `json:"session_id"`
+			Children  []struct {
+				SessionID string `json:"session_id"`
+			} `json:"children,omitempty"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	for _, r := range output.Results {
+		if r.SessionID != "big-trunk" {
+			continue
+		}
+		if len(r.Children) >= 8 {
+			t.Errorf("expected children capped below the full 8 matching steps, got %d", len(r.Children))
+		}
+		return
+	}
+	t.Fatal("expected a top-level result for big-trunk")
+}
+
+func TestQuery_SessionDrilldown_ChildSessionIDs(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedWorkflowData(t, env)
+
+	stdout, _, err := env.RunCLI("query", "--session", "trunk-session")
+	if err != nil {
+		t.Fatalf("query --session should succeed: %v", err)
+	}
+
+	var output struct {
+		ChildSessionIDs []string `json:"child_session_ids"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("expected valid JSON: %v\nstdout: %s", err, stdout)
+	}
+
+	if len(output.ChildSessionIDs) != 2 {
+		t.Fatalf("expected 2 child session ids, got %d: %v", len(output.ChildSessionIDs), output.ChildSessionIDs)
+	}
+}
+
+// seedWorkflowData inserts a trunk session plus two dynamic-workflow-step
+// transcripts linked to it via parent_session_id, all discussing the same
+// topic so they compete for the same search results.
+func seedWorkflowData(t *testing.T, env *TestEnv) {
+	t.Helper()
+
+	dataDB, err := db.OpenData(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open data db: %v", err)
+	}
+	defer dataDB.Close()
+
+	if err := db.InsertSession(dataDB, "trunk-session", "", "hash-trunk", "human", "", "dave@example.com", "main", "2026-02-25T09:00:00Z", ""); err != nil {
+		t.Fatalf("insert trunk session: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-t1", "trunk-session", 0, "human", "run the release checklist before we ship", "2026-02-25T09:00:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-t2", "trunk-session", 1, "assistant", "Kicking off the release checklist workflow.", "2026-02-25T09:01:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+
+	if err := db.InsertSessionMeta(dataDB, "workflow-step-1", "trunk-session", "hash-wf1", "agent", "agent-1", "", "main", "2026-02-25T09:02:00Z", "", "", "release-checklist"); err != nil {
+		t.Fatalf("insert workflow step 1: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-w1", "workflow-step-1", 0, "assistant", "Running the release checklist: verifying CI is green.", "2026-02-25T09:02:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+
+	if err := db.InsertSessionMeta(dataDB, "workflow-step-2", "trunk-session", "hash-wf2", "agent", "agent-2", "", "main", "2026-02-25T09:03:00Z", "", "", "release-checklist"); err != nil {
+		t.Fatalf("insert workflow step 2: %v", err)
+	}
+	if err := db.InsertTurn(dataDB, "turn-w2", "workflow-step-2", 0, "assistant", "Running the release checklist: tagging the release.", "2026-02-25T09:03:00Z"); err != nil {
+		t.Fatalf("insert turn: %v", err)
 	}
 }
 

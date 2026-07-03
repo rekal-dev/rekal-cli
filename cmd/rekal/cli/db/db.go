@@ -315,6 +315,46 @@ func QuerySessionFromIndex(d *sql.DB, id string) (*SessionRow, error) {
 	return r, nil
 }
 
+// QueryChildSessionIDs returns the IDs of sessions whose parent_session_id
+// points at sessionID, ordered by capture time — the subagent/workflow
+// transcripts folded under this trunk conversation. Generic across agent
+// types: returns empty for sessions with no children.
+func QueryChildSessionIDs(d *sql.DB, sessionID string) ([]string, error) {
+	rows, err := d.Query(
+		`SELECT id FROM sessions WHERE parent_session_id = $1 ORDER BY captured_at`, sessionID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query child sessions: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+	return scanIDs(rows)
+}
+
+// QueryChildSessionIDsFromIndex is QueryChildSessionIDs against the index DB
+// (session_facets), used for remote/teammate sessions.
+func QueryChildSessionIDsFromIndex(d *sql.DB, sessionID string) ([]string, error) {
+	rows, err := d.Query(
+		`SELECT session_id FROM session_facets WHERE parent_session_id = $1 ORDER BY captured_at`, sessionID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query child sessions from index: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+	return scanIDs(rows)
+}
+
+func scanIDs(rows *sql.Rows) ([]string, error) {
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // TurnPageOptions controls pagination and filtering for QueryTurnsPage.
 type TurnPageOptions struct {
 	Offset int

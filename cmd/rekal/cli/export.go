@@ -105,8 +105,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, error) {
 			var prevTs time.Time
 			for _, t := range turns {
 				role := codec.RoleHuman
-				if t.Role == "assistant" {
+				switch t.Role {
+				case "assistant":
 					role = codec.RoleAssistant
+				case "human_steering":
+					role = codec.RoleHumanSteering
 				}
 				var tsDelta uint64
 				if t.Ts != "" {

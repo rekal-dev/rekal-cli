@@ -96,8 +96,11 @@ func importBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 			// Insert turns.
 			for i, t := range sf.Turns {
 				role := "human"
-				if t.Role == codec.RoleAssistant {
+				switch t.Role {
+				case codec.RoleAssistant:
 					role = "assistant"
+				case codec.RoleHumanSteering:
+					role = "human_steering"
 				}
 				if err := db.InsertTurn(dataDB, newID(), sessionID, i, role, t.Text, ""); err != nil {
 					return imported, fmt.Errorf("insert turn: %w", err)

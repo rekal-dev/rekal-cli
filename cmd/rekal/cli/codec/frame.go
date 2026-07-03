@@ -33,10 +33,14 @@ const (
 	ActorAgent byte = 0x01
 )
 
-// Role values.
+// Role values. RoleHumanSteering marks out-of-band user steering messages
+// (queue-operation/enqueue captures) — the highest-intent text in the corpus,
+// used to boost recall ranking. It costs nothing on the wire: same byte
+// field, one more value.
 const (
-	RoleHuman     byte = 0x00
-	RoleAssistant byte = 0x01
+	RoleHuman         byte = 0x00
+	RoleAssistant     byte = 0x01
+	RoleHumanSteering byte = 0x02
 )
 
 // Change type values (ASCII bytes).

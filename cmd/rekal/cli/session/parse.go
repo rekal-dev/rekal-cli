@@ -37,7 +37,7 @@ type SessionPayload struct {
 
 // Turn represents a single conversation turn (human prompt or assistant reply).
 type Turn struct {
-	Role      string    `json:"role"` // "human" | "assistant"
+	Role      string    `json:"role"` // "human" | "human_steering" | "assistant"
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -220,11 +220,13 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 			if raw.Operation != "enqueue" {
 				continue
 			}
-			// Content can be a plain string or a content-block array.
+			// Content can be a plain string or a content-block array. Tagged
+			// "human_steering" (distinct from "human") — it is the highest-
+			// intent text in the corpus and recall ranking boosts it.
 			if text := extractTextContent(raw.Content); text != "" {
 				pendingQueueTexts[text] = true
 				payload.Turns = append(payload.Turns, Turn{
-					Role:      "human",
+					Role:      "human_steering",
 					Content:   text,
 					Timestamp: ts,
 				})

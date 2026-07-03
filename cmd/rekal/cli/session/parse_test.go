@@ -293,8 +293,8 @@ func TestParseTranscript_QueueOperationEnqueueCaptured(t *testing.T) {
 	if len(payload.Turns) != 1 {
 		t.Fatalf("len(Turns) = %d, want 1", len(payload.Turns))
 	}
-	if payload.Turns[0].Role != "human" {
-		t.Errorf("Turns[0].Role = %q, want human", payload.Turns[0].Role)
+	if payload.Turns[0].Role != "human_steering" {
+		t.Errorf("Turns[0].Role = %q, want human_steering", payload.Turns[0].Role)
 	}
 	if payload.Turns[0].Content != "Also clean up the stale lock files." {
 		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)

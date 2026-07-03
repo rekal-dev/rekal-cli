@@ -128,8 +128,11 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 			// Insert turns into turns_ft.
 			for i, t := range sf.Turns {
 				role := "human"
-				if t.Role == codec.RoleAssistant {
+				switch t.Role {
+				case codec.RoleAssistant:
 					role = "assistant"
+				case codec.RoleHumanSteering:
+					role = "human_steering"
 				}
 				if _, err := indexDB.Exec(
 					`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)

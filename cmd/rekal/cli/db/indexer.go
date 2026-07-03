@@ -95,25 +95,6 @@ func migrateDataAt(gitRoot string) error {
 	return nil
 }
 
-// DropIndexTables drops all index tables for a clean rebuild.
-func DropIndexTables(d *sql.DB) error {
-	tables := []string{
-		"index_state",
-		"session_embeddings",
-		"file_cooccurrence",
-		"session_facets",
-		"files_index",
-		"tool_calls_index",
-		"turns_ft",
-	}
-	for _, t := range tables {
-		if _, err := d.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t)); err != nil {
-			return fmt.Errorf("drop table %s: %w", t, err)
-		}
-	}
-	return nil
-}
-
 // PopulateIndex attaches the data DB and bulk-populates all index tables.
 func PopulateIndex(d *sql.DB, gitRoot string) error {
 	dataPath := filepath.Join(gitRoot, ".rekal", "data.db")

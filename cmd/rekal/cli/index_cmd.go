@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
@@ -46,27 +47,50 @@ Rebuild when the index is out of date or after importing new data.
 	}
 }
 
+// runIndex rebuilds the index DB into a temporary file and only replaces
+// the live index.db with it — via an atomic rename — once the entire
+// rebuild has succeeded. index.db is always derived and rebuildable in
+// principle, but the old drop-tables-then-repopulate-in-place approach
+// meant a kill mid-rebuild (OOM, disk full, Ctrl-C) could leave the live
+// index.db with some tables dropped and not yet repopulated — recall/query
+// would then silently run against a partially empty index with no signal
+// anything was wrong. Building into a fresh file means any failure simply
+// leaves the previous, fully-built index.db in place untouched.
 func runIndex(cmd *cobra.Command, gitRoot string) error {
 	w := cmd.ErrOrStderr()
 
-	indexDB, err := db.OpenIndex(gitRoot)
+	livePath := db.IndexPath(gitRoot)
+	tmpPath := livePath + ".rebuilding"
+
+	// Clear any leftover temp file (and its WAL, if DuckDB left one behind)
+	// from a previous interrupted rebuild before starting a fresh one.
+	_ = os.Remove(tmpPath)
+	_ = os.Remove(tmpPath + ".wal")
+
+	indexDB, err := db.OpenIndexAt(tmpPath)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
 	}
-	defer indexDB.Close()
+	// On any failure below, close and discard the half-built temp file —
+	// the live index.db (if any) is never touched until the rename at the
+	// end. On success this Close is a harmless no-op double-close guard
+	// (rebuildOK short-circuits the removal).
+	rebuildOK := false
+	defer func() {
+		indexDB.Close()
+		if !rebuildOK {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
 	// Load FTS extension.
 	if err := db.LoadFTSExtension(indexDB); err != nil {
 		return fmt.Errorf("load fts extension: %w", err)
 	}
 
-	// Clean slate.
-	fmt.Fprintln(w, "dropping existing index tables...")
-	if err := db.DropIndexTables(indexDB); err != nil {
-		return fmt.Errorf("drop index tables: %w", err)
-	}
-
-	// Create schema.
+	// Create schema. Building into a brand-new file means there's nothing
+	// to drop first — DropIndexTables existed only to support the old
+	// in-place rebuild.
 	if err := db.InitIndexSchema(indexDB); err != nil {
 		return fmt.Errorf("create index schema: %w", err)
 	}
@@ -141,6 +165,19 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	if err := db.WriteIndexState(indexDB, "last_indexed_at", "now"); err != nil {
 		return err
 	}
+
+	// Everything succeeded — close the temp DB (DuckDB checkpoints/flushes
+	// on close) and atomically replace the live index.db with it. Rename
+	// within the same directory is atomic on the filesystems rekal targets
+	// (POSIX rename(2)): a reader opening index.db either sees the old file
+	// or the fully-built new one, never a partial file.
+	if err := indexDB.Close(); err != nil {
+		return fmt.Errorf("close rebuilt index: %w", err)
+	}
+	if err := os.Rename(tmpPath, livePath); err != nil {
+		return fmt.Errorf("replace index db: %w", err)
+	}
+	rebuildOK = true
 
 	fmt.Fprintf(w, "index rebuilt: %d sessions, %d turns\n", sessionCount, turnCount)
 	return nil

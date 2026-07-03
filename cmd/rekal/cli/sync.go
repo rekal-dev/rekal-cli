@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -86,21 +87,31 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		fmt.Fprintf(w, "rekal: warning: listing remote branches failed: %v\n", err)
 	}
 
-	// Step 5: Rebuild index.
-	indexDB, err := db.OpenIndex(gitRoot)
+	// Step 5: Rebuild index — into a temp file, renamed over the live
+	// index.db only once everything below succeeds (see runIndex's doc
+	// comment in index_cmd.go: the old in-place drop-then-repopulate could
+	// leave index.db half-built if interrupted mid-rebuild).
+	livePath := db.IndexPath(gitRoot)
+	tmpPath := livePath + ".rebuilding"
+	_ = os.Remove(tmpPath)
+	_ = os.Remove(tmpPath + ".wal")
+
+	indexDB, err := db.OpenIndexAt(tmpPath)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
 	}
-	defer indexDB.Close()
+	rebuildOK := false
+	defer func() {
+		indexDB.Close()
+		if !rebuildOK {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
 	if err := db.LoadFTSExtension(indexDB); err != nil {
 		return fmt.Errorf("load fts extension: %w", err)
 	}
 
-	// Clean slate.
-	if err := db.DropIndexTables(indexDB); err != nil {
-		return fmt.Errorf("drop index tables: %w", err)
-	}
 	if err := db.InitIndexSchema(indexDB); err != nil {
 		return fmt.Errorf("create index schema: %w", err)
 	}
@@ -195,6 +206,15 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	if err := db.WriteIndexState(indexDB, "last_indexed_at", "now"); err != nil {
 		return err
 	}
+
+	// Everything succeeded — close and atomically replace the live index.db.
+	if err := indexDB.Close(); err != nil {
+		return fmt.Errorf("close rebuilt index: %w", err)
+	}
+	if err := os.Rename(tmpPath, livePath); err != nil {
+		return fmt.Errorf("replace index db: %w", err)
+	}
+	rebuildOK = true
 
 	// Step 6: Summary.
 	fmt.Fprintf(w, "rekal: synced — %d local sessions", localSessions)

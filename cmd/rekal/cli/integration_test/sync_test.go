@@ -3,8 +3,11 @@
 package integration
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 )
 
 func TestSync_Team_NoRemote(t *testing.T) {
@@ -47,5 +50,43 @@ func TestSync_Team_RebuildIndex(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "indexing local data") {
 		t.Errorf("expected index rebuild message, got: %q", stderr)
+	}
+}
+
+// TestSync_Team_FailedRebuildLeavesNoTempFile is the `rekal sync` equivalent
+// of TestIndex_FailedRebuildLeavesLiveIndexIntact (recall_test.go):
+// runSyncTeam has its own separate rebuild-into-a-temp-file implementation
+// (it folds remote-branch import into the same pass rather than calling
+// runIndex), so it needs its own regression coverage for the same
+// atomicity property — a failed rebuild must not leave a stray
+// `.rebuilding` temp file behind.
+func TestSync_Team_FailedRebuildLeavesNoTempFile(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedData(t, env)
+
+	if _, stderr, err := env.RunCLI("sync"); err != nil {
+		t.Fatalf("initial sync should succeed: %v\nstderr: %s", err, stderr)
+	}
+
+	dataDB, err := db.OpenData(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open data db: %v", err)
+	}
+	if _, err := dataDB.Exec("DROP TABLE turns"); err != nil {
+		t.Fatalf("drop turns table: %v", err)
+	}
+	dataDB.Close()
+
+	if _, stderr, err := env.RunCLI("sync"); err == nil {
+		t.Fatalf("expected sync's rebuild to fail after corrupting data.db, but it succeeded\nstderr: %s", stderr)
+	}
+
+	tmpPath := db.IndexPath(env.RepoDir) + ".rebuilding"
+	if _, err := os.Stat(tmpPath); err == nil {
+		t.Errorf("expected no leftover temp file at %s after a failed sync rebuild", tmpPath)
+	} else if !os.IsNotExist(err) {
+		t.Errorf("unexpected error stat-ing temp file: %v", err)
 	}
 }

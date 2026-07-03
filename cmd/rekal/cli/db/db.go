@@ -17,7 +17,19 @@ func OpenData(gitRoot string) (*sql.DB, error) {
 
 // OpenIndex opens (or creates) the index DB at <gitRoot>/.rekal/index.db.
 func OpenIndex(gitRoot string) (*sql.DB, error) {
-	path := filepath.Join(gitRoot, ".rekal", "index.db")
+	return OpenIndexAt(IndexPath(gitRoot))
+}
+
+// IndexPath returns the path to the index DB for gitRoot.
+func IndexPath(gitRoot string) string {
+	return filepath.Join(gitRoot, ".rekal", "index.db")
+}
+
+// OpenIndexAt opens (or creates) an index DB at an arbitrary path. Used by
+// `rekal index`'s rebuild-into-a-temp-file-then-rename path (see
+// index_cmd.go) so a rebuild that's interrupted midway never leaves the
+// live index.db half-dropped/half-repopulated.
+func OpenIndexAt(path string) (*sql.DB, error) {
 	return open(path)
 }
 

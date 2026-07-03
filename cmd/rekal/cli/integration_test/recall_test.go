@@ -5,6 +5,7 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -27,6 +28,76 @@ func TestIndex_Rebuild(t *testing.T) {
 	if !strings.Contains(stderr, "index rebuilt") {
 		t.Errorf("expected 'index rebuilt' in stderr, got: %q", stderr)
 	}
+}
+
+// TestIndex_FailedRebuildLeavesLiveIndexIntact is the regression test for
+// atomic index rebuild: a `rekal index` that fails partway through (here,
+// PopulateIndex fails because data.db's sessions table went missing) must
+// leave the previous, fully-built index.db completely untouched — not a
+// half-dropped/half-repopulated one — and must not leave a stray temp file
+// behind in .rekal/.
+func TestIndex_FailedRebuildLeavesLiveIndexIntact(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	seedData(t, env)
+
+	if _, stderr, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("initial index should succeed: %v\nstderr: %s", err, stderr)
+	}
+
+	baselineSessions, baselineTurns := indexCounts(t, env)
+	if baselineSessions == 0 {
+		t.Fatal("expected a non-zero baseline session count after the initial index build")
+	}
+
+	// Corrupt data.db so a rebuild's PopulateIndex fails partway through:
+	// the very first population step reads FROM data_db.turns.
+	dataDB, err := db.OpenData(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open data db: %v", err)
+	}
+	if _, err := dataDB.Exec("DROP TABLE turns"); err != nil {
+		t.Fatalf("drop turns table: %v", err)
+	}
+	dataDB.Close()
+
+	if _, stderr, err := env.RunCLI("index"); err == nil {
+		t.Fatalf("expected the rebuild to fail after corrupting data.db, but it succeeded\nstderr: %s", stderr)
+	}
+
+	// The live index.db must be exactly as it was before the failed rebuild.
+	sessions, turns := indexCounts(t, env)
+	if sessions != baselineSessions || turns != baselineTurns {
+		t.Errorf("live index.db changed after a failed rebuild: got sessions=%d turns=%d, want sessions=%d turns=%d",
+			sessions, turns, baselineSessions, baselineTurns)
+	}
+
+	// No leftover temp file from the failed rebuild.
+	tmpPath := db.IndexPath(env.RepoDir) + ".rebuilding"
+	if _, err := os.Stat(tmpPath); err == nil {
+		t.Errorf("expected no leftover temp file at %s after a failed rebuild", tmpPath)
+	} else if !os.IsNotExist(err) {
+		t.Errorf("unexpected error stat-ing temp file: %v", err)
+	}
+}
+
+// indexCounts reads session/turn counts directly from the live index.db.
+func indexCounts(t *testing.T, env *TestEnv) (sessions, turns int) {
+	t.Helper()
+	indexDB, err := db.OpenIndex(env.RepoDir)
+	if err != nil {
+		t.Fatalf("open index db: %v", err)
+	}
+	defer indexDB.Close()
+
+	if err := indexDB.QueryRow("SELECT count(*) FROM session_facets").Scan(&sessions); err != nil {
+		t.Fatalf("count session_facets: %v", err)
+	}
+	if err := indexDB.QueryRow("SELECT count(*) FROM turns_ft").Scan(&turns); err != nil {
+		t.Fatalf("count turns_ft: %v", err)
+	}
+	return sessions, turns
 }
 
 func TestRecall_HybridSearch(t *testing.T) {

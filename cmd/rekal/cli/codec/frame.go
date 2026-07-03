@@ -393,14 +393,21 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 	sf := &SessionFrame{}
 
 	var n int
-	sf.SessionRef, n = readUvarint(data[pos:])
+	var err error
+	sf.SessionRef, n, err = readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("session payload: session_ref: %w", err)
+	}
 	pos += n
 	if pos+4 > len(data) {
 		return nil, fmt.Errorf("session payload truncated at captured_at")
 	}
 	sf.CapturedAt = time.Unix(int64(binary.LittleEndian.Uint32(data[pos:pos+4])), 0).UTC()
 	pos += 4
-	sf.EmailRef, n = readUvarint(data[pos:])
+	sf.EmailRef, n, err = readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("session payload: email_ref: %w", err)
+	}
 	pos += n
 	if pos >= len(data) {
 		return nil, fmt.Errorf("session payload truncated at actor_type")
@@ -408,7 +415,10 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 	sf.ActorType = data[pos]
 	pos++
 	if sf.ActorType == ActorAgent {
-		sf.AgentIDRef, n = readUvarint(data[pos:])
+		sf.AgentIDRef, n, err = readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: agent_id_ref: %w", err)
+		}
 		pos += n
 	}
 
@@ -421,13 +431,22 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 		var t TurnRecord
 		t.Role = data[pos]
 		pos++
-		t.TsDelta, n = readUvarint(data[pos:])
+		t.TsDelta, n, err = readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: turn %d ts_delta: %w", i, err)
+		}
 		pos += n
-		t.BranchRef, n = readUvarint(data[pos:])
+		t.BranchRef, n, err = readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: turn %d branch_ref: %w", i, err)
+		}
 		pos += n
-		textLen, n2 := readUvarint(data[pos:])
+		textLen, n2, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: turn %d text_len: %w", i, err)
+		}
 		pos += n2
-		if pos+int(textLen) > len(data) {
+		if textLen > uint64(len(data)-pos) {
 			return nil, fmt.Errorf("session payload truncated at turn %d text", i)
 		}
 		t.Text = string(data[pos : pos+int(textLen)])
@@ -448,12 +467,18 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 		pos++
 		switch tc.PathFlag {
 		case PathDictRef:
-			tc.PathRef, n = readUvarint(data[pos:])
+			tc.PathRef, n, err = readUvarint(data[pos:])
+			if err != nil {
+				return nil, fmt.Errorf("session payload: tool %d path_ref: %w", i, err)
+			}
 			pos += n
 		case PathInline:
-			pathLen, n2 := readUvarint(data[pos:])
+			pathLen, n2, err := readUvarint(data[pos:])
+			if err != nil {
+				return nil, fmt.Errorf("session payload: tool %d path_len: %w", i, err)
+			}
 			pos += n2
-			if pos+int(pathLen) > len(data) {
+			if pathLen > uint64(len(data)-pos) {
 				return nil, fmt.Errorf("session payload truncated at tool %d inline path", i)
 			}
 			tc.PathInline = string(data[pos : pos+int(pathLen)])
@@ -461,10 +486,13 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 		case PathNull:
 			// no additional bytes
 		}
-		cmdLen, n2 := readUvarint(data[pos:])
+		cmdLen, n2, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: tool %d cmd_len: %w", i, err)
+		}
 		pos += n2
 		if cmdLen > 0 {
-			if pos+int(cmdLen) > len(data) {
+			if cmdLen > uint64(len(data)-pos) {
 				return nil, fmt.Errorf("session payload truncated at tool %d cmd", i)
 			}
 			tc.CmdPrefix = string(data[pos : pos+int(cmdLen)])
@@ -491,7 +519,11 @@ func parseCheckpointPayload(data []byte) (*CheckpointFrame, error) {
 
 	// Checkpoint ULID dict ref.
 	var n int
-	cf.CheckpointRef, n = readUvarint(data[pos:])
+	var err error
+	cf.CheckpointRef, n, err = readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint payload: checkpoint_ref: %w", err)
+	}
 	pos += n
 
 	if pos+40 > len(data) {
@@ -499,9 +531,15 @@ func parseCheckpointPayload(data []byte) (*CheckpointFrame, error) {
 	}
 	cf.GitSHA = string(data[pos : pos+40])
 	pos += 40
-	cf.BranchRef, n = readUvarint(data[pos:])
+	cf.BranchRef, n, err = readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint payload: branch_ref: %w", err)
+	}
 	pos += n
-	cf.EmailRef, n = readUvarint(data[pos:])
+	cf.EmailRef, n, err = readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint payload: email_ref: %w", err)
+	}
 	pos += n
 	if pos+4 > len(data) {
 		return nil, fmt.Errorf("checkpoint payload truncated at ts")
@@ -514,24 +552,44 @@ func parseCheckpointPayload(data []byte) (*CheckpointFrame, error) {
 	cf.ActorType = data[pos]
 	pos++
 	if cf.ActorType == ActorAgent {
-		cf.AgentIDRef, n = readUvarint(data[pos:])
+		cf.AgentIDRef, n, err = readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("checkpoint payload: agent_id_ref: %w", err)
+		}
 		pos += n
 	}
 
-	nSess, n2 := readUvarint(data[pos:])
+	nSess, n2, err := readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("checkpoint payload: n_sessions: %w", err)
+	}
 	pos += n2
+	// Each session ref costs at least 1 byte on the wire, so a count that
+	// exceeds the remaining bytes is definitely corrupt — reject it before
+	// allocating, rather than trusting an attacker/corruption-controlled
+	// count for a slice capacity.
+	if nSess > uint64(len(data)-pos) {
+		return nil, fmt.Errorf("checkpoint payload: n_sessions %d exceeds remaining data", nSess)
+	}
 	cf.SessionRefs = make([]uint64, 0, nSess)
 	for i := uint64(0); i < nSess; i++ {
-		ref, n3 := readUvarint(data[pos:])
+		ref, n3, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("checkpoint payload: session_ref %d: %w", i, err)
+		}
 		pos += n3
 		cf.SessionRefs = append(cf.SessionRefs, ref)
 	}
 
-	// Files touched.
+	// Files touched. nFiles comes from a single byte (data[5]), so it is
+	// already bounded to [0,255] — no additional cap needed before allocating.
 	cf.Files = make([]FileTouchedRecord, 0, nFiles)
 	for i := 0; i < nFiles; i++ {
 		var f FileTouchedRecord
-		f.PathRef, n = readUvarint(data[pos:])
+		f.PathRef, n, err = readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("checkpoint payload: file %d path_ref: %w", i, err)
+		}
 		pos += n
 		if pos >= len(data) {
 			return nil, fmt.Errorf("checkpoint payload truncated at file %d change_type", i)
@@ -563,7 +621,11 @@ func parseMetaPayload(data []byte) (*MetaFrame, error) {
 	pos++
 
 	var n int
-	mf.EmailRef, n = readUvarint(data[pos:])
+	var err error
+	mf.EmailRef, n, err = readUvarint(data[pos:])
+	if err != nil {
+		return nil, fmt.Errorf("meta payload: email_ref: %w", err)
+	}
 	pos += n
 
 	if pos+40 > len(data) {
@@ -596,11 +658,21 @@ func appendUvarint(buf []byte, x uint64) []byte {
 }
 
 // readUvarint reads an unsigned LEB128 varint from data.
-// Returns the value and the number of bytes consumed.
-func readUvarint(data []byte) (uint64, int) {
-	v, n := binary.Uvarint(data)
-	if n <= 0 {
-		return 0, 1 // consume at least 1 byte on error
+// Returns the value and the number of bytes consumed, or an error if data is
+// empty or does not contain a complete, valid varint. Callers must check the
+// error before trusting the returned count — a malformed or truncated frame
+// (e.g. from a corrupt or hostile git push) must produce an error here, not
+// silently advance past the end of data and panic on the next slice.
+func readUvarint(data []byte) (uint64, int, error) {
+	if len(data) == 0 {
+		return 0, 0, fmt.Errorf("unexpected end of data reading varint")
 	}
-	return v, n
+	v, n := binary.Uvarint(data)
+	if n == 0 {
+		return 0, 0, fmt.Errorf("incomplete varint")
+	}
+	if n < 0 {
+		return 0, 0, fmt.Errorf("varint overflows uint64")
+	}
+	return v, n, nil
 }

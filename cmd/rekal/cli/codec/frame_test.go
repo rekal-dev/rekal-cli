@@ -357,6 +357,192 @@ func TestCompressionRatio(t *testing.T) {
 	}
 }
 
+// callParse invokes fn, converting any panic into a test failure instead of
+// crashing the test binary — this is what a decoder panic would do to a live
+// `rekal sync` process on a corrupt or hostile frame from a teammate's push.
+func callParse(t *testing.T, fn func() error) (err error) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("parse panicked: %v", r)
+		}
+	}()
+	return fn()
+}
+
+// TestParseCheckpointPayload_TruncatedNeverPanics feeds every possible
+// truncation of a valid checkpoint payload to the parser. A malformed or
+// truncated frame (as would arrive from a corrupt git object or a hostile
+// teammate push) must return an error, never panic.
+func TestParseCheckpointPayload_TruncatedNeverPanics(t *testing.T) {
+	cf := &CheckpointFrame{
+		CheckpointRef: 42,
+		GitSHA:        "aaa111bbb222ccc333ddd444eee555fff666aaa1",
+		BranchRef:     7,
+		EmailRef:      3,
+		Timestamp:     time.Date(2026, 2, 25, 10, 30, 0, 0, time.UTC),
+		ActorType:     ActorAgent,
+		AgentIDRef:    9,
+		SessionRefs:   []uint64{0, 1, 2},
+		Files: []FileTouchedRecord{
+			{PathRef: 0, ChangeType: ChangeModified},
+			{PathRef: 1, ChangeType: ChangeAdded},
+		},
+	}
+	payload := encodeCheckpointPayload(cf)
+
+	for i := 0; i <= len(payload); i++ {
+		trunc := payload[:i]
+		var cfOut *CheckpointFrame
+		err := callParse(t, func() error {
+			var perr error
+			cfOut, perr = parseCheckpointPayload(trunc)
+			return perr
+		})
+		if i == len(payload) {
+			if err != nil {
+				t.Fatalf("full payload should parse cleanly, got: %v", err)
+			}
+			if cfOut == nil {
+				t.Fatal("full payload parse returned nil frame with nil error")
+			}
+			continue
+		}
+		// Any truncation must either error out or (rarely, if the cut lands
+		// exactly on a field boundary with no further required bytes) still
+		// be internally consistent — never panic. The panic check above is
+		// the actual regression guard; err is allowed to be nil only if
+		// parsing genuinely had nothing left to misinterpret.
+		_ = err
+	}
+}
+
+// TestParseCheckpointPayload_HugeSessionCountRejected crafts a payload whose
+// declared session-ref count vastly exceeds the bytes actually present. This
+// must be rejected before allocating a slice sized by the attacker-controlled
+// count.
+func TestParseCheckpointPayload_HugeSessionCountRejected(t *testing.T) {
+	cf := &CheckpointFrame{
+		CheckpointRef: 1,
+		GitSHA:        "aaa111bbb222ccc333ddd444eee555fff666aaa1",
+		Timestamp:     time.Date(2026, 2, 25, 10, 30, 0, 0, time.UTC),
+		ActorType:     ActorHuman,
+		SessionRefs:   []uint64{0},
+	}
+	payload := encodeCheckpointPayload(cf)
+
+	// Re-derive the byte offset of the n_sessions varint by replaying the
+	// same field order parseCheckpointPayload expects (header, checkpoint
+	// ref, git_sha, branch_ref, email_ref, timestamp, actor_type — no
+	// agent_id_ref since ActorHuman).
+	headerLen := 6
+	headerLen += len(appendUvarint(nil, cf.CheckpointRef))
+	headerLen += 40 // git_sha
+	headerLen += len(appendUvarint(nil, cf.BranchRef))
+	headerLen += len(appendUvarint(nil, cf.EmailRef))
+	headerLen += 4 // timestamp
+	headerLen += 1 // actor_type
+
+	// Overwrite everything from n_sessions onward with a huge declared count
+	// and nothing else — simulating a corrupted/truncated frame that claims
+	// far more session refs than remain in the buffer.
+	huge := appendUvarint(nil, 1<<40)
+	crafted := append(append([]byte{}, payload[:headerLen]...), huge...)
+
+	var cfOut *CheckpointFrame
+	err := callParse(t, func() error {
+		var perr error
+		cfOut, perr = parseCheckpointPayload(crafted)
+		return perr
+	})
+	if err == nil {
+		t.Fatalf("expected error for oversized session count, got frame: %+v", cfOut)
+	}
+}
+
+func TestParseSessionPayload_TruncatedNeverPanics(t *testing.T) {
+	sf := &SessionFrame{
+		SessionRef: 3,
+		CapturedAt: time.Date(2026, 2, 25, 10, 30, 0, 0, time.UTC),
+		EmailRef:   1,
+		ActorType:  ActorAgent,
+		AgentIDRef: 2,
+		Turns: []TurnRecord{
+			{Role: RoleHuman, TsDelta: 0, BranchRef: 0, Text: "hello"},
+			{Role: RoleAssistant, TsDelta: 5, BranchRef: 0, Text: "hi there, a longer reply"},
+		},
+		ToolCalls: []ToolCallRecord{
+			{Tool: ToolRead, PathFlag: PathDictRef, PathRef: 0},
+			{Tool: ToolWrite, PathFlag: PathInline, PathInline: "a/b.go"},
+			{Tool: ToolBash, PathFlag: PathNull, CmdPrefix: "go build"},
+		},
+	}
+	payload := encodeSessionPayload(sf)
+
+	for i := 0; i <= len(payload); i++ {
+		trunc := payload[:i]
+		_ = callParse(t, func() error {
+			_, perr := parseSessionPayload(trunc)
+			return perr
+		})
+	}
+}
+
+func TestParseMetaPayload_TruncatedNeverPanics(t *testing.T) {
+	mf := &MetaFrame{
+		FormatVersion: 0x01,
+		EmailRef:      4,
+		CheckpointSHA: "e7b3a91f2c4d5e6f7890abcdef1234567890abcd",
+		Timestamp:     time.Date(2026, 2, 25, 16, 50, 0, 0, time.UTC),
+		NSessions:     42,
+		NCheckpoints:  38,
+		NFrames:       80,
+		NDictEntries:  133,
+	}
+	payload := encodeMetaPayload(mf)
+
+	for i := 0; i <= len(payload); i++ {
+		trunc := payload[:i]
+		_ = callParse(t, func() error {
+			_, perr := parseMetaPayload(trunc)
+			return perr
+		})
+	}
+}
+
+// TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic exercises the full
+// decode path (zstd + parse) with garbage compressed bytes, matching what
+// import.go actually receives from a teammate's git object.
+func TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic(t *testing.T) {
+	dec, err := NewDecoder()
+	if err != nil {
+		t.Fatalf("NewDecoder: %v", err)
+	}
+	defer dec.Close()
+
+	inputs := [][]byte{
+		nil,
+		{},
+		{0x00},
+		{0xFF, 0xFF, 0xFF, 0xFF},
+		bytesRepeat(0xAB, 64),
+	}
+	for _, in := range inputs {
+		_ = callParse(t, func() error {
+			_, perr := dec.DecodeCheckpointFrame(in)
+			return perr
+		})
+	}
+}
+
+func bytesRepeat(b byte, n int) []byte {
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = b
+	}
+	return out
+}
+
 func BenchmarkEncodeSessionFrame(b *testing.B) {
 	enc, err := NewEncoder()
 	if err != nil {

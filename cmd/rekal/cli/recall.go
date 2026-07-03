@@ -594,19 +594,32 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 		}
 	}
 
+	// Batch-load facets and files for every candidate up front — candidatePool
+	// (hybridSearch) is deliberately wider than limit so grouping has raw
+	// material to fold, which used to mean one facets query and one files
+	// query per candidate here. loadParentIDs already does this batched;
+	// this mirrors that pattern for the other two per-row lookups.
+	candidateIDs := make([]string, len(scored))
+	for i, s := range scored {
+		candidateIDs[i] = s.sessionID
+	}
+	facets, err := loadSessionFacetsBatch(indexDB, candidateIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load session facets: %w", err)
+	}
+	filesBySession, err := loadSessionFilesBatch(indexDB, candidateIDs)
+	if err != nil {
+		filesBySession = nil // non-fatal — file filter/output just comes back empty
+	}
+
 	var results []searchResult
 	for _, s := range scored {
 		if len(results) >= limit {
 			break
 		}
 
-		// Load session facets.
-		var sf sessionFacetRow
-		row := indexDB.QueryRow(
-			"SELECT "+sessionFacetCols+" FROM session_facets WHERE session_id = $1",
-			s.sessionID,
-		)
-		if err := sf.scan(row); err != nil {
+		sf, ok := facets[s.sessionID]
+		if !ok {
 			continue // session not in facets (shouldn't happen)
 		}
 
@@ -621,7 +634,7 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 			continue
 		}
 
-		files, _ := querySessionFiles(indexDB, s.sessionID)
+		files := filesBySession[s.sessionID]
 
 		if fileRe != nil {
 			matched := false
@@ -660,6 +673,77 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 	}
 
 	return results, nil
+}
+
+// loadSessionFacetsBatch batch-loads session_facets rows for a set of
+// candidate sessions, keyed by session_id. Sessions missing from
+// session_facets (shouldn't happen) are simply absent from the map.
+func loadSessionFacetsBatch(indexDB *sql.DB, sessionIDs []string) (map[string]sessionFacetRow, error) {
+	result := make(map[string]sessionFacetRow, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(sessionIDs))
+	args := make([]interface{}, len(sessionIDs))
+	for i, sid := range sessionIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = sid
+	}
+
+	rows, err := indexDB.Query(
+		"SELECT "+sessionFacetCols+" FROM session_facets WHERE session_id IN ("+strings.Join(placeholders, ",")+")",
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("batch load session facets: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	for rows.Next() {
+		var sf sessionFacetRow
+		if err := sf.scan(rows); err != nil {
+			return nil, fmt.Errorf("scan session facet: %w", err)
+		}
+		result[sf.sessionID] = sf
+	}
+	return result, rows.Err()
+}
+
+// loadSessionFilesBatch batch-loads distinct file paths per session for a
+// set of candidate sessions, keyed by session_id. Sessions with no files
+// touched are simply absent from the map (nil slice on lookup, same as
+// querySessionFiles returning no rows).
+func loadSessionFilesBatch(indexDB *sql.DB, sessionIDs []string) (map[string][]string, error) {
+	result := make(map[string][]string, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(sessionIDs))
+	args := make([]interface{}, len(sessionIDs))
+	for i, sid := range sessionIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = sid
+	}
+
+	rows, err := indexDB.Query(
+		"SELECT DISTINCT session_id, file_path FROM files_index WHERE session_id IN ("+strings.Join(placeholders, ",")+")",
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("batch load session files: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	for rows.Next() {
+		var sid, path string
+		if err := rows.Scan(&sid, &path); err != nil {
+			return nil, fmt.Errorf("scan session file: %w", err)
+		}
+		result[sid] = append(result[sid], path)
+	}
+	return result, rows.Err()
 }
 
 // loadParentIDs batch-loads parent_session_id for a set of candidate

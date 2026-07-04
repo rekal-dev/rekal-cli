@@ -44,11 +44,18 @@ Header (9 bytes):
 
 Frame sequence (repeated):
   Envelope (6 bytes, uncompressed):
-    type            (u8: 0x01=session, 0x02=checkpoint, 0x03=meta)
+    type            (u8: 0x01=session, 0x02=checkpoint, 0x03=meta,
+                         0x04=session v2, 0x05=checkpoint v2)
     compressed_len  (u24 little-endian)
-    uncompressed_len (u16 little-endian)
+    uncompressed_len (u16 little-endian, advisory only — saturates at 0xFFFF;
+                      decoding never relies on it)
   Payload (compressed_len bytes, zstd-compressed)
 ```
+
+A reader that encounters an unknown frame type skips it using the envelope's
+`compressed_len` — this is how binaries that predate v2 frames handle them:
+they silently skip the sessions/checkpoints they cannot parse instead of
+misreading them, and continue with the frames they understand.
 
 The 6-byte envelope is always uncompressed. This allows scanning all frame offsets without decompressing any payload — useful for seeking to a specific frame or counting frames.
 
@@ -67,11 +74,13 @@ Frame payloads reference strings by namespace + varint index. For index < 128, t
 
 ### Frame types
 
-**Session (0x01):** One captured AI session — turns (role + text + timestamp delta) and tool calls (tool code + path ref + command prefix).
+**Session (0x01):** One captured AI session — turns (role + text + timestamp delta) and tool calls (tool code + path ref + command prefix). Payload v1: turn and tool-call counts are single bytes (max 255 each).
 
-**Checkpoint (0x02):** Git state at capture time — HEAD SHA, branch, files changed (path ref + change type A/M/D/R), and references to the session frames included in this checkpoint.
+**Checkpoint (0x02):** Git state at capture time — HEAD SHA, branch, files changed (path ref + change type A/M/D/R), and references to the session frames included in this checkpoint. Payload v1: file count is a single byte (max 255).
 
 **Meta (0x03):** Summary counters — total sessions, checkpoints, frames, dictionary entries. Written last in each checkpoint batch.
+
+**Session v2 (0x04) / Checkpoint v2 (0x05):** Same layout as v1 except the counts above are varints. The encoder writes v1 whenever the counts fit in a byte (so binaries that predate v2 keep reading those frames) and v2 only when they don't. This fixed a v1 format bug where a 300-turn session silently wrapped its count mod 256 and corrupted the frame.
 
 ## Why This Works With Git
 

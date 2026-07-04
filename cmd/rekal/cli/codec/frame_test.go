@@ -35,7 +35,7 @@ func TestSessionFrame_Roundtrip(t *testing.T) {
 		},
 	}
 
-	encoded := enc.EncodeSessionFrame(sf)
+	encoded := mustEncodeSession(t, enc, sf)
 
 	// Verify envelope.
 	if FrameType(encoded[0]) != FrameSession {
@@ -115,7 +115,7 @@ func TestSessionFrame_WithAgent(t *testing.T) {
 		},
 	}
 
-	encoded := enc.EncodeSessionFrame(sf)
+	encoded := mustEncodeSession(t, enc, sf)
 	compressed := encoded[frameEnvSize:]
 	decoded, err := dec.DecodeSessionFrame(compressed)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestSessionFrame_InlinePath(t *testing.T) {
 		},
 	}
 
-	encoded := enc.EncodeSessionFrame(sf)
+	encoded := mustEncodeSession(t, enc, sf)
 	compressed := encoded[frameEnvSize:]
 	decoded, err := dec.DecodeSessionFrame(compressed)
 	if err != nil {
@@ -200,7 +200,7 @@ func TestCheckpointFrame_Roundtrip(t *testing.T) {
 		},
 	}
 
-	encoded := enc.EncodeCheckpointFrame(cf)
+	encoded := mustEncodeCheckpoint(t, enc, cf)
 	if FrameType(encoded[0]) != FrameCheckpoint {
 		t.Errorf("frame type: got %x, want %x", encoded[0], FrameCheckpoint)
 	}
@@ -258,7 +258,7 @@ func TestMetaFrame_Roundtrip(t *testing.T) {
 		NDictEntries:  133,
 	}
 
-	encoded := enc.EncodeMetaFrame(mf)
+	encoded := mustEncodeMeta(t, enc, mf)
 	if FrameType(encoded[0]) != FrameMeta {
 		t.Errorf("frame type: got %x, want %x", encoded[0], FrameMeta)
 	}
@@ -342,7 +342,7 @@ func TestCompressionRatio(t *testing.T) {
 		},
 	}
 
-	encoded := enc.EncodeSessionFrame(sf)
+	encoded := mustEncodeSession(t, enc, sf)
 	compressedSize := len(encoded) - frameEnvSize
 	// Build uncompressed payload to measure ratio.
 	payload := encodeSessionPayload(sf)
@@ -569,7 +569,7 @@ func BenchmarkEncodeSessionFrame(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		enc.EncodeSessionFrame(sf)
+		mustEncodeSession(b, enc, sf)
 	}
 }
 
@@ -600,11 +600,266 @@ func BenchmarkDecodeSessionFrame(b *testing.B) {
 		},
 	}
 
-	encoded := enc.EncodeSessionFrame(sf)
+	encoded := mustEncodeSession(b, enc, sf)
 	compressed := encoded[frameEnvSize:]
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = dec.DecodeSessionFrame(compressed)
+	}
+}
+
+// mustEncodeSession / mustEncodeCheckpoint / mustEncodeMeta wrap the Encode*
+// methods for tests where encoding a well-formed frame must succeed.
+func mustEncodeSession(tb testing.TB, enc *Encoder, sf *SessionFrame) []byte {
+	tb.Helper()
+	b, err := enc.EncodeSessionFrame(sf)
+	if err != nil {
+		tb.Fatalf("EncodeSessionFrame: %v", err)
+	}
+	return b
+}
+
+func mustEncodeCheckpoint(tb testing.TB, enc *Encoder, cf *CheckpointFrame) []byte {
+	tb.Helper()
+	b, err := enc.EncodeCheckpointFrame(cf)
+	if err != nil {
+		tb.Fatalf("EncodeCheckpointFrame: %v", err)
+	}
+	return b
+}
+
+func mustEncodeMeta(tb testing.TB, enc *Encoder, mf *MetaFrame) []byte {
+	tb.Helper()
+	b, err := enc.EncodeMetaFrame(mf)
+	if err != nil {
+		tb.Fatalf("EncodeMetaFrame: %v", err)
+	}
+	return b
+}
+
+func newEncDec(t *testing.T) (*Encoder, *Decoder) {
+	t.Helper()
+	enc, err := NewEncoder()
+	if err != nil {
+		t.Fatalf("NewEncoder: %v", err)
+	}
+	t.Cleanup(enc.Close)
+	dec, err := NewDecoder()
+	if err != nil {
+		t.Fatalf("NewDecoder: %v", err)
+	}
+	t.Cleanup(dec.Close)
+	return enc, dec
+}
+
+// TestSessionFrameV2_Roundtrip is the regression test for the v1 format bug
+// where turn/tool-call counts were single bytes: a 300-turn session encoded
+// without error but decoded as 44 turns (300 mod 256). Large sessions must
+// now round-trip losslessly via the v2 frame.
+func TestSessionFrameV2_Roundtrip(t *testing.T) {
+	enc, dec := newEncDec(t)
+
+	sf := &SessionFrame{
+		SessionRef: 7,
+		CapturedAt: time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		EmailRef:   1,
+		ActorType:  ActorAgent,
+		AgentIDRef: 2,
+	}
+	for i := 0; i < 300; i++ {
+		sf.Turns = append(sf.Turns, TurnRecord{
+			Role: RoleHuman, TsDelta: uint64(i), BranchRef: 0,
+			Text: "turn text " + string(rune('a'+i%26)),
+		})
+		sf.ToolCalls = append(sf.ToolCalls, ToolCallRecord{
+			Tool: ToolBash, PathFlag: PathNull, CmdPrefix: "go test",
+		})
+	}
+
+	encoded := mustEncodeSession(t, enc, sf)
+	if FrameType(encoded[0]) != FrameSessionV2 {
+		t.Fatalf("frame type: got %x, want FrameSessionV2 %x", encoded[0], FrameSessionV2)
+	}
+
+	decoded, err := dec.DecodeSessionFrame(encoded[frameEnvSize:])
+	if err != nil {
+		t.Fatalf("decode v2: %v", err)
+	}
+	if len(decoded.Turns) != 300 {
+		t.Fatalf("turns: got %d, want 300", len(decoded.Turns))
+	}
+	if len(decoded.ToolCalls) != 300 {
+		t.Fatalf("tool calls: got %d, want 300", len(decoded.ToolCalls))
+	}
+	if decoded.Turns[299].Text != sf.Turns[299].Text {
+		t.Errorf("turn 299 text: got %q, want %q", decoded.Turns[299].Text, sf.Turns[299].Text)
+	}
+	if decoded.Turns[299].TsDelta != 299 {
+		t.Errorf("turn 299 ts_delta: got %d, want 299", decoded.Turns[299].TsDelta)
+	}
+	if decoded.AgentIDRef != 2 {
+		t.Errorf("agent_id_ref: got %d, want 2", decoded.AgentIDRef)
+	}
+}
+
+// TestCheckpointFrameV2_Roundtrip covers the same count-overflow bug for
+// checkpoint frames: commits touching more than 255 files.
+func TestCheckpointFrameV2_Roundtrip(t *testing.T) {
+	enc, dec := newEncDec(t)
+
+	cf := &CheckpointFrame{
+		CheckpointRef: 42,
+		GitSHA:        "aaa111bbb222ccc333ddd444eee555fff666aaa1",
+		Timestamp:     time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		ActorType:     ActorHuman,
+		SessionRefs:   []uint64{0, 1, 2},
+	}
+	for i := 0; i < 300; i++ {
+		cf.Files = append(cf.Files, FileTouchedRecord{PathRef: uint64(i), ChangeType: ChangeModified})
+	}
+
+	encoded := mustEncodeCheckpoint(t, enc, cf)
+	if FrameType(encoded[0]) != FrameCheckpointV2 {
+		t.Fatalf("frame type: got %x, want FrameCheckpointV2 %x", encoded[0], FrameCheckpointV2)
+	}
+
+	decoded, err := dec.DecodeCheckpointFrame(encoded[frameEnvSize:])
+	if err != nil {
+		t.Fatalf("decode v2: %v", err)
+	}
+	if len(decoded.Files) != 300 {
+		t.Fatalf("files: got %d, want 300", len(decoded.Files))
+	}
+	if decoded.Files[299].PathRef != 299 {
+		t.Errorf("file 299 path_ref: got %d, want 299", decoded.Files[299].PathRef)
+	}
+	if len(decoded.SessionRefs) != 3 {
+		t.Errorf("session_refs: got %d, want 3", len(decoded.SessionRefs))
+	}
+}
+
+// TestEncoder_SelectsV1WhenCountsFit pins the compatibility contract: sessions
+// and checkpoints that fit the v1 single-byte counts keep being written as v1
+// frames, so binaries that predate v2 can still read them.
+func TestEncoder_SelectsV1WhenCountsFit(t *testing.T) {
+	enc, _ := newEncDec(t)
+
+	sf := &SessionFrame{
+		CapturedAt: time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		ActorType:  ActorHuman,
+		Turns:      make([]TurnRecord, 255),
+	}
+	encoded := mustEncodeSession(t, enc, sf)
+	if FrameType(encoded[0]) != FrameSession {
+		t.Errorf("255-turn session: got frame type %x, want v1 %x", encoded[0], FrameSession)
+	}
+
+	sf.Turns = make([]TurnRecord, 256)
+	encoded = mustEncodeSession(t, enc, sf)
+	if FrameType(encoded[0]) != FrameSessionV2 {
+		t.Errorf("256-turn session: got frame type %x, want v2 %x", encoded[0], FrameSessionV2)
+	}
+
+	cf := &CheckpointFrame{
+		GitSHA:    "aaa111bbb222ccc333ddd444eee555fff666aaa1",
+		Timestamp: time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		ActorType: ActorHuman,
+		Files:     make([]FileTouchedRecord, 255),
+	}
+	encoded = mustEncodeCheckpoint(t, enc, cf)
+	if FrameType(encoded[0]) != FrameCheckpoint {
+		t.Errorf("255-file checkpoint: got frame type %x, want v1 %x", encoded[0], FrameCheckpoint)
+	}
+
+	cf.Files = make([]FileTouchedRecord, 256)
+	encoded = mustEncodeCheckpoint(t, enc, cf)
+	if FrameType(encoded[0]) != FrameCheckpointV2 {
+		t.Errorf("256-file checkpoint: got frame type %x, want v2 %x", encoded[0], FrameCheckpointV2)
+	}
+}
+
+// TestScanFrames_UnknownTypeIsSkippable verifies the property v2 relies on
+// for forward compatibility: a reader that doesn't understand a frame type
+// can still scan past it using only the envelope, and decode the frames it
+// does understand.
+func TestScanFrames_UnknownTypeIsSkippable(t *testing.T) {
+	enc, dec := newEncDec(t)
+
+	body := NewBody()
+	big := &SessionFrame{
+		CapturedAt: time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		ActorType:  ActorHuman,
+		Turns:      make([]TurnRecord, 300),
+	}
+	body = AppendFrame(body, mustEncodeSession(t, enc, big)) // v2
+	small := &SessionFrame{
+		CapturedAt: time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		ActorType:  ActorHuman,
+		Turns:      []TurnRecord{{Role: RoleHuman, Text: "small"}},
+	}
+	body = AppendFrame(body, mustEncodeSession(t, enc, small)) // v1
+
+	frames, err := ScanFrames(body)
+	if err != nil {
+		t.Fatalf("ScanFrames: %v", err)
+	}
+	if len(frames) != 2 {
+		t.Fatalf("frames: got %d, want 2", len(frames))
+	}
+	if frames[0].Type != FrameSessionV2 || frames[1].Type != FrameSession {
+		t.Fatalf("frame types: got %x, %x", frames[0].Type, frames[1].Type)
+	}
+
+	// An old reader switches on the types it knows and skips the rest —
+	// simulate that by decoding only the v1 frame.
+	decoded, err := dec.DecodeSessionFrame(ExtractFramePayload(body, frames[1]))
+	if err != nil {
+		t.Fatalf("decode v1 frame after skipping v2: %v", err)
+	}
+	if len(decoded.Turns) != 1 || decoded.Turns[0].Text != "small" {
+		t.Errorf("v1 frame content: %+v", decoded.Turns)
+	}
+}
+
+// TestParseSessionPayloadV2_TruncatedNeverPanics sweeps every truncation of a
+// v2 payload through the parser — corrupt frames must error, never panic.
+func TestParseSessionPayloadV2_TruncatedNeverPanics(t *testing.T) {
+	sf := &SessionFrame{
+		SessionRef: 3,
+		CapturedAt: time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		EmailRef:   1,
+		ActorType:  ActorAgent,
+		AgentIDRef: 2,
+	}
+	for i := 0; i < 260; i++ {
+		sf.Turns = append(sf.Turns, TurnRecord{Role: RoleHuman, Text: "x"})
+	}
+	payload := encodeSessionPayloadV2(sf)
+
+	for i := 0; i <= len(payload); i++ {
+		trunc := payload[:i]
+		_ = callParse(t, func() error {
+			_, perr := parseSessionPayload(trunc)
+			return perr
+		})
+	}
+}
+
+// TestParseSessionPayloadV2_HugeCountsRejected crafts a v2 payload declaring
+// far more turns than the buffer holds — it must be rejected before the
+// counts are trusted for slice capacities.
+func TestParseSessionPayloadV2_HugeCountsRejected(t *testing.T) {
+	payload := append([]byte{}, sessionMagic...)
+	payload = append(payload, payloadVersionV2, 0x01)
+	payload = appendUvarint(payload, 1<<40) // n_turns
+	payload = appendUvarint(payload, 0)     // n_tools
+
+	err := callParse(t, func() error {
+		_, perr := parseSessionPayload(payload)
+		return perr
+	})
+	if err == nil {
+		t.Fatal("expected error for oversized turn count")
 	}
 }

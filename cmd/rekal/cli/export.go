@@ -156,7 +156,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 				sf.ToolCalls = append(sf.ToolCalls, tcr)
 			}
 
-			body = codec.AppendFrame(body, enc.EncodeSessionFrame(sf))
+			frame, err := enc.EncodeSessionFrame(sf)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("encode session %s: %w", sid, err)
+			}
+			body = codec.AppendFrame(body, frame)
 			sessionRefs = append(sessionRefs, sessRef)
 		}
 
@@ -205,7 +209,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 			SessionRefs:   sessionRefs,
 			Files:         fileRecords,
 		}
-		body = codec.AppendFrame(body, enc.EncodeCheckpointFrame(cf))
+		frame, err := enc.EncodeCheckpointFrame(cf)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("encode checkpoint %s: %w", cp.ID, err)
+		}
+		body = codec.AppendFrame(body, frame)
 
 		exportedIDs = append(exportedIDs, cp.ID)
 	}
@@ -227,7 +235,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		NFrames:       nFrames + 1, // +1 for this meta frame
 		NDictEntries:  uint32(dict.TotalEntries()),
 	}
-	body = codec.AppendFrame(body, enc.EncodeMetaFrame(mf))
+	metaFrame, err := enc.EncodeMetaFrame(mf)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("encode meta frame: %w", err)
+	}
+	body = codec.AppendFrame(body, metaFrame)
 
 	// Checkpoints are NOT marked exported here — see the doc comment above.
 	// The caller marks them only once commitWireFormat has durably committed

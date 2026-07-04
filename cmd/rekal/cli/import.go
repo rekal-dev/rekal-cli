@@ -52,7 +52,7 @@ func importBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 		compressed := codec.ExtractFramePayload(bodyData, fs)
 
 		switch fs.Type {
-		case codec.FrameSession:
+		case codec.FrameSession, codec.FrameSessionV2:
 			sf, err := dec.DecodeSessionFrame(compressed)
 			if err != nil {
 				continue // skip malformed frames
@@ -124,7 +124,7 @@ func importBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 
 			imported++
 
-		case codec.FrameCheckpoint:
+		case codec.FrameCheckpoint, codec.FrameCheckpointV2:
 			cf, err := dec.DecodeCheckpointFrame(compressed)
 			if err != nil {
 				continue

@@ -101,7 +101,7 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 		compressed := codec.ExtractFramePayload(bodyData, fs)
 
 		switch fs.Type {
-		case codec.FrameSession:
+		case codec.FrameSession, codec.FrameSessionV2:
 			sf, err := dec.DecodeSessionFrame(compressed)
 			if err != nil {
 				continue
@@ -157,7 +157,7 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 
 			imported++
 
-		case codec.FrameCheckpoint:
+		case codec.FrameCheckpoint, codec.FrameCheckpointV2:
 			cf, err := dec.DecodeCheckpointFrame(compressed)
 			if err != nil {
 				continue

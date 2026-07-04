@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
@@ -463,7 +465,6 @@ func buildFilterWhere(filters RecallFilters) (string, []interface{}) {
 		idx++
 	}
 	if filters.File != "" {
-		// File filter applied post-query via files_index.
 		conditions = append(conditions, fmt.Sprintf("session_id IN (SELECT DISTINCT session_id FROM files_index WHERE regexp_matches(file_path, $%d))", idx))
 		args = append(args, filters.File)
 	}
@@ -917,12 +918,9 @@ type sessionHit struct {
 }
 
 func sortScored(s []scored) {
-	// Sort descending by score.
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j].score > s[j-1].score; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
+	// Sort descending by score. LSA scoring touches every session in the
+	// corpus, so this list grows with history — keep it O(n log n).
+	sort.Slice(s, func(i, j int) bool { return s[i].score > s[j].score })
 }
 
 func querySessionFiles(indexDB *sql.DB, sessionID string) ([]string, error) {
@@ -954,9 +952,18 @@ func firstTurnSnippet(indexDB *sql.DB, sessionID string) (string, int, string) {
 		return "", 0, ""
 	}
 	if len(content) > defaultSnippetSize {
-		content = content[:defaultSnippetSize] + "..."
+		content = content[:snapToRuneStart(content, defaultSnippetSize)] + "..."
 	}
 	return content, turnIndex, role
+}
+
+// snapToRuneStart moves i backward to the start of the UTF-8 rune containing
+// it, so byte-offset snippet boundaries never split a multi-byte character.
+func snapToRuneStart(s string, i int) int {
+	for i > 0 && i < len(s) && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return i
 }
 
 // extractSnippet extracts a window around the first query term match.
@@ -978,7 +985,7 @@ func extractSnippet(content, query string) string {
 
 	if bestPos < 0 {
 		// No term match — take first N chars.
-		return content[:defaultSnippetSize] + "..."
+		return content[:snapToRuneStart(content, defaultSnippetSize)] + "..."
 	}
 
 	half := defaultSnippetSize / 2
@@ -995,12 +1002,22 @@ func extractSnippet(content, query string) string {
 		}
 	}
 
-	// Align to word boundaries.
+	// Never split a multi-byte rune. The word alignment below preserves this:
+	// it only ever moves a boundary to sit next to an ASCII space.
+	start = snapToRuneStart(content, start)
+	end = snapToRuneStart(content, end)
+
+	// Align to word boundaries. If the window holds one giant token (no
+	// space at all), leave the boundary where it is rather than walking
+	// start past end — content[start:end] must stay a valid slice.
 	if start > 0 {
-		for start < end && content[start] != ' ' {
-			start++
+		aligned := start
+		for aligned < end && content[aligned] != ' ' {
+			aligned++
 		}
-		start++ // skip the space
+		if aligned < end {
+			start = aligned + 1 // skip the space
+		}
 	}
 	if end < len(content) {
 		for end > start && content[end-1] != ' ' {

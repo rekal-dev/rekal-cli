@@ -92,7 +92,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&checkpointFilter, "checkpoint", "", "Query as of checkpoint ref")
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
-	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (0 = no limit)")
+	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

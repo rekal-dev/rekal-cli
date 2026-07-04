@@ -1020,8 +1020,12 @@ func extractSnippet(content, query string) string {
 		}
 	}
 	if end < len(content) {
-		for end > start && content[end-1] != ' ' {
-			end--
+		aligned := end
+		for aligned > start && content[aligned-1] != ' ' {
+			aligned--
+		}
+		if aligned > start {
+			end = aligned
 		}
 	}
 

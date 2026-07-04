@@ -88,7 +88,7 @@ limit is crossed; readers that predate v2 reject a v2 dict loudly
 
 **Meta (0x03):** Summary counters — total sessions, checkpoints, frames, dictionary entries. Written last in each checkpoint batch.
 
-**Session v2 (0x04) / Checkpoint v2 (0x05):** Same layout as v1 except the counts above are varints. The encoder writes v1 whenever the counts fit in a byte (so binaries that predate v2 keep reading those frames) and v2 only when they don't. This fixed a v1 format bug where a 300-turn session silently wrapped its count mod 256 and corrupted the frame.
+**Session v2 (0x04) / Checkpoint v2 (0x05):** Same layout as v1 except the counts above are varints, and the session payload carries an optional harness-metadata block (flags byte + parent session ref, team name, workflow name, agent type, description, spawn depth — see `docs/agent-metadata.md`) between the session meta and the turn records. The encoder writes v1 whenever the counts fit in a byte and no metadata is present (so binaries that predate v2 keep reading those frames) and v2 only when needed. V2 fixed a v1 format bug where a 300-turn session silently wrapped its count mod 256 and corrupted the frame.
 
 ## Why This Works With Git
 

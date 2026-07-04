@@ -108,6 +108,18 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 				EmailRef:   emailRef,
 				ActorType:  actorType,
 				AgentIDRef: agentIDRef,
+
+				// Harness metadata rides the v2 payload; zero values cost
+				// nothing on the wire (single flags byte).
+				TeamName:     sess.TeamName,
+				WorkflowName: sess.WorkflowName,
+				AgentType:    sess.AgentType,
+				Description:  sess.Description,
+				SpawnDepth:   sess.SpawnDepth,
+			}
+			if sess.ParentSessionID != "" {
+				sf.HasParent = true
+				sf.ParentRef = dict.LookupOrAdd(codec.NSSessions, sess.ParentSessionID)
 			}
 
 			// Build turn records with delta timestamps.

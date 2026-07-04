@@ -863,3 +863,86 @@ func TestParseSessionPayloadV2_HugeCountsRejected(t *testing.T) {
 		t.Fatal("expected error for oversized turn count")
 	}
 }
+
+// TestSessionFrame_MetadataRoundtrip covers the v2 harness-metadata block:
+// parent ref, team/workflow names, agent type, description, and spawn depth
+// survive the wire, and their presence alone forces a v2 frame.
+func TestSessionFrame_MetadataRoundtrip(t *testing.T) {
+	enc, dec := newEncDec(t)
+
+	sf := &SessionFrame{
+		SessionRef:   9,
+		CapturedAt:   time.Date(2026, 3, 2, 14, 0, 0, 0, time.UTC),
+		EmailRef:     1,
+		ActorType:    ActorAgent,
+		AgentIDRef:   4,
+		HasParent:    true,
+		ParentRef:    3,
+		TeamName:     "core-team",
+		WorkflowName: "release-flow",
+		AgentType:    "code-reviewer",
+		Description:  "Review the auth changes",
+		SpawnDepth:   2,
+		Turns: []TurnRecord{
+			{Role: RoleAssistant, Text: "reviewing"},
+		},
+	}
+
+	encoded := mustEncodeSession(t, enc, sf)
+	if FrameType(encoded[0]) != FrameSessionV2 {
+		t.Fatalf("frame type: got %x, want v2 (metadata present)", encoded[0])
+	}
+
+	decoded, err := dec.DecodeSessionFrame(encoded[frameEnvSize:])
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !decoded.HasParent || decoded.ParentRef != 3 {
+		t.Errorf("parent: got (%v, %d), want (true, 3)", decoded.HasParent, decoded.ParentRef)
+	}
+	if decoded.TeamName != "core-team" {
+		t.Errorf("team_name: got %q", decoded.TeamName)
+	}
+	if decoded.WorkflowName != "release-flow" {
+		t.Errorf("workflow_name: got %q", decoded.WorkflowName)
+	}
+	if decoded.AgentType != "code-reviewer" {
+		t.Errorf("agent_type: got %q", decoded.AgentType)
+	}
+	if decoded.Description != "Review the auth changes" {
+		t.Errorf("description: got %q", decoded.Description)
+	}
+	if decoded.SpawnDepth != 2 {
+		t.Errorf("spawn_depth: got %d, want 2", decoded.SpawnDepth)
+	}
+	if len(decoded.Turns) != 1 || decoded.Turns[0].Text != "reviewing" {
+		t.Errorf("turns after meta block: %+v", decoded.Turns)
+	}
+}
+
+// TestSessionFrame_PartialMetadata: only some metadata fields set — the flags
+// byte must gate exactly the fields present.
+func TestSessionFrame_PartialMetadata(t *testing.T) {
+	enc, dec := newEncDec(t)
+
+	sf := &SessionFrame{
+		CapturedAt: time.Date(2026, 3, 2, 14, 0, 0, 0, time.UTC),
+		ActorType:  ActorAgent,
+		AgentIDRef: 1,
+		HasParent:  true,
+		ParentRef:  0, // ref 0 is a valid dict index — presence is the flag bit, not the value
+		Turns:      []TurnRecord{{Role: RoleHuman, Text: "hi"}},
+	}
+
+	encoded := mustEncodeSession(t, enc, sf)
+	decoded, err := dec.DecodeSessionFrame(encoded[frameEnvSize:])
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !decoded.HasParent || decoded.ParentRef != 0 {
+		t.Errorf("parent: got (%v, %d), want (true, 0)", decoded.HasParent, decoded.ParentRef)
+	}
+	if decoded.TeamName != "" || decoded.SpawnDepth != 0 {
+		t.Errorf("unset fields leaked: team=%q depth=%d", decoded.TeamName, decoded.SpawnDepth)
+	}
+}

@@ -434,7 +434,7 @@ func scanIDs(rows *sql.Rows) ([]string, error) {
 type TurnPageOptions struct {
 	Offset int
 	Limit  int
-	Role   string // "" = all, "human", "assistant"
+	Role   string // "" = all; exact match otherwise: "human", "assistant", "human_steering"
 }
 
 // QueryTurnsPage returns a page of turns for a session with optional role filtering.

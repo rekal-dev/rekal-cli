@@ -21,13 +21,15 @@ func newQueryCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "query [<sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant]]",
+		Use:   "query [<sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering]]",
 		Short: "Run raw SQL or drill into a session",
 		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
 
 Session drill-down (--session) returns the full conversation as JSON. Add --full
 to include tool calls and files touched. Use --offset, --limit, and --role to
-paginate through turns or filter by role. Output always includes
+paginate through turns or filter by role (human, assistant, or human_steering —
+the exact stored role; steering turns are the text a human typed while the
+agent was already working). Output always includes
 child_session_ids — subagent/workflow transcripts whose parent_session_id
 points at this session — so an agent can navigate from a trunk conversation
 into the transcript that actually matched.
@@ -115,9 +117,9 @@ INDEX DB SCHEMA (.rekal/index.db):
 				return fmt.Errorf("--offset, --limit, and --role require --session")
 			}
 
-			// --role must be "human" or "assistant" if set.
-			if role != "" && role != "human" && role != "assistant" {
-				return fmt.Errorf("--role must be \"human\" or \"assistant\"")
+			// --role matches the stored role exactly.
+			if role != "" && role != "human" && role != "assistant" && role != "human_steering" {
+				return fmt.Errorf("--role must be \"human\", \"assistant\", or \"human_steering\"")
 			}
 
 			if sessionID != "" {
@@ -137,7 +139,7 @@ INDEX DB SCHEMA (.rekal/index.db):
 	cmd.Flags().BoolVar(&full, "full", false, "Include tool calls and files in session output")
 	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
-	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human or assistant (requires --session)")
+	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human, assistant, or human_steering (requires --session)")
 	return cmd
 }
 

@@ -12,6 +12,7 @@ import (
 
 func newPushCmd() *cobra.Command {
 	var force bool
+	var reExport bool
 
 	cmd := &cobra.Command{
 		Use:   "push",
@@ -29,6 +30,12 @@ a 2-10 MB session compresses to ~300 bytes on the wire.
 Use --force to overwrite the remote branch when it has diverged from local
 (e.g. after a rebuild or conflict).
 
+Use --re-export to regenerate the branch's wire data from scratch out of the
+local data DB and force-push it. This repairs a branch whose wire data was
+written by a rekal version with the frame-count bug (sessions with more than
+255 turns or tool calls were corrupted on the wire) and drops accumulated
+stale meta frames. Implies --force.
+
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
 You do not need to run this manually.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -44,12 +51,56 @@ You do not need to run this manually.`,
 				return NewSilentError(err)
 			}
 
+			if reExport {
+				return doReExport(gitRoot, cmd.ErrOrStderr())
+			}
 			return doPush(gitRoot, cmd.ErrOrStderr(), force)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force push (overwrite remote with local data)")
+	cmd.Flags().BoolVar(&reExport, "re-export", false, "Rebuild the branch's wire data from the local data DB and force push")
 	return cmd
+}
+
+// doReExport regenerates the orphan branch's wire data from every checkpoint
+// in data.db and force-pushes it. The branch is derived data; data.db is the
+// source of truth — this heals wire bytes corrupted by the pre-v2 frame-count
+// bug and drops stale meta frames accumulated by past pushes.
+func doReExport(gitRoot string, w io.Writer) error {
+	body, dict, exportedIDs, err := exportAllFrames(gitRoot)
+	if err != nil {
+		return fmt.Errorf("re-export: %w", err)
+	}
+	if body == nil {
+		fmt.Fprintln(w, "rekal: no checkpoints to export")
+		return nil
+	}
+
+	if err := ensureOrphanBranch(gitRoot); err != nil {
+		return fmt.Errorf("ensure rekal branch: %w", err)
+	}
+	if _, err := commitWireFormat(gitRoot, body, dict); err != nil {
+		return fmt.Errorf("commit to rekal branch: %w", err)
+	}
+	if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
+		return fmt.Errorf("mark checkpoints exported: %w", err)
+	}
+	fmt.Fprintf(w, "rekal: re-exported %d checkpoint(s)\n", len(exportedIDs))
+
+	branch := rekalBranchName()
+	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run(); err != nil {
+		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
+		return nil
+	}
+	forceCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "--force", "origin", branch)
+	forceCmd.Stdin = nil
+	if output, err := forceCmd.CombinedOutput(); err != nil {
+		fmt.Fprintf(w, "rekal: force push failed: %s\n", strings.TrimSpace(string(output)))
+		return nil
+	}
+	fmt.Fprintf(w, "rekal: force pushed to origin/%s\n", branch)
+	return nil
 }
 
 // doPush pushes Rekal data to the remote orphan branch.

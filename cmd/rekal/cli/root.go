@@ -29,12 +29,11 @@ Getting Started:
 // NewRootCmd returns the root command for the rekal CLI.
 func NewRootCmd() *cobra.Command {
 	var (
-		fileFilter       string
-		commitFilter     string
-		checkpointFilter string
-		authorFilter     string
-		actorFilter      string
-		limitFlag        int
+		fileFilter   string
+		commitFilter string
+		authorFilter string
+		actorFilter  string
+		limitFlag    int
 	)
 
 	cmd := &cobra.Command{
@@ -56,7 +55,7 @@ func NewRootCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If no args and no filters, show help.
 			if len(args) == 0 && fileFilter == "" && commitFilter == "" &&
-				checkpointFilter == "" && authorFilter == "" && actorFilter == "" {
+				authorFilter == "" && actorFilter == "" {
 				return cmd.Help()
 			}
 
@@ -80,8 +79,6 @@ func NewRootCmd() *cobra.Command {
 				Limit:  limitFlag,
 			}
 
-			_ = checkpointFilter // reserved for future use
-
 			return runRecall(cmd, gitRoot, filters)
 		},
 	}
@@ -89,7 +86,6 @@ func NewRootCmd() *cobra.Command {
 	// Recall filter flags on root command.
 	cmd.Flags().StringVar(&fileFilter, "file", "", "Filter by file path (regex)")
 	cmd.Flags().StringVar(&commitFilter, "commit", "", "Filter by git commit SHA")
-	cmd.Flags().StringVar(&checkpointFilter, "checkpoint", "", "Query as of checkpoint ref")
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20)")

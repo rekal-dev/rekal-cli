@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 
 ## `checkpoints`
 
-One row per checkpoint commit on the orphan branch. The `id` is the commit SHA on `rekal/<email>` — this is the checkpoint ID used by `--checkpoint <ref>`.
+One row per checkpoint commit on the orphan branch. The `id` is the commit SHA on `rekal/<email>` — this is the checkpoint ID.
 
 ```sql
 CREATE TABLE IF NOT EXISTS checkpoints (

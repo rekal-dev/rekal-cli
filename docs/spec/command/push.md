@@ -2,7 +2,7 @@
 
 **Role:** Push local Rekal data to the remote branch. Exports unexported checkpoints from DuckDB to wire format, commits to the orphan branch, and pushes to origin.
 
-**Invocation:** `rekal push` or `rekal push --force`.
+**Invocation:** `rekal push`, `rekal push --force`, or `rekal push --re-export`.
 
 ---
 
@@ -34,8 +34,11 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 | Flag | Description |
 |------|-------------|
 | `--force`, `-f` | Force push, overwriting the remote branch with local data |
+| `--re-export` | Rebuild the branch's wire data from scratch out of the local data DB, then force push. Implies `--force`. |
 
 When a normal push is rejected (non-fast-forward), push prints a warning and suggests `rekal push --force`. Force push is safe because each user owns their branch and the local DuckDB is the source of truth.
+
+`--re-export` re-encodes every checkpoint in data.db into a fresh rekal.body and dict.bin, ignoring exported flags and the branch's current contents. Use it to repair a branch whose wire bytes were written by a rekal version with the frame-count bug (sessions with more than 255 turns or tool calls were corrupted on the wire), or to drop stale meta frames accumulated by past pushes. The branch is derived data; data.db is the source of truth.
 
 ---
 

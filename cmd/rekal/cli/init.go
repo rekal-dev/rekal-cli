@@ -81,7 +81,7 @@ imported into the local data DB automatically.`,
 			}
 
 			// Install hook stubs.
-			if err := installHooks(gitRoot); err != nil {
+			if err := installHooks(gitRoot, cmd.ErrOrStderr()); err != nil {
 				return fmt.Errorf("install hooks: %w", err)
 			}
 
@@ -173,20 +173,29 @@ func appendGitignoreEntry(gitRoot, entry string) error {
 	return err
 }
 
-func installHooks(gitRoot string) error {
+func installHooks(gitRoot string, w io.Writer) error {
 	hooksDir := filepath.Join(gitRoot, ".git", "hooks")
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		return err
 	}
 
-	postCommit := filepath.Join(hooksDir, "post-commit")
-	if err := writeHook(postCommit, hookScript("checkpoint")); err != nil {
-		return fmt.Errorf("post-commit hook: %w", err)
-	}
-
-	prePush := filepath.Join(hooksDir, "pre-push")
-	if err := writeHook(prePush, hookScript("push")); err != nil {
-		return fmt.Errorf("pre-push hook: %w", err)
+	for _, h := range []struct {
+		name       string
+		subcommand string
+	}{
+		{"post-commit", "checkpoint"},
+		{"pre-push", "push"},
+	} {
+		path := filepath.Join(hooksDir, h.name)
+		installed, err := writeHook(path, hookScript(h.subcommand))
+		if err != nil {
+			return fmt.Errorf("%s hook: %w", h.name, err)
+		}
+		if !installed {
+			// Say so instead of silently skipping — without the hook the
+			// automatic capture/push never runs and nothing else hints why.
+			fmt.Fprintf(w, "rekal: existing %s hook left untouched — add 'rekal %s' to it to enable automatic capture\n", h.name, h.subcommand)
+		}
 	}
 
 	return nil
@@ -205,13 +214,18 @@ fi
 `
 }
 
-func writeHook(path, content string) error {
+// writeHook installs a hook unless a foreign (non-rekal) hook already exists.
+// Returns whether the hook was actually written.
+func writeHook(path, content string) (bool, error) {
 	// If a hook already exists and is not ours, leave it alone.
 	existing, err := os.ReadFile(path)
 	if err == nil && !strings.Contains(string(existing), rekalHookMarker) {
-		return nil // not our hook; do not overwrite
+		return false, nil // not our hook; do not overwrite
 	}
-	return os.WriteFile(path, []byte(content), 0o755)
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // rekalBranchName returns the orphan branch name for the current user.

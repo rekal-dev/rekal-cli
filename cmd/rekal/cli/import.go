@@ -52,7 +52,7 @@ func importBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 		compressed := codec.ExtractFramePayload(bodyData, fs)
 
 		switch fs.Type {
-		case codec.FrameSession:
+		case codec.FrameSession, codec.FrameSessionV2:
 			sf, err := dec.DecodeSessionFrame(compressed)
 			if err != nil {
 				continue // skip malformed frames
@@ -89,7 +89,19 @@ func importBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 			sessionHash := "wire:" + sessionID
 			capturedAt := sf.CapturedAt.UTC().Format(time.RFC3339)
 
-			if err := db.InsertSession(dataDB, sessionID, "", sessionHash, actorType, agentID, email, branch, capturedAt, ""); err != nil {
+			// Harness metadata is only present on v2 frames; for v1 frames
+			// every field is zero and stored as NULL.
+			parentID := ""
+			if sf.HasParent {
+				parentID, _ = dict.Get(codec.NSSessions, sf.ParentRef)
+			}
+			if err := db.InsertSessionMeta(dataDB, sessionID, parentID, sessionHash, actorType, agentID, email, branch, capturedAt, "", db.SessionMetaFields{
+				TeamName:     sf.TeamName,
+				WorkflowName: sf.WorkflowName,
+				AgentType:    sf.AgentType,
+				Description:  sf.Description,
+				SpawnDepth:   sf.SpawnDepth,
+			}); err != nil {
 				return imported, fmt.Errorf("insert session: %w", err)
 			}
 
@@ -124,7 +136,7 @@ func importBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 
 			imported++
 
-		case codec.FrameCheckpoint:
+		case codec.FrameCheckpoint, codec.FrameCheckpointV2:
 			cf, err := dec.DecodeCheckpointFrame(compressed)
 			if err != nil {
 				continue

@@ -57,9 +57,18 @@ var (
 	metaMagic       = []byte("RKLM")
 )
 
-const payloadVersion = 0x01
+// Payload versions. V1 stores the session turn/tool-call counts and the
+// checkpoint file count as single bytes — anything above 255 silently wrapped
+// mod 256 and corrupted the frame. V2 stores those counts as varints. New
+// frames are written as v1 while the counts fit (so binaries that predate v2
+// keep reading them) and as v2 — under the FrameSessionV2/FrameCheckpointV2
+// envelope types, which old readers skip — only when they don't.
+const (
+	payloadVersionV1 = 0x01
+	payloadVersionV2 = 0x02
+)
 
-// SessionFrame is the decoded content of a session frame (0x01).
+// SessionFrame is the decoded content of a session frame (0x01/0x04).
 type SessionFrame struct {
 	SessionRef uint64
 	CapturedAt time.Time
@@ -68,7 +77,28 @@ type SessionFrame struct {
 	AgentIDRef uint64 // only valid if ActorType == ActorAgent
 	Turns      []TurnRecord
 	ToolCalls  []ToolCallRecord
+
+	// Optional harness metadata (docs/agent-metadata.md). Only the v2
+	// payload carries these — any non-zero field forces the frame to v2.
+	// Zero values mean "not applicable for this harness or session".
+	ParentRef    uint64 // NSSessions ref of the trunk session; valid only if HasParent
+	HasParent    bool
+	TeamName     string
+	WorkflowName string
+	AgentType    string
+	Description  string
+	SpawnDepth   int
 }
+
+// Session metadata flag bits (v2 payload meta_flags byte).
+const (
+	metaHasParent     byte = 1 << 0
+	metaHasTeam       byte = 1 << 1
+	metaHasWorkflow   byte = 1 << 2
+	metaHasAgentType  byte = 1 << 3
+	metaHasDesc       byte = 1 << 4
+	metaHasSpawnDepth byte = 1 << 5
+)
 
 // TurnRecord is a single conversation turn.
 type TurnRecord struct {
@@ -182,45 +212,142 @@ func (e *Encoder) Close() {
 	_ = e.zw.Close()
 }
 
-// EncodeSessionFrame encodes a session frame to bytes (envelope + compressed payload).
-func (e *Encoder) EncodeSessionFrame(sf *SessionFrame) []byte {
-	payload := encodeSessionPayload(sf)
-	return e.wrapFrame(FrameSession, payload)
+// EncodeSessionFrame encodes a session frame to bytes (envelope + compressed
+// payload). Sessions whose turn/tool-call counts fit in a byte are written as
+// v1 for compatibility with readers that predate v2; larger sessions use the
+// v2 payload under the FrameSessionV2 envelope type, which old readers skip.
+func (e *Encoder) EncodeSessionFrame(sf *SessionFrame) ([]byte, error) {
+	if sessionNeedsV2(sf) {
+		return e.wrapFrame(FrameSessionV2, encodeSessionPayloadV2(sf))
+	}
+	return e.wrapFrame(FrameSession, encodeSessionPayload(sf))
 }
 
-// EncodeCheckpointFrame encodes a checkpoint frame to bytes.
-func (e *Encoder) EncodeCheckpointFrame(cf *CheckpointFrame) []byte {
-	payload := encodeCheckpointPayload(cf)
-	return e.wrapFrame(FrameCheckpoint, payload)
+// EncodeCheckpointFrame encodes a checkpoint frame to bytes. Checkpoints
+// touching more than 255 files use the v2 payload (varint file count) under
+// the FrameCheckpointV2 envelope type; smaller ones stay v1 for compatibility.
+func (e *Encoder) EncodeCheckpointFrame(cf *CheckpointFrame) ([]byte, error) {
+	if len(cf.Files) > 0xFF {
+		return e.wrapFrame(FrameCheckpointV2, encodeCheckpointPayloadV2(cf))
+	}
+	return e.wrapFrame(FrameCheckpoint, encodeCheckpointPayload(cf))
 }
 
 // EncodeMetaFrame encodes a meta frame to bytes.
-func (e *Encoder) EncodeMetaFrame(mf *MetaFrame) []byte {
+func (e *Encoder) EncodeMetaFrame(mf *MetaFrame) ([]byte, error) {
 	payload := encodeMetaPayload(mf)
 	return e.wrapFrame(FrameMeta, payload)
 }
 
-func (e *Encoder) wrapFrame(ft FrameType, payload []byte) []byte {
+// sessionNeedsV2 reports whether sf requires the v2 payload: v1 stores the
+// turn and tool-call counts as single bytes and has no field for harness
+// metadata.
+func sessionNeedsV2(sf *SessionFrame) bool {
+	return len(sf.Turns) > 0xFF || len(sf.ToolCalls) > 0xFF || sf.hasMeta()
+}
+
+func (sf *SessionFrame) hasMeta() bool {
+	return sf.HasParent || sf.TeamName != "" || sf.WorkflowName != "" ||
+		sf.AgentType != "" || sf.Description != "" || sf.SpawnDepth != 0
+}
+
+func (e *Encoder) wrapFrame(ft FrameType, payload []byte) ([]byte, error) {
 	compressed := e.zw.EncodeAll(payload, nil)
+	if len(compressed) > maxFrameCompressedLen {
+		return nil, fmt.Errorf("codec: compressed frame is %d bytes, exceeds the format's %d-byte limit", len(compressed), maxFrameCompressedLen)
+	}
 	env := WriteEnvelope(ft, len(compressed), len(payload))
-	return append(env, compressed...)
+	return append(env, compressed...), nil
 }
 
 func encodeSessionPayload(sf *SessionFrame) []byte {
 	buf := make([]byte, 0, 256)
 
-	// Header: magic + payload_version + dict_flags + n_turns + n_tools
+	// Header: magic + payload_version + dict_flags + n_turns + n_tools (u8 each)
 	buf = append(buf, sessionMagic...)
-	buf = append(buf, payloadVersion)
-	dictFlags := byte(0x00)
-	if len(presetDict) > 0 {
-		dictFlags = 0x01
-	}
-	buf = append(buf, dictFlags)
+	buf = append(buf, payloadVersionV1)
+	buf = append(buf, dictFlagsByte())
 	buf = append(buf, byte(len(sf.Turns)))
 	buf = append(buf, byte(len(sf.ToolCalls)))
 
-	// Session meta.
+	return appendSessionBody(buf, sf)
+}
+
+// encodeSessionPayloadV2 is the v1 layout with varint turn/tool-call counts
+// instead of single bytes, plus an optional harness-metadata block between
+// the session meta and the turn records.
+func encodeSessionPayloadV2(sf *SessionFrame) []byte {
+	buf := make([]byte, 0, 256)
+
+	// Header: magic + payload_version + dict_flags + n_turns + n_tools (varints)
+	buf = append(buf, sessionMagic...)
+	buf = append(buf, payloadVersionV2)
+	buf = append(buf, dictFlagsByte())
+	buf = appendUvarint(buf, uint64(len(sf.Turns)))
+	buf = appendUvarint(buf, uint64(len(sf.ToolCalls)))
+
+	buf = appendSessionCore(buf, sf)
+	buf = appendSessionMeta(buf, sf)
+	return appendSessionRecords(buf, sf)
+}
+
+// appendSessionMeta appends the v2 harness-metadata block: a flags byte
+// followed by only the fields whose bits are set.
+func appendSessionMeta(buf []byte, sf *SessionFrame) []byte {
+	var flags byte
+	if sf.HasParent {
+		flags |= metaHasParent
+	}
+	if sf.TeamName != "" {
+		flags |= metaHasTeam
+	}
+	if sf.WorkflowName != "" {
+		flags |= metaHasWorkflow
+	}
+	if sf.AgentType != "" {
+		flags |= metaHasAgentType
+	}
+	if sf.Description != "" {
+		flags |= metaHasDesc
+	}
+	if sf.SpawnDepth != 0 {
+		flags |= metaHasSpawnDepth
+	}
+	buf = append(buf, flags)
+
+	if sf.HasParent {
+		buf = appendUvarint(buf, sf.ParentRef)
+	}
+	for _, s := range []string{sf.TeamName, sf.WorkflowName, sf.AgentType, sf.Description} {
+		if s != "" {
+			buf = appendUvarint(buf, uint64(len(s)))
+			buf = append(buf, []byte(s)...)
+		}
+	}
+	if sf.SpawnDepth != 0 {
+		buf = appendUvarint(buf, uint64(sf.SpawnDepth))
+	}
+	return buf
+}
+
+func dictFlagsByte() byte {
+	if len(presetDict) > 0 {
+		return 0x01
+	}
+	return 0x00
+}
+
+// appendSessionBody appends the session core meta, turn records, and
+// tool-call records — the v1 payload layout (v2 inserts a metadata block
+// between core and records).
+func appendSessionBody(buf []byte, sf *SessionFrame) []byte {
+	buf = appendSessionCore(buf, sf)
+	return appendSessionRecords(buf, sf)
+}
+
+// appendSessionCore appends the session refs, capture time, and actor —
+// identical between payload v1 and v2.
+func appendSessionCore(buf []byte, sf *SessionFrame) []byte {
 	buf = appendUvarint(buf, sf.SessionRef)
 	buf = binary.LittleEndian.AppendUint32(buf, uint32(sf.CapturedAt.Unix()))
 	buf = appendUvarint(buf, sf.EmailRef)
@@ -228,7 +355,12 @@ func encodeSessionPayload(sf *SessionFrame) []byte {
 	if sf.ActorType == ActorAgent {
 		buf = appendUvarint(buf, sf.AgentIDRef)
 	}
+	return buf
+}
 
+// appendSessionRecords appends the turn and tool-call records — identical
+// between payload v1 and v2.
+func appendSessionRecords(buf []byte, sf *SessionFrame) []byte {
 	// Turns.
 	for _, t := range sf.Turns {
 		buf = append(buf, t.Role)
@@ -264,11 +396,30 @@ func encodeSessionPayload(sf *SessionFrame) []byte {
 func encodeCheckpointPayload(cf *CheckpointFrame) []byte {
 	buf := make([]byte, 0, 128)
 
-	// Header: magic + payload_version + n_files
+	// Header: magic + payload_version + n_files (u8)
 	buf = append(buf, checkpointMagic...)
-	buf = append(buf, payloadVersion)
+	buf = append(buf, payloadVersionV1)
 	buf = append(buf, byte(len(cf.Files)))
 
+	return appendCheckpointBody(buf, cf)
+}
+
+// encodeCheckpointPayloadV2 is the v1 layout with a varint file count instead
+// of a single byte.
+func encodeCheckpointPayloadV2(cf *CheckpointFrame) []byte {
+	buf := make([]byte, 0, 128)
+
+	// Header: magic + payload_version + n_files (varint)
+	buf = append(buf, checkpointMagic...)
+	buf = append(buf, payloadVersionV2)
+	buf = appendUvarint(buf, uint64(len(cf.Files)))
+
+	return appendCheckpointBody(buf, cf)
+}
+
+// appendCheckpointBody appends the checkpoint meta, session refs, and
+// file-touched records — identical between payload v1 and v2.
+func appendCheckpointBody(buf []byte, cf *CheckpointFrame) []byte {
 	// Checkpoint ULID dict ref (before GitSHA).
 	buf = appendUvarint(buf, cf.CheckpointRef)
 
@@ -306,7 +457,7 @@ func encodeMetaPayload(mf *MetaFrame) []byte {
 
 	// Header: magic + payload_version
 	buf = append(buf, metaMagic...)
-	buf = append(buf, payloadVersion)
+	buf = append(buf, payloadVersionV1)
 
 	// Meta fields.
 	buf = append(buf, mf.FormatVersion)
@@ -384,70 +535,180 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 	if string(data[0:4]) != string(sessionMagic) {
 		return nil, fmt.Errorf("session payload bad magic: %x", data[0:4])
 	}
-	// data[4] = payload_version
 	// data[5] = dict_flags
-	nTurns := int(data[6])
-	nTools := int(data[7])
 
-	pos := 8
+	switch data[4] {
+	case payloadVersionV1:
+		return parseSessionBody(data, 8, int(data[6]), int(data[7]))
+	case payloadVersionV2:
+		pos := 6
+		nTurns, n, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: n_turns: %w", err)
+		}
+		pos += n
+		nTools, n, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("session payload: n_tools: %w", err)
+		}
+		pos += n
+		// Each turn and tool call costs multiple bytes on the wire, so counts
+		// exceeding the remaining bytes are definitely corrupt — reject them
+		// (individually, so their sum cannot overflow) before trusting a
+		// corruption-controlled count for slice capacities.
+		remaining := uint64(len(data) - pos)
+		if nTurns > remaining || nTools > remaining {
+			return nil, fmt.Errorf("session payload: counts (%d turns, %d tools) exceed remaining data", nTurns, nTools)
+		}
+		sf, pos, err := parseSessionCore(data, pos)
+		if err != nil {
+			return nil, err
+		}
+		pos, err = parseSessionMeta(sf, data, pos)
+		if err != nil {
+			return nil, err
+		}
+		return sf, parseSessionRecords(sf, data, pos, int(nTurns), int(nTools))
+	default:
+		return nil, fmt.Errorf("session payload: unsupported version %d", data[4])
+	}
+}
+
+// parseSessionBody parses the session core meta, turn records, and tool-call
+// records starting at pos — the v1 payload layout (v2 inserts a metadata
+// block between core and records).
+func parseSessionBody(data []byte, pos, nTurns, nTools int) (*SessionFrame, error) {
+	sf, pos, err := parseSessionCore(data, pos)
+	if err != nil {
+		return nil, err
+	}
+	return sf, parseSessionRecords(sf, data, pos, nTurns, nTools)
+}
+
+// parseSessionCore parses the session refs, capture time, and actor —
+// identical between payload v1 and v2. Returns the frame and the position
+// after the core fields.
+func parseSessionCore(data []byte, pos int) (*SessionFrame, int, error) {
 	sf := &SessionFrame{}
 
 	var n int
 	var err error
 	sf.SessionRef, n, err = readUvarint(data[pos:])
 	if err != nil {
-		return nil, fmt.Errorf("session payload: session_ref: %w", err)
+		return nil, 0, fmt.Errorf("session payload: session_ref: %w", err)
 	}
 	pos += n
 	if pos+4 > len(data) {
-		return nil, fmt.Errorf("session payload truncated at captured_at")
+		return nil, 0, fmt.Errorf("session payload truncated at captured_at")
 	}
 	sf.CapturedAt = time.Unix(int64(binary.LittleEndian.Uint32(data[pos:pos+4])), 0).UTC()
 	pos += 4
 	sf.EmailRef, n, err = readUvarint(data[pos:])
 	if err != nil {
-		return nil, fmt.Errorf("session payload: email_ref: %w", err)
+		return nil, 0, fmt.Errorf("session payload: email_ref: %w", err)
 	}
 	pos += n
 	if pos >= len(data) {
-		return nil, fmt.Errorf("session payload truncated at actor_type")
+		return nil, 0, fmt.Errorf("session payload truncated at actor_type")
 	}
 	sf.ActorType = data[pos]
 	pos++
 	if sf.ActorType == ActorAgent {
 		sf.AgentIDRef, n, err = readUvarint(data[pos:])
 		if err != nil {
-			return nil, fmt.Errorf("session payload: agent_id_ref: %w", err)
+			return nil, 0, fmt.Errorf("session payload: agent_id_ref: %w", err)
 		}
 		pos += n
 	}
+	return sf, pos, nil
+}
+
+// parseSessionMeta parses the v2 harness-metadata block (flags byte plus the
+// fields whose bits are set) into sf. Returns the position after the block.
+func parseSessionMeta(sf *SessionFrame, data []byte, pos int) (int, error) {
+	if pos >= len(data) {
+		return 0, fmt.Errorf("session payload truncated at meta_flags")
+	}
+	flags := data[pos]
+	pos++
+
+	var n int
+	var err error
+	if flags&metaHasParent != 0 {
+		sf.ParentRef, n, err = readUvarint(data[pos:])
+		if err != nil {
+			return 0, fmt.Errorf("session payload: parent_ref: %w", err)
+		}
+		sf.HasParent = true
+		pos += n
+	}
+	for _, field := range []struct {
+		bit  byte
+		name string
+		dst  *string
+	}{
+		{metaHasTeam, "team_name", &sf.TeamName},
+		{metaHasWorkflow, "workflow_name", &sf.WorkflowName},
+		{metaHasAgentType, "agent_type", &sf.AgentType},
+		{metaHasDesc, "description", &sf.Description},
+	} {
+		if flags&field.bit == 0 {
+			continue
+		}
+		l, n, err := readUvarint(data[pos:])
+		if err != nil {
+			return 0, fmt.Errorf("session payload: %s len: %w", field.name, err)
+		}
+		pos += n
+		if l > uint64(len(data)-pos) {
+			return 0, fmt.Errorf("session payload truncated at %s", field.name)
+		}
+		*field.dst = string(data[pos : pos+int(l)])
+		pos += int(l)
+	}
+	if flags&metaHasSpawnDepth != 0 {
+		depth, n, err := readUvarint(data[pos:])
+		if err != nil {
+			return 0, fmt.Errorf("session payload: spawn_depth: %w", err)
+		}
+		sf.SpawnDepth = int(depth)
+		pos += n
+	}
+	return pos, nil
+}
+
+// parseSessionRecords parses the turn and tool-call records into sf —
+// identical between payload v1 and v2.
+func parseSessionRecords(sf *SessionFrame, data []byte, pos, nTurns, nTools int) error {
+	var n int
+	var err error
 
 	// Turns.
 	sf.Turns = make([]TurnRecord, 0, nTurns)
 	for i := 0; i < nTurns; i++ {
 		if pos >= len(data) {
-			return nil, fmt.Errorf("session payload truncated at turn %d", i)
+			return fmt.Errorf("session payload truncated at turn %d", i)
 		}
 		var t TurnRecord
 		t.Role = data[pos]
 		pos++
 		t.TsDelta, n, err = readUvarint(data[pos:])
 		if err != nil {
-			return nil, fmt.Errorf("session payload: turn %d ts_delta: %w", i, err)
+			return fmt.Errorf("session payload: turn %d ts_delta: %w", i, err)
 		}
 		pos += n
 		t.BranchRef, n, err = readUvarint(data[pos:])
 		if err != nil {
-			return nil, fmt.Errorf("session payload: turn %d branch_ref: %w", i, err)
+			return fmt.Errorf("session payload: turn %d branch_ref: %w", i, err)
 		}
 		pos += n
 		textLen, n2, err := readUvarint(data[pos:])
 		if err != nil {
-			return nil, fmt.Errorf("session payload: turn %d text_len: %w", i, err)
+			return fmt.Errorf("session payload: turn %d text_len: %w", i, err)
 		}
 		pos += n2
 		if textLen > uint64(len(data)-pos) {
-			return nil, fmt.Errorf("session payload truncated at turn %d text", i)
+			return fmt.Errorf("session payload truncated at turn %d text", i)
 		}
 		t.Text = string(data[pos : pos+int(textLen)])
 		pos += int(textLen)
@@ -458,7 +719,7 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 	sf.ToolCalls = make([]ToolCallRecord, 0, nTools)
 	for i := 0; i < nTools; i++ {
 		if pos+2 > len(data) {
-			return nil, fmt.Errorf("session payload truncated at tool %d", i)
+			return fmt.Errorf("session payload truncated at tool %d", i)
 		}
 		var tc ToolCallRecord
 		tc.Tool = data[pos]
@@ -469,17 +730,17 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 		case PathDictRef:
 			tc.PathRef, n, err = readUvarint(data[pos:])
 			if err != nil {
-				return nil, fmt.Errorf("session payload: tool %d path_ref: %w", i, err)
+				return fmt.Errorf("session payload: tool %d path_ref: %w", i, err)
 			}
 			pos += n
 		case PathInline:
 			pathLen, n2, err := readUvarint(data[pos:])
 			if err != nil {
-				return nil, fmt.Errorf("session payload: tool %d path_len: %w", i, err)
+				return fmt.Errorf("session payload: tool %d path_len: %w", i, err)
 			}
 			pos += n2
 			if pathLen > uint64(len(data)-pos) {
-				return nil, fmt.Errorf("session payload truncated at tool %d inline path", i)
+				return fmt.Errorf("session payload truncated at tool %d inline path", i)
 			}
 			tc.PathInline = string(data[pos : pos+int(pathLen)])
 			pos += int(pathLen)
@@ -488,12 +749,12 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 		}
 		cmdLen, n2, err := readUvarint(data[pos:])
 		if err != nil {
-			return nil, fmt.Errorf("session payload: tool %d cmd_len: %w", i, err)
+			return fmt.Errorf("session payload: tool %d cmd_len: %w", i, err)
 		}
 		pos += n2
 		if cmdLen > 0 {
 			if cmdLen > uint64(len(data)-pos) {
-				return nil, fmt.Errorf("session payload truncated at tool %d cmd", i)
+				return fmt.Errorf("session payload truncated at tool %d cmd", i)
 			}
 			tc.CmdPrefix = string(data[pos : pos+int(cmdLen)])
 			pos += int(cmdLen)
@@ -501,7 +762,7 @@ func parseSessionPayload(data []byte) (*SessionFrame, error) {
 		sf.ToolCalls = append(sf.ToolCalls, tc)
 	}
 
-	return sf, nil
+	return nil
 }
 
 func parseCheckpointPayload(data []byte) (*CheckpointFrame, error) {
@@ -511,10 +772,31 @@ func parseCheckpointPayload(data []byte) (*CheckpointFrame, error) {
 	if string(data[0:4]) != string(checkpointMagic) {
 		return nil, fmt.Errorf("checkpoint payload bad magic: %x", data[0:4])
 	}
-	// data[4] = payload_version
-	nFiles := int(data[5])
 
-	pos := 6
+	switch data[4] {
+	case payloadVersionV1:
+		return parseCheckpointBody(data, 6, int(data[5]))
+	case payloadVersionV2:
+		pos := 5
+		nFiles, n, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("checkpoint payload: n_files: %w", err)
+		}
+		pos += n
+		// Each file record costs at least 2 bytes on the wire — reject a
+		// corrupt count before trusting it for a slice capacity.
+		if nFiles > uint64(len(data)-pos) {
+			return nil, fmt.Errorf("checkpoint payload: n_files %d exceeds remaining data", nFiles)
+		}
+		return parseCheckpointBody(data, pos, int(nFiles))
+	default:
+		return nil, fmt.Errorf("checkpoint payload: unsupported version %d", data[4])
+	}
+}
+
+// parseCheckpointBody parses the checkpoint meta, session refs, and
+// file-touched records starting at pos — identical between payload v1 and v2.
+func parseCheckpointBody(data []byte, pos, nFiles int) (*CheckpointFrame, error) {
 	cf := &CheckpointFrame{}
 
 	// Checkpoint ULID dict ref.
@@ -581,8 +863,8 @@ func parseCheckpointPayload(data []byte) (*CheckpointFrame, error) {
 		cf.SessionRefs = append(cf.SessionRefs, ref)
 	}
 
-	// Files touched. nFiles comes from a single byte (data[5]), so it is
-	// already bounded to [0,255] — no additional cap needed before allocating.
+	// Files touched. nFiles is bounded by the caller: [0,255] for v1 (single
+	// byte), checked against the remaining data for v2.
 	cf.Files = make([]FileTouchedRecord, 0, nFiles)
 	for i := 0; i < nFiles; i++ {
 		var f FileTouchedRecord

@@ -20,8 +20,19 @@ const (
 	FrameSession    FrameType = 0x01
 	FrameCheckpoint FrameType = 0x02
 	FrameMeta       FrameType = 0x03
-	FrameTombstone  FrameType = 0xFF
+	// V2 frames carry counts as varints instead of single bytes (see
+	// payloadVersionV2 in frame.go). They use distinct envelope types so
+	// binaries that predate them skip the frames they can't parse instead of
+	// misreading them — unknown types fall through every decode switch.
+	FrameSessionV2    FrameType = 0x04
+	FrameCheckpointV2 FrameType = 0x05
+	FrameTombstone    FrameType = 0xFF
 )
+
+// maxFrameCompressedLen is the largest compressed payload the 3-byte
+// envelope length field can describe. The encoder refuses to emit anything
+// larger rather than silently truncating the length.
+const maxFrameCompressedLen = 1<<24 - 1
 
 // FrameSlice describes a frame's location in the body.
 type FrameSlice struct {
@@ -46,7 +57,9 @@ func AppendFrame(body, frame []byte) []byte {
 	return append(body, frame...)
 }
 
-// WriteEnvelope writes a 6-byte frame envelope.
+// WriteEnvelope writes a 6-byte frame envelope. The uncompressed_len field is
+// advisory (decoding never relies on it — zstd frames carry their own size);
+// it saturates at 0xFFFF for payloads larger than the u16 can describe.
 func WriteEnvelope(frameType FrameType, compressedLen, uncompressedLen int) []byte {
 	env := make([]byte, frameEnvSize)
 	env[0] = byte(frameType)
@@ -55,6 +68,9 @@ func WriteEnvelope(frameType FrameType, compressedLen, uncompressedLen int) []by
 	env[2] = byte(compressedLen >> 8)
 	env[3] = byte(compressedLen >> 16)
 	// uncompressed_len as u16 LE.
+	if uncompressedLen > 0xFFFF {
+		uncompressedLen = 0xFFFF
+	}
 	binary.LittleEndian.PutUint16(env[4:6], uint16(uncompressedLen))
 	return env
 }

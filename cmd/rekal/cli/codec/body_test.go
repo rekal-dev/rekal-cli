@@ -37,7 +37,7 @@ func TestBody_AppendAndScan(t *testing.T) {
 			{Role: RoleHuman, TsDelta: 0, BranchRef: 0, Text: "hello"},
 		},
 	}
-	frame1 := enc.EncodeSessionFrame(sf)
+	frame1 := mustEncodeSession(t, enc, sf)
 	body = AppendFrame(body, frame1)
 
 	// Append a checkpoint frame.
@@ -52,7 +52,7 @@ func TestBody_AppendAndScan(t *testing.T) {
 			{PathRef: 0, ChangeType: ChangeModified},
 		},
 	}
-	frame2 := enc.EncodeCheckpointFrame(cf)
+	frame2 := mustEncodeCheckpoint(t, enc, cf)
 	body = AppendFrame(body, frame2)
 
 	// Append a meta frame.
@@ -66,7 +66,7 @@ func TestBody_AppendAndScan(t *testing.T) {
 		NFrames:       3,
 		NDictEntries:  5,
 	}
-	frame3 := enc.EncodeMetaFrame(mf)
+	frame3 := mustEncodeMeta(t, enc, mf)
 	body = AppendFrame(body, frame3)
 
 	// Scan.
@@ -134,7 +134,7 @@ func TestBody_IncrementalAppend(t *testing.T) {
 	originalLen := len(body)
 
 	// First checkpoint: 1 session + 1 checkpoint + 1 meta = 3 frames.
-	sf1 := enc.EncodeSessionFrame(&SessionFrame{
+	sf1 := mustEncodeSession(t, enc, &SessionFrame{
 		SessionRef: 0,
 		CapturedAt: time.Date(2026, 2, 25, 10, 0, 0, 0, time.UTC),
 		EmailRef:   0,
@@ -142,12 +142,12 @@ func TestBody_IncrementalAppend(t *testing.T) {
 		Turns:      []TurnRecord{{Role: RoleHuman, TsDelta: 0, BranchRef: 0, Text: "first session"}},
 	})
 	body = AppendFrame(body, sf1)
-	body = AppendFrame(body, enc.EncodeCheckpointFrame(&CheckpointFrame{
+	body = AppendFrame(body, mustEncodeCheckpoint(t, enc, &CheckpointFrame{
 		GitSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", BranchRef: 0, EmailRef: 0,
 		Timestamp: time.Date(2026, 2, 25, 10, 0, 0, 0, time.UTC), ActorType: ActorHuman,
 		SessionRefs: []uint64{0},
 	}))
-	body = AppendFrame(body, enc.EncodeMetaFrame(&MetaFrame{
+	body = AppendFrame(body, mustEncodeMeta(t, enc, &MetaFrame{
 		FormatVersion: 1, EmailRef: 0,
 		CheckpointSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Timestamp:     time.Date(2026, 2, 25, 10, 0, 0, 0, time.UTC),
@@ -161,7 +161,7 @@ func TestBody_IncrementalAppend(t *testing.T) {
 	prefixSnapshot := make([]byte, afterFirst)
 	copy(prefixSnapshot, body)
 
-	sf2 := enc.EncodeSessionFrame(&SessionFrame{
+	sf2 := mustEncodeSession(t, enc, &SessionFrame{
 		SessionRef: 1,
 		CapturedAt: time.Date(2026, 2, 25, 12, 0, 0, 0, time.UTC),
 		EmailRef:   0,
@@ -169,12 +169,12 @@ func TestBody_IncrementalAppend(t *testing.T) {
 		Turns:      []TurnRecord{{Role: RoleHuman, TsDelta: 0, BranchRef: 0, Text: "second session"}},
 	})
 	body = AppendFrame(body, sf2)
-	body = AppendFrame(body, enc.EncodeCheckpointFrame(&CheckpointFrame{
+	body = AppendFrame(body, mustEncodeCheckpoint(t, enc, &CheckpointFrame{
 		GitSHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", BranchRef: 0, EmailRef: 0,
 		Timestamp: time.Date(2026, 2, 25, 12, 0, 0, 0, time.UTC), ActorType: ActorHuman,
 		SessionRefs: []uint64{1},
 	}))
-	body = AppendFrame(body, enc.EncodeMetaFrame(&MetaFrame{
+	body = AppendFrame(body, mustEncodeMeta(t, enc, &MetaFrame{
 		FormatVersion: 1, EmailRef: 0,
 		CheckpointSHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		Timestamp:     time.Date(2026, 2, 25, 12, 0, 0, 0, time.UTC),
@@ -257,7 +257,7 @@ func BenchmarkBodyAppendAndScan(b *testing.B) {
 			{Role: RoleAssistant, TsDelta: 30, BranchRef: 0, Text: "Done."},
 		},
 	}
-	frame := enc.EncodeSessionFrame(sf)
+	frame := mustEncodeSession(b, enc, sf)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

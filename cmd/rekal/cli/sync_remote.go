@@ -12,6 +12,24 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 )
 
+// sqlNullIfEmpty returns nil for "" so optional VARCHAR columns store NULL
+// instead of an empty string (mirrors db.nullIfEmpty for inserts made here).
+func sqlNullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// sqlNullIfZero returns nil for 0 so optional INTEGER columns store NULL
+// instead of a misleading zero.
+func sqlNullIfZero(n int) interface{} {
+	if n == 0 {
+		return nil
+	}
+	return n
+}
+
 // fetchRemoteRekalRefs fetches all rekal/* branches from origin.
 // Non-fatal: returns nil if no remote or fetch fails.
 func fetchRemoteRekalRefs(gitRoot string) error {
@@ -101,7 +119,7 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 		compressed := codec.ExtractFramePayload(bodyData, fs)
 
 		switch fs.Type {
-		case codec.FrameSession:
+		case codec.FrameSession, codec.FrameSessionV2:
 			sf, err := dec.DecodeSessionFrame(compressed)
 			if err != nil {
 				continue
@@ -114,8 +132,10 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 
 			email, _ := dict.Get(codec.NSEmails, sf.EmailRef)
 			actorType := "human"
+			agentID := ""
 			if sf.ActorType == codec.ActorAgent {
 				actorType = "agent"
+				agentID, _ = dict.Get(codec.NSEmails, sf.AgentIDRef)
 			}
 
 			branch := ""
@@ -143,21 +163,32 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 				}
 			}
 
+			// Harness metadata is only present on v2 frames; for v1 frames
+			// every field is zero and stored as NULL.
+			parentID := ""
+			if sf.HasParent {
+				parentID, _ = dict.Get(codec.NSSessions, sf.ParentRef)
+			}
+
 			// Insert session_facets.
 			if _, err := indexDB.Exec(
 				`INSERT INTO session_facets (
 					session_id, user_email, git_branch, actor_type, agent_id,
-					captured_at, turn_count, tool_call_count, file_count
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-				sessionID, email, branch, actorType, "",
+					captured_at, turn_count, tool_call_count, file_count,
+					parent_session_id, team_name, workflow_name,
+					agent_type, description, spawn_depth
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+				sessionID, email, branch, actorType, agentID,
 				capturedAt, len(sf.Turns), 0, 0,
+				sqlNullIfEmpty(parentID), sqlNullIfEmpty(sf.TeamName), sqlNullIfEmpty(sf.WorkflowName),
+				sqlNullIfEmpty(sf.AgentType), sqlNullIfEmpty(sf.Description), sqlNullIfZero(sf.SpawnDepth),
 			); err != nil {
 				return imported, fmt.Errorf("insert session_facet: %w", err)
 			}
 
 			imported++
 
-		case codec.FrameCheckpoint:
+		case codec.FrameCheckpoint, codec.FrameCheckpointV2:
 			cf, err := dec.DecodeCheckpointFrame(compressed)
 			if err != nil {
 				continue

@@ -251,12 +251,23 @@ type CheckpointRow struct {
 
 // QueryUnexportedCheckpoints returns checkpoints where exported = FALSE, ordered by ts.
 func QueryUnexportedCheckpoints(d *sql.DB) ([]CheckpointRow, error) {
+	return queryCheckpoints(d, "WHERE exported = FALSE")
+}
+
+// QueryAllCheckpoints returns every checkpoint ordered by ts, regardless of
+// exported state. Used by `rekal push --re-export` to regenerate the orphan
+// branch's wire data from scratch.
+func QueryAllCheckpoints(d *sql.DB) ([]CheckpointRow, error) {
+	return queryCheckpoints(d, "")
+}
+
+func queryCheckpoints(d *sql.DB, where string) ([]CheckpointRow, error) {
 	rows, err := d.Query(
 		`SELECT id, git_sha, git_branch, user_email, ts, actor_type, COALESCE(agent_id, '')
-		 FROM checkpoints WHERE exported = FALSE ORDER BY ts`,
+		 FROM checkpoints ` + where + ` ORDER BY ts`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query unexported checkpoints: %w", err)
+		return nil, fmt.Errorf("query checkpoints: %w", err)
 	}
 	defer rows.Close() //nolint:errcheck
 
@@ -423,7 +434,7 @@ func scanIDs(rows *sql.Rows) ([]string, error) {
 type TurnPageOptions struct {
 	Offset int
 	Limit  int
-	Role   string // "" = all, "human", "assistant"
+	Role   string // "" = all; exact match otherwise: "human", "assistant", "human_steering"
 }
 
 // QueryTurnsPage returns a page of turns for a session with optional role filtering.

@@ -411,7 +411,9 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 func QuerySessionContentByIDs(d *sql.DB, sessionIDs []string) (map[string]string, error) {
 	result := make(map[string]string, len(sessionIDs))
 	for _, sid := range sessionIDs {
-		var content string
+		// string_agg over zero rows returns NULL — a session can have tool
+		// calls but no turns, and that must not fail the whole batch.
+		var content sql.NullString
 		err := d.QueryRow(`
 			SELECT string_agg(content, ' ' ORDER BY turn_index)
 			FROM turns_ft WHERE session_id = $1
@@ -419,8 +421,8 @@ func QuerySessionContentByIDs(d *sql.DB, sessionIDs []string) (map[string]string
 		if err != nil && err != sql.ErrNoRows {
 			return nil, fmt.Errorf("query session content for %s: %w", sid, err)
 		}
-		if content != "" {
-			result[sid] = content
+		if content.Valid && content.String != "" {
+			result[sid] = content.String
 		}
 	}
 	return result, nil

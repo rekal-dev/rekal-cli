@@ -17,9 +17,19 @@ const (
 )
 
 const (
-	dictMagic   = "RKDICT"
-	dictVersion = 0x01
-	dictHdrSize = 12 // 6 magic + 1 version + 1 reserved + 2 n_sessions + 2 n_branches
+	dictMagic = "RKDICT"
+	// dictVersionV1 packs counts into fixed header fields: n_emails in the
+	// single reserved byte (max 255 — and agent IDs are interned in the email
+	// namespace, so heavy subagent use crosses that fast), n_sessions and
+	// n_branches as u16, and 1-byte length prefixes on branch/email entries.
+	// dictVersionV2 stores all counts and entry lengths as varints. Encode
+	// writes v1 while everything fits (binaries that predate v2 keep reading
+	// it) and v2 only once a limit is crossed; v2 makes old readers fail
+	// loudly ("unsupported version") instead of misparsing.
+	dictVersionV1 = 0x01
+	dictVersionV2 = 0x02
+	dictHdrSize   = 12 // v1: 6 magic + 1 version + 1 reserved + 2 n_sessions + 2 n_branches
+	dictHdrSizeV2 = 8  // v2: 6 magic + 1 version + 1 reserved; varint counts follow
 )
 
 // Dict is the in-memory representation of dict.bin.
@@ -103,8 +113,41 @@ func (d *Dict) nsRef(ns Namespace) (*[]string, *map[string]uint64) {
 	}
 }
 
-// Encode serializes the dictionary to the dict.bin binary format.
+// Encode serializes the dictionary to the dict.bin binary format. It writes
+// v1 while every count and entry length fits v1's fixed-width fields, and v2
+// once any limit is crossed (see the dictVersion constants).
 func (d *Dict) Encode() []byte {
+	if d.needsV2() {
+		return d.encodeV2()
+	}
+	return d.encodeV1()
+}
+
+// needsV2 reports whether any namespace has outgrown v1's fixed-width count
+// or length fields.
+func (d *Dict) needsV2() bool {
+	if len(d.Emails) > 0xFF || len(d.Sessions) > 0xFFFF || len(d.Branches) > 0xFFFF {
+		return true
+	}
+	for _, s := range d.Branches {
+		if len(s) > 0xFF {
+			return true
+		}
+	}
+	for _, s := range d.Emails {
+		if len(s) > 0xFF {
+			return true
+		}
+	}
+	for _, s := range d.Paths {
+		if len(s) > 0xFFFF {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *Dict) encodeV1() []byte {
 	// Calculate size.
 	size := dictHdrSize
 	size += len(d.Sessions) * 26 // fixed-width ULIDs
@@ -121,16 +164,7 @@ func (d *Dict) Encode() []byte {
 	buf := make([]byte, dictHdrSize, size)
 	d.encodeHeader(buf)
 
-	// Session entries: fixed 26-byte ULID strings.
-	for _, s := range d.Sessions {
-		if len(s) != 26 {
-			padded := make([]byte, 26)
-			copy(padded, s)
-			buf = append(buf, padded...)
-		} else {
-			buf = append(buf, []byte(s)...)
-		}
-	}
+	buf = appendSessionEntries(buf, d.Sessions)
 
 	// Branch entries: 1-byte length prefix + UTF-8.
 	for _, s := range d.Branches {
@@ -153,9 +187,46 @@ func (d *Dict) Encode() []byte {
 	return buf
 }
 
+// encodeV2 writes the v2 layout: 8-byte header (magic + version + reserved),
+// varint counts for all four namespaces, fixed 26-byte session entries, then
+// varint-length-prefixed branch/email/path entries.
+func (d *Dict) encodeV2() []byte {
+	buf := make([]byte, 0, dictHdrSizeV2+len(d.Sessions)*26)
+	buf = append(buf, dictMagic...)
+	buf = append(buf, dictVersionV2, 0x00)
+	buf = appendUvarint(buf, uint64(len(d.Sessions)))
+	buf = appendUvarint(buf, uint64(len(d.Branches)))
+	buf = appendUvarint(buf, uint64(len(d.Emails)))
+	buf = appendUvarint(buf, uint64(len(d.Paths)))
+
+	buf = appendSessionEntries(buf, d.Sessions)
+	for _, ns := range [][]string{d.Branches, d.Emails, d.Paths} {
+		for _, s := range ns {
+			buf = appendUvarint(buf, uint64(len(s)))
+			buf = append(buf, []byte(s)...)
+		}
+	}
+	return buf
+}
+
+// appendSessionEntries appends fixed 26-byte ULID strings, zero-padding any
+// entry that is not exactly 26 bytes.
+func appendSessionEntries(buf []byte, sessions []string) []byte {
+	for _, s := range sessions {
+		if len(s) != 26 {
+			padded := make([]byte, 26)
+			copy(padded, s)
+			buf = append(buf, padded...)
+		} else {
+			buf = append(buf, []byte(s)...)
+		}
+	}
+	return buf
+}
+
 // LoadDict parses a dict.bin binary blob into a Dict.
 func LoadDict(data []byte) (*Dict, error) {
-	if len(data) < dictHdrSize {
+	if len(data) < dictHdrSizeV2 {
 		return nil, errors.New("dict: data too short for header")
 	}
 
@@ -163,11 +234,21 @@ func LoadDict(data []byte) (*Dict, error) {
 	if magic != dictMagic {
 		return nil, fmt.Errorf("dict: bad magic %q, want %q", magic, dictMagic)
 	}
-	version := data[6]
-	if version != dictVersion {
-		return nil, fmt.Errorf("dict: unsupported version %d", version)
+	switch data[6] {
+	case dictVersionV1:
+		return loadDictV1(data)
+	case dictVersionV2:
+		return loadDictV2(data)
+	default:
+		return nil, fmt.Errorf("dict: unsupported version %d", data[6])
 	}
-	// data[7] = reserved
+}
+
+func loadDictV1(data []byte) (*Dict, error) {
+	if len(data) < dictHdrSize {
+		return nil, errors.New("dict: data too short for header")
+	}
+	// data[7] = reserved (n_emails, read below)
 
 	nSessions := int(binary.LittleEndian.Uint16(data[8:10]))
 	nBranches := int(binary.LittleEndian.Uint16(data[10:12]))
@@ -247,10 +328,72 @@ func LoadDict(data []byte) (*Dict, error) {
 	return d, nil
 }
 
-// encodeHeader writes the 12-byte header.
+func loadDictV2(data []byte) (*Dict, error) {
+	pos := dictHdrSizeV2
+
+	counts := make([]int, 4) // sessions, branches, emails, paths
+	for i := range counts {
+		v, n, err := readUvarint(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("dict: count %d: %w", i, err)
+		}
+		pos += n
+		// Every entry costs at least 1 byte on the wire — reject counts that
+		// exceed the remaining bytes before trusting them for allocations.
+		if v > uint64(len(data)-pos) {
+			return nil, fmt.Errorf("dict: count %d (%d) exceeds remaining data", i, v)
+		}
+		counts[i] = int(v)
+	}
+	nSessions, nBranches, nEmails, nPaths := counts[0], counts[1], counts[2], counts[3]
+
+	d := NewDict()
+
+	// Session entries: fixed 26 bytes each.
+	for i := 0; i < nSessions; i++ {
+		if pos+26 > len(data) {
+			return nil, fmt.Errorf("dict: truncated at session entry %d", i)
+		}
+		s := string(data[pos : pos+26])
+		d.Sessions = append(d.Sessions, s)
+		d.sessIdx[s] = uint64(i)
+		pos += 26
+	}
+
+	// Branch, email, and path entries: varint length prefix + UTF-8.
+	for _, ns := range []struct {
+		name    string
+		count   int
+		entries *[]string
+		idx     *map[string]uint64
+	}{
+		{"branch", nBranches, &d.Branches, &d.branchIdx},
+		{"email", nEmails, &d.Emails, &d.emailIdx},
+		{"path", nPaths, &d.Paths, &d.pathIdx},
+	} {
+		for i := 0; i < ns.count; i++ {
+			l, n, err := readUvarint(data[pos:])
+			if err != nil {
+				return nil, fmt.Errorf("dict: truncated at %s entry %d", ns.name, i)
+			}
+			pos += n
+			if l > uint64(len(data)-pos) {
+				return nil, fmt.Errorf("dict: truncated at %s entry %d data", ns.name, i)
+			}
+			s := string(data[pos : pos+int(l)])
+			*ns.entries = append(*ns.entries, s)
+			(*ns.idx)[s] = uint64(i)
+			pos += int(l)
+		}
+	}
+
+	return d, nil
+}
+
+// encodeHeader writes the 12-byte v1 header.
 func (d *Dict) encodeHeader(buf []byte) {
 	copy(buf[0:6], dictMagic)
-	buf[6] = dictVersion
+	buf[6] = dictVersionV1
 	buf[7] = byte(len(d.Emails)) // reserved byte = n_emails
 	binary.LittleEndian.PutUint16(buf[8:10], uint16(len(d.Sessions)))
 	binary.LittleEndian.PutUint16(buf[10:12], uint16(len(d.Branches)))

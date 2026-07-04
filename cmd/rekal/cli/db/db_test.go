@@ -131,3 +131,42 @@ func TestWrapOpenError_OtherErrorsPassThrough(t *testing.T) {
 		t.Errorf("wrapOpenError misclassified a non-lock error as a lock conflict: %q", got.Error())
 	}
 }
+
+// TestQuerySessionContentByIDs_ZeroTurnSession: a session with tool calls but
+// no turns aggregates to NULL — the batch must skip it, not error out (it
+// used to fail the whole incremental index update).
+func TestQuerySessionContentByIDs_ZeroTurnSession(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rekalDir := filepath.Join(dir, ".rekal")
+	if err := os.MkdirAll(rekalDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer d.Close()
+	if err := InitIndexSchema(d); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+
+	if _, err := d.Exec(
+		`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
+		 VALUES ('t1', 'with-turns', 0, 'human', 'hello world', '')`,
+	); err != nil {
+		t.Fatalf("seed turn: %v", err)
+	}
+
+	got, err := QuerySessionContentByIDs(d, []string{"with-turns", "no-turns"})
+	if err != nil {
+		t.Fatalf("QuerySessionContentByIDs: %v", err)
+	}
+	if got["with-turns"] != "hello world" {
+		t.Errorf("with-turns content: %q", got["with-turns"])
+	}
+	if _, ok := got["no-turns"]; ok {
+		t.Error("zero-turn session should be absent from the result")
+	}
+}

@@ -50,7 +50,6 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 |------|-------------|
 | `--file <regex>` | Sessions that touched a file matching the regex (git-root-relative paths) |
 | `--commit <sha>` | Sessions linked to a git commit (SHA prefix match) |
-| `--checkpoint <ref>` | Reserved for future use |
 | `--author <email>` | Sessions by this author email |
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20) |

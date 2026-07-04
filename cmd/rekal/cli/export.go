@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"database/sql"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -54,6 +55,38 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		body = codec.NewBody()
 	}
 
+	return encodeCheckpointFrames(dataDB, body, dict, checkpoints)
+}
+
+// exportAllFrames re-encodes every checkpoint in data.db into a fresh body
+// and dict, ignoring the orphan branch's current contents and exported flags.
+// Used by `rekal push --re-export` to regenerate a branch whose wire data is
+// corrupt (frames written before the v2 count fix) or bloated (stale meta
+// frames) — data.db is the source of truth, the branch is derived.
+func exportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
+	dataDB, err := db.OpenData(gitRoot)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("open data DB: %w", err)
+	}
+	defer dataDB.Close()
+
+	checkpoints, err := db.QueryAllCheckpoints(dataDB)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("query checkpoints: %w", err)
+	}
+	if len(checkpoints) == 0 {
+		return nil, nil, nil, nil
+	}
+
+	return encodeCheckpointFrames(dataDB, codec.NewBody(), codec.NewDict(), checkpoints)
+}
+
+// encodeCheckpointFrames appends session + checkpoint frames for the given
+// checkpoints to body, interning strings into dict, and finishes with a meta
+// frame. Returns the updated body, encoded dict, and the checkpoint IDs
+// encoded — which the caller must only mark exported after the bytes are
+// durably committed (see exportNewFrames' doc comment).
+func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, checkpoints []db.CheckpointRow) ([]byte, []byte, []string, error) {
 	enc, err := codec.NewEncoder()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("create encoder: %w", err)
@@ -108,6 +141,18 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 				EmailRef:   emailRef,
 				ActorType:  actorType,
 				AgentIDRef: agentIDRef,
+
+				// Harness metadata rides the v2 payload; zero values cost
+				// nothing on the wire (single flags byte).
+				TeamName:     sess.TeamName,
+				WorkflowName: sess.WorkflowName,
+				AgentType:    sess.AgentType,
+				Description:  sess.Description,
+				SpawnDepth:   sess.SpawnDepth,
+			}
+			if sess.ParentSessionID != "" {
+				sf.HasParent = true
+				sf.ParentRef = dict.LookupOrAdd(codec.NSSessions, sess.ParentSessionID)
 			}
 
 			// Build turn records with delta timestamps.
@@ -156,7 +201,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 				sf.ToolCalls = append(sf.ToolCalls, tcr)
 			}
 
-			body = codec.AppendFrame(body, enc.EncodeSessionFrame(sf))
+			frame, err := enc.EncodeSessionFrame(sf)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("encode session %s: %w", sid, err)
+			}
+			body = codec.AppendFrame(body, frame)
 			sessionRefs = append(sessionRefs, sessRef)
 		}
 
@@ -205,7 +254,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 			SessionRefs:   sessionRefs,
 			Files:         fileRecords,
 		}
-		body = codec.AppendFrame(body, enc.EncodeCheckpointFrame(cf))
+		frame, err := enc.EncodeCheckpointFrame(cf)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("encode checkpoint %s: %w", cp.ID, err)
+		}
+		body = codec.AppendFrame(body, frame)
 
 		exportedIDs = append(exportedIDs, cp.ID)
 	}
@@ -227,7 +280,11 @@ func exportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		NFrames:       nFrames + 1, // +1 for this meta frame
 		NDictEntries:  uint32(dict.TotalEntries()),
 	}
-	body = codec.AppendFrame(body, enc.EncodeMetaFrame(mf))
+	metaFrame, err := enc.EncodeMetaFrame(mf)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("encode meta frame: %w", err)
+	}
+	body = codec.AppendFrame(body, metaFrame)
 
 	// Checkpoints are NOT marked exported here — see the doc comment above.
 	// The caller marks them only once commitWireFormat has durably committed

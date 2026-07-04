@@ -63,7 +63,7 @@ The 6-byte envelope is always uncompressed. This allows scanning all frame offse
 
 Four namespaces, each append-only:
 
-| Namespace | Entry format | Typical values |
+| Namespace | Entry format (v1) | Typical values |
 |-----------|-------------|----------------|
 | Sessions  | Fixed 26-byte ULID | `01KJ9KSM...` |
 | Branches  | 1-byte length + UTF-8 | `main`, `feature/auth` |
@@ -71,6 +71,14 @@ Four namespaces, each append-only:
 | Paths     | 2-byte length (u16 LE) + UTF-8 | `src/auth/handler.go` |
 
 Frame payloads reference strings by namespace + varint index. For index < 128, this costs 1 byte instead of the full string.
+
+The v1 header packs the counts into fixed-width fields: n_emails in a single
+byte, n_sessions/n_branches as u16 (paths run to EOF). Because agent IDs are
+interned in the email namespace, the 255-email cap is easy to cross. Dict v2
+(version byte 0x02) stores all four counts and all entry lengths as varints.
+The encoder writes v1 while everything fits and switches to v2 only once a
+limit is crossed; readers that predate v2 reject a v2 dict loudly
+("unsupported version") instead of misparsing it.
 
 ### Frame types
 

@@ -1,6 +1,8 @@
 package codec
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -216,5 +218,108 @@ func BenchmarkDictLoad(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = LoadDict(encoded)
+	}
+}
+
+// TestDict_V2Roundtrip_ManyEmails is the regression test for the v1 limit
+// where the email count lived in a single header byte: entry 256+ made the
+// count wrap and every path entry after the emails misparse. Agent IDs are
+// interned in the email namespace, so heavy subagent use crosses 255 fast.
+func TestDict_V2Roundtrip_ManyEmails(t *testing.T) {
+	d := NewDict()
+	for i := 0; i < 300; i++ {
+		d.LookupOrAdd(NSEmails, fmt.Sprintf("agent-%d@example.com", i))
+	}
+	d.LookupOrAdd(NSSessions, "01JNQXAAAAAAAAAAAAAAAAAAAA")
+	d.LookupOrAdd(NSBranches, "main")
+	d.LookupOrAdd(NSPaths, "src/auth/handler.go")
+
+	encoded := d.Encode()
+	if encoded[6] != dictVersionV2 {
+		t.Fatalf("version: got %d, want v2 with 300 emails", encoded[6])
+	}
+
+	loaded, err := LoadDict(encoded)
+	if err != nil {
+		t.Fatalf("LoadDict v2: %v", err)
+	}
+	if len(loaded.Emails) != 300 {
+		t.Fatalf("emails: got %d, want 300", len(loaded.Emails))
+	}
+	if got, _ := loaded.Get(NSEmails, 299); got != "agent-299@example.com" {
+		t.Errorf("email 299: got %q", got)
+	}
+	if got, _ := loaded.Get(NSPaths, 0); got != "src/auth/handler.go" {
+		t.Errorf("path 0: got %q", got)
+	}
+	if got, _ := loaded.Get(NSSessions, 0); got != "01JNQXAAAAAAAAAAAAAAAAAAAA" {
+		t.Errorf("session 0: got %q", got)
+	}
+	if idx, ok := loaded.Lookup(NSEmails, "agent-150@example.com"); !ok || idx != 150 {
+		t.Errorf("email reverse lookup: got (%d, %v)", idx, ok)
+	}
+}
+
+// TestDict_StaysV1WhileCountsFit pins the compatibility contract: dicts that
+// fit v1's fixed-width fields keep being written as v1 so binaries that
+// predate v2 can still read them.
+func TestDict_StaysV1WhileCountsFit(t *testing.T) {
+	d := NewDict()
+	for i := 0; i < 255; i++ {
+		d.LookupOrAdd(NSEmails, fmt.Sprintf("dev-%d@example.com", i))
+	}
+	encoded := d.Encode()
+	if encoded[6] != dictVersionV1 {
+		t.Fatalf("version: got %d, want v1 with 255 emails", encoded[6])
+	}
+	loaded, err := LoadDict(encoded)
+	if err != nil {
+		t.Fatalf("LoadDict v1: %v", err)
+	}
+	if len(loaded.Emails) != 255 {
+		t.Fatalf("emails: got %d, want 255", len(loaded.Emails))
+	}
+}
+
+// TestDict_V2LongBranchName covers the other v1 length limit: a branch name
+// longer than 255 bytes wrapped its 1-byte length prefix.
+func TestDict_V2LongBranchName(t *testing.T) {
+	long := strings.Repeat("feature/very-long-branch-name-", 10) // 300 bytes
+	d := NewDict()
+	d.LookupOrAdd(NSBranches, long)
+	d.LookupOrAdd(NSEmails, "dev@example.com")
+
+	encoded := d.Encode()
+	if encoded[6] != dictVersionV2 {
+		t.Fatalf("version: got %d, want v2 with 300-byte branch name", encoded[6])
+	}
+	loaded, err := LoadDict(encoded)
+	if err != nil {
+		t.Fatalf("LoadDict: %v", err)
+	}
+	if got, _ := loaded.Get(NSBranches, 0); got != long {
+		t.Errorf("branch 0: got %d bytes, want %d", len(got), len(long))
+	}
+}
+
+// TestDict_V2TruncatedNeverPanics sweeps truncations of a v2 dict through
+// LoadDict — corrupt input must error, never panic.
+func TestDict_V2TruncatedNeverPanics(t *testing.T) {
+	d := NewDict()
+	for i := 0; i < 260; i++ {
+		d.LookupOrAdd(NSEmails, fmt.Sprintf("a%d@x.co", i))
+	}
+	d.LookupOrAdd(NSPaths, "src/main.go")
+	encoded := d.Encode()
+
+	for i := 0; i < len(encoded); i++ {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("LoadDict panicked at truncation %d: %v", i, r)
+				}
+			}()
+			_, _ = LoadDict(encoded[:i])
+		}()
 	}
 }

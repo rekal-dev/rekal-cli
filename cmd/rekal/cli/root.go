@@ -47,8 +47,11 @@ func NewRootCmd() *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: true,
 		},
+		// The update notice goes to stderr: stdout carries JSON that agents
+		// parse (recall/query output), and appending the notice there breaks
+		// the parse once per check interval.
 		PersistentPostRun: func(cmd *cobra.Command, _ []string) {
-			versioncheck.CheckAndNotify(cmd.OutOrStdout(), Version)
+			versioncheck.CheckAndNotify(cmd.ErrOrStderr(), Version)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If no args and no filters, show help.

@@ -86,14 +86,23 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 	newID := ids.NewULIDFunc()
 
 	// Track session → checkpoint mapping for updating facets.
-	type cpInfo struct {
-		checkpointID string
-		gitSHA       string
-		fileCount    int
-	}
 	sessionCheckpoints := make(map[string]*cpInfo)
 
 	var imported int
+
+	handleSession := func(sf *codec.SessionFrame) error {
+		did, err := indexSessionFrame(indexDB, dict, sf, newID)
+		if err != nil {
+			return err
+		}
+		if did {
+			imported++
+		}
+		return nil
+	}
+	handleCheckpoint := func(cf *codec.CheckpointFrame) error {
+		return indexCheckpointFrame(indexDB, dict, cf, sessionCheckpoints)
+	}
 
 	for _, fs := range frames {
 		compressed := codec.ExtractFramePayload(bodyData, fs)
@@ -104,103 +113,44 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 			if err != nil {
 				continue
 			}
-
-			sessionID, err := dict.Get(codec.NSSessions, sf.SessionRef)
-			if err != nil {
-				continue
+			if err := handleSession(sf); err != nil {
+				return imported, err
 			}
-
-			email, _ := dict.Get(codec.NSEmails, sf.EmailRef)
-			actorType := "human"
-			agentID := ""
-			if sf.ActorType == codec.ActorAgent {
-				actorType = "agent"
-				agentID, _ = dict.Get(codec.NSEmails, sf.AgentIDRef)
-			}
-
-			branch := ""
-			if len(sf.Turns) > 0 {
-				branch, _ = dict.Get(codec.NSBranches, sf.Turns[0].BranchRef)
-			}
-
-			capturedAt := sf.CapturedAt.UTC().Format(time.RFC3339)
-
-			// Insert turns into turns_ft.
-			for i, t := range sf.Turns {
-				role := "human"
-				switch t.Role {
-				case codec.RoleAssistant:
-					role = "assistant"
-				case codec.RoleHumanSteering:
-					role = "human_steering"
-				}
-				if _, err := indexDB.Exec(
-					`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
-					 VALUES ($1, $2, $3, $4, $5, $6)`,
-					newID(), sessionID, i, role, t.Text, "",
-				); err != nil {
-					return imported, fmt.Errorf("insert turn_ft: %w", err)
-				}
-			}
-
-			// Harness metadata is only present on v2 frames; for v1 frames
-			// every field is zero and stored as NULL.
-			parentID := ""
-			if sf.HasParent {
-				parentID, _ = dict.Get(codec.NSSessions, sf.ParentRef)
-			}
-
-			// Insert session_facets.
-			if _, err := indexDB.Exec(
-				`INSERT INTO session_facets (
-					session_id, user_email, git_branch, actor_type, agent_id,
-					captured_at, turn_count, tool_call_count, file_count,
-					parent_session_id, team_name, workflow_name,
-					agent_type, description, spawn_depth
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-				sessionID, email, branch, actorType, agentID,
-				capturedAt, len(sf.Turns), 0, 0,
-				db.NullIfEmpty(parentID), db.NullIfEmpty(sf.TeamName), db.NullIfEmpty(sf.WorkflowName),
-				db.NullIfEmpty(sf.AgentType), db.NullIfEmpty(sf.Description), db.NullIfZero(sf.SpawnDepth),
-			); err != nil {
-				return imported, fmt.Errorf("insert session_facet: %w", err)
-			}
-
-			imported++
 
 		case codec.FrameCheckpoint, codec.FrameCheckpointV2:
 			cf, err := dec.DecodeCheckpointFrame(compressed)
 			if err != nil {
 				continue
 			}
+			if err := handleCheckpoint(cf); err != nil {
+				return imported, err
+			}
 
-			checkpointID, err := dict.Get(codec.NSSessions, cf.CheckpointRef)
+		case codec.FrameBatch:
+			members, err := dec.DecodeBatch(compressed)
 			if err != nil {
 				continue
 			}
-
-			// Insert files_index.
-			for _, ref := range cf.SessionRefs {
-				sid, err := dict.Get(codec.NSSessions, ref)
-				if err != nil {
-					continue
-				}
-				for _, f := range cf.Files {
-					filePath, _ := dict.Get(codec.NSPaths, f.PathRef)
-					changeType := string(f.ChangeType)
-					if _, err := indexDB.Exec(
-						`INSERT INTO files_index (checkpoint_id, session_id, file_path, change_type)
-						 VALUES ($1, $2, $3, $4)`,
-						checkpointID, sid, filePath, changeType,
-					); err != nil {
-						return imported, fmt.Errorf("insert files_index: %w", err)
+			for _, m := range members {
+				switch m.Type {
+				case codec.FrameSession, codec.FrameSessionV2:
+					sf, err := codec.DecodeSessionPayload(m.Payload)
+					if err != nil {
+						continue
 					}
-				}
-
-				sessionCheckpoints[sid] = &cpInfo{
-					checkpointID: checkpointID,
-					gitSHA:       cf.GitSHA,
-					fileCount:    len(cf.Files),
+					if err := handleSession(sf); err != nil {
+						return imported, err
+					}
+				case codec.FrameCheckpoint, codec.FrameCheckpointV2:
+					cf, err := codec.DecodeCheckpointPayload(m.Payload)
+					if err != nil {
+						continue
+					}
+					if err := handleCheckpoint(cf); err != nil {
+						return imported, err
+					}
+				case codec.FrameMeta:
+					continue
 				}
 			}
 
@@ -222,4 +172,113 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 	}
 
 	return imported, nil
+}
+
+// cpInfo carries the checkpoint fields folded back into session_facets after
+// all frames are imported.
+type cpInfo struct {
+	checkpointID string
+	gitSHA       string
+	fileCount    int
+}
+
+// indexSessionFrame inserts a decoded session's turns and facet row into the
+// index DB. Reports whether a session was inserted; a dict miss is skipped
+// (false, nil), only DB failures are hard errors. Shared by the standalone and
+// batched frame paths.
+func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame, newID func() string) (bool, error) {
+	sessionID, err := dict.Get(codec.NSSessions, sf.SessionRef)
+	if err != nil {
+		return false, nil
+	}
+
+	email, _ := dict.Get(codec.NSEmails, sf.EmailRef)
+	actorType := "human"
+	agentID := ""
+	if sf.ActorType == codec.ActorAgent {
+		actorType = "agent"
+		agentID, _ = dict.Get(codec.NSEmails, sf.AgentIDRef)
+	}
+
+	branch := ""
+	if len(sf.Turns) > 0 {
+		branch, _ = dict.Get(codec.NSBranches, sf.Turns[0].BranchRef)
+	}
+
+	capturedAt := sf.CapturedAt.UTC().Format(time.RFC3339)
+
+	for i, t := range sf.Turns {
+		role := "human"
+		switch t.Role {
+		case codec.RoleAssistant:
+			role = "assistant"
+		case codec.RoleHumanSteering:
+			role = "human_steering"
+		}
+		if _, err := indexDB.Exec(
+			`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			newID(), sessionID, i, role, t.Text, "",
+		); err != nil {
+			return false, fmt.Errorf("insert turn_ft: %w", err)
+		}
+	}
+
+	// Harness metadata is only present on v2 frames; for v1 frames every field
+	// is zero and stored as NULL.
+	parentID := ""
+	if sf.HasParent {
+		parentID, _ = dict.Get(codec.NSSessions, sf.ParentRef)
+	}
+
+	if _, err := indexDB.Exec(
+		`INSERT INTO session_facets (
+			session_id, user_email, git_branch, actor_type, agent_id,
+			captured_at, turn_count, tool_call_count, file_count,
+			parent_session_id, team_name, workflow_name,
+			agent_type, description, spawn_depth
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		sessionID, email, branch, actorType, agentID,
+		capturedAt, len(sf.Turns), 0, 0,
+		db.NullIfEmpty(parentID), db.NullIfEmpty(sf.TeamName), db.NullIfEmpty(sf.WorkflowName),
+		db.NullIfEmpty(sf.AgentType), db.NullIfEmpty(sf.Description), db.NullIfZero(sf.SpawnDepth),
+	); err != nil {
+		return false, fmt.Errorf("insert session_facet: %w", err)
+	}
+
+	return true, nil
+}
+
+// indexCheckpointFrame inserts a checkpoint's files_index rows and records the
+// checkpoint fields to fold back into session_facets afterward.
+func indexCheckpointFrame(indexDB *sql.DB, dict *codec.Dict, cf *codec.CheckpointFrame, sessionCheckpoints map[string]*cpInfo) error {
+	checkpointID, err := dict.Get(codec.NSSessions, cf.CheckpointRef)
+	if err != nil {
+		return nil
+	}
+
+	for _, ref := range cf.SessionRefs {
+		sid, err := dict.Get(codec.NSSessions, ref)
+		if err != nil {
+			continue
+		}
+		for _, f := range cf.Files {
+			filePath, _ := dict.Get(codec.NSPaths, f.PathRef)
+			changeType := string(f.ChangeType)
+			if _, err := indexDB.Exec(
+				`INSERT INTO files_index (checkpoint_id, session_id, file_path, change_type)
+				 VALUES ($1, $2, $3, $4)`,
+				checkpointID, sid, filePath, changeType,
+			); err != nil {
+				return fmt.Errorf("insert files_index: %w", err)
+			}
+		}
+
+		sessionCheckpoints[sid] = &cpInfo{
+			checkpointID: checkpointID,
+			gitSHA:       cf.GitSHA,
+			fileCount:    len(cf.Files),
+		}
+	}
+	return nil
 }

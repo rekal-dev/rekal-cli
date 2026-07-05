@@ -74,6 +74,25 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 	return encodeCheckpointFrames(dataDB, codec.NewBody(), codec.NewDict(), checkpoints)
 }
 
+// appendBatch encodes members as one FrameBatch and appends it to body. If the
+// batch would overflow the frame envelope's length field (a single checkpoint
+// with an implausible amount of compressed data), it falls back to appending
+// each member as its own standalone frame, so the export still succeeds.
+func appendBatch(body []byte, enc *codec.Encoder, members []codec.BatchMember) ([]byte, error) {
+	batch, err := enc.EncodeBatch(members)
+	if err == nil {
+		return codec.AppendFrame(body, batch), nil
+	}
+	for _, m := range members {
+		frame, ferr := enc.EncodeMemberFrame(m)
+		if ferr != nil {
+			return nil, ferr
+		}
+		body = codec.AppendFrame(body, frame)
+	}
+	return body, nil
+}
+
 // encodeCheckpointFrames appends session + checkpoint frames for the given
 // checkpoints to body, interning strings into dict, and finishes with a meta
 // frame. Returns the updated body, encoded dict, and the checkpoint IDs
@@ -96,6 +115,11 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 		}
 
 		var sessionRefs []uint64
+		// One checkpoint's session frames plus its checkpoint frame are
+		// batched into a single FrameBatch: sessions in one commit share
+		// paths, author, and phrasing, so compressing them together is far
+		// tighter than one zstd stream per frame (see codec.EncodeBatch).
+		var members []codec.BatchMember
 
 		for _, sid := range sessionIDs {
 			sess, err := db.QuerySession(dataDB, sid)
@@ -194,11 +218,7 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 				sf.ToolCalls = append(sf.ToolCalls, tcr)
 			}
 
-			frame, err := enc.EncodeSessionFrame(sf)
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("encode session %s: %w", sid, err)
-			}
-			body = codec.AppendFrame(body, frame)
+			members = append(members, codec.SessionMember(sf))
 			sessionRefs = append(sessionRefs, sessRef)
 		}
 
@@ -247,11 +267,12 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 			SessionRefs:   sessionRefs,
 			Files:         fileRecords,
 		}
-		frame, err := enc.EncodeCheckpointFrame(cf)
+		members = append(members, codec.CheckpointMember(cf))
+
+		body, err = appendBatch(body, enc, members)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("encode checkpoint %s: %w", cp.ID, err)
 		}
-		body = codec.AppendFrame(body, frame)
 
 		exportedIDs = append(exportedIDs, cp.ID)
 	}

@@ -217,26 +217,84 @@ func (e *Encoder) Close() {
 // v1 for compatibility with readers that predate v2; larger sessions use the
 // v2 payload under the FrameSessionV2 envelope type, which old readers skip.
 func (e *Encoder) EncodeSessionFrame(sf *SessionFrame) ([]byte, error) {
-	if sessionNeedsV2(sf) {
-		return e.wrapFrame(FrameSessionV2, encodeSessionPayloadV2(sf))
-	}
-	return e.wrapFrame(FrameSession, encodeSessionPayload(sf))
+	ft, payload := sessionTypeAndPayload(sf)
+	return e.wrapFrame(ft, payload)
 }
 
 // EncodeCheckpointFrame encodes a checkpoint frame to bytes. Checkpoints
 // touching more than 255 files use the v2 payload (varint file count) under
 // the FrameCheckpointV2 envelope type; smaller ones stay v1 for compatibility.
 func (e *Encoder) EncodeCheckpointFrame(cf *CheckpointFrame) ([]byte, error) {
-	if len(cf.Files) > 0xFF {
-		return e.wrapFrame(FrameCheckpointV2, encodeCheckpointPayloadV2(cf))
-	}
-	return e.wrapFrame(FrameCheckpoint, encodeCheckpointPayload(cf))
+	ft, payload := checkpointTypeAndPayload(cf)
+	return e.wrapFrame(ft, payload)
 }
 
 // EncodeMetaFrame encodes a meta frame to bytes.
 func (e *Encoder) EncodeMetaFrame(mf *MetaFrame) ([]byte, error) {
-	payload := encodeMetaPayload(mf)
-	return e.wrapFrame(FrameMeta, payload)
+	return e.wrapFrame(FrameMeta, encodeMetaPayload(mf))
+}
+
+// sessionTypeAndPayload returns the frame type and uncompressed payload for a
+// session, picking v1 or v2 the same way EncodeSessionFrame does. Shared with
+// the batch path so a batched session encodes identically to a standalone one.
+func sessionTypeAndPayload(sf *SessionFrame) (FrameType, []byte) {
+	if sessionNeedsV2(sf) {
+		return FrameSessionV2, encodeSessionPayloadV2(sf)
+	}
+	return FrameSession, encodeSessionPayload(sf)
+}
+
+func checkpointTypeAndPayload(cf *CheckpointFrame) (FrameType, []byte) {
+	if len(cf.Files) > 0xFF {
+		return FrameCheckpointV2, encodeCheckpointPayloadV2(cf)
+	}
+	return FrameCheckpoint, encodeCheckpointPayload(cf)
+}
+
+// BatchMember is one frame inside a batch: its type plus its uncompressed
+// payload (the same bytes a standalone frame of that type would carry, minus
+// the outer envelope and compression).
+type BatchMember struct {
+	Type    FrameType
+	Payload []byte
+}
+
+// SessionMember / CheckpointMember / MetaMember build the BatchMember for a
+// frame, choosing the v1/v2 type exactly as the standalone encoders do.
+func SessionMember(sf *SessionFrame) BatchMember {
+	ft, payload := sessionTypeAndPayload(sf)
+	return BatchMember{Type: ft, Payload: payload}
+}
+
+func CheckpointMember(cf *CheckpointFrame) BatchMember {
+	ft, payload := checkpointTypeAndPayload(cf)
+	return BatchMember{Type: ft, Payload: payload}
+}
+
+func MetaMember(mf *MetaFrame) BatchMember {
+	return BatchMember{Type: FrameMeta, Payload: encodeMetaPayload(mf)}
+}
+
+// EncodeMemberFrame encodes a single batch member as a standalone frame
+// (envelope + compressed payload) under its own type. Used as the per-frame
+// fallback when a batch would overflow the envelope's length field.
+func (e *Encoder) EncodeMemberFrame(m BatchMember) ([]byte, error) {
+	return e.wrapFrame(m.Type, m.Payload)
+}
+
+// EncodeBatch encodes members as a single FrameBatch: their payloads are
+// concatenated uncompressed — each prefixed with its type and a varint length
+// — and the whole run is compressed once, so cross-member redundancy is shared
+// instead of paid per frame. Returns an error if the compressed batch exceeds
+// the envelope's length field (the caller should then fall back to per-frame).
+func (e *Encoder) EncodeBatch(members []BatchMember) ([]byte, error) {
+	inner := make([]byte, 0, 512)
+	for _, m := range members {
+		inner = append(inner, byte(m.Type))
+		inner = appendUvarint(inner, uint64(len(m.Payload)))
+		inner = append(inner, m.Payload...)
+	}
+	return e.wrapFrame(FrameBatch, inner)
 }
 
 // sessionNeedsV2 reports whether sf requires the v2 payload: v1 stores the
@@ -525,6 +583,54 @@ func (d *Decoder) DecodeMetaFrame(compressed []byte) (*MetaFrame, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode meta: zstd: %w", err)
 	}
+	return parseMetaPayload(payload)
+}
+
+// DecodeBatch decompresses a FrameBatch payload and splits it into its member
+// frames. The returned payloads are uncompressed and ready for
+// DecodeSessionPayload / DecodeCheckpointPayload / DecodeMetaPayload. A
+// corrupt or truncated batch returns an error, never a panic.
+func (d *Decoder) DecodeBatch(compressed []byte) ([]BatchMember, error) {
+	raw, err := d.zr.DecodeAll(compressed, nil)
+	if err != nil {
+		return nil, fmt.Errorf("decode batch: zstd: %w", err)
+	}
+
+	var members []BatchMember
+	pos := 0
+	for pos < len(raw) {
+		ft := FrameType(raw[pos])
+		pos++
+		n, adv, err := readUvarint(raw[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("batch: member %d length: %w", len(members), err)
+		}
+		pos += adv
+		// A member payload costs at least its declared bytes — reject a length
+		// that runs past the buffer before slicing.
+		if n > uint64(len(raw)-pos) {
+			return nil, fmt.Errorf("batch: member %d length %d exceeds remaining data", len(members), n)
+		}
+		members = append(members, BatchMember{Type: ft, Payload: raw[pos : pos+int(n)]})
+		pos += int(n)
+	}
+	return members, nil
+}
+
+// DecodeSessionPayload parses an already-decompressed session payload (a batch
+// member, or any raw payload). DecodeSessionFrame is this preceded by zstd
+// decompression.
+func DecodeSessionPayload(payload []byte) (*SessionFrame, error) {
+	return parseSessionPayload(payload)
+}
+
+// DecodeCheckpointPayload parses an already-decompressed checkpoint payload.
+func DecodeCheckpointPayload(payload []byte) (*CheckpointFrame, error) {
+	return parseCheckpointPayload(payload)
+}
+
+// DecodeMetaPayload parses an already-decompressed meta payload.
+func DecodeMetaPayload(payload []byte) (*MetaFrame, error) {
 	return parseMetaPayload(payload)
 }
 

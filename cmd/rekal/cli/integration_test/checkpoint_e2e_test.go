@@ -237,28 +237,41 @@ func TestPush_E2E_ExportAndPush(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScanFrames: %v", err)
 	}
-	if len(frames1) != 3 {
-		t.Fatalf("expected 3 frames after push, got %d", len(frames1))
+	// The checkpoint's session + checkpoint frames are grouped into one batch
+	// frame (per-push batching), so expect 2: batch + meta.
+	if len(frames1) != 2 {
+		t.Fatalf("expected 2 frames after push (batch + meta), got %d", len(frames1))
 	}
-	if frames1[0].Type != codec.FrameSession {
-		t.Errorf("frame 0: expected session (0x01), got 0x%02x", frames1[0].Type)
+	if frames1[0].Type != codec.FrameBatch {
+		t.Errorf("frame 0: expected batch (0x06), got 0x%02x", frames1[0].Type)
 	}
-	if frames1[1].Type != codec.FrameCheckpoint {
-		t.Errorf("frame 1: expected checkpoint (0x02), got 0x%02x", frames1[1].Type)
-	}
-	if frames1[2].Type != codec.FrameMeta {
-		t.Errorf("frame 2: expected meta (0x03), got 0x%02x", frames1[2].Type)
+	if frames1[1].Type != codec.FrameMeta {
+		t.Errorf("frame 1: expected meta (0x03), got 0x%02x", frames1[1].Type)
 	}
 
-	// Decode session frame and verify data.
 	dec, err := codec.NewDecoder()
 	if err != nil {
 		t.Fatalf("NewDecoder: %v", err)
 	}
 	defer dec.Close()
 
-	payload0 := codec.ExtractFramePayload(body1, frames1[0])
-	sf, err := dec.DecodeSessionFrame(payload0)
+	// Decode the batch into its member frames: session + checkpoint.
+	members, err := dec.DecodeBatch(codec.ExtractFramePayload(body1, frames1[0]))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("batch members: got %d, want 2 (session + checkpoint)", len(members))
+	}
+	if members[0].Type != codec.FrameSession {
+		t.Errorf("member 0: expected session (0x01), got 0x%02x", members[0].Type)
+	}
+	if members[1].Type != codec.FrameCheckpoint {
+		t.Errorf("member 1: expected checkpoint (0x02), got 0x%02x", members[1].Type)
+	}
+
+	// Decode the session member and verify data.
+	sf, err := codec.DecodeSessionPayload(members[0].Payload)
 	if err != nil {
 		t.Fatalf("decode session: %v", err)
 	}
@@ -275,9 +288,8 @@ func TestPush_E2E_ExportAndPush(t *testing.T) {
 		t.Errorf("tool 0: got %d, want Read (%d)", sf.ToolCalls[0].Tool, codec.ToolRead)
 	}
 
-	// Decode checkpoint frame — verify CheckpointRef is set.
-	payload1 := codec.ExtractFramePayload(body1, frames1[1])
-	cf, err := dec.DecodeCheckpointFrame(payload1)
+	// Decode the checkpoint member — verify session_refs.
+	cf, err := codec.DecodeCheckpointPayload(members[1].Payload)
 	if err != nil {
 		t.Fatalf("decode checkpoint: %v", err)
 	}
@@ -337,13 +349,14 @@ func TestPush_E2E_ExportAndPush(t *testing.T) {
 		t.Error("append-only violation: body prefix changed after second push")
 	}
 
-	// Should now have 6 frames.
+	// Each push appends one batch (its checkpoint's frames) plus a meta
+	// frame, so after two pushes the body has 4 frames.
 	frames2, err := codec.ScanFrames(body2)
 	if err != nil {
 		t.Fatalf("ScanFrames 2: %v", err)
 	}
-	if len(frames2) != 6 {
-		t.Fatalf("expected 6 frames after second push, got %d", len(frames2))
+	if len(frames2) != 4 {
+		t.Fatalf("expected 4 frames after second push, got %d", len(frames2))
 	}
 
 	// Dict should have grown.
@@ -355,7 +368,7 @@ func TestPush_E2E_ExportAndPush(t *testing.T) {
 		t.Errorf("dict sessions after 2nd push: %d", loadedDict2.Len(codec.NSSessions))
 	}
 
-	t.Logf("E2E: body %d → %d bytes, dict %d → %d bytes, 6 frames, 2 sessions",
+	t.Logf("E2E: body %d → %d bytes, dict %d → %d bytes, 4 frames, 2 sessions",
 		len(body1), len(body2), len(dict1), len(dict2))
 }
 

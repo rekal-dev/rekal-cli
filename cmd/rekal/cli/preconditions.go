@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 // EnsureGitRoot resolves and returns the git repository root.
@@ -37,4 +39,25 @@ func EnsureInitDone(gitRoot string) error {
 // RekalDir returns the path to .rekal/ within the given git root.
 func RekalDir(gitRoot string) string {
 	return filepath.Join(gitRoot, ".rekal")
+}
+
+// RequireInitializedRepo runs the two preconditions shared by every command
+// except init and clean (docs/spec/preconditions.md): resolve the git root and
+// verify Rekal is initialized. On failure it silences usage, prints the
+// user-facing message, and returns a SilentError so the caller can just
+// `return err`. This is the one central place the checks live, so the message
+// and behavior stay identical across commands.
+func RequireInitializedRepo(cmd *cobra.Command) (string, error) {
+	cmd.SilenceUsage = true
+
+	gitRoot, err := EnsureGitRoot()
+	if err != nil {
+		fmt.Fprintln(cmd.ErrOrStderr(), err)
+		return "", NewSilentError(err)
+	}
+	if err := EnsureInitDone(gitRoot); err != nil {
+		fmt.Fprintln(cmd.ErrOrStderr(), err)
+		return "", NewSilentError(err)
+	}
+	return gitRoot, nil
 }

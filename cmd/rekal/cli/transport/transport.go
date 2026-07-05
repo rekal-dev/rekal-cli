@@ -7,15 +7,14 @@ package transport
 import (
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/oklog/ulid/v2"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/ids"
 )
 
 // ExportNewFrames reads existing wire format from the orphan branch, appends
@@ -47,8 +46,8 @@ func ExportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 
 	// Load existing wire format from orphan branch.
 	branch := gitx.RekalBranchName()
-	bodyData := gitx.ShowFile(gitRoot, branch, "rekal.body")
-	dictData := gitx.ShowFile(gitRoot, branch, "dict.bin")
+	bodyData := gitx.ShowFile(gitRoot, branch, codec.BodyFilename)
+	dictData := gitx.ShowFile(gitRoot, branch, codec.DictFilename)
 
 	dict := codec.NewDict()
 	if len(dictData) > 0 {
@@ -356,12 +355,12 @@ func CommitWireFormat(gitRoot string, bodyData, dictData []byte) (string, error)
 // sessions + checkpoints into DuckDB. Returns the number of sessions imported.
 // Deduplicates by session ID and checkpoint ID.
 func ImportBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
-	bodyData := gitx.ShowFile(gitRoot, branch, "rekal.body")
+	bodyData := gitx.ShowFile(gitRoot, branch, codec.BodyFilename)
 	if len(bodyData) <= 9 {
 		return 0, nil // empty body (header only)
 	}
 
-	dictData := gitx.ShowFile(gitRoot, branch, "dict.bin")
+	dictData := gitx.ShowFile(gitRoot, branch, codec.DictFilename)
 	if len(dictData) == 0 {
 		return 0, nil
 	}
@@ -382,10 +381,7 @@ func ImportBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 	}
 	defer dec.Close()
 
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
-	newID := func() string {
-		return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
-	}
+	newID := ids.NewULIDFunc()
 
 	var imported int
 
@@ -591,12 +587,12 @@ func ListRemoteRekalBranches(gitRoot string) ([]string, error) {
 // Tool calls are skipped for remote data.
 // Returns the number of sessions imported.
 func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (int, error) {
-	bodyData := gitx.ShowFile(gitRoot, remoteBranch, "rekal.body")
+	bodyData := gitx.ShowFile(gitRoot, remoteBranch, codec.BodyFilename)
 	if len(bodyData) <= 9 {
 		return 0, nil
 	}
 
-	dictData := gitx.ShowFile(gitRoot, remoteBranch, "dict.bin")
+	dictData := gitx.ShowFile(gitRoot, remoteBranch, codec.DictFilename)
 	if len(dictData) == 0 {
 		return 0, nil
 	}
@@ -617,10 +613,7 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 	}
 	defer dec.Close()
 
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
-	newID := func() string {
-		return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
-	}
+	newID := ids.NewULIDFunc()
 
 	// Track session → checkpoint mapping for updating facets.
 	type cpInfo struct {

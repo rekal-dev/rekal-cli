@@ -5,15 +5,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/oklog/ulid/v2"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/ids"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/scrub"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 	"github.com/spf13/cobra"
@@ -68,10 +67,7 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 	}
 
 	email := gitx.ConfigValue("user.email")
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
-	newID := func() string {
-		return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
-	}
+	newID := ids.NewULIDFunc()
 
 	var sessionIDs []string
 	// trunkOnlySessionIDs is the subset of sessionIDs with no parent — used to

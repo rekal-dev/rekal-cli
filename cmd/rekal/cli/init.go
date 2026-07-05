@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
@@ -92,7 +93,7 @@ imported into the local data DB automatically.`,
 
 			// Import existing data from orphan branch into DuckDB.
 			branch := gitx.RekalBranchName()
-			bodyData := gitx.ShowFile(gitRoot, branch, "rekal.body")
+			bodyData := gitx.ShowFile(gitRoot, branch, codec.BodyFilename)
 			if len(bodyData) > 9 { // more than empty header
 				importDB, err := db.OpenData(gitRoot)
 				if err == nil {

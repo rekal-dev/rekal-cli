@@ -45,7 +45,7 @@ Header (9 bytes):
 Frame sequence (repeated):
   Envelope (6 bytes, uncompressed):
     type            (u8: 0x01=session, 0x02=checkpoint, 0x03=meta,
-                         0x04=session v2, 0x05=checkpoint v2)
+                         0x04=session v2, 0x05=checkpoint v2, 0x06=batch)
     compressed_len  (u24 little-endian)
     uncompressed_len (u16 little-endian, advisory only — saturates at 0xFFFF;
                       decoding never relies on it)
@@ -89,6 +89,8 @@ limit is crossed; readers that predate v2 reject a v2 dict loudly
 **Meta (0x03):** Summary counters — total sessions, checkpoints, frames, dictionary entries. Written last in each checkpoint batch.
 
 **Session v2 (0x04) / Checkpoint v2 (0x05):** Same layout as v1 except the counts above are varints, and the session payload carries an optional harness-metadata block (flags byte + parent session ref, team name, workflow name, agent type, description, spawn depth — see `docs/agent-metadata.md`) between the session meta and the turn records. The encoder writes v1 whenever the counts fit in a byte and no metadata is present (so binaries that predate v2 keep reading those frames) and v2 only when needed. V2 fixed a v1 format bug where a 300-turn session silently wrapped its count mod 256 and corrupted the frame.
+
+**Batch (0x06):** One checkpoint's session frames plus its checkpoint frame, grouped and compressed **together** as a single zstd stream. The decompressed payload is a sequence of members, each `type (u8) + length (varint) + payload`, where `payload` is exactly the bytes a standalone frame of that type would carry (its own magic + version + body). This is the key compression lever: sessions in one commit share paths, author, ULIDs, and phrasing, so compressing them as one stream is far tighter than one zstd frame each (the per-frame design paid framing overhead per frame and could not back-reference across frames). Members are decoded with the ordinary per-type parsers after the batch is decompressed. Old readers skip a `0x06` frame by its envelope length, exactly like any unknown type, so a batched push is invisible to a pre-batch binary rather than misread — the same forward-compatibility contract the v2 frames use. The encoder falls back to standalone frames for the (implausible) case a single checkpoint's batch would overflow the envelope's u24 compressed-length field.
 
 ## Why This Works With Git
 

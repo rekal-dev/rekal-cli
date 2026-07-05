@@ -33,7 +33,15 @@ const (
 	// misreading them — unknown types fall through every decode switch.
 	FrameSessionV2    FrameType = 0x04
 	FrameCheckpointV2 FrameType = 0x05
-	FrameTombstone    FrameType = 0xFF
+	// FrameBatch groups several member frames (sessions + a checkpoint) into
+	// one zstd stream so redundancy shared across them — repeated paths,
+	// emails, ULIDs, phrasing — compresses together instead of once per
+	// frame. Its decompressed payload is a sequence of length-prefixed member
+	// frames (see EncodeBatch/DecodeBatch). Old readers skip it by envelope
+	// length like any unknown type, so a batched push is invisible to a
+	// pre-batch binary rather than misread.
+	FrameBatch     FrameType = 0x06
+	FrameTombstone FrameType = 0xFF
 )
 
 // maxFrameCompressedLen is the largest compressed payload the 3-byte

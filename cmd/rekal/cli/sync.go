@@ -8,7 +8,10 @@ import (
 	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 	"github.com/spf13/cobra"
 )
 
@@ -36,16 +39,9 @@ Typical usage:
   Agent:      Run 'rekal sync' at the start of a session if team context matters
   Ad-hoc:     Run 'rekal sync --self' to pull your own data from another machine`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.SilenceUsage = true
-
-			gitRoot, err := EnsureGitRoot()
+			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			if err := EnsureInitDone(gitRoot); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
+				return err
 			}
 
 			if selfOnly {
@@ -77,12 +73,12 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 
 	// Step 3: Fetch remote rekal refs (non-fatal).
 	fmt.Fprintln(w, "fetching remote rekal branches...")
-	if err := fetchRemoteRekalRefs(gitRoot); err != nil {
+	if err := transport.FetchRemoteRekalRefs(gitRoot); err != nil {
 		fmt.Fprintf(w, "rekal: warning: fetch failed: %v\n", err)
 	}
 
 	// Step 4: List remote branches (excluding self).
-	remoteBranches, err := listRemoteRekalBranches(gitRoot)
+	remoteBranches, err := transport.ListRemoteRekalBranches(gitRoot)
 	if err != nil {
 		fmt.Fprintf(w, "rekal: warning: listing remote branches failed: %v\n", err)
 	}
@@ -133,7 +129,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	teamMembers := 0
 	for _, branch := range remoteBranches {
 		fmt.Fprintf(w, "importing %s...\n", branch)
-		n, err := importBranchToIndex(gitRoot, indexDB, branch)
+		n, err := transport.ImportBranchToIndex(gitRoot, indexDB, branch)
 		if err != nil {
 			fmt.Fprintf(w, "rekal: warning: import %s failed: %v\n", branch, err)
 			continue
@@ -182,7 +178,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 
 			// Cache the query-projection state so recall doesn't refit the
 			// whole model on every call — non-fatal.
-			if err := storeLSAProjection(indexDB, model); err != nil {
+			if err := search.StoreLSAProjection(indexDB, model); err != nil {
 				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
 			}
 		}
@@ -230,7 +226,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 // and performs a full index rebuild.
 func runSyncSelf(cmd *cobra.Command, gitRoot string) error {
 	w := cmd.ErrOrStderr()
-	branch := rekalBranchName()
+	branch := gitx.RekalBranchName()
 
 	// Step 1: Fetch own remote branch.
 	fmt.Fprintln(w, "fetching your remote branch...")
@@ -251,7 +247,7 @@ func runSyncSelf(cmd *cobra.Command, gitRoot string) error {
 		return fmt.Errorf("open data db: %w", err)
 	}
 
-	n, err := importBranch(gitRoot, dataDB, remoteBranch)
+	n, err := transport.ImportBranch(gitRoot, dataDB, remoteBranch)
 	dataDB.Close()
 	if err != nil {
 		return fmt.Errorf("import from %s: %w", remoteBranch, err)

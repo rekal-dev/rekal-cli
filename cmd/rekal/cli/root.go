@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/versioncheck"
 	"github.com/spf13/cobra"
 )
@@ -60,17 +61,12 @@ func NewRootCmd() *cobra.Command {
 			}
 
 			// Recall: preconditions required.
-			gitRoot, err := EnsureGitRoot()
+			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			if err := EnsureInitDone(gitRoot); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
+				return err
 			}
 
-			filters := RecallFilters{
+			filters := search.Filters{
 				Query:  strings.Join(args, " "),
 				File:   fileFilter,
 				Commit: commitFilter,

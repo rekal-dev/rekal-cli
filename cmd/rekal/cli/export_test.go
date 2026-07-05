@@ -8,12 +8,13 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 )
 
 // TestExportNewFrames_DoesNotMarkExportedBeforeCommit is the regression test
-// for the export-ordering bug: exportNewFrames must return the wire-format
+// for the export-ordering bug: transport.ExportNewFrames must return the wire-format
 // bytes plus the exported checkpoint IDs WITHOUT marking those checkpoints
-// exported in data.db. Only the caller, after commitWireFormat durably
+// exported in data.db. Only the caller, after transport.CommitWireFormat durably
 // commits the bytes to the orphan branch, should mark them. If a crash or
 // git failure happened between the old export-then-mark and an actual
 // commit, a checkpoint could be permanently flagged exported without its
@@ -34,26 +35,26 @@ func TestExportNewFrames_DoesNotMarkExportedBeforeCommit(t *testing.T) {
 		t.Fatalf("before export: got %d unexported checkpoints, want 1", got)
 	}
 
-	body, dict, exportedIDs, err := exportNewFrames(gitRoot)
+	body, dict, exportedIDs, err := transport.ExportNewFrames(gitRoot)
 	if err != nil {
-		t.Fatalf("exportNewFrames: %v", err)
+		t.Fatalf("transport.ExportNewFrames: %v", err)
 	}
 	if body == nil {
-		t.Fatal("exportNewFrames returned nil body for a checkpoint that should have been exported")
+		t.Fatal("transport.ExportNewFrames returned nil body for a checkpoint that should have been exported")
 	}
 	if len(exportedIDs) != 1 || exportedIDs[0] != checkpointID {
 		t.Fatalf("exportedIDs = %v, want [%s]", exportedIDs, checkpointID)
 	}
 
-	// The regression check: exportNewFrames must NOT have marked the
-	// checkpoint exported yet — commitWireFormat hasn't run.
+	// The regression check: transport.ExportNewFrames must NOT have marked the
+	// checkpoint exported yet — transport.CommitWireFormat hasn't run.
 	if got := countUnexported(t, gitRoot); got != 1 {
-		t.Fatalf("after exportNewFrames (before commit): got %d unexported checkpoints, want 1 (still unexported)", got)
+		t.Fatalf("after transport.ExportNewFrames (before commit): got %d unexported checkpoints, want 1 (still unexported)", got)
 	}
 
 	// Now commit and mark, mirroring doPush's ordering.
-	if _, err := commitWireFormat(gitRoot, body, dict); err != nil {
-		t.Fatalf("commitWireFormat: %v", err)
+	if _, err := transport.CommitWireFormat(gitRoot, body, dict); err != nil {
+		t.Fatalf("transport.CommitWireFormat: %v", err)
 	}
 	if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
 		t.Fatalf("markCheckpointsExported: %v", err)
@@ -65,7 +66,7 @@ func TestExportNewFrames_DoesNotMarkExportedBeforeCommit(t *testing.T) {
 }
 
 // TestExportNewFrames_CrashBetweenExportAndMarkIsRetried simulates a process
-// dying after exportNewFrames but before commitWireFormat/markCheckpointsExported
+// dying after transport.ExportNewFrames but before transport.CommitWireFormat/markCheckpointsExported
 // ever run, by simply never calling them, then re-running the whole export
 // path fresh — the checkpoint must still be picked up (not silently lost).
 func TestExportNewFrames_CrashBetweenExportAndMarkIsRetried(t *testing.T) {
@@ -79,25 +80,25 @@ func TestExportNewFrames_CrashBetweenExportAndMarkIsRetried(t *testing.T) {
 
 	// First "attempt": export runs, then the process is imagined to die
 	// before commit/mark — simply don't call them.
-	_, _, exportedIDs, err := exportNewFrames(gitRoot)
+	_, _, exportedIDs, err := transport.ExportNewFrames(gitRoot)
 	if err != nil {
-		t.Fatalf("exportNewFrames (first attempt): %v", err)
+		t.Fatalf("transport.ExportNewFrames (first attempt): %v", err)
 	}
 	if len(exportedIDs) != 1 {
 		t.Fatalf("first attempt exportedIDs = %v, want 1 entry", exportedIDs)
 	}
 
 	// Retry: a fresh export must still find the same checkpoint unexported.
-	body2, dict2, exportedIDs2, err := exportNewFrames(gitRoot)
+	body2, dict2, exportedIDs2, err := transport.ExportNewFrames(gitRoot)
 	if err != nil {
-		t.Fatalf("exportNewFrames (retry): %v", err)
+		t.Fatalf("transport.ExportNewFrames (retry): %v", err)
 	}
 	if len(exportedIDs2) != 1 || exportedIDs2[0] != checkpointID {
 		t.Fatalf("retry exportedIDs = %v, want [%s] — checkpoint was lost after simulated crash", exportedIDs2, checkpointID)
 	}
 
-	if _, err := commitWireFormat(gitRoot, body2, dict2); err != nil {
-		t.Fatalf("commitWireFormat: %v", err)
+	if _, err := transport.CommitWireFormat(gitRoot, body2, dict2); err != nil {
+		t.Fatalf("transport.CommitWireFormat: %v", err)
 	}
 	if err := markCheckpointsExported(gitRoot, exportedIDs2); err != nil {
 		t.Fatalf("markCheckpointsExported: %v", err)
@@ -111,7 +112,7 @@ func TestExportNewFrames_CrashBetweenExportAndMarkIsRetried(t *testing.T) {
 // seedCheckpoint inserts a minimal session+turn+checkpoint fixture, using its
 // own short-lived data.db connection (each helper/production function in
 // this path opens and closes its own connection — sharing one long-lived
-// handle across exportNewFrames/markCheckpointsExported calls, which do the
+// handle across transport.ExportNewFrames/markCheckpointsExported calls, which do the
 // same, causes stale reads against a DuckDB file opened by multiple
 // concurrent *sql.DB handles in one process).
 func seedCheckpoint(t *testing.T, gitRoot, sessionID, checkpointID, ts string) {
@@ -139,7 +140,7 @@ func seedCheckpoint(t *testing.T, gitRoot, sessionID, checkpointID, ts string) {
 
 // countUnexported opens a fresh data.db connection to count unexported
 // checkpoints — see seedCheckpoint's doc comment on why this must not reuse
-// a connection held open across exportNewFrames/markCheckpointsExported.
+// a connection held open across transport.ExportNewFrames/markCheckpointsExported.
 func countUnexported(t *testing.T, gitRoot string) int {
 	t.Helper()
 
@@ -158,7 +159,7 @@ func countUnexported(t *testing.T, gitRoot string) int {
 
 // setupExportTestRepo creates a temp git repo with .rekal/data.db initialized
 // and a local orphan branch ready for export/commit, and chdirs the test
-// process into it (gitConfigValue and rekalBranchName resolve git config
+// process into it (gitx.ConfigValue and gitx.RekalBranchName resolve git config
 // relative to cwd, not gitRoot). Not safe to run in parallel with other
 // tests that chdir.
 func setupExportTestRepo(t *testing.T) string {
@@ -196,8 +197,8 @@ func setupExportTestRepo(t *testing.T) string {
 	}
 	dataDB.Close()
 
-	if err := ensureOrphanBranch(dir); err != nil {
-		t.Fatalf("ensureOrphanBranch: %v", err)
+	if err := transport.EnsureOrphanBranch(dir); err != nil {
+		t.Fatalf("transport.EnsureOrphanBranch: %v", err)
 	}
 
 	return dir

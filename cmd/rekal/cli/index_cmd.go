@@ -10,6 +10,7 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
 
@@ -30,16 +31,9 @@ The index is local-only and never synced. It contains:
 Rebuild when the index is out of date or after importing new data.
 'rekal sync' rebuilds the index automatically.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.SilenceUsage = true
-
-			gitRoot, err := EnsureGitRoot()
+			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			if err := EnsureInitDone(gitRoot); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
+				return err
 			}
 
 			return runIndex(cmd, gitRoot)
@@ -141,7 +135,7 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 			// Cache the query-projection state so recall doesn't refit the
 			// whole model on every call — non-fatal, recall falls back to
 			// rebuilding from raw content if this is missing.
-			if err := storeLSAProjection(indexDB, model); err != nil {
+			if err := search.StoreLSAProjection(indexDB, model); err != nil {
 				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
 			}
 		}

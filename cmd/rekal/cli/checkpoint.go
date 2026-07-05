@@ -5,15 +5,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/oklog/ulid/v2"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/ids"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/scrub"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 	"github.com/spf13/cobra"
@@ -33,16 +32,9 @@ records which files were changed.
 Normally runs automatically via the post-commit hook installed by 'rekal init'.
 Run manually to capture a session without committing.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.SilenceUsage = true
-
-			gitRoot, err := EnsureGitRoot()
+			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			if err := EnsureInitDone(gitRoot); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
+				return err
 			}
 
 			return runCheckpoint(cmd, gitRoot)
@@ -74,11 +66,8 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 		return fmt.Errorf("data DB is corrupt or unreadable: %w", err)
 	}
 
-	email := gitConfigValue("user.email")
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
-	newID := func() string {
-		return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
-	}
+	email := gitx.ConfigValue("user.email")
+	newID := ids.NewULIDFunc()
 
 	var sessionIDs []string
 	// trunkOnlySessionIDs is the subset of sessionIDs with no parent — used to
@@ -265,9 +254,9 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 	}
 
 	// Get git state for checkpoint.
-	gitSHA := gitHeadSHA(gitRoot)
-	gitBranch := gitCurrentBranch(gitRoot)
-	filesTouched := gitFilesChanged(gitRoot)
+	gitSHA := gitx.HeadSHA(gitRoot)
+	gitBranch := gitx.CurrentBranch(gitRoot)
+	filesTouched := gitx.FilesChanged(gitRoot)
 
 	// Generate checkpoint ULID.
 	checkpointID := newID()
@@ -316,46 +305,6 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 
 	fmt.Fprintf(w, "rekal: %d session(s) captured\n", inserted)
 	return nil
-}
-
-func gitHeadSHA(gitRoot string) string {
-	out, err := exec.Command("git", "-C", gitRoot, "rev-parse", "HEAD").Output()
-	if err != nil {
-		return strings.Repeat("0", 40)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func gitCurrentBranch(gitRoot string) string {
-	out, err := exec.Command("git", "-C", gitRoot, "rev-parse", "--abbrev-ref", "HEAD").Output()
-	if err != nil {
-		return "unknown"
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func gitFilesChanged(gitRoot string) []string {
-	out, err := exec.Command("git", "-C", gitRoot, "diff", "--name-status", "HEAD~1", "HEAD").Output()
-	if err != nil {
-		return nil
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	var result []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			result = append(result, line)
-		}
-	}
-	return result
-}
-
-// gitShowFile reads a file from a git ref. Returns nil if not found.
-func gitShowFile(gitRoot, ref, path string) []byte {
-	out, err := exec.Command("git", "-C", gitRoot, "show", ref+":"+path).Output()
-	if err != nil {
-		return nil
-	}
-	return out
 }
 
 func sha256Hex(data []byte) string {

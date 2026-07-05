@@ -1,4 +1,4 @@
-package cli
+package search
 
 import (
 	"database/sql"
@@ -49,8 +49,8 @@ func TestLSAProjection_StoreLoadRoundTrip(t *testing.T) {
 		t.Fatalf("lsa.Build: model=%v err=%v", model, err)
 	}
 
-	if err := storeLSAProjection(indexDB, model); err != nil {
-		t.Fatalf("storeLSAProjection: %v", err)
+	if err := StoreLSAProjection(indexDB, model); err != nil {
+		t.Fatalf("StoreLSAProjection: %v", err)
 	}
 
 	loaded, err := loadLSAProjection(indexDB)
@@ -92,7 +92,7 @@ func TestLoadLSAProjection_AbsentReturnsNil(t *testing.T) {
 	}
 }
 
-// TestStoreLSAProjection_NilModelIsNoop matches storeLSAProjection's doc: a
+// TestStoreLSAProjection_NilModelIsNoop matches StoreLSAProjection's doc: a
 // nil model (LSA build failed/skipped) must not error and must not write a
 // stale/garbage entry.
 func TestStoreLSAProjection_NilModelIsNoop(t *testing.T) {
@@ -100,14 +100,14 @@ func TestStoreLSAProjection_NilModelIsNoop(t *testing.T) {
 
 	indexDB := openTempIndexDB(t)
 
-	if err := storeLSAProjection(indexDB, nil); err != nil {
-		t.Fatalf("storeLSAProjection(nil): %v", err)
+	if err := StoreLSAProjection(indexDB, nil); err != nil {
+		t.Fatalf("StoreLSAProjection(nil): %v", err)
 	}
 	model, err := loadLSAProjection(indexDB)
 	if err != nil {
 		t.Fatalf("loadLSAProjection: %v", err)
 	}
 	if model != nil {
-		t.Error("expected no projection stored after storeLSAProjection(nil)")
+		t.Error("expected no projection stored after StoreLSAProjection(nil)")
 	}
 }

@@ -95,16 +95,9 @@ INDEX DB SCHEMA (.rekal/index.db):
   rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cmd.SilenceUsage = true
-
-			gitRoot, err := EnsureGitRoot()
+			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			if err := EnsureInitDone(gitRoot); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
+				return err
 			}
 
 			// --session and positional SQL are mutually exclusive.

@@ -45,15 +45,12 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 ### Core CLI (`cmd/rekal/cli/`)
 
 - `root.go`: Root command (recall is the default) + command registration
-- `recall.go`: Hybrid search — BM25 + LSA + Nomic ranking, signal weighting
-  (steering-turn boost, subagent down-weight), and grouping subagent/workflow
-  hits under their trunk conversation (see `docs/agent-metadata.md`)
+- `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
+  index DB, call the `search` package, marshal JSON. The ranking engine itself
+  lives in `search/`.
 - `checkpoint.go`: Capture session after commit
-- `push.go`: Push data to remote branch
-- `sync.go`: Sync team context
-- `sync_remote.go`: Remote sync implementation
-- `export.go`: Encode checkpoints to wire format for push
-- `import.go`: Decode wire format during sync
+- `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
+- `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo
 - `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB
@@ -61,12 +58,23 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `query.go`: Raw SQL access
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
-- `preconditions.go`: Shared checks (git repo, init done, index exists)
+- `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +
+  init done) plus the individual `EnsureGitRoot`/`EnsureInitDone` helpers
 
 ### Packages (`cmd/rekal/cli/`)
 
 - `codec/`: Binary wire format — frame encoding/decoding, body, dictionary, preset zstd dictionary
+- `transport/`: Git-side sync — encode checkpoints to the orphan-branch wire
+  format and decode them back (`export`/`import`/remote-sync glue, orphan-branch
+  commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`
+- `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
+  `rekal/<email>` branch name) shared by the command and transport layers
+- `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
+  weighting (steering-turn boost, subagent down-weight), conversation grouping
+  (see `docs/agent-metadata.md`), snippet extraction, and the LSA
+  query-projection cache (`projection.go`)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate
+- `scrub/`: Redact secrets and anonymize file paths in a session payload before any DB insert (runs in `checkpoint` after parse)
 - `db/`: DuckDB backend — open, close, schema, insert helpers, index population
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)

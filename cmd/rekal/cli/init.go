@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/skill"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 	"github.com/spf13/cobra"
 )
 
@@ -86,17 +87,17 @@ imported into the local data DB automatically.`,
 			}
 
 			// Create local orphan branch for checkpoint data.
-			if err := ensureOrphanBranch(gitRoot); err != nil {
+			if err := transport.EnsureOrphanBranch(gitRoot); err != nil {
 				return fmt.Errorf("create rekal branch: %w", err)
 			}
 
 			// Import existing data from orphan branch into DuckDB.
-			branch := rekalBranchName()
-			bodyData := gitShowFile(gitRoot, branch, "rekal.body")
+			branch := gitx.RekalBranchName()
+			bodyData := gitx.ShowFile(gitRoot, branch, codec.BodyFilename)
 			if len(bodyData) > 9 { // more than empty header
 				importDB, err := db.OpenData(gitRoot)
 				if err == nil {
-					n, importErr := importBranch(gitRoot, importDB, branch)
+					n, importErr := transport.ImportBranch(gitRoot, importDB, branch)
 					importDB.Close()
 					if importErr != nil {
 						fmt.Fprintf(cmd.ErrOrStderr(), "rekal: import error: %v\n", importErr)
@@ -226,92 +227,6 @@ func writeHook(path, content string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-// rekalBranchName returns the orphan branch name for the current user.
-// Format: rekal/<user_email>
-func rekalBranchName() string {
-	email := strings.TrimSpace(gitConfigValue("user.email"))
-	if email == "" {
-		email = "local"
-	}
-	return "rekal/" + email
-}
-
-// gitConfigValue reads a git config value.
-func gitConfigValue(key string) string {
-	out, err := exec.Command("git", "config", key).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// ensureOrphanBranch creates or fetches the local rekal orphan branch.
-// If the branch exists locally, it's left as-is.
-// If it exists on the remote, it's fetched.
-// Otherwise, a new orphan branch is created with empty rekal.body and dict.bin.
-func ensureOrphanBranch(gitRoot string) error {
-	branch := rekalBranchName()
-
-	// Check if local branch already exists.
-	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branch).Run(); err == nil {
-		return nil // already exists locally
-	}
-
-	// Check if remote branch exists and fetch it.
-	remote := "origin"
-	remoteBranch := remote + "/" + branch
-	// Fetch the specific branch (ignore errors — remote may not exist or branch may not exist).
-	_ = exec.Command("git", "-C", gitRoot, "fetch", remote, branch).Run()
-
-	// If remote branch now exists locally as a remote-tracking branch, create local from it.
-	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", remoteBranch).Run(); err == nil {
-		return exec.Command("git", "-C", gitRoot, "branch", branch, remoteBranch).Run()
-	}
-
-	// Create new orphan branch with initial wire format files.
-	bodyData := codec.NewBody()
-	dictData := codec.NewDict().Encode()
-
-	bodyHash, err := gitHashObject(gitRoot, bodyData)
-	if err != nil {
-		return fmt.Errorf("hash rekal.body: %w", err)
-	}
-	dictHash, err := gitHashObject(gitRoot, dictData)
-	if err != nil {
-		return fmt.Errorf("hash dict.bin: %w", err)
-	}
-
-	treeEntry := fmt.Sprintf("100644 blob %s\tdict.bin\n100644 blob %s\trekal.body\n", dictHash, bodyHash)
-	mktreeCmd := exec.Command("git", "-C", gitRoot, "mktree")
-	mktreeCmd.Stdin = strings.NewReader(treeEntry)
-	treeOut, err := mktreeCmd.Output()
-	if err != nil {
-		return fmt.Errorf("mktree: %w", err)
-	}
-	treeHash := strings.TrimSpace(string(treeOut))
-
-	commitOut, err := exec.Command("git", "-C", gitRoot,
-		"commit-tree", treeHash, "-m", "rekal: initialize checkpoint branch",
-	).Output()
-	if err != nil {
-		return fmt.Errorf("create initial commit: %w", err)
-	}
-	commitHash := strings.TrimSpace(string(commitOut))
-
-	return exec.Command("git", "-C", gitRoot, "update-ref", "refs/heads/"+branch, commitHash).Run()
-}
-
-// gitHashObject writes data to the git object store and returns its hash.
-func gitHashObject(gitRoot string, data []byte) (string, error) {
-	cmd := exec.Command("git", "-C", gitRoot, "hash-object", "-w", "--stdin")
-	cmd.Stdin = strings.NewReader(string(data))
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 // installSkill writes the Rekal skill to .claude/skills/rekal/SKILL.md.

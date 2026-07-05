@@ -115,9 +115,9 @@ func InsertSessionMeta(d *sql.DB, id, parentSessionID, hash, actorType, agentID,
 	_, err := d.Exec(
 		`INSERT INTO sessions (id, parent_session_id, session_hash, captured_at, actor_type, agent_id, user_email, branch, source, team_name, workflow_name, agent_type, description, spawn_depth)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		id, nullIfEmpty(parentSessionID), hash, capturedAt, actorType, agentID, userEmail, branch, source,
-		nullIfEmpty(meta.TeamName), nullIfEmpty(meta.WorkflowName),
-		nullIfEmpty(meta.AgentType), nullIfEmpty(meta.Description), nullIfZero(meta.SpawnDepth),
+		id, NullIfEmpty(parentSessionID), hash, capturedAt, actorType, agentID, userEmail, branch, source,
+		NullIfEmpty(meta.TeamName), NullIfEmpty(meta.WorkflowName),
+		NullIfEmpty(meta.AgentType), NullIfEmpty(meta.Description), NullIfZero(meta.SpawnDepth),
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -125,18 +125,19 @@ func InsertSessionMeta(d *sql.DB, id, parentSessionID, hash, actorType, agentID,
 	return nil
 }
 
-// nullIfEmpty returns nil if s is empty, otherwise s.
-// Used to store NULL in VARCHAR columns instead of empty strings.
-func nullIfEmpty(s string) interface{} {
+// NullIfEmpty returns nil if s is empty, otherwise s. Used to store NULL in
+// VARCHAR columns instead of empty strings, from both this package's insert
+// helpers and callers that build raw INSERTs against these tables.
+func NullIfEmpty(s string) interface{} {
 	if s == "" {
 		return nil
 	}
 	return s
 }
 
-// nullIfZero returns nil if n is zero, otherwise n.
-// Used to store NULL in INTEGER columns instead of a misleading 0.
-func nullIfZero(n int) interface{} {
+// NullIfZero returns nil if n is zero, otherwise n. Used to store NULL in
+// INTEGER columns instead of a misleading 0.
+func NullIfZero(n int) interface{} {
 	if n == 0 {
 		return nil
 	}
@@ -148,7 +149,7 @@ func InsertTurn(d *sql.DB, id, sessionID string, turnIndex int, role, content, t
 	_, err := d.Exec(
 		`INSERT INTO turns (id, session_id, turn_index, role, content, ts)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		id, sessionID, turnIndex, role, content, nullIfEmpty(ts),
+		id, sessionID, turnIndex, role, content, NullIfEmpty(ts),
 	)
 	if err != nil {
 		return fmt.Errorf("insert turn: %w", err)

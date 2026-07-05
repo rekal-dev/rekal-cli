@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 	"github.com/spf13/cobra"
 )
 
@@ -39,16 +41,9 @@ stale meta frames. Implies --force.
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
 You do not need to run this manually.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.SilenceUsage = true
-
-			gitRoot, err := EnsureGitRoot()
+			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			if err := EnsureInitDone(gitRoot); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
+				return err
 			}
 
 			if reExport {
@@ -68,7 +63,7 @@ You do not need to run this manually.`,
 // source of truth — this heals wire bytes corrupted by the pre-v2 frame-count
 // bug and drops stale meta frames accumulated by past pushes.
 func doReExport(gitRoot string, w io.Writer) error {
-	body, dict, exportedIDs, err := exportAllFrames(gitRoot)
+	body, dict, exportedIDs, err := transport.ExportAllFrames(gitRoot)
 	if err != nil {
 		return fmt.Errorf("re-export: %w", err)
 	}
@@ -77,10 +72,10 @@ func doReExport(gitRoot string, w io.Writer) error {
 		return nil
 	}
 
-	if err := ensureOrphanBranch(gitRoot); err != nil {
+	if err := transport.EnsureOrphanBranch(gitRoot); err != nil {
 		return fmt.Errorf("ensure rekal branch: %w", err)
 	}
-	if _, err := commitWireFormat(gitRoot, body, dict); err != nil {
+	if _, err := transport.CommitWireFormat(gitRoot, body, dict); err != nil {
 		return fmt.Errorf("commit to rekal branch: %w", err)
 	}
 	if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
@@ -88,7 +83,7 @@ func doReExport(gitRoot string, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "rekal: re-exported %d checkpoint(s)\n", len(exportedIDs))
 
-	branch := rekalBranchName()
+	branch := gitx.RekalBranchName()
 	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run(); err != nil {
 		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
 		return nil
@@ -106,7 +101,7 @@ func doReExport(gitRoot string, w io.Writer) error {
 // doPush pushes Rekal data to the remote orphan branch.
 // Extracted so sync can call it without a cobra.Command.
 func doPush(gitRoot string, w io.Writer, force bool) error {
-	branch := rekalBranchName()
+	branch := gitx.RekalBranchName()
 
 	// Check if local branch exists — if not, nothing to push.
 	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branch).Run(); err != nil {
@@ -121,18 +116,18 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 	}
 
 	// Export unexported checkpoints from DuckDB → wire format → orphan branch.
-	body, dict, exportedIDs, err := exportNewFrames(gitRoot)
+	body, dict, exportedIDs, err := transport.ExportNewFrames(gitRoot)
 	if err != nil {
 		return fmt.Errorf("export: %w", err)
 	}
 	if body != nil {
-		if _, err := commitWireFormat(gitRoot, body, dict); err != nil {
+		if _, err := transport.CommitWireFormat(gitRoot, body, dict); err != nil {
 			return fmt.Errorf("commit to rekal branch: %w", err)
 		}
 		// Only mark checkpoints exported once the wire format is durably
 		// committed to the orphan branch — marking earlier risks a
 		// checkpoint being flagged exported but never actually written if
-		// commitWireFormat had failed (or the process died) in between.
+		// transport.CommitWireFormat had failed (or the process died) in between.
 		if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
 			return fmt.Errorf("mark checkpoints exported: %w", err)
 		}

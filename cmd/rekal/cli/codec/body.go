@@ -6,6 +6,13 @@ import (
 	"fmt"
 )
 
+// Wire-format filenames on the rekal orphan branch: the append-only frame
+// body and the string dictionary it references.
+const (
+	BodyFilename = "rekal.body"
+	DictFilename = "dict.bin"
+)
+
 const (
 	bodyMagic    = "RKLBODY"
 	bodyVersion  = 0x01

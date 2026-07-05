@@ -45,9 +45,9 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 ### Core CLI (`cmd/rekal/cli/`)
 
 - `root.go`: Root command (recall is the default) + command registration
-- `recall.go`: Hybrid search — BM25 + LSA + Nomic ranking, signal weighting
-  (steering-turn boost, subagent down-weight), and grouping subagent/workflow
-  hits under their trunk conversation (see `docs/agent-metadata.md`)
+- `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
+  index DB, call the `search` package, marshal JSON. The ranking engine itself
+  lives in `search/`.
 - `checkpoint.go`: Capture session after commit
 - `push.go`: Push data to remote branch
 - `sync.go`: Sync team context
@@ -59,8 +59,6 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `index_cmd.go`: Rebuild index DB from data DB
 - `log.go`: Show recent checkpoints
 - `query.go`: Raw SQL access
-- `lsa_cache.go`: Persist/load the LSA query-projection state in `index.db`
-  so recall doesn't refit the whole model on every call
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +
@@ -69,6 +67,10 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 ### Packages (`cmd/rekal/cli/`)
 
 - `codec/`: Binary wire format — frame encoding/decoding, body, dictionary, preset zstd dictionary
+- `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
+  weighting (steering-turn boost, subagent down-weight), conversation grouping
+  (see `docs/agent-metadata.md`), snippet extraction, and the LSA
+  query-projection cache (`projection.go`)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate
 - `scrub/`: Redact secrets and anonymize file paths in a session payload before any DB insert (runs in `checkpoint` after parse)
 - `db/`: DuckDB backend — open, close, schema, insert helpers, index population

@@ -1,4 +1,4 @@
-package cli
+package search
 
 import (
 	"database/sql"
@@ -17,13 +17,13 @@ import (
 // metadata.
 const lsaProjectionStateKey = "lsa_projection"
 
-// storeLSAProjection persists model's query-projection state to index.db so
+// StoreLSAProjection persists model's query-projection state to index.db so
 // a later recall doesn't need to re-tokenize the whole corpus and re-run SVD
 // just to embed the query string — only the corpus-dependent part (fitting
 // the model) needs redoing when the corpus changes, at `rekal index`/`sync`
 // time, not on every single recall call. Non-fatal by design at call
 // sites: a query still works without this cache, just slower.
-func storeLSAProjection(indexDB *sql.DB, model *lsa.Model) error {
+func StoreLSAProjection(indexDB *sql.DB, model *lsa.Model) error {
 	if model == nil {
 		return nil
 	}

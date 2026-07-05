@@ -9,6 +9,7 @@ import (
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
 
@@ -175,7 +176,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 
 			// Cache the query-projection state so recall doesn't refit the
 			// whole model on every call — non-fatal.
-			if err := storeLSAProjection(indexDB, model); err != nil {
+			if err := search.StoreLSAProjection(indexDB, model); err != nil {
 				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
 			}
 		}

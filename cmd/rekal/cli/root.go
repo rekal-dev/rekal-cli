@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/versioncheck"
 	"github.com/spf13/cobra"
 )
@@ -65,7 +66,7 @@ func NewRootCmd() *cobra.Command {
 				return err
 			}
 
-			filters := RecallFilters{
+			filters := search.Filters{
 				Query:  strings.Join(args, " "),
 				File:   fileFilter,
 				Commit: commitFilter,

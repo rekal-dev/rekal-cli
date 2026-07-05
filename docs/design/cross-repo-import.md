@@ -47,43 +47,70 @@ that never enters it is structurally unexportable. No new flag on the export
 path, no local-only column to remember to filter — the safety comes from
 where the bytes live, not from discipline.
 
-### Re-derived, not stored — and that is the point
+### Durable preference, disposable index
 
-`index.db` is derived and disposable (SOUL.md). It is rebuilt from its sources
-of truth on every `rekal index` and `rekal sync`:
+Two different things must not be conflated:
 
-- `data.db` (this repo's own captured sessions), and
-- the synced remote branches (teammate sessions).
+- The **index content** is derived and disposable (SOUL.md). It is rebuilt
+  from its sources of truth on every `rekal index` and `rekal sync`:
+  `data.db` (this repo's sessions), the synced remote branches (teammate
+  sessions), and — new — the local session tree at `~/.claude/projects/*`.
+  The local tree is re-read on each rebuild, exactly as teammate data is
+  re-read from remote branches.
+- The **preference** ("include cross-repo: all, or repos X/Y") is durable
+  config — it is *how you want the index built*, not index content.
 
-Cross-repo import adds a third source of truth, already present on the machine:
-the local session tree at `~/.claude/projects/*`. It is re-read on the rebuild
-that requests it, exactly as teammate data is re-read from remote branches.
+`rekal sync` forces a full reindex (rebuild into a temp file, atomic rename).
+If the preference were transient, every sync would silently drop the
+cross-repo view — unnatural, since sync is run routinely. So the preference
+**persists**, and both `index` and `sync` re-derive the index from it. Once
+`--include-all` is on, sync keeps it until `--no-local` turns it off.
 
-So a **plain** `rekal index` or `rekal sync` (without the flags below) drops
-the cross-repo view. That is intended and soul-aligned: the index re-derives
-exactly what you explicitly asked for this time. There is no persisted
-preference and no config file — nothing hidden to reason about or remove. The
-only persistent copy of the data stays in `~/.claude`, right where it already
-was; drop `index.db` and the cross-repo content is simply gone.
+Persisting the preference does not violate the disposable-index belief: the
+preference is config, the index is still fully re-derived. The only persistent
+copy of the session *data* stays in `~/.claude`, where it already was — the
+preference stores *what to import*, never the imported content.
+
+**Where the preference lives: `.rekal/local.json` (gitignored), not
+`index_state`.** `index_state` lives inside `index.db`, which is wiped and
+rebuilt on every reindex, so a setting stored there must be read from the old
+index before it is destroyed and carried into the new one — durable state in a
+store designed to be thrown away. A config file outside the disposable index
+survives rebuilds with no ceremony, is human-inspectable (transparency), and
+is removed by `clean`. (`index_state` is workable if "everything in the DB" is
+preferred, at the cost of that read-before-wipe step.)
+
+```json
+// .rekal/local.json
+{ "include": "all" }                       // --include-all
+{ "include": ["/Users/frank/work/api"] }   // --include <repo> [...]
+// absent or {} → off (default)
+```
 
 ## Interface
 
-Two per-invocation flags on the existing `index` command — the correct home,
-because the data is index-layer, not ledger-layer, and the flag name states
-exactly what happens:
+Flags on the existing `index` command — the correct home, because the data is
+index-layer, not ledger-layer, and the flag name states exactly what happens.
+The flags **set the persistent preference** and rebuild; a plain `index` or
+`sync` **honors** the current preference.
 
 ```
-rekal index --include-all           # this rebuild: every local project + shell session
-rekal index --include <repo> [...]  # this rebuild: only the named repo(s)
-rekal index                         # plain rebuild: no cross-repo (local view dropped)
+rekal index --include-all           # set preference = all local, rebuild now
+rekal index --include <repo> [...]  # set preference = these repo(s), rebuild now
+rekal index --no-local              # clear preference, rebuild now
+rekal index                         # honor current preference (unchanged)
+rekal sync                          # honor current preference (keeps your last setting)
 ```
 
 - `--include <repo>` takes a **repo path** — the working directory the other
   sessions were launched in — resolved to its session directory the same way
   the current repo is (`session.SanitizeRepoPath` →
-  `~/.claude/projects/<sanitized>`). Repeatable for several repos.
+  `~/.claude/projects/<sanitized>`). The invocation sets the preference to
+  exactly the repos listed.
 - `--include-all` supersedes `--include` and covers everything, including
   non-repo/shell working directories.
+- Setting the preference prints it loudly so the persisted state is visible:
+  `rekal: local cross-repo import: ON — future syncs include it; turn off with rekal index --no-local`.
 - **Cover all, no tiers.** Shell-only sessions are included by
   `--include-all`; they are not gated or classified out. This is acceptable
   *because* of the hard rule: nothing imported can leave the machine, and the
@@ -184,8 +211,8 @@ only. Ship without it first; add it only if measured rebuild time demands it.
 | Intent stays next to the code? | The shared ledger stays this-repo-only. Cross-repo intent is local recall, never merged into the shared record. |
 | Thin on the wire? | Nothing imported ever reaches the wire — structural. |
 | Data stays within git and the local machine? | Yes. The data already lives in `~/.claude`; this only makes it locally searchable. Never exported. |
-| Simple — zero config? | Two flags on an existing command. No config file, no persisted preference, no new DB. |
-| Transparent — see and remove? | Origin-labeled in output; nothing persisted beyond the disposable index; a plain reindex or `clean` removes it entirely. |
+| Simple — zero config? | Flags on an existing command; one small gitignored preference file (`.rekal/local.json`), no new DB. |
+| Transparent — see and remove? | Preference is a visible file, printed loudly when set; origin-labeled in output; `--no-local` turns it off and `clean` removes it (the file and the disposable index). |
 | Agent gets what it needs? | Wider memory, explicitly labeled by origin so the agent can judge relevance. |
 
 ## Implementation sketch
@@ -196,8 +223,11 @@ only. Ship without it first; add it only if measured rebuild time demands it.
    local-import populate function mirroring `PopulateIndex`'s session/turn/
    facet/embedding steps but sourced from parsed local session files, hash-
    deduped against `data.db`.
-3. `index_cmd`: `--include-all` / `--include` flags; after the normal
-   `PopulateIndex`, run the local-import pass for the requested roots, then the
-   embedding pass over the combined content. Confirmation for `--include-all`.
+3. Preference: read/write `.rekal/local.json`. `index_cmd` flags
+   (`--include-all` / `--include` / `--no-local`) set it; a plain run reads it.
+   Both `runIndex` and `runSyncTeam` load the preference and, when set, run the
+   local-import pass after the normal `PopulateIndex`, then embed over the
+   combined content. Confirmation for enabling `--include-all`.
 4. `search`: thread `origin` into `SessionDetail` / recall JSON.
-5. Docs: update `docs/spec/command/index.md`; note the feature in `CLAUDE.md`.
+5. Docs: update `docs/spec/command/index.md` and `docs/spec/command/sync.md`;
+   note the feature in `CLAUDE.md`.

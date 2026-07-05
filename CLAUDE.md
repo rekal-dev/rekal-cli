@@ -49,11 +49,8 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
   index DB, call the `search` package, marshal JSON. The ranking engine itself
   lives in `search/`.
 - `checkpoint.go`: Capture session after commit
-- `push.go`: Push data to remote branch
-- `sync.go`: Sync team context
-- `sync_remote.go`: Remote sync implementation
-- `export.go`: Encode checkpoints to wire format for push
-- `import.go`: Decode wire format during sync
+- `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
+- `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo
 - `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB
@@ -67,6 +64,11 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 ### Packages (`cmd/rekal/cli/`)
 
 - `codec/`: Binary wire format — frame encoding/decoding, body, dictionary, preset zstd dictionary
+- `transport/`: Git-side sync — encode checkpoints to the orphan-branch wire
+  format and decode them back (`export`/`import`/remote-sync glue, orphan-branch
+  commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`
+- `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
+  `rekal/<email>` branch name) shared by the command and transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
   weighting (steering-turn boost, subagent down-weight), conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, and the LSA

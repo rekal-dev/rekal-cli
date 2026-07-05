@@ -1,7 +1,7 @@
 # Cross-repo local session import
 
-**Status:** design (2026-07). Not yet implemented. This note is the spec to
-sign off before code.
+**Status:** implemented (2026-07). This note is the design record; the
+persisted preference lives in `.rekal/config.json` (see below).
 
 ## Problem
 
@@ -71,7 +71,7 @@ preference is config, the index is still fully re-derived. The only persistent
 copy of the session *data* stays in `~/.claude`, where it already was — the
 preference stores *what to import*, never the imported content.
 
-**Where the preference lives: `.rekal/local.json` (gitignored), not
+**Where the preference lives: `.rekal/config.json` (gitignored), not
 `index_state`.** `index_state` lives inside `index.db`, which is wiped and
 rebuilt on every reindex, so a setting stored there must be read from the old
 index before it is destroyed and carried into the new one — durable state in a
@@ -80,10 +80,15 @@ survives rebuilds with no ceremony, is human-inspectable (transparency), and
 is removed by `clean`. (`index_state` is workable if "everything in the DB" is
 preferred, at the cost of that read-before-wipe step.)
 
+`config.json` is Rekal's general local config — the durable home for
+per-repo settings. Today it holds the cross-repo import preference; it is the
+intended home for future recall-tuning knobs (BM25 / LSA / nomic layer
+weights).
+
 ```json
-// .rekal/local.json
-{ "include": "all" }                       // --include-all
-{ "include": ["/Users/frank/work/api"] }   // --include <repo> [...]
+// .rekal/config.json
+{ "local_import": { "all": true } }                       // --include-all
+{ "local_import": { "repos": ["/Users/frank/work/api"] } } // --include <repo> [...]
 // absent or {} → off (default)
 ```
 
@@ -117,23 +122,22 @@ rekal sync                          # honor current preference (keeps your last 
   data already lives in `~/.claude` — the feature widens the local *recall*
   surface, not the *exposure* surface.
 
-### Confirmation and voice
+### No confirmation — and why
 
-`--include-all` prompts once (unless `--yes`), because it reaches personal and
-shell sessions:
-
-```
-rekal: this imports every local agent session on this machine — 412 sessions
-       across 37 projects, including non-repo/shell sessions — into this repo's
-       local recall. They stay local and are never pushed. Continue? [y/N]
-rekal: imported 412 sessions from 37 local projects (local only, never pushed)
-```
-
-`--include <repo>` is narrow and self-evident; it imports without a prompt and
-reports what it did:
+Neither flag prompts. It reads as a heavy action ("suck everything"), but the
+hard rule makes it reversible and contained: the import is local-only, never
+pushed, and any plain `index`/`sync` or `--no-local` drops it. Gating a
+machine-local, trivially-droppable action behind a prompt is friction against
+the soul's "quiet, fewer choices." Instead the action is **loud in its
+output** so it is never silent:
 
 ```
-rekal: imported 23 sessions from /Users/frank/work/api (local only, never pushed)
+rekal: imported 412 sessions from 37 local projects into local recall
+rekal: local cross-repo import: ON (never pushed) — turn off with rekal index --no-local
+```
+
+```
+rekal: imported 23 sessions from /Users/frank/work/api into local recall (never pushed)
 ```
 
 Optional narrowing (`--since <date>`) can land later; not required for v1.
@@ -211,7 +215,7 @@ only. Ship without it first; add it only if measured rebuild time demands it.
 | Intent stays next to the code? | The shared ledger stays this-repo-only. Cross-repo intent is local recall, never merged into the shared record. |
 | Thin on the wire? | Nothing imported ever reaches the wire — structural. |
 | Data stays within git and the local machine? | Yes. The data already lives in `~/.claude`; this only makes it locally searchable. Never exported. |
-| Simple — zero config? | Flags on an existing command; one small gitignored preference file (`.rekal/local.json`), no new DB. |
+| Simple — zero config? | Flags on an existing command; one small gitignored config file (`.rekal/config.json`), no new DB. |
 | Transparent — see and remove? | Preference is a visible file, printed loudly when set; origin-labeled in output; `--no-local` turns it off and `clean` removes it (the file and the disposable index). |
 | Agent gets what it needs? | Wider memory, explicitly labeled by origin so the agent can judge relevance. |
 
@@ -223,11 +227,12 @@ only. Ship without it first; add it only if measured rebuild time demands it.
    local-import populate function mirroring `PopulateIndex`'s session/turn/
    facet/embedding steps but sourced from parsed local session files, hash-
    deduped against `data.db`.
-3. Preference: read/write `.rekal/local.json`. `index_cmd` flags
-   (`--include-all` / `--include` / `--no-local`) set it; a plain run reads it.
-   Both `runIndex` and `runSyncTeam` load the preference and, when set, run the
-   local-import pass after the normal `PopulateIndex`, then embed over the
-   combined content. Confirmation for enabling `--include-all`.
+3. Preference: read/write `.rekal/config.json` (the `local_import` section).
+   `index_cmd` flags (`--include-all` / `--include` / `--no-local`) set it; a
+   plain run reads it. Both `runIndex` and `runSyncTeam` load the preference
+   and, when set, run the local-import pass after the normal `PopulateIndex`,
+   then embed over the combined content. No confirmation prompt — the import is
+   local-only and trivially reversible; the action is loud in its output.
 4. `search`: thread `origin` into `SessionDetail` / recall JSON.
 5. Docs: update `docs/spec/command/index.md` and `docs/spec/command/sync.md`;
    note the feature in `CLAUDE.md`.

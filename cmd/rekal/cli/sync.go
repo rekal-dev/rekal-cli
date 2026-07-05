@@ -124,6 +124,22 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		return fmt.Errorf("count local sessions: %w", err)
 	}
 
+	// 5a-ii: Cross-repo local import (index-only; never touches data.db, so it
+	// can never be pushed). Honors the remembered preference — off by default.
+	cfg, err := readConfig(gitRoot)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	pref := cfg.LocalImport
+	var importedSessions, importedProjects int
+	if pref.enabled() {
+		fmt.Fprintln(w, "importing local cross-repo sessions...")
+		importedSessions, importedProjects, err = importLocalSessions(indexDB, gitRoot, pref, w)
+		if err != nil {
+			return fmt.Errorf("import local sessions: %w", err)
+		}
+	}
+
 	// 5b: Import each remote branch into index.
 	var remoteSessions int
 	teamMembers := 0
@@ -216,6 +232,9 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	fmt.Fprintf(w, "rekal: synced — %d local sessions", localSessions)
 	if remoteSessions > 0 {
 		fmt.Fprintf(w, ", %d remote sessions from %d team member(s)", remoteSessions, teamMembers)
+	}
+	if importedSessions > 0 {
+		fmt.Fprintf(w, ", %d cross-repo sessions from %d project(s)", importedSessions, importedProjects)
 	}
 	fmt.Fprintln(w)
 

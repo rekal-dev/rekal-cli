@@ -23,11 +23,12 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
    - `files_index` — Files touched, denormalized via `checkpoint_sessions`
    - `session_facets` — Aggregated session metadata (email, branch, actor, counts, checkpoint/SHA)
    - `file_cooccurrence` — Self-join on tool call paths within same session
-5. **Create FTS index** — DuckDB BM25 full-text search on `turns_ft.content` (only if turns exist).
-6. **LSA pass** — Build LSA model from session content (only if 2+ sessions), store embeddings in `session_embeddings` with model `lsa-v1`.
-7. **Nomic pass** — Generate nomic-embed-text deep semantic embeddings (only on supported platforms: darwin/arm64, linux/amd64). Store in `session_embeddings` with model `nomic-v1.5`. Non-fatal — skipped with a warning if unavailable or fails.
-8. **Write index state** — Record `session_count`, `turn_count`, `embedding_dim`, `last_indexed_at`.
-9. **Print summary** — `index rebuilt: N sessions, N turns`.
+5. **Cross-repo local import (if enabled)** — When the `local_import` preference in `.rekal/config.json` is set, fold this machine's other Claude Code sessions (other repos and shell sessions under `~/.claude/projects/*`) into `turns_ft` / `session_facets`, labeled with an `origin` (`repo:`/`shell:`). **Index only — never written to `data.db`, so these sessions can be recalled locally but can never be pushed to the team.** Sessions whose content hash already exists in `data.db` are skipped.
+6. **Create FTS index** — DuckDB BM25 full-text search on `turns_ft.content` (only if turns exist).
+7. **LSA pass** — Build LSA model from session content (only if 2+ sessions), store embeddings in `session_embeddings` with model `lsa-v1`.
+8. **Nomic pass** — Generate nomic-embed-text deep semantic embeddings (only on supported platforms: darwin/arm64, linux/amd64). Store in `session_embeddings` with model `nomic-v1.5`. Non-fatal — skipped with a warning if unavailable or fails.
+9. **Write index state** — Record `session_count`, `turn_count`, `embedding_dim`, `last_indexed_at`.
+10. **Print summary** — `index rebuilt: N sessions, N turns`.
 
 ---
 
@@ -37,9 +38,17 @@ The index DB can be deleted at any time; `rekal index` rebuilds it completely. N
 
 ---
 
-## No flags
+## Flags
 
-No user-facing flags. Same behaviour every run: full rebuild.
+Cross-repo local import — fold your own Claude Code history from other repos and shell sessions on this machine into recall. These flags **set a persistent preference** (stored in `.rekal/config.json`, gitignored) and rebuild. A plain `rekal index` — and `rekal sync` — then **honor** whatever was last set. Default is off. Mutually exclusive.
+
+| Flag | Effect |
+|---|---|
+| `--include-all` | Import every local Claude Code session (all repos + shell sessions). |
+| `--include <repo>` | Import local sessions for specific repo path(s). Repeatable. |
+| `--no-local` | Stop importing; clears the remembered preference. |
+
+Imported sessions are stored in the index only, never in `data.db`, so they are **structurally incapable of being pushed** to the team. They are labeled with an `origin` (`repo:`/`shell:`) in recall output. Turn the choice off with `--no-local`; `rekal clean` also removes the preference.
 
 ---
 

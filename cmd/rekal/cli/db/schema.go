@@ -157,6 +157,10 @@ func MigrateIndexSchema(d *sql.DB) error {
 		{"agent_type", "VARCHAR"},
 		{"description", "VARCHAR"},
 		{"spawn_depth", "INTEGER"},
+		// origin labels a cross-repo local import (rekal index --include*):
+		// the source working directory ("repo:/path" or "shell:/path"). NULL
+		// for this repo's own sessions and teammate sessions.
+		{"origin", "VARCHAR"},
 	} {
 		if err := addColumnIfMissing(d, "session_facets", col.name, col.typ); err != nil {
 			return err
@@ -378,7 +382,8 @@ CREATE TABLE IF NOT EXISTS session_facets (
 	workflow_name     VARCHAR,
 	agent_type        VARCHAR,
 	description       VARCHAR,
-	spawn_depth       INTEGER
+	spawn_depth       INTEGER,
+	origin            VARCHAR
 );
 CREATE INDEX IF NOT EXISTS idx_sf_email ON session_facets(user_email);
 CREATE INDEX IF NOT EXISTS idx_sf_actor ON session_facets(actor_type);

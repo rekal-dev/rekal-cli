@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
@@ -15,7 +16,11 @@ import (
 )
 
 func newIndexCmd() *cobra.Command {
-	return &cobra.Command{
+	var includeAll bool
+	var include []string
+	var noLocal bool
+
+	cmd := &cobra.Command{
 		Use:   "index",
 		Short: "Rebuild the index DB from the data DB",
 		Long: `Drop and rebuild the index DB (.rekal/index.db) from the data DB.
@@ -29,16 +34,92 @@ The index is local-only and never synced. It contains:
   - Tool call indexes
 
 Rebuild when the index is out of date or after importing new data.
-'rekal sync' rebuilds the index automatically.`,
+'rekal sync' rebuilds the index automatically.
+
+Cross-repo local import (--include-all / --include / --no-local) folds your
+own Claude Code history from other repos and shell sessions on this machine
+into recall. These sessions are stored in the index only, never in the data
+DB, so they can be recalled locally but can never be pushed to the team.
+The choice is remembered: plain 'rekal index' and 'rekal sync' keep whatever
+you last set. Default is off.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
 				return err
 			}
 
+			if err := applyLocalPrefFlags(cmd, gitRoot, includeAll, include, noLocal); err != nil {
+				return err
+			}
+
 			return runIndex(cmd, gitRoot)
 		},
 	}
+
+	cmd.Flags().BoolVar(&includeAll, "include-all", false,
+		"import every local Claude Code session on this machine (all repos + shell) into recall")
+	cmd.Flags().StringArrayVar(&include, "include", nil,
+		"import local sessions for specific repo path(s) into recall (repeatable)")
+	cmd.Flags().BoolVar(&noLocal, "no-local", false,
+		"stop importing local cross-repo sessions (clears the remembered choice)")
+
+	return cmd
+}
+
+// applyLocalPrefFlags translates the cross-repo import flags into a persisted
+// preference before the rebuild. Only one of the flags may be set at a time.
+// When none is set, the remembered preference is left untouched so a plain
+// rebuild honors the last choice.
+func applyLocalPrefFlags(cmd *cobra.Command, gitRoot string, includeAll bool, include []string, noLocal bool) error {
+	set := 0
+	if includeAll {
+		set++
+	}
+	if len(include) > 0 {
+		set++
+	}
+	if noLocal {
+		set++
+	}
+	if set == 0 {
+		return nil
+	}
+	if set > 1 {
+		return fmt.Errorf("--include-all, --include, and --no-local are mutually exclusive")
+	}
+
+	cfg, err := readConfig(gitRoot)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+
+	w := cmd.ErrOrStderr()
+	switch {
+	case noLocal:
+		cfg.LocalImport = localPref{}
+		fmt.Fprintln(w, "rekal: cross-repo local import off")
+	case includeAll:
+		cfg.LocalImport = localPref{All: true}
+		fmt.Fprintln(w, "rekal: cross-repo local import on (all local sessions)")
+	default:
+		// Normalize to absolute so a repo path resolves to the same project
+		// dir the current repo would (the sanitizer keys off the absolute cwd).
+		abs := make([]string, 0, len(include))
+		for _, p := range include {
+			if a, aerr := filepath.Abs(p); aerr == nil {
+				abs = append(abs, a)
+			} else {
+				abs = append(abs, p)
+			}
+		}
+		cfg.LocalImport = localPref{Repos: abs}
+		fmt.Fprintf(w, "rekal: cross-repo local import on (%d repo path(s))\n", len(abs))
+	}
+
+	if err := writeConfig(gitRoot, cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	return nil
 }
 
 // runIndex rebuilds the index DB into a temporary file and only replaces
@@ -93,6 +174,22 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	fmt.Fprintln(w, "populating index from data db...")
 	if err := db.PopulateIndex(indexDB, gitRoot); err != nil {
 		return fmt.Errorf("populate index: %w", err)
+	}
+
+	// Cross-repo local import (index-only; never touches data.db). Honors the
+	// remembered preference — off by default.
+	cfg, err := readConfig(gitRoot)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	pref := cfg.LocalImport
+	if pref.enabled() {
+		fmt.Fprintln(w, "importing local cross-repo sessions...")
+		localSessions, localProjects, ierr := importLocalSessions(indexDB, gitRoot, pref, w)
+		if ierr != nil {
+			return fmt.Errorf("import local sessions: %w", ierr)
+		}
+		fmt.Fprintf(w, "imported %d local session(s) from %d project(s)\n", localSessions, localProjects)
 	}
 
 	// Count what we indexed.

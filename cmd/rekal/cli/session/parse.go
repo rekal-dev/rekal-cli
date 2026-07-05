@@ -17,8 +17,13 @@ type SessionPayload struct {
 	ToolCalls  []ToolCall `json:"tool_calls"`
 	Branch     string     `json:"branch"`
 	CapturedAt time.Time  `json:"captured_at"`
-	ActorType  string     `json:"actor_type"` // "human" | "agent"
-	AgentID    string     `json:"agent_id"`   // empty for human
+
+	// CWD is the working directory the session was recorded in (from the
+	// transcript's cwd field). Used to label the origin of cross-repo local
+	// imports; empty when the transcript carries no cwd.
+	CWD       string `json:"cwd,omitempty"`
+	ActorType string `json:"actor_type"` // "human" | "agent"
+	AgentID   string `json:"agent_id"`   // empty for human
 
 	// TeamName is the active team name when the session was part of a
 	// Claude Code teammates run (from the entries' teamName field or the
@@ -208,6 +213,9 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 		}
 		if payload.Branch == "" && raw.GitBranch != "" {
 			payload.Branch = raw.GitBranch
+		}
+		if payload.CWD == "" && raw.CWD != "" {
+			payload.CWD = raw.CWD
 		}
 		if payload.TeamName == "" && raw.TeamName != "" {
 			payload.TeamName = raw.TeamName

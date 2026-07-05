@@ -676,6 +676,19 @@ func buildResults(indexDB *sql.DB, scored []scored, filters RecallFilters, limit
 	return results, nil
 }
 
+// sqlInClause builds a "$1,$2,...,$N" placeholder list and the matching args
+// slice for an `IN (...)` clause over sessionIDs. It assumes $1 is the first
+// bound parameter in the statement (nothing else precedes it).
+func sqlInClause(sessionIDs []string) (string, []interface{}) {
+	placeholders := make([]string, len(sessionIDs))
+	args := make([]interface{}, len(sessionIDs))
+	for i, sid := range sessionIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = sid
+	}
+	return strings.Join(placeholders, ","), args
+}
+
 // loadSessionFacetsBatch batch-loads session_facets rows for a set of
 // candidate sessions, keyed by session_id. Sessions missing from
 // session_facets (shouldn't happen) are simply absent from the map.
@@ -685,15 +698,9 @@ func loadSessionFacetsBatch(indexDB *sql.DB, sessionIDs []string) (map[string]se
 		return result, nil
 	}
 
-	placeholders := make([]string, len(sessionIDs))
-	args := make([]interface{}, len(sessionIDs))
-	for i, sid := range sessionIDs {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = sid
-	}
-
+	inClause, args := sqlInClause(sessionIDs)
 	rows, err := indexDB.Query(
-		"SELECT "+sessionFacetCols+" FROM session_facets WHERE session_id IN ("+strings.Join(placeholders, ",")+")",
+		"SELECT "+sessionFacetCols+" FROM session_facets WHERE session_id IN ("+inClause+")",
 		args...,
 	)
 	if err != nil {
@@ -721,15 +728,9 @@ func loadSessionFilesBatch(indexDB *sql.DB, sessionIDs []string) (map[string][]s
 		return result, nil
 	}
 
-	placeholders := make([]string, len(sessionIDs))
-	args := make([]interface{}, len(sessionIDs))
-	for i, sid := range sessionIDs {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = sid
-	}
-
+	inClause, args := sqlInClause(sessionIDs)
 	rows, err := indexDB.Query(
-		"SELECT DISTINCT session_id, file_path FROM files_index WHERE session_id IN ("+strings.Join(placeholders, ",")+")",
+		"SELECT DISTINCT session_id, file_path FROM files_index WHERE session_id IN ("+inClause+")",
 		args...,
 	)
 	if err != nil {
@@ -756,16 +757,13 @@ func loadParentIDs(indexDB *sql.DB, sessionIDs []string) (map[string]string, err
 		return result, nil
 	}
 
-	placeholders := make([]string, len(sessionIDs))
-	args := make([]interface{}, len(sessionIDs))
-	for i, sid := range sessionIDs {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = sid
+	for _, sid := range sessionIDs {
 		result[sid] = "" // default: no parent, until proven otherwise
 	}
 
+	inClause, args := sqlInClause(sessionIDs)
 	rows, err := indexDB.Query(
-		"SELECT session_id, parent_session_id FROM session_facets WHERE session_id IN ("+strings.Join(placeholders, ",")+")",
+		"SELECT session_id, parent_session_id FROM session_facets WHERE session_id IN ("+inClause+")",
 		args...,
 	)
 	if err != nil {

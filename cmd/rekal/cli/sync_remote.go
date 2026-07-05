@@ -10,25 +10,8 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 )
-
-// sqlNullIfEmpty returns nil for "" so optional VARCHAR columns store NULL
-// instead of an empty string (mirrors db.nullIfEmpty for inserts made here).
-func sqlNullIfEmpty(s string) interface{} {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-// sqlNullIfZero returns nil for 0 so optional INTEGER columns store NULL
-// instead of a misleading zero.
-func sqlNullIfZero(n int) interface{} {
-	if n == 0 {
-		return nil
-	}
-	return n
-}
 
 // fetchRemoteRekalRefs fetches all rekal/* branches from origin.
 // Non-fatal: returns nil if no remote or fetch fails.
@@ -180,8 +163,8 @@ func importBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 				sessionID, email, branch, actorType, agentID,
 				capturedAt, len(sf.Turns), 0, 0,
-				sqlNullIfEmpty(parentID), sqlNullIfEmpty(sf.TeamName), sqlNullIfEmpty(sf.WorkflowName),
-				sqlNullIfEmpty(sf.AgentType), sqlNullIfEmpty(sf.Description), sqlNullIfZero(sf.SpawnDepth),
+				db.NullIfEmpty(parentID), db.NullIfEmpty(sf.TeamName), db.NullIfEmpty(sf.WorkflowName),
+				db.NullIfEmpty(sf.AgentType), db.NullIfEmpty(sf.Description), db.NullIfZero(sf.SpawnDepth),
 			); err != nil {
 				return imported, fmt.Errorf("insert session_facet: %w", err)
 			}

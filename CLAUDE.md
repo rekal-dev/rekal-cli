@@ -59,14 +59,18 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `index_cmd.go`: Rebuild index DB from data DB
 - `log.go`: Show recent checkpoints
 - `query.go`: Raw SQL access
+- `lsa_cache.go`: Persist/load the LSA query-projection state in `index.db`
+  so recall doesn't refit the whole model on every call
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
-- `preconditions.go`: Shared checks (git repo, init done, index exists)
+- `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +
+  init done) plus the individual `EnsureGitRoot`/`EnsureInitDone` helpers
 
 ### Packages (`cmd/rekal/cli/`)
 
 - `codec/`: Binary wire format — frame encoding/decoding, body, dictionary, preset zstd dictionary
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate
+- `scrub/`: Redact secrets and anonymize file paths in a session payload before any DB insert (runs in `checkpoint` after parse)
 - `db/`: DuckDB backend — open, close, schema, insert helpers, index population
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)

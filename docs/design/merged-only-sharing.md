@@ -68,6 +68,27 @@ The change is at the **export boundary only**, not a new store.
 - `data.db` is untouched: it still holds every branch. Only the bytes that
   cross the wire are filtered.
 
+### The index stays complete — the gate is export-only
+
+The merged-gate lives at the **export boundary and nowhere else**. `data.db`
+and `index.db` both index **all local branches**, exactly as today; recall sees
+your entire history regardless of merge state. This is the right trade-off on
+every axis:
+
+- **Free of the cost that matters.** The index is local and disposable; the
+  only price of indexing everything is a little disk and rebuild time. It
+  carries no leakage risk, because leakage is governed by the export filter, not
+  the index — richness on the machine is decoupled from what crosses the wire.
+- **Necessary, not just tolerable.** If the index were gated to merged-only,
+  recall on a feature branch would be blind to that branch's own in-progress
+  history — the exact moment the agent most needs it. Indexing all branches is
+  what makes mid-branch recall work.
+- **Simpler.** The recall/index path is untouched; the entire feature is one
+  filter added to `export`. Nothing to gate, migrate, or re-derive in the index.
+
+This is the soul in one line: **rich on the machine, thin on the wire.** Index
+richness is local and total; wire thinness is the merge filter.
+
 ### Resolving "the default branch"
 
 New `gitx` helper: resolve the default branch once per invocation, preferring

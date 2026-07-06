@@ -111,18 +111,61 @@ for every worktree of a repo. So it should live in the repo's **common git
 dir**, not the per-worktree checkout.
 
 - Resolve the store root with `git rev-parse --git-common-dir` (returns the
-  shared `.git` even from a linked worktree) instead of the working-tree root.
-  Put `index.db` there — one index, read/written by every worktree.
-- `data.db` can follow the same rule, so a checkpoint taken in any worktree
-  lands in the one shared ledger. One `rekal sync` then serves all worktrees.
+  shared `.git` even from a linked worktree), and put the store at
+  `<common-git-dir>/rekal/` — i.e. `.git/rekal/` for a normal repo. One store,
+  read/written by every worktree.
+- Everything moves together — `data.db`, `index.db`, and `config.json` — so a
+  checkpoint taken in any worktree lands in the one shared ledger, and one
+  `rekal sync` serves them all.
+- Putting the store inside the git dir also means it is **never tracked** (git
+  never versions its own internals), so the `.gitignore` entry for `.rekal/`
+  becomes unnecessary — the store is invisible to `git status` by construction
+  rather than by a rule that has to be maintained.
 - The only genuinely per-worktree fact is *which branch is checked out right
   now*, which recall already reads live (`gitx.CurrentBranch`) for ranking. The
   store is one; the branch is a lens over it, not a partition of it.
 
-Migration: existing repos have `.rekal/` in the working root (which for a
-non-worktree repo *is* the common dir's parent). Detect the legacy location and
-either move it or read it in place; a repo that never uses worktrees sees no
-change.
+## One-time cutover (existing installs)
+
+Today's installs put `.rekal/` in the **working tree root**, gitignored —
+*not* under `.git`. The move to `<common-git-dir>/rekal/` therefore needs a
+one-time, automatic cutover so nobody has to think about it and nobody loses
+history.
+
+**Detection.** On any command, resolve both the legacy path
+(`<worktree-root>/.rekal`) and the new path (`<common-git-dir>/rekal`). The
+cutover is needed exactly when the legacy dir exists and the new one does not.
+
+**The move — safe and idempotent:**
+
+1. If new exists and legacy does not → already cut over; use new. (Steady state.)
+2. If legacy exists and new does not → **cut over now:**
+   - `os.Rename(legacy, new)` when both are on the same filesystem (atomic —
+     the common git dir is almost always under the same mount as the worktree).
+   - Fall back to copy-then-remove if rename crosses a filesystem boundary
+     (e.g. `.git` is a `gitdir:` pointer file into another volume — rare, but
+     submodules and some worktree setups do this). Copy first, fsync, verify,
+     then remove the legacy dir, so an interrupted copy never destroys the only
+     copy.
+   - After a successful move, drop the now-obsolete `.rekal/` line from
+     `.gitignore` (best-effort; leaving it is harmless).
+3. If **both** exist → do not merge blindly. This means a cutover was
+   interrupted, or a worktree wrote a fresh legacy `.rekal/` after an earlier
+   cutover. Prefer the new (shared) store, and print a one-line notice pointing
+   at the leftover legacy dir so the user can inspect/remove it. Never silently
+   delete data we didn't just write.
+4. If neither exists → fresh repo; `init` creates the store at the new path
+   directly.
+
+**Properties:** runs at most once per repo (step 1 is the fast path forever
+after), touches nothing on a fresh install, and is crash-safe (rename is
+atomic; the copy path removes the source only after the destination is
+verified). `rekal clean` learns the new path and removes
+`<common-git-dir>/rekal/` (plus any stray legacy dir).
+
+A repo that never uses worktrees still benefits: its store simply lives in
+`.git/rekal/` instead of `./.rekal/`, with no behavior change the user notices
+beyond the one-time move.
 
 ## How the two link
 
@@ -159,9 +202,15 @@ use it for both the export filter and the store location.
 3. `transport/export.go`: apply the filter before encoding frames; never mark a
    held-back checkpoint exported (so it re-evaluates next push and releases on
    merge).
-4. Store location: resolve `.rekal/` (at least `index.db`) under
-   `CommonGitDir`; migrate/read legacy path.
-5. `log`/`recall`: surface shared-vs-held state for transparency.
+4. Store location: a single `RekalDir(gitRoot)` resolver returns
+   `<CommonGitDir>/rekal`; every path helper already funnels through it, so the
+   move is one function. `init` creates it there; `clean` removes it there.
+5. One-time cutover: a `migrateStore()` run early in command startup
+   (before any store open) that performs the safe/idempotent move described in
+   "One-time cutover" — rename-or-copy legacy `<worktree>/.rekal` →
+   `<CommonGitDir>/rekal`, both-exist notice, `.gitignore` cleanup. Covered by
+   unit tests for each of the four detection cases.
+6. `log`/`recall`: surface shared-vs-held state for transparency.
 6. Optional: `share_policy` in `config.json` if teams need to override the
    squash default.
 7. Docs: `spec/command/push.md`, `spec/command/sync.md`, `CLAUDE.md`.

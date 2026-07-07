@@ -1,7 +1,10 @@
 # Merged-only sharing (and worktree-shared state)
 
-**Status:** design (2026-07). Not yet implemented. This note is the spec to
-sign off before code. It captures two features that turn out to be one idea.
+**Status:** partially implemented (2026-07). **Mechanism 1 (merged-only export
+gate) is built** — `push`/`--re-export` now share only checkpoints whose
+`git_sha` is an ancestor of the default branch (fail-closed; squash fallback
+deferred). **Mechanism 2 (worktree-shared store + one-time cutover) remains
+design.** This note captures both — they are one idea seen from two sides.
 
 ## Problem
 

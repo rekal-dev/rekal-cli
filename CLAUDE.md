@@ -75,9 +75,13 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `codec/`: Binary wire format — frame encoding/decoding, body, dictionary, preset zstd dictionary
 - `transport/`: Git-side sync — encode checkpoints to the orphan-branch wire
   format and decode them back (`export`/`import`/remote-sync glue, orphan-branch
-  commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`
+  commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`.
+  `export` applies the **merged-only gate** (`filterMerged`): only checkpoints
+  whose `git_sha` is an ancestor of the default branch reach the wire — unmerged
+  work stays local (see `docs/design/merged-only-sharing.md`)
 - `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
-  `rekal/<email>` branch name) shared by the command and transport layers
+  `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor` for the merged-only
+  export gate) shared by the command and transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
   weighting (steering-turn boost, subagent down-weight), conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, and the LSA

@@ -81,3 +81,37 @@ func RekalBranchName() string {
 	}
 	return "rekal/" + email
 }
+
+// DefaultBranch resolves the ref that represents merged mainline history — the
+// reference the merged-only export filter tests against. It prefers the
+// remote's declared default (origin/HEAD → origin/main → origin/master), so
+// "merged" means "landed on the shared remote", then falls back to a local
+// main/master for repos without a remote. Returns "" when nothing resolves
+// (e.g. a repo with no commits), which the caller treats as "share nothing".
+func DefaultBranch(gitRoot string) string {
+	if out, err := exec.Command("git", "-C", gitRoot,
+		"symbolic-ref", "--short", "refs/remotes/origin/HEAD").Output(); err == nil {
+		if ref := strings.TrimSpace(string(out)); ref != "" {
+			return ref
+		}
+	}
+	for _, ref := range []string{"origin/main", "origin/master", "main", "master"} {
+		if exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", "--quiet", ref).Run() == nil {
+			return ref
+		}
+	}
+	return ""
+}
+
+// IsAncestor reports whether commit sha is an ancestor of (reachable from) ref.
+// Because a merge-commit or rebase workflow lands a branch's commits into the
+// mainline's history, this is an exact "did this session's code merge?" test
+// for those workflows. It is deliberately conservative: a squash-merge rewrites
+// the branch into a new commit, so the original sha is not an ancestor and the
+// session is held back (fail-closed) rather than risk sharing unmerged work.
+func IsAncestor(gitRoot, sha, ref string) bool {
+	if sha == "" || ref == "" {
+		return false
+	}
+	return exec.Command("git", "-C", gitRoot, "merge-base", "--is-ancestor", sha, ref).Run() == nil
+}

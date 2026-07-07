@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestReadConfig_MissingIsDefault(t *testing.T) {
@@ -95,6 +98,94 @@ func TestLocalPref_Enabled(t *testing.T) {
 			t.Errorf("%s: enabled() = %v, want %v", tc.name, got, tc.want)
 		}
 	}
+}
+
+func TestApplyLocalPrefFlags(t *testing.T) {
+	t.Parallel()
+
+	newCmd := func() *cobra.Command {
+		cmd := &cobra.Command{}
+		cmd.SetErr(io.Discard)
+		return cmd
+	}
+
+	t.Run("mutually exclusive", func(t *testing.T) {
+		t.Parallel()
+		gitRoot := t.TempDir()
+		if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyLocalPrefFlags(newCmd(), gitRoot, true, nil, true); err == nil {
+			t.Fatal("expected error for --include-all with --no-local")
+		}
+	})
+
+	t.Run("no flags leaves preference untouched", func(t *testing.T) {
+		t.Parallel()
+		gitRoot := t.TempDir()
+		if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeConfig(gitRoot, Config{LocalImport: localPref{All: true}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyLocalPrefFlags(newCmd(), gitRoot, false, nil, false); err != nil {
+			t.Fatalf("applyLocalPrefFlags: %v", err)
+		}
+		cfg, err := readConfig(gitRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.LocalImport.All {
+			t.Fatal("plain rebuild must honor, not clear, the remembered preference")
+		}
+	})
+
+	t.Run("include-all persists, no-local clears", func(t *testing.T) {
+		t.Parallel()
+		gitRoot := t.TempDir()
+		if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyLocalPrefFlags(newCmd(), gitRoot, true, nil, false); err != nil {
+			t.Fatalf("--include-all: %v", err)
+		}
+		cfg, err := readConfig(gitRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.LocalImport.All {
+			t.Fatal("--include-all did not persist")
+		}
+
+		if err := applyLocalPrefFlags(newCmd(), gitRoot, false, nil, true); err != nil {
+			t.Fatalf("--no-local: %v", err)
+		}
+		cfg, err = readConfig(gitRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.LocalImport.enabled() {
+			t.Fatal("--no-local did not clear the preference")
+		}
+	})
+
+	t.Run("include normalizes to absolute paths", func(t *testing.T) {
+		gitRoot := t.TempDir() // no t.Parallel: relies on process cwd
+		if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyLocalPrefFlags(newCmd(), gitRoot, false, []string{"rel/path"}, false); err != nil {
+			t.Fatalf("--include: %v", err)
+		}
+		cfg, err := readConfig(gitRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(cfg.LocalImport.Repos) != 1 || !filepath.IsAbs(cfg.LocalImport.Repos[0]) {
+			t.Fatalf("repos = %v, want one absolute path", cfg.LocalImport.Repos)
+		}
+	})
 }
 
 func TestConfigPath(t *testing.T) {

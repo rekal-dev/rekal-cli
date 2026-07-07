@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,7 +131,10 @@ func seedCheckpoint(t *testing.T, gitRoot, sessionID, checkpointID, ts string) {
 	if err := db.InsertTurn(dataDB, ulid.Make().String(), sessionID, 0, "human", "fix the bug", ts); err != nil {
 		t.Fatalf("InsertTurn: %v", err)
 	}
-	if err := db.InsertCheckpoint(dataDB, checkpointID, "abc123", "main", "dev@example.com", ts, "human", ""); err != nil {
+	// The checkpoint's git_sha must be a real commit on the default branch so
+	// the merged-only export gate shares it (see ExportNewFrames / filterMerged
+	// in transport). setupExportTestRepo commits on and renames HEAD to main.
+	if err := db.InsertCheckpoint(dataDB, checkpointID, headSHA(t, gitRoot), "main", "dev@example.com", ts, "human", ""); err != nil {
 		t.Fatalf("InsertCheckpoint: %v", err)
 	}
 	if err := db.InsertCheckpointSession(dataDB, checkpointID, sessionID); err != nil {
@@ -170,6 +174,9 @@ func setupExportTestRepo(t *testing.T) string {
 	runGit(t, dir, "config", "user.email", "dev@example.com")
 	runGit(t, dir, "config", "user.name", "Dev")
 	runGit(t, dir, "commit", "--allow-empty", "-m", "initial")
+	// Normalize the default branch name so gitx.DefaultBranch resolves
+	// deterministically regardless of the host's init.defaultBranch.
+	runGit(t, dir, "branch", "-M", "main")
 
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -211,4 +218,14 @@ func runGit(t *testing.T, dir string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+}
+
+// headSHA returns the current HEAD commit SHA of the repo at dir.
+func headSHA(t *testing.T, dir string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	return strings.TrimSpace(string(out))
 }

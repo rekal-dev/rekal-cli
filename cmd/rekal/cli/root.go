@@ -23,8 +23,9 @@ Workflow:
 Getting Started:
   rekal init                        Initialize Rekal in a git repository
   rekal checkpoint                  Capture the current session
-  rekal push                        Share context with the team
+  rekal push                        Share context with the team (merged work only)
   rekal sync                        Pull team context
+  rekal index --include-all         Also recall your other repos' sessions (local only, never pushed)
 `
 
 // NewRootCmd returns the root command for the rekal CLI.

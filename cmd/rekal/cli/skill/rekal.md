@@ -43,6 +43,8 @@ Output is scored JSON. Each result includes:
 - `snippet_turn_index` — the turn index of the snippet (use as `--offset` for drill-down)
 - `snippet_role` — whether the snippet is from a `human` or `assistant` turn
 - `score`, `actor`, `author`, `branch`, `files` — metadata for filtering
+- `children` — subagent/workflow transcripts grouped under this result's trunk conversation (when any matched)
+- `origin` — present only on cross-repo hits (see below): `repo:/path` or `shell:/path`, the working directory the session came from. The hit is from *another project on this machine* — weigh its relevance to this repo accordingly. Absent means the session belongs to this repo or a teammate.
 
 ### 2. Drill down — progressive context loading
 
@@ -65,7 +67,25 @@ Output includes `total_turns`, `offset`, `limit`, and `has_more` for navigation.
 Do NOT load all turns or use `--full` by default. Use `snippet_turn_index` from
 search results to jump directly to the relevant part of the conversation.
 
-### 3. Raw SQL — for edge cases
+### 3. Widen memory — cross-repo recall
+
+By default recall covers this repo (plus synced teammate sessions). If the
+answer likely lives in the developer's *other* work on this machine, the
+developer can widen recall to every local Claude Code session:
+
+```bash
+rekal index --include-all           # all repos + shell sessions on this machine
+rekal index --include /path/to/repo # just that repo's sessions
+rekal index --no-local              # back to this repo only
+```
+
+The setting persists across `index`/`sync` rebuilds. Imported sessions are
+index-only — recallable here, structurally impossible to push to the team —
+and carry the `origin` label in results. Suggest `--include-all` to the user
+when a search comes up empty but the problem smells like something they've
+solved elsewhere; don't run it unprompted, it's their history to widen.
+
+### 4. Raw SQL — for edge cases
 
 ```bash
 rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
@@ -95,6 +115,7 @@ the full DB schemas (`rekal query --help`).
 - Start with `rekal "keyword"` — only drop to raw SQL when the search workflow doesn't cover your need
 - Use `snippet_turn_index` to jump to the relevant part of a session — don't load everything
 - Human turns contain the intent; assistant turns contain the reasoning
+- Cross-repo hits (`origin` set) are how a similar problem was solved *elsewhere* — treat them as prior art, not as this repo's conventions
 - `actor_type` distinguishes human-initiated sessions from automated agent sessions
 - Join `turns` with `tool_calls` via `session_id` to get context around file changes
 

@@ -290,3 +290,49 @@ func TestDecodeBatch_CorruptInnerLengthRejected(t *testing.T) {
 		t.Fatal("expected error for oversized member length")
 	}
 }
+
+// TestEncodeMemberFrame_FallbackReadableAsStandalone: when a batch would
+// overflow the envelope's length field, appendBatch (transport) falls back to
+// EncodeMemberFrame — each member written as its own standalone frame. Those
+// fallback frames must be indistinguishable from normally encoded standalone
+// frames: same envelope types, decodable by the standard session/checkpoint
+// decoders any reader already has.
+func TestEncodeMemberFrame_FallbackReadableAsStandalone(t *testing.T) {
+	enc, dec := newEncDec(t)
+
+	sf := sampleSession(3, "fallback path session")
+	cf := sampleCheckpoint(4)
+
+	body := NewBody()
+	for _, m := range []BatchMember{SessionMember(sf), CheckpointMember(cf)} {
+		frame, err := enc.EncodeMemberFrame(m)
+		if err != nil {
+			t.Fatalf("EncodeMemberFrame: %v", err)
+		}
+		body = AppendFrame(body, frame)
+	}
+
+	frames, err := ScanFrames(body)
+	if err != nil {
+		t.Fatalf("ScanFrames: %v", err)
+	}
+	if len(frames) != 2 {
+		t.Fatalf("expected 2 standalone frames, got %d", len(frames))
+	}
+
+	gotSF, err := dec.DecodeSessionFrame(ExtractFramePayload(body, frames[0]))
+	if err != nil {
+		t.Fatalf("DecodeSessionFrame on fallback frame: %v", err)
+	}
+	if gotSF.SessionRef != sf.SessionRef || len(gotSF.Turns) != 1 || gotSF.Turns[0].Text != sf.Turns[0].Text {
+		t.Fatalf("session round-trip mismatch: %+v", gotSF)
+	}
+
+	gotCF, err := dec.DecodeCheckpointFrame(ExtractFramePayload(body, frames[1]))
+	if err != nil {
+		t.Fatalf("DecodeCheckpointFrame on fallback frame: %v", err)
+	}
+	if gotCF.CheckpointRef != cf.CheckpointRef || gotCF.GitSHA != cf.GitSHA {
+		t.Fatalf("checkpoint round-trip mismatch: %+v", gotCF)
+	}
+}

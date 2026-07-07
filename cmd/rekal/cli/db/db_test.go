@@ -170,3 +170,43 @@ func TestQuerySessionContentByIDs_ZeroTurnSession(t *testing.T) {
 		t.Error("zero-turn session should be absent from the result")
 	}
 }
+
+// TestQuerySessionIDByHash covers checkpoint's subagent→trunk linking
+// fallback: when the trunk was captured in an earlier run, the subagent finds
+// its parent row by the trunk file's content hash — most recent capture wins.
+func TestQuerySessionIDByHash(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	// Two captures of the same content hash at different times.
+	if err := InsertSession(d, "older", "", "same-hash", "human", "", "dev@x.com", "main", "2026-01-01T10:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession older: %v", err)
+	}
+	if err := InsertSession(d, "newer", "", "same-hash", "human", "", "dev@x.com", "main", "2026-02-01T10:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession newer: %v", err)
+	}
+
+	id, err := QuerySessionIDByHash(d, "same-hash")
+	if err != nil {
+		t.Fatalf("QuerySessionIDByHash: %v", err)
+	}
+	if id != "newer" {
+		t.Fatalf("id = %q, want the most recently captured (newer)", id)
+	}
+
+	if _, err := QuerySessionIDByHash(d, "absent"); err == nil {
+		t.Fatal("expected error for an unknown hash")
+	}
+}

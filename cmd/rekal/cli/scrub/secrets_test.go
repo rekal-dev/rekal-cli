@@ -246,3 +246,54 @@ func TestHighEntropyRedactsRandom(t *testing.T) {
 		t.Errorf("high-entropy string should be redacted: %s", got)
 	}
 }
+
+func TestIsHexString(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		s    string
+		want bool
+	}{
+		{"deadbeef0123456789abcdefABCDEF", true},
+		{"e7b3a91f2c4d5e6f7890abcdef1234567890abcd", true}, // git SHA
+		{"deadbeefz", false},                               // one non-hex rune
+		{"", true},                                         // vacuously hex
+	}
+	for _, tc := range cases {
+		if got := isHexString(tc.s); got != tc.want {
+			t.Errorf("isHexString(%q) = %v, want %v", tc.s, got, tc.want)
+		}
+	}
+}
+
+func TestIsAllowedHighEntropy(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, s string
+		want    bool
+	}{
+		{"git sha allowed", "e7b3a91f2c4d5e6f7890abcdef1234567890abcd", true},
+		{"file path allowed", "/usr/local/lib/libgomp/x86_64-linux-gnu-12345", true},
+		{"random base64 not allowed", "qZx9Kf3mWv8Rt2Yp6Ln4Jh0Gd5Bs7Cn1", false},
+	}
+	for _, tc := range cases {
+		if got := isAllowedHighEntropy(tc.s); got != tc.want {
+			t.Errorf("%s: isAllowedHighEntropy(%q) = %v, want %v", tc.name, tc.s, got, tc.want)
+		}
+	}
+}
+
+// TestRedactText_GitSHAPreserved pins the allowlist behavior end to end:
+// commit SHAs are load-bearing context for recall (checkpoints anchor to
+// them) and must survive redaction, while real secrets in the same text go.
+func TestRedactText_GitSHAPreserved(t *testing.T) {
+	t.Parallel()
+	sha := "e7b3a91f2c4d5e6f7890abcdef1234567890abcd"
+	in := "fixed in commit " + sha + " using token ghp_abcdefghijklmnopqrstuvwxyz123456"
+	out := RedactText(in)
+	if !strings.Contains(out, sha) {
+		t.Fatalf("git SHA was redacted from %q", out)
+	}
+	if strings.Contains(out, "ghp_") {
+		t.Fatalf("github token survived: %q", out)
+	}
+}

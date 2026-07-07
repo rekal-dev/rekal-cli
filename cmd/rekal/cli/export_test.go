@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 )
 
@@ -181,6 +184,78 @@ func TestExportNewFrames_MergedOnlyGate(t *testing.T) {
 	}
 	if got := countUnexported(t, gitRoot); got != 0 {
 		t.Fatalf("after merge push: %d unexported checkpoints, want 0", got)
+	}
+}
+
+// TestDoReExport_RegeneratesMergedOnly covers the repair path (push
+// --re-export): it must rebuild the branch's wire data from data.db, mark the
+// re-encoded checkpoints exported, and apply the merged-only gate — a repair
+// must never re-leak unmerged work onto the wire.
+func TestDoReExport_RegeneratesMergedOnly(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	mergedSession := ulid.Make().String()
+	mergedCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, mergedSession, mergedCP, now, headSHA(t, gitRoot), "main")
+
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	runGit(t, gitRoot, "commit", "--allow-empty", "-m", "wip")
+	featureSHA := headSHA(t, gitRoot)
+	runGit(t, gitRoot, "checkout", "main")
+	unmergedSession := ulid.Make().String()
+	unmergedCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, unmergedSession, unmergedCP, now, featureSHA, "feature")
+
+	if err := doReExport(gitRoot, io.Discard); err != nil {
+		t.Fatalf("doReExport: %v", err)
+	}
+
+	// The merged checkpoint is exported; the unmerged one is still held back.
+	if got := countUnexported(t, gitRoot); got != 1 {
+		t.Fatalf("after re-export: %d unexported checkpoints, want 1 (unmerged held back)", got)
+	}
+
+	// The regenerated wire must decode and contain exactly one batch frame
+	// (the merged checkpoint) plus one meta frame — nothing from the branch.
+	body := gitx.ShowFile(gitRoot, gitx.RekalBranchName(), codec.BodyFilename)
+	frames, err := codec.ScanFrames(body)
+	if err != nil {
+		t.Fatalf("ScanFrames on regenerated body: %v", err)
+	}
+	var batches, metas int
+	for _, fs := range frames {
+		switch fs.Type {
+		case codec.FrameBatch:
+			batches++
+		case codec.FrameMeta:
+			metas++
+		default:
+			t.Fatalf("unexpected frame type %#x in regenerated body", fs.Type)
+		}
+	}
+	if batches != 1 || metas != 1 {
+		t.Fatalf("regenerated body has %d batch + %d meta frames, want 1 + 1", batches, metas)
+	}
+}
+
+// TestDoReExport_NothingMergedExportsNothing: with only unmerged work, a
+// repair must not write unmerged data — it reports nothing to export.
+func TestDoReExport_NothingMergedExportsNothing(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	runGit(t, gitRoot, "commit", "--allow-empty", "-m", "wip")
+	featureSHA := headSHA(t, gitRoot)
+	runGit(t, gitRoot, "checkout", "main")
+	seedCheckpointAt(t, gitRoot, ulid.Make().String(), ulid.Make().String(), now, featureSHA, "feature")
+
+	if err := doReExport(gitRoot, io.Discard); err != nil {
+		t.Fatalf("doReExport: %v", err)
+	}
+	if got := countUnexported(t, gitRoot); got != 1 {
+		t.Fatalf("after no-op re-export: %d unexported, want 1 (nothing marked)", got)
 	}
 }
 

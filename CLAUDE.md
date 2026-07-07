@@ -113,6 +113,7 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 mise run test              # Unit tests only
 mise run test:integration  # Integration tests only
 mise run test:ci           # All tests (unit + integration) with race detection
+mise run test:coverage     # All tests + statement coverage (writes coverage.html)
 ```
 
 ### Linting and Formatting

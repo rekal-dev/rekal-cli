@@ -10,6 +10,7 @@
 *.dylib
 *.test
 /coverage.out
+/coverage.html
 /vendor/
 
 # IDE and OS

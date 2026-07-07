@@ -111,6 +111,7 @@ mv /tmp/nomic.gguf.gz cmd/rekal/cli/nomic/models/nomic-embed-text-v1.5.Q8_0.gguf
 | Run unit tests | `mise run test` |
 | Run integration tests | `mise run test:integration` |
 | Run all tests (CI-style) | `mise run test:ci` |
+| Coverage report | `mise run test:coverage` (total + `coverage.html` line view) |
 | Run linters | `mise run lint` |
 | Build binary | `mise run build` |
 | Before push | Pre-push hook runs `test:ci` + `lint` if you ran `install-hooks.sh` |

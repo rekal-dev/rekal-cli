@@ -187,6 +187,76 @@ func TestExportNewFrames_MergedOnlyGate(t *testing.T) {
 	}
 }
 
+// TestExportNewFrames_SquashMergeReleases proves the squash workflow end to
+// end: checkpoints on a feature branch are held back while the branch is
+// unmerged, and are released — including the mid-branch one, via branch
+// grouping — after the branch is squash-merged (GitHub style: one new commit
+// on main, the branch's own commits never become ancestors).
+func TestExportNewFrames_SquashMergeReleases(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Base content on main so the branch diff is real (patch-ids need diffs).
+	writeAndCommit(t, gitRoot, "f.txt", "base\n", "base")
+
+	// Feature branch, two commits, a checkpoint at each.
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	midSHA := writeAndCommit(t, gitRoot, "f.txt", "base\none\n", "c1")
+	tipSHA := writeAndCommit(t, gitRoot, "f.txt", "base\none\ntwo\n", "c2")
+	midCP := ulid.Make().String()
+	tipCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, ulid.Make().String(), midCP, now, midSHA, "feature")
+	seedCheckpointAt(t, gitRoot, ulid.Make().String(), tipCP, now, tipSHA, "feature")
+
+	// main advances independently — nothing merged yet: everything held.
+	runGit(t, gitRoot, "checkout", "main")
+	writeAndCommit(t, gitRoot, "g.txt", "mainwork\n", "main advances")
+
+	body, _, exportedIDs, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames (pre-squash): %v", err)
+	}
+	if body != nil || len(exportedIDs) != 0 {
+		t.Fatalf("pre-squash export shipped %v, want nothing", exportedIDs)
+	}
+
+	// GitHub-style squash merge of the feature branch.
+	runGit(t, gitRoot, "merge", "--squash", "feature")
+	runGit(t, gitRoot, "commit", "-m", "feature (#1)")
+
+	body2, dict2, exportedIDs2, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames (post-squash): %v", err)
+	}
+	if len(exportedIDs2) != 2 {
+		t.Fatalf("post-squash exportedIDs = %v, want both feature checkpoints", exportedIDs2)
+	}
+	got := map[string]bool{exportedIDs2[0]: true, exportedIDs2[1]: true}
+	if !got[midCP] || !got[tipCP] {
+		t.Fatalf("post-squash exported %v, want {%s, %s} (mid released via branch grouping)", exportedIDs2, midCP, tipCP)
+	}
+	if _, err := transport.CommitWireFormat(gitRoot, body2, dict2); err != nil {
+		t.Fatalf("CommitWireFormat: %v", err)
+	}
+	if err := markCheckpointsExported(gitRoot, exportedIDs2); err != nil {
+		t.Fatalf("markCheckpointsExported: %v", err)
+	}
+	if n := countUnexported(t, gitRoot); n != 0 {
+		t.Fatalf("after squash release: %d unexported, want 0", n)
+	}
+}
+
+// writeAndCommit writes content to name, commits it, and returns the sha.
+func writeAndCommit(t *testing.T, dir, name, content, msg string) string {
+	t.Helper()
+	if err := os.WriteFile(dir+"/"+name, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", name)
+	runGit(t, dir, "commit", "-m", msg)
+	return headSHA(t, dir)
+}
+
 // TestDoReExport_RegeneratesMergedOnly covers the repair path (push
 // --re-export): it must rebuild the branch's wire data from data.db, mark the
 // re-encoded checkpoints exported, and apply the merged-only gate — a repair

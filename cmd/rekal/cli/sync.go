@@ -205,7 +205,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		}
 
 		// 5d-ii: Nomic pass (non-fatal).
-		if err := buildNomicEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
+		if err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
 			fmt.Fprintf(w, "warning: nomic embeddings skipped: %v\n", err)
 		}
 	}

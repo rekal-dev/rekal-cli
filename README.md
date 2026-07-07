@@ -187,7 +187,7 @@ rekal log
 
 Rekal keeps two local DuckDB databases. The split is deliberate.
 
-- **data.db** — The shared truth. Append-only. Contains sessions, turns, tool calls, checkpoints, files touched. This is what gets encoded and pushed through git. `rekal query` reads from here.
+- **data.db** — The shared truth. Append-only. Contains sessions, turns, tool calls, checkpoints, files touched — every branch, merged or not. This is the only source `rekal push` encodes from (filtered to merged work — see below). `rekal query` reads from here.
 
 - **index.db** — Local intelligence. Full-text indexes, vector embeddings, file co-occurrence graphs. Never synced. Rebuilt anytime with `rekal index`. This is what powers `rekal "query"` search.
 
@@ -197,6 +197,54 @@ Thin on the wire, rich on the machine.
 
 Rekal data lives on git orphan branches named `rekal/<email>`. These branches have no common ancestor with your code branches — they do not appear in your project history, do not affect merges, and do not clutter your working tree. Standard git push and fetch move the data.
 
+### What gets shared: merged work only
+
+Your local databases keep **every** branch — full fidelity, nothing gated. The wire is different: `rekal push` shares a session only when its code **landed on the default branch**, detected two ways, both exact:
+
+- its commit is an ancestor of `main` (merge-commit and rebase workflows), or
+- its branch's changes landed as a **squash merge** (patch-equivalence detection — no heuristics)
+
+Unmerged work simply waits: it stays local, is re-checked on every push, and ships automatically the moment its branch merges. Abandoned branches never qualify, so a dead-end spike never reaches your teammates. Commit everything for yourself; share only what merged.
+
+### Cross-repo recall (optional)
+
+Your agent's memory can span your whole machine, not just this repo:
+
+```bash
+rekal index --include-all            # recall every local Claude Code session (all repos + shell)
+rekal index --include /path/to/repo  # just that repo
+rekal index --no-local               # back to this repo only
+```
+
+Imported sessions live in the **index only** — never in `data.db`, which is the only thing `push` reads — so they are structurally impossible to share. Results are labeled with their origin (`repo:/path`, `shell:/path`). The setting persists across rebuilds.
+
+## Configuration (optional)
+
+Rekal is zero-config by default. When you do want to tune it, there is exactly one file: `.rekal/config.json` — gitignored, local to the machine, never committed.
+
+```json
+{
+  "local_import": { "all": true },
+  "weights": {
+    "bm25": 0.35,
+    "lsa": 0.10,
+    "nomic": 0.55,
+    "steering_boost": 1.3,
+    "subagent_downweight": 0.7
+  },
+  "embedding": {
+    "endpoint": "$EMBED_ENDPOINT",
+    "model": "nomic-embed-text-v1.5",
+    "api_key_env": "EMBED_API_KEY",
+    "timeout_seconds": 10
+  }
+}
+```
+
+- **`weights`** tunes recall ranking (layer mix, steering-turn boost, subagent discount). Applied at query time — changing them takes effect on the next search, no reindex, any corpus size.
+- **`embedding`** switches deep semantic embeddings from the embedded nomic model to any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI). `endpoint` and `api_key` expand `$VAR` references; `api_key_env` names an env var — secrets can stay in the environment entirely. Requests are batched and hard-timeboxed so a slow server can never stall a commit (embedding is always non-fatal). Pointed at localhost, your data still never leaves the machine; pointed at a cloud API, session text leaves — your call, made explicitly.
+- Switching embedding model/endpoint requires one `rekal index` to regenerate vectors. A content-hash-keyed cache (`.rekal/embed-cache.db`, vectors only, never text) makes routine rebuilds embed only new sessions — and makes a model switch cost exactly one full pass.
+
 ## Commands reference
 
 | Command | Description |
@@ -205,9 +253,9 @@ Rekal data lives on git orphan branches named `rekal/<email>`. These branches ha
 | `rekal clean` | Remove Rekal setup from this repository |
 | `rekal version` | Print the CLI version |
 | `rekal checkpoint` | Capture the current session after a commit |
-| `rekal push [--force]` | Push Rekal data to the remote branch |
+| `rekal push [--force] [--re-export]` | Push Rekal data to the remote branch (merged work only) |
 | `rekal sync [--self]` | Sync team context from remote rekal branches |
-| `rekal index` | Rebuild the index DB from the data DB |
+| `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB; optionally fold in cross-repo local sessions |
 | `rekal log [--limit N]` | Show recent checkpoints |
 | `rekal [filters...] [query]` | Hybrid search over sessions |
 | `rekal query --session <id> [--full]` | Drill into a session |

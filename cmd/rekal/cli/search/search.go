@@ -18,28 +18,10 @@ const (
 	defaultSnippetSize = 300
 	defaultLimit       = 20
 
-	// 2-way weights (fallback when nomic is unavailable).
-	bm25Weight2Way = 0.4
-	lsaWeight2Way  = 0.6
+	// Layer weights and metadata-signal multipliers live in Weights
+	// (weights.go) — configurable via .rekal/config.json, applied at query
+	// time only.
 
-	// 3-way weights (full hybrid with nomic).
-	bm25Weight3Way  = 0.35 // Keyword precision
-	lsaWeight3Way   = 0.10 // Corpus-specific co-occurrence
-	nomicWeight3Way = 0.55 // Semantic understanding
-
-	// Signal weighting over harness metadata (docs/agent-metadata.md). Simple
-	// multipliers, not a re-ranking pass — applied where the existing hybrid
-	// score is already assembled.
-	//
-	// steeringBoost favors turns captured from queue-operation/enqueue: text
-	// typed by a human while an agent was already working is the highest-
-	// intent signal in the corpus (SOUL.md: "agent first").
-	steeringBoost = 1.3
-	// subagentDownweight discounts sessions that are not the trunk of their
-	// conversation (non-null parent_session_id) relative to trunk turns of
-	// equal textual relevance — a subagent's internal exploration matters
-	// less than what the trunk actually said or decided.
-	subagentDownweight = 0.7
 	// conversationChildBudget caps how many folded transcripts are nested
 	// under one collapsed conversation result, so a single large workflow
 	// cannot occupy the whole top-k result budget.
@@ -126,7 +108,7 @@ type bm25Hit struct {
 	score     float64
 }
 
-func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string) ([]Result, error) {
+func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w Weights, qe QueryEmbedder) ([]Result, error) {
 	// Step 1: BM25 search.
 	bm25Hits, err := bm25Search(indexDB, filters.Query)
 	if err != nil {
@@ -141,7 +123,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string) (
 	}
 
 	// Step 3: Nomic deep semantic search (non-fatal).
-	nomicScores, _ := nomicSearch(indexDB, filters.Query, gitRoot)
+	nomicScores, _ := nomicSearch(indexDB, filters.Query, gitRoot, qe)
 
 	// Step 4: Group by session, pick best turn per session.
 	sessions := make(map[string]*sessionHit)
@@ -156,7 +138,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string) (
 		// text in the corpus — boost them so they win the best-turn slot.
 		weighted := hit.score
 		if hit.role == "human_steering" {
-			weighted *= steeringBoost
+			weighted *= w.SteeringBoost
 		}
 		if weighted > sh.bm25Max {
 			sh.bm25Max = weighted
@@ -224,6 +206,8 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string) (
 
 	// Compute hybrid scores — 3-way when nomic available, 2-way fallback.
 	useNomic := len(nomicScores) > 0
+	bm25W3, lsaW3, nomicW3 := w.layers3()
+	bm25W2, lsaW2 := w.layers2()
 	var scoredResults []scored
 	for sid, sh := range sessions {
 		bm25Norm := 0.0
@@ -241,14 +225,14 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string) (
 			if maxNomic > 0 {
 				nomicNorm = sh.nomicScore / maxNomic
 			}
-			hybrid = bm25Weight3Way*bm25Norm + lsaWeight3Way*lsaNorm + nomicWeight3Way*nomicNorm
+			hybrid = bm25W3*bm25Norm + lsaW3*lsaNorm + nomicW3*nomicNorm
 		} else {
-			hybrid = bm25Weight2Way*bm25Norm + lsaWeight2Way*lsaNorm
+			hybrid = bm25W2*bm25Norm + lsaW2*lsaNorm
 		}
 		// Subagent/workflow transcripts (non-null parent) are discounted
 		// relative to trunk turns of equal relevance.
 		if parentIDs[sid] != "" {
-			hybrid *= subagentDownweight
+			hybrid *= w.SubagentDownweight
 		}
 		scoredResults = append(scoredResults, scored{sid, hybrid, sh})
 	}
@@ -484,27 +468,45 @@ func lsaSearch(indexDB *sql.DB, query string) (map[string]float64, error) {
 	return scores, nil
 }
 
-// nomicSearch computes deep semantic similarity using nomic-embed-text embeddings.
-// Non-fatal: returns nil on any failure or when nomic is unavailable.
-func nomicSearch(indexDB *sql.DB, query string, gitRoot string) (map[string]float64, error) {
-	if !nomic.Supported() {
-		return nil, nil
-	}
+// QueryEmbedder embeds recall queries into the same vector space the index's
+// session embeddings were generated in. Implemented by the embedded nomic
+// client and the HTTP backend (cli wires the right one from config).
+type QueryEmbedder interface {
+	// ModelName keys the stored vectors this embedder is compatible with.
+	ModelName() string
+	EmbedQuery(text string) ([]float64, error)
+	Close()
+}
 
-	// Load stored nomic embeddings.
-	embeddings, err := db.QueryEmbeddings(indexDB, nomic.ModelName)
+// nomicSearch computes deep semantic similarity against the index's stored
+// session vectors. Non-fatal: returns nil on any failure or when no backend
+// is available.
+//
+// The embedder must match the model the index was built with — vectors from
+// different models live in incompatible spaces, so on a mismatch the layer is
+// skipped (scores nil → hybrid falls back to 2-way weights) rather than
+// comparing garbage. qe == nil selects the embedded nomic backend.
+func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder) (map[string]float64, error) {
+	if qe == nil {
+		if !nomic.Supported() {
+			return nil, nil
+		}
+		client, err := nomic.NewClient(gitRoot)
+		if err != nil {
+			return nil, err
+		}
+		qe = nomicQueryEmbedder{client}
+	}
+	defer qe.Close()
+
+	// Load stored vectors for this embedder's model; none (e.g. the index was
+	// built with a different backend) means the layer is skipped.
+	embeddings, err := db.QueryEmbeddings(indexDB, qe.ModelName())
 	if err != nil || len(embeddings) == 0 {
 		return nil, err
 	}
 
-	// Load client and embed the query.
-	client, err := nomic.NewClient(gitRoot)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-
-	queryVec, err := client.EmbedQuery(query)
+	queryVec, err := qe.EmbedQuery(query)
 	if err != nil {
 		return nil, err
 	}
@@ -518,6 +520,13 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string) (map[string]floa
 	}
 	return scores, nil
 }
+
+// nomicQueryEmbedder adapts the embedded nomic client to QueryEmbedder.
+type nomicQueryEmbedder struct{ c *nomic.Client }
+
+func (n nomicQueryEmbedder) ModelName() string                         { return nomic.ModelName }
+func (n nomicQueryEmbedder) EmbedQuery(text string) ([]float64, error) { return n.c.EmbedQuery(text) }
+func (n nomicQueryEmbedder) Close()                                    { n.c.Close() }
 
 func buildResults(indexDB *sql.DB, scored []scored, filters Filters, limit int) ([]Result, error) {
 	// Compile file regex if present.
@@ -986,18 +995,21 @@ func nullStr(ns sql.NullString) string {
 // Nomic) is used when a text query is present; otherwise results come from
 // facet filtering alone. Opening/rebuilding the index and marshaling the
 // Output to JSON are the caller's responsibility (see cli.runRecall).
-func Run(indexDB *sql.DB, filters Filters, gitRoot string) (Output, error) {
+// Run executes a recall. w tunes ranking (zero value → defaults); qe embeds
+// the query for the deep semantic layer (nil → the embedded nomic backend).
+func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEmbedder) (Output, error) {
 	limit := filters.Limit
 	if limit <= 0 {
 		limit = defaultLimit
 	}
+	w = w.orDefaults()
 
 	var results []Result
 	var err error
 	mode := "filter"
 	if filters.Query != "" {
 		mode = "hybrid"
-		results, err = hybridSearch(indexDB, filters, limit, gitRoot)
+		results, err = hybridSearch(indexDB, filters, limit, gitRoot, w, qe)
 	} else {
 		results, err = filterSearch(indexDB, filters, limit)
 	}

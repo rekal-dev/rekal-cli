@@ -57,3 +57,11 @@ Imported sessions are stored in the index only, never in `data.db`, so they are 
 - After sync (sync runs index automatically for `--self` mode; team mode rebuilds inline).
 - When index is missing or corrupted (`rm .rekal/index.db && rekal index`).
 - After manual edits to data DB.
+
+---
+
+## Semantic embeddings and the cache
+
+The deep-semantic pass uses the backend from `.rekal/config.json` — the `embedding` HTTP endpoint when configured (batched requests, hard per-request timeout, non-fatal on any failure), otherwise the embedded nomic model. Vectors are stored under the backend's model name, which is also recorded in `index_state` (`embed_model`).
+
+A content-hash-keyed cache (`.rekal/embed-cache.db`; `(model, content_hash) → vector`, vectors only, never text) makes rebuilds cheap: only content the model has never seen is embedded. Switching models invalidates by key construction and costs exactly one full re-embed. The cache is best-effort — unopenable/corrupt cache degrades to embedding everything, never to a build failure.

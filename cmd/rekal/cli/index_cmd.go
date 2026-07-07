@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
@@ -238,7 +239,7 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 		}
 
 		// Nomic pass (non-fatal).
-		if err := buildNomicEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
+		if err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
 			fmt.Fprintf(w, "warning: nomic embeddings skipped: %v\n", err)
 		}
 	}
@@ -274,28 +275,123 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	return nil
 }
 
-// buildNomicEmbeddings generates nomic-embed-text embeddings for all sessions
-// and stores them in the index DB. Non-fatal: returns error on any failure.
-func buildNomicEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string) error {
-	if !nomic.Supported() {
-		return nil
-	}
+// sessionEmbedder is the index-time embedding backend: the embedded nomic
+// model or the HTTP endpoint from config, chosen by semanticEmbedder.
+type sessionEmbedder interface {
+	ModelName() string
+	EmbedSessions(sessions map[string]string) (map[string][]float64, error)
+	Close()
+}
 
-	fmt.Fprintln(w, "building nomic deep semantic embeddings...")
+// nomicSessionEmbedder adapts the embedded nomic client to sessionEmbedder.
+type nomicSessionEmbedder struct{ c *nomic.Client }
+
+func (n nomicSessionEmbedder) ModelName() string { return nomic.ModelName }
+func (n nomicSessionEmbedder) EmbedSessions(s map[string]string) (map[string][]float64, error) {
+	return n.c.EmbedSessions(s)
+}
+func (n nomicSessionEmbedder) Close() { n.c.Close() }
+
+// semanticEmbedder picks the embedding backend: the HTTP endpoint when
+// configured in .rekal/config.json, otherwise the embedded nomic model.
+// Returns (nil, nil) when no backend is available (unsupported platform, no
+// config) — the semantic layer is simply skipped.
+func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
+	cfg, err := readConfig(gitRoot)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+	if cfg.Embedding != nil {
+		ec, err := cfg.Embedding.resolve()
+		if err != nil {
+			return nil, err
+		}
+		return embedhttp.New(ec), nil
+	}
+	if !nomic.Supported() {
+		return nil, nil
+	}
 	client, err := nomic.NewClient(gitRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer client.Close()
+	return nomicSessionEmbedder{client}, nil
+}
 
-	vectors, err := client.EmbedSessions(sessionContent)
-	if err != nil {
+// buildSemanticEmbeddings generates deep semantic embeddings for the given
+// sessions and stores them in the index DB under the backend's model name,
+// recording that name in index_state (embed_model) so recall knows which
+// vector space the index speaks.
+//
+// A content-hash-keyed cache (.rekal/embed-cache.db) makes rebuilds cheap:
+// only content the model has never seen is embedded; everything else is a
+// lookup. Switching models invalidates by key construction (new model, no
+// entries) and costs one full re-embed. The cache is best-effort — any cache
+// failure degrades to embedding everything, never to a build failure.
+//
+// Callers treat this whole function as non-fatal.
+func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string) error {
+	emb, err := semanticEmbedder(gitRoot)
+	if err != nil || emb == nil {
 		return err
+	}
+	defer emb.Close()
+	model := emb.ModelName()
+
+	fmt.Fprintf(w, "building deep semantic embeddings (%s)...\n", model)
+
+	// Hash each session's content for cache lookup.
+	hashBySession := make(map[string]string, len(sessionContent))
+	hashes := make([]string, 0, len(sessionContent))
+	for sid, content := range sessionContent {
+		h := sha256Hex([]byte(content))
+		hashBySession[sid] = h
+		hashes = append(hashes, h)
 	}
 
-	if err := db.StoreEmbeddings(indexDB, vectors, nomic.ModelName); err != nil {
+	var cached map[string][]float64
+	cacheDB, cacheErr := db.OpenEmbedCache(gitRoot)
+	if cacheErr == nil {
+		defer cacheDB.Close()
+		if got, gerr := db.CacheGetEmbeddings(cacheDB, model, hashes); gerr == nil {
+			cached = got
+		}
+	}
+
+	// Embed only content the cache doesn't know.
+	vectors := make(map[string][]float64, len(sessionContent))
+	toEmbed := make(map[string]string)
+	for sid, content := range sessionContent {
+		if vec, ok := cached[hashBySession[sid]]; ok {
+			vectors[sid] = vec
+			continue
+		}
+		toEmbed[sid] = content
+	}
+
+	if len(toEmbed) > 0 {
+		fresh, err := emb.EmbedSessions(toEmbed)
+		if err != nil {
+			return err
+		}
+		newEntries := make(map[string][]float64, len(fresh))
+		for sid, vec := range fresh {
+			vectors[sid] = vec
+			newEntries[hashBySession[sid]] = vec
+		}
+		if cacheErr == nil {
+			// Best-effort: a failed cache write only costs a future re-embed.
+			_ = db.CachePutEmbeddings(cacheDB, model, newEntries)
+		}
+	}
+
+	if err := db.StoreEmbeddings(indexDB, vectors, model); err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "stored %d nomic embeddings (%d dimensions)\n", len(vectors), nomic.EmbedDim)
+	if err := db.WriteIndexState(indexDB, "embed_model", model); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "stored %d semantic embeddings (%d cached, %d embedded)\n",
+		len(vectors), len(vectors)-len(toEmbed), len(toEmbed))
 	return nil
 }

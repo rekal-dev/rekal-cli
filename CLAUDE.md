@@ -56,9 +56,12 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `index_cmd.go`: Rebuild index DB from data DB. Also carries the cross-repo
   local-import flags (`--include-all`/`--include`/`--no-local`), which set a
   persistent preference and rebuild
-- `config.go`: `.rekal/config.json` (gitignored) — Rekal's durable local config.
-  Holds the cross-repo `local_import` preference; intended home for future
-  recall-tuning weights (BM25/LSA/nomic layers)
+- `config.go`: `.rekal/config.json` (gitignored, never committed) — Rekal's
+  durable local config. Holds the cross-repo `local_import` preference, the
+  recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost, subagent
+  discount — applied at query time, no reindex), and the `embedding` section
+  (OpenAI-compatible HTTP backend: endpoint/model/api_key with `$VAR`
+  expansion and `api_key_env`)
 - `local_import.go`: Cross-repo local session import — folds this machine's
   other Claude Code sessions (all repos + shell, from `~/.claude/projects/*`)
   into the index. **Index-only, never `data.db`**, so imported sessions are
@@ -84,15 +87,22 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
   `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
   `BranchTip` for the merged-only export gate) shared by the command and
   transport layers
-- `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
-  weighting (steering-turn boost, subagent down-weight), conversation grouping
+- `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring with
+  configurable weights (`weights.go`; query-time only), signal weighting
+  (steering-turn boost, subagent down-weight), conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, and the LSA
   query-projection cache (`projection.go`)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets and anonymize file paths in a session payload before any DB insert (runs in `checkpoint` after parse)
-- `db/`: DuckDB backend — open, close, schema, insert helpers, index population
+- `db/`: DuckDB backend — open, close, schema, insert helpers, index population.
+  `embedcache.go` is the content-hash-keyed embedding cache
+  (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;
+  a model switch invalidates by key construction
+- `embedhttp/`: OpenAI-compatible HTTP embedding client (vLLM/Ollama/TEI) —
+  batched, hard-timeboxed so the post-commit hook can never stall; selected
+  over the embedded nomic model via config
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
 - `skill/`: Rekal Skill definition for Claude Code integration

@@ -76,12 +76,14 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `transport/`: Git-side sync — encode checkpoints to the orphan-branch wire
   format and decode them back (`export`/`import`/remote-sync glue, orphan-branch
   commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`.
-  `export` applies the **merged-only gate** (`filterMerged`): only checkpoints
-  whose `git_sha` is an ancestor of the default branch reach the wire — unmerged
-  work stays local (see `docs/design/merged-only-sharing.md`)
+  `export` applies the **merged-only gate** (`filterMerged`): checkpoints reach
+  the wire only when their `git_sha` is an ancestor of the default branch or
+  their branch landed as a patch-equivalent squash commit — unmerged work
+  stays local (see `docs/design/merged-only-sharing.md`)
 - `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
-  `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor` for the merged-only
-  export gate) shared by the command and transport layers
+  `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
+  `BranchTip` for the merged-only export gate) shared by the command and
+  transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
   weighting (steering-turn boost, subagent down-weight), conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, and the LSA
@@ -113,6 +115,7 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 mise run test              # Unit tests only
 mise run test:integration  # Integration tests only
 mise run test:ci           # All tests (unit + integration) with race detection
+mise run test:coverage     # All tests + statement coverage (writes coverage.html)
 ```
 
 ### Linting and Formatting

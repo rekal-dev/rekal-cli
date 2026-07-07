@@ -1,7 +1,9 @@
 package gitx
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -64,6 +66,77 @@ func TestIsAncestor(t *testing.T) {
 	}
 	if IsAncestor(dir, base, "") {
 		t.Error("empty ref must not report ancestry")
+	}
+}
+
+// commitFile writes content to name and commits it, returning the commit sha.
+func commitFile(t *testing.T, dir, name, content, msg string) string {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", name)
+	git(t, dir, "commit", "-m", msg)
+	return git(t, dir, "rev-parse", "HEAD")
+}
+
+func TestIsSquashMergedInto(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	commitFile(t, dir, "f.txt", "base\n", "base")
+
+	// Feature branch with two real commits.
+	git(t, dir, "checkout", "-b", "feature")
+	mid := commitFile(t, dir, "f.txt", "base\none\n", "c1")
+	tip := commitFile(t, dir, "f.txt", "base\none\ntwo\n", "c2")
+
+	// Abandoned branch with its own change.
+	git(t, dir, "checkout", "-b", "abandoned", "main")
+	dead := commitFile(t, dir, "g.txt", "dead\n", "dead end")
+
+	// Empty branch: commits but no tree change vs main.
+	git(t, dir, "checkout", "-b", "empty", "main")
+	git(t, dir, "commit", "--allow-empty", "-m", "no changes")
+	emptyTip := git(t, dir, "rev-parse", "HEAD")
+
+	// main advances independently, then squash-merges feature (GitHub style).
+	git(t, dir, "checkout", "main")
+	commitFile(t, dir, "h.txt", "mainwork\n", "main advances")
+	git(t, dir, "merge", "--squash", "feature")
+	git(t, dir, "commit", "-m", "feature (#1)")
+
+	if !IsSquashMergedInto(dir, tip, "main") {
+		t.Error("squash-merged branch tip must be detected")
+	}
+	if IsSquashMergedInto(dir, mid, "main") {
+		t.Error("mid-branch commit is not the landed cumulative state — direct probe must fail (release happens via branch grouping)")
+	}
+	if IsSquashMergedInto(dir, dead, "main") {
+		t.Error("abandoned branch must never be treated as squash-merged")
+	}
+	if IsSquashMergedInto(dir, emptyTip, "main") {
+		t.Error("empty cumulative diff must fail closed")
+	}
+	if IsSquashMergedInto(dir, "", "main") || IsSquashMergedInto(dir, tip, "") {
+		t.Error("empty args must fail closed")
+	}
+}
+
+func TestBranchTip(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	sha := commit(t, dir, "base")
+
+	if got := BranchTip(dir, "main"); got != sha {
+		t.Fatalf("BranchTip(main) = %q, want %q", got, sha)
+	}
+	if got := BranchTip(dir, "gone"); got != "" {
+		t.Fatalf("BranchTip(gone) = %q, want empty", got)
+	}
+	if got := BranchTip(dir, ""); got != "" {
+		t.Fatalf("BranchTip(\"\") = %q, want empty", got)
 	}
 }
 

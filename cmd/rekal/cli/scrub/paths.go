@@ -100,8 +100,3 @@ func (a *pathAnonymizer) anonymizeText(text string) string {
 	})
 	return text
 }
-
-// NewAnonymizerForUser creates an anonymizer for a specific username (for testing).
-func NewAnonymizerForUser(username string) *pathAnonymizer {
-	return newAnonymizer(username)
-}

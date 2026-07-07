@@ -19,6 +19,15 @@ run = "go test -tags=integration ./cmd/rekal/cli/integration_test/..."
 description = "Run all tests (unit + integration) with race detection"
 run = "go test -tags=integration -race ./..."
 
+[tasks."test:coverage"]
+description = "Run all tests and report statement coverage (HTML report in coverage.html)"
+run = """
+go test -tags=integration -coverprofile=coverage.out -coverpkg=./cmd/rekal/cli/... ./...
+go tool cover -func=coverage.out | tail -1
+go tool cover -html=coverage.out -o coverage.html
+echo "open coverage.html for the line-by-line view"
+"""
+
 [tasks.lint]
 description = "Run linters (gofmt check + golangci-lint)"
 run = """

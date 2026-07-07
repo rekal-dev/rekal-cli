@@ -115,3 +115,72 @@ func IsAncestor(gitRoot, sha, ref string) bool {
 	}
 	return exec.Command("git", "-C", gitRoot, "merge-base", "--is-ancestor", sha, ref).Run() == nil
 }
+
+// BranchTip returns the commit sha of a local branch, or "" when the branch
+// doesn't exist (e.g. deleted after merge). The merged-only export gate probes
+// a held-back checkpoint's surviving branch tip as a squash candidate, so
+// mid-branch checkpoints release even when no checkpoint exists at the tip.
+func BranchTip(gitRoot, branch string) string {
+	if branch == "" {
+		return ""
+	}
+	out, err := exec.Command("git", "-C", gitRoot,
+		"rev-parse", "--verify", "--quiet", "refs/heads/"+branch).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// IsSquashMergedInto reports whether the cumulative change of tip (relative to
+// its merge-base with ref) landed on ref as a patch-equivalent commit — i.e.
+// the branch was squash-merged. This is the second signal of the merged-only
+// export gate, covering the workflow IsAncestor cannot: a squash merge rewrites
+// the branch into one new commit, so the original commits never become
+// ancestors of the mainline.
+//
+// Technique (the standard squashed-branch detection, git-only): synthesize an
+// unreferenced commit carrying tip's tree parented on the merge-base — its
+// diff is the branch's whole cumulative change — then ask `git cherry` whether
+// ref contains a commit with the same patch-id. Patch-ids are stable across
+// line offsets, so the match survives the mainline having advanced before the
+// squash landed.
+//
+// Fail-closed by construction: an abandoned or never-merged branch has no
+// patch-equivalent commit on ref, and a tip whose tree equals the merge-base
+// (empty cumulative diff — e.g. only --allow-empty commits) is rejected
+// outright rather than allowed to false-match another empty commit. The
+// synthetic commit is never referenced by any ref; git gc removes it.
+func IsSquashMergedInto(gitRoot, tip, ref string) bool {
+	if tip == "" || ref == "" {
+		return false
+	}
+	mbOut, err := exec.Command("git", "-C", gitRoot, "merge-base", tip, ref).Output()
+	if err != nil {
+		return false
+	}
+	mergeBase := strings.TrimSpace(string(mbOut))
+
+	// Empty cumulative diff can never prove a squash landed — fail closed.
+	if exec.Command("git", "-C", gitRoot, "diff", "--quiet", mergeBase, tip).Run() == nil {
+		return false
+	}
+
+	// Fixed probe identity: commit-tree requires one, and the identity only
+	// affects the throwaway commit's own sha — patch-ids ignore it.
+	synOut, err := exec.Command("git", "-C", gitRoot,
+		"-c", "user.name=rekal", "-c", "user.email=rekal@probe",
+		"commit-tree", tip+"^{tree}", "-p", mergeBase, "-m", "rekal: squash-merge probe").Output()
+	if err != nil {
+		return false
+	}
+	synthetic := strings.TrimSpace(string(synOut))
+
+	cherryOut, err := exec.Command("git", "-C", gitRoot, "cherry", ref, synthetic).Output()
+	if err != nil {
+		return false
+	}
+	// `git cherry` prefixes "-" when an equivalent change exists upstream.
+	line := strings.TrimSpace(string(cherryOut))
+	return strings.HasPrefix(line, "-")
+}

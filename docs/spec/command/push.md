@@ -24,7 +24,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
    - Update string dictionary (`dict.bin`) with session IDs, emails, branches, paths.
    - Mark checkpoints as `exported = TRUE`.
 
-   **Note on merge workflow:** the ancestor test is exact for merge-commit and rebase workflows. Under squash-merge the branch's original commits never become ancestors of the default branch, so squash-merged sessions are held back (fail-closed) rather than risk sharing unmerged work; squash support is a follow-up (see the design doc).
+   **Merge workflows:** the ancestor test is exact for merge-commit and rebase workflows. Squash merges are covered by a second, equally fail-closed signal (`gitx.IsSquashMergedInto`): a checkpoint's branch counts as merged when its cumulative change (tree vs. merge-base) exists on the default branch as a patch-equivalent commit (`git cherry` on a synthetic probe commit). Mid-branch checkpoints release when they are ancestors of a proven squash point on their branch (a sibling checkpoint or the surviving local branch tip). Abandoned branches never patch-match, and empty cumulative diffs are rejected outright — the failure mode is always "share later," never "leak."
 5. **Commit to orphan branch** — Write `rekal.body` and `dict.bin` via `git hash-object` + `git mktree` + `git commit-tree`. Uses the HEAD commit message from the main branch.
 6. **Compare with remote** — Skip push if local and remote SHAs match.
 7. **Push** — `git push --no-verify origin rekal/<email>`. Handle non-fast-forward with a warning suggesting `--force`.

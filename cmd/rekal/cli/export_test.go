@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 )
 
@@ -110,6 +113,222 @@ func TestExportNewFrames_CrashBetweenExportAndMarkIsRetried(t *testing.T) {
 	}
 }
 
+// TestExportNewFrames_MergedOnlyGate proves the merged-only sharing guarantee
+// end to end (docs/design/merged-only-sharing.md): a checkpoint on an unmerged
+// branch is held back by export — staying unexported — and is released
+// automatically by the next export after its branch merges into main. This is
+// the "self-releasing" property: no promote step, no on-merge hook.
+func TestExportNewFrames_MergedOnlyGate(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Checkpoint A: on main (merged by definition).
+	mergedSession := ulid.Make().String()
+	mergedCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, mergedSession, mergedCP, now, headSHA(t, gitRoot), "main")
+
+	// Checkpoint B: on a feature branch main has never seen.
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	runGit(t, gitRoot, "commit", "--allow-empty", "-m", "wip on feature")
+	featureSHA := headSHA(t, gitRoot)
+	runGit(t, gitRoot, "checkout", "main")
+	unmergedSession := ulid.Make().String()
+	unmergedCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, unmergedSession, unmergedCP, now, featureSHA, "feature")
+
+	// First push: only the merged checkpoint may reach the wire.
+	body, dict, exportedIDs, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames: %v", err)
+	}
+	if len(exportedIDs) != 1 || exportedIDs[0] != mergedCP {
+		t.Fatalf("exportedIDs = %v, want only the merged checkpoint %s", exportedIDs, mergedCP)
+	}
+	if _, err := transport.CommitWireFormat(gitRoot, body, dict); err != nil {
+		t.Fatalf("CommitWireFormat: %v", err)
+	}
+	if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
+		t.Fatalf("markCheckpointsExported: %v", err)
+	}
+
+	// The held-back checkpoint must still be unexported — not lost, not leaked.
+	if got := countUnexported(t, gitRoot); got != 1 {
+		t.Fatalf("after first push: %d unexported checkpoints, want 1 (the unmerged one held back)", got)
+	}
+
+	// A push with nothing merged exports nothing (held-back only ⇒ nil body).
+	body2, _, exportedIDs2, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames (held-back only): %v", err)
+	}
+	if body2 != nil || len(exportedIDs2) != 0 {
+		t.Fatalf("held-back-only export shipped something: ids=%v", exportedIDs2)
+	}
+
+	// Merge the feature branch. The next export must release the held-back
+	// checkpoint with no other intervention.
+	runGit(t, gitRoot, "merge", "--no-ff", "-m", "merge feature", "feature")
+
+	body3, dict3, exportedIDs3, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames (after merge): %v", err)
+	}
+	if len(exportedIDs3) != 1 || exportedIDs3[0] != unmergedCP {
+		t.Fatalf("after merge exportedIDs = %v, want [%s] — held-back checkpoint was not released", exportedIDs3, unmergedCP)
+	}
+	if _, err := transport.CommitWireFormat(gitRoot, body3, dict3); err != nil {
+		t.Fatalf("CommitWireFormat (after merge): %v", err)
+	}
+	if err := markCheckpointsExported(gitRoot, exportedIDs3); err != nil {
+		t.Fatalf("markCheckpointsExported (after merge): %v", err)
+	}
+	if got := countUnexported(t, gitRoot); got != 0 {
+		t.Fatalf("after merge push: %d unexported checkpoints, want 0", got)
+	}
+}
+
+// TestExportNewFrames_SquashMergeReleases proves the squash workflow end to
+// end: checkpoints on a feature branch are held back while the branch is
+// unmerged, and are released — including the mid-branch one, via branch
+// grouping — after the branch is squash-merged (GitHub style: one new commit
+// on main, the branch's own commits never become ancestors).
+func TestExportNewFrames_SquashMergeReleases(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Base content on main so the branch diff is real (patch-ids need diffs).
+	writeAndCommit(t, gitRoot, "f.txt", "base\n", "base")
+
+	// Feature branch, two commits, a checkpoint at each.
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	midSHA := writeAndCommit(t, gitRoot, "f.txt", "base\none\n", "c1")
+	tipSHA := writeAndCommit(t, gitRoot, "f.txt", "base\none\ntwo\n", "c2")
+	midCP := ulid.Make().String()
+	tipCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, ulid.Make().String(), midCP, now, midSHA, "feature")
+	seedCheckpointAt(t, gitRoot, ulid.Make().String(), tipCP, now, tipSHA, "feature")
+
+	// main advances independently — nothing merged yet: everything held.
+	runGit(t, gitRoot, "checkout", "main")
+	writeAndCommit(t, gitRoot, "g.txt", "mainwork\n", "main advances")
+
+	body, _, exportedIDs, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames (pre-squash): %v", err)
+	}
+	if body != nil || len(exportedIDs) != 0 {
+		t.Fatalf("pre-squash export shipped %v, want nothing", exportedIDs)
+	}
+
+	// GitHub-style squash merge of the feature branch.
+	runGit(t, gitRoot, "merge", "--squash", "feature")
+	runGit(t, gitRoot, "commit", "-m", "feature (#1)")
+
+	body2, dict2, exportedIDs2, err := transport.ExportNewFrames(gitRoot)
+	if err != nil {
+		t.Fatalf("ExportNewFrames (post-squash): %v", err)
+	}
+	if len(exportedIDs2) != 2 {
+		t.Fatalf("post-squash exportedIDs = %v, want both feature checkpoints", exportedIDs2)
+	}
+	got := map[string]bool{exportedIDs2[0]: true, exportedIDs2[1]: true}
+	if !got[midCP] || !got[tipCP] {
+		t.Fatalf("post-squash exported %v, want {%s, %s} (mid released via branch grouping)", exportedIDs2, midCP, tipCP)
+	}
+	if _, err := transport.CommitWireFormat(gitRoot, body2, dict2); err != nil {
+		t.Fatalf("CommitWireFormat: %v", err)
+	}
+	if err := markCheckpointsExported(gitRoot, exportedIDs2); err != nil {
+		t.Fatalf("markCheckpointsExported: %v", err)
+	}
+	if n := countUnexported(t, gitRoot); n != 0 {
+		t.Fatalf("after squash release: %d unexported, want 0", n)
+	}
+}
+
+// writeAndCommit writes content to name, commits it, and returns the sha.
+func writeAndCommit(t *testing.T, dir, name, content, msg string) string {
+	t.Helper()
+	if err := os.WriteFile(dir+"/"+name, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", name)
+	runGit(t, dir, "commit", "-m", msg)
+	return headSHA(t, dir)
+}
+
+// TestDoReExport_RegeneratesMergedOnly covers the repair path (push
+// --re-export): it must rebuild the branch's wire data from data.db, mark the
+// re-encoded checkpoints exported, and apply the merged-only gate — a repair
+// must never re-leak unmerged work onto the wire.
+func TestDoReExport_RegeneratesMergedOnly(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	mergedSession := ulid.Make().String()
+	mergedCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, mergedSession, mergedCP, now, headSHA(t, gitRoot), "main")
+
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	runGit(t, gitRoot, "commit", "--allow-empty", "-m", "wip")
+	featureSHA := headSHA(t, gitRoot)
+	runGit(t, gitRoot, "checkout", "main")
+	unmergedSession := ulid.Make().String()
+	unmergedCP := ulid.Make().String()
+	seedCheckpointAt(t, gitRoot, unmergedSession, unmergedCP, now, featureSHA, "feature")
+
+	if err := doReExport(gitRoot, io.Discard); err != nil {
+		t.Fatalf("doReExport: %v", err)
+	}
+
+	// The merged checkpoint is exported; the unmerged one is still held back.
+	if got := countUnexported(t, gitRoot); got != 1 {
+		t.Fatalf("after re-export: %d unexported checkpoints, want 1 (unmerged held back)", got)
+	}
+
+	// The regenerated wire must decode and contain exactly one batch frame
+	// (the merged checkpoint) plus one meta frame — nothing from the branch.
+	body := gitx.ShowFile(gitRoot, gitx.RekalBranchName(), codec.BodyFilename)
+	frames, err := codec.ScanFrames(body)
+	if err != nil {
+		t.Fatalf("ScanFrames on regenerated body: %v", err)
+	}
+	var batches, metas int
+	for _, fs := range frames {
+		switch fs.Type {
+		case codec.FrameBatch:
+			batches++
+		case codec.FrameMeta:
+			metas++
+		default:
+			t.Fatalf("unexpected frame type %#x in regenerated body", fs.Type)
+		}
+	}
+	if batches != 1 || metas != 1 {
+		t.Fatalf("regenerated body has %d batch + %d meta frames, want 1 + 1", batches, metas)
+	}
+}
+
+// TestDoReExport_NothingMergedExportsNothing: with only unmerged work, a
+// repair must not write unmerged data — it reports nothing to export.
+func TestDoReExport_NothingMergedExportsNothing(t *testing.T) {
+	gitRoot := setupExportTestRepo(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	runGit(t, gitRoot, "checkout", "-b", "feature")
+	runGit(t, gitRoot, "commit", "--allow-empty", "-m", "wip")
+	featureSHA := headSHA(t, gitRoot)
+	runGit(t, gitRoot, "checkout", "main")
+	seedCheckpointAt(t, gitRoot, ulid.Make().String(), ulid.Make().String(), now, featureSHA, "feature")
+
+	if err := doReExport(gitRoot, io.Discard); err != nil {
+		t.Fatalf("doReExport: %v", err)
+	}
+	if got := countUnexported(t, gitRoot); got != 1 {
+		t.Fatalf("after no-op re-export: %d unexported, want 1 (nothing marked)", got)
+	}
+}
+
 // seedCheckpoint inserts a minimal session+turn+checkpoint fixture, using its
 // own short-lived data.db connection (each helper/production function in
 // this path opens and closes its own connection — sharing one long-lived
@@ -118,6 +337,16 @@ func TestExportNewFrames_CrashBetweenExportAndMarkIsRetried(t *testing.T) {
 // concurrent *sql.DB handles in one process).
 func seedCheckpoint(t *testing.T, gitRoot, sessionID, checkpointID, ts string) {
 	t.Helper()
+	// The checkpoint's git_sha must be a real commit on the default branch so
+	// the merged-only export gate shares it (see ExportNewFrames / filterMerged
+	// in transport). setupExportTestRepo commits on and renames HEAD to main.
+	seedCheckpointAt(t, gitRoot, sessionID, checkpointID, ts, headSHA(t, gitRoot), "main")
+}
+
+// seedCheckpointAt is seedCheckpoint pinned to a specific commit and branch —
+// used by the merged-only gate test to seed checkpoints on unmerged branches.
+func seedCheckpointAt(t *testing.T, gitRoot, sessionID, checkpointID, ts, gitSHA, branch string) {
+	t.Helper()
 
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
@@ -125,16 +354,14 @@ func seedCheckpoint(t *testing.T, gitRoot, sessionID, checkpointID, ts string) {
 	}
 	defer dataDB.Close()
 
-	if err := db.InsertSession(dataDB, sessionID, "", "hash1", "human", "", "dev@example.com", "main", ts, "claude"); err != nil {
+	// Content hash must be unique per session (dedup is by hash).
+	if err := db.InsertSession(dataDB, sessionID, "", "hash-"+sessionID, "human", "", "dev@example.com", branch, ts, "claude"); err != nil {
 		t.Fatalf("InsertSession: %v", err)
 	}
 	if err := db.InsertTurn(dataDB, ulid.Make().String(), sessionID, 0, "human", "fix the bug", ts); err != nil {
 		t.Fatalf("InsertTurn: %v", err)
 	}
-	// The checkpoint's git_sha must be a real commit on the default branch so
-	// the merged-only export gate shares it (see ExportNewFrames / filterMerged
-	// in transport). setupExportTestRepo commits on and renames HEAD to main.
-	if err := db.InsertCheckpoint(dataDB, checkpointID, headSHA(t, gitRoot), "main", "dev@example.com", ts, "human", ""); err != nil {
+	if err := db.InsertCheckpoint(dataDB, checkpointID, gitSHA, branch, "dev@example.com", ts, "human", ""); err != nil {
 		t.Fatalf("InsertCheckpoint: %v", err)
 	}
 	if err := db.InsertCheckpointSession(dataDB, checkpointID, sessionID); err != nil {

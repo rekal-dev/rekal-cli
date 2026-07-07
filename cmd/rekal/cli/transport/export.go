@@ -94,11 +94,18 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 }
 
 // filterMerged returns only the checkpoints whose code has merged into the
-// mainline (git_sha reachable from the default branch), or nil when the
-// mainline can't be resolved. Shared by the incremental (ExportNewFrames) and
-// full re-export (ExportAllFrames) paths so every route that writes the wire
-// honors the merged-only guarantee — unmerged work must never be encoded,
-// including by a repair. See docs/design/merged-only-sharing.md.
+// mainline, or nil when the mainline can't be resolved. Shared by the
+// incremental (ExportNewFrames) and full re-export (ExportAllFrames) paths so
+// every route that writes the wire honors the merged-only guarantee —
+// unmerged work must never be encoded, including by a repair. See
+// docs/design/merged-only-sharing.md.
+//
+// Two merge signals, both exact and fail-closed:
+//   - ancestry: git_sha reachable from the default branch (merge-commit and
+//     rebase workflows)
+//   - squash: the branch's cumulative change landed as a patch-equivalent
+//     commit (gitx.IsSquashMergedInto) — covering squash-merge workflows,
+//     where the original commits never become ancestors
 func filterMerged(gitRoot string, checkpoints []db.CheckpointRow) []db.CheckpointRow {
 	defaultRef := gitx.DefaultBranch(gitRoot)
 	if defaultRef == "" {
@@ -106,20 +113,81 @@ func filterMerged(gitRoot string, checkpoints []db.CheckpointRow) []db.Checkpoin
 		// nothing (fail closed).
 		return nil
 	}
-	return shareableCheckpoints(checkpoints, func(sha string) bool {
-		return gitx.IsAncestor(gitRoot, sha, defaultRef)
-	})
+	return shareableCheckpoints(checkpoints,
+		func(sha string) bool { return gitx.IsAncestor(gitRoot, sha, defaultRef) },
+		func(sha string) bool { return gitx.IsSquashMergedInto(gitRoot, sha, defaultRef) },
+		func(branch string) string { return gitx.BranchTip(gitRoot, branch) },
+		func(sha, tip string) bool { return gitx.IsAncestor(gitRoot, sha, tip) },
+	)
 }
 
 // shareableCheckpoints keeps only checkpoints whose code has merged into the
-// mainline, as decided by isMerged (true ⇒ the checkpoint's git_sha is an
-// ancestor of the default branch). It never mutates the input slice — the
-// held-back checkpoints must stay untouched so they remain unexported and are
-// re-evaluated on the next push. A checkpoint with no git_sha is never shared.
-func shareableCheckpoints(checkpoints []db.CheckpointRow, isMerged func(sha string) bool) []db.CheckpointRow {
+// mainline. It never mutates the input slice — the held-back checkpoints must
+// stay untouched so they remain unexported and are re-evaluated on the next
+// push. A checkpoint with no git_sha is never shared.
+//
+// A checkpoint is shareable when any of:
+//   - isAncestor(git_sha): its commit is literally on the mainline
+//   - isSquashMerged(git_sha): its commit was the branch state whose
+//     cumulative diff landed as a squash commit
+//   - it is an ancestor of a proven squash point on the same branch: a squash
+//     lands the branch's *final* state, so mid-branch checkpoints (earlier
+//     commits of the same branch) are part of the landed history exactly as
+//     they would be under a merge commit. Proven points are the branch's local
+//     tip (if it still exists) and any sibling checkpoint that passed the
+//     squash test.
+func shareableCheckpoints(
+	checkpoints []db.CheckpointRow,
+	isAncestor func(sha string) bool,
+	isSquashMerged func(sha string) bool,
+	branchTip func(branch string) string,
+	isAncestorOf func(sha, tip string) bool,
+) []db.CheckpointRow {
+	// Pass 1: direct proofs. Track squash-proven shas per branch for pass 2.
+	proven := make(map[string]bool, len(checkpoints)) // git_sha → shareable
+	squashPoints := make(map[string][]string)         // branch → proven squash shas
+	var held []int
+
+	for i, cp := range checkpoints {
+		switch {
+		case cp.GitSHA == "":
+			// never shareable
+		case isAncestor(cp.GitSHA):
+			proven[cp.GitSHA] = true
+		case isSquashMerged(cp.GitSHA):
+			proven[cp.GitSHA] = true
+			squashPoints[cp.GitBranch] = append(squashPoints[cp.GitBranch], cp.GitSHA)
+		default:
+			held = append(held, i)
+		}
+	}
+
+	// Pass 2: release mid-branch checkpoints that are ancestors of a proven
+	// squash point on their branch. The branch's surviving local tip counts as
+	// a candidate too (probed at most once per branch).
+	tipChecked := make(map[string]bool)
+	for _, i := range held {
+		cp := checkpoints[i]
+		if cp.GitBranch == "" {
+			continue
+		}
+		if !tipChecked[cp.GitBranch] {
+			tipChecked[cp.GitBranch] = true
+			if tip := branchTip(cp.GitBranch); tip != "" && isSquashMerged(tip) {
+				squashPoints[cp.GitBranch] = append(squashPoints[cp.GitBranch], tip)
+			}
+		}
+		for _, point := range squashPoints[cp.GitBranch] {
+			if isAncestorOf(cp.GitSHA, point) {
+				proven[cp.GitSHA] = true
+				break
+			}
+		}
+	}
+
 	out := make([]db.CheckpointRow, 0, len(checkpoints))
 	for _, cp := range checkpoints {
-		if cp.GitSHA != "" && isMerged(cp.GitSHA) {
+		if proven[cp.GitSHA] {
 			out = append(out, cp)
 		}
 	}

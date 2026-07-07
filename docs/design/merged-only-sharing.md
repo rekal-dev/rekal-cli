@@ -1,10 +1,11 @@
 # Merged-only sharing (and worktree-shared state)
 
 **Status:** partially implemented (2026-07). **Mechanism 1 (merged-only export
-gate) is built** — `push`/`--re-export` now share only checkpoints whose
-`git_sha` is an ancestor of the default branch (fail-closed; squash fallback
-deferred). **Mechanism 2 (worktree-shared store + one-time cutover) remains
-design.** This note captures both — they are one idea seen from two sides.
+gate) is built, including squash support** — `push`/`--re-export` share only
+checkpoints whose `git_sha` is an ancestor of the default branch or whose
+branch landed as a patch-equivalent squash commit (both fail-closed).
+**Mechanism 2 (worktree-shared store + one-time cutover) remains design.**
+This note captures both — they are one idea seen from two sides.
 
 ## Problem
 
@@ -106,27 +107,37 @@ Under **squash-merge**, the branch is rewritten into a single new commit on
 never qualify to share. Most GitHub teams squash by default, so this decides
 the design, not an edge case.
 
-**Chosen default: ancestor + squash fallback.** Primary signal is the ancestor
-test. Fallback for squash: a session's branch is treated as merged when that
-branch no longer exists on the remote (`git ls-remote --heads origin <branch>`
-is empty) **and** the default branch has advanced past the point the branch
-forked from. This releases squash-merged branches by branch-name association
-without a perfect commit match. It accepts a small heuristic risk (a
-force-deleted-but-unmerged branch could be treated as merged); acceptable
-because the data is the developer's own and the alternative — dropping squash
-teams' entire history — is worse.
+**Shipped: patch-equivalence detection (fail-closed).** Squash merges are
+detected exactly, git-only, with no branch-deletion heuristics
+(`gitx.IsSquashMergedInto`): synthesize an unreferenced commit carrying the
+branch tip’s tree parented on its merge-base with the mainline — its diff is
+the branch’s whole cumulative change — then ask `git cherry` whether the
+mainline contains a patch-equivalent commit. Patch-ids are stable across line
+offsets, so the match survives the mainline having advanced before the squash
+landed (the standard squashed-branch detection technique).
 
-This is the one assumption to confirm. Alternatives if it's wrong:
+Release rules in the export gate (`transport.shareableCheckpoints`):
 
-- **Pure ancestor** — exact, zero heuristics, but squash teams share nearly
-  nothing.
-- **Explicit promote** — nothing auto-shares; `rekal push --promote <branch>`
-  releases a branch's sessions. Deterministic and workflow-agnostic, at the
-  cost of a manual step.
-- **`share_policy` config** — expose all of the above as a `.rekal/config.json`
-  knob (`merged-ancestor | merged-or-squash | manual | all`), safest default.
-  `config.json` already exists as the home for exactly this kind of durable
-  local setting.
+- a checkpoint whose own sha patch-matches (it was the branch’s final state)
+  is released directly;
+- a **mid-branch** checkpoint is released when it is an *ancestor of a proven
+  squash point on its branch* — a sibling checkpoint that matched, or the
+  surviving local branch tip (probed once per branch). A squash lands the
+  branch’s final state, so earlier states of the same lineage are part of the
+  landed history exactly as they would be under a merge commit.
+
+Fail-closed properties: an abandoned or never-merged branch has no
+patch-equivalent commit on the mainline and can never false-match; an empty
+cumulative diff (e.g. only `--allow-empty` commits) is rejected outright; an
+unresolvable mainline shares nothing. The earlier design draft considered a
+branch-deleted-on-remote heuristic — rejected because it can fail *open*
+(a force-deleted-but-unmerged branch would leak). Patch equivalence replaces
+it with an exact signal.
+
+Residual gap (accepted): a mid-branch checkpoint on a branch whose tip was
+deleted locally *and* has no later sibling checkpoint has no provable squash
+point and stays held. Escape hatches if this bites in practice: an explicit
+`rekal push --promote <branch>`, or a `share_policy` knob in `config.json`.
 
 ## Mechanism 2 — worktree-shared state
 

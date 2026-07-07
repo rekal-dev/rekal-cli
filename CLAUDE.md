@@ -53,7 +53,16 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo
 - `clean.go`: Remove Rekal setup — completely, no residue
-- `index_cmd.go`: Rebuild index DB from data DB
+- `index_cmd.go`: Rebuild index DB from data DB. Also carries the cross-repo
+  local-import flags (`--include-all`/`--include`/`--no-local`), which set a
+  persistent preference and rebuild
+- `config.go`: `.rekal/config.json` (gitignored) — Rekal's durable local config.
+  Holds the cross-repo `local_import` preference; intended home for future
+  recall-tuning weights (BM25/LSA/nomic layers)
+- `local_import.go`: Cross-repo local session import — folds this machine's
+  other Claude Code sessions (all repos + shell, from `~/.claude/projects/*`)
+  into the index. **Index-only, never `data.db`**, so imported sessions are
+  structurally unpushable to the team; origin-labeled, deduped by content hash
 - `log.go`: Show recent checkpoints
 - `query.go`: Raw SQL access
 - `version.go`: Version constant (set via ldflags)
@@ -66,14 +75,20 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
 - `codec/`: Binary wire format — frame encoding/decoding, body, dictionary, preset zstd dictionary
 - `transport/`: Git-side sync — encode checkpoints to the orphan-branch wire
   format and decode them back (`export`/`import`/remote-sync glue, orphan-branch
-  commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`
+  commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`.
+  `export` applies the **merged-only gate** (`filterMerged`): only checkpoints
+  whose `git_sha` is an ancestor of the default branch reach the wire — unmerged
+  work stays local (see `docs/design/merged-only-sharing.md`)
 - `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
-  `rekal/<email>` branch name) shared by the command and transport layers
+  `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor` for the merged-only
+  export gate) shared by the command and transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring, signal
   weighting (steering-turn boost, subagent down-weight), conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, and the LSA
   query-projection cache (`projection.go`)
-- `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate
+- `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
+  `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
+  for the cross-repo local import
 - `scrub/`: Redact secrets and anonymize file paths in a session payload before any DB insert (runs in `checkpoint` after parse)
 - `db/`: DuckDB backend — open, close, schema, insert helpers, index population
 - `lsa/`: Latent Semantic Analysis embeddings

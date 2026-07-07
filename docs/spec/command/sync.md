@@ -24,12 +24,13 @@ Captures local work, pushes it, fetches remote branches, and rebuilds the search
 4. **List remote branches** — `git for-each-ref` on `refs/remotes/origin/rekal/`, excluding the current user's branch.
 5. **Rebuild index** — Drop and recreate all index tables, then:
    - Populate from local `data.db` (sessions, turns, tool calls, files, facets, co-occurrence)
+   - **Cross-repo local import (if enabled)** — When the `local_import` preference in `.rekal/config.json` is set (via `rekal index --include-all` / `--include`), fold this machine's other Claude Code sessions into `turns_ft` / `session_facets`, labeled with `origin`. Index only — never written to `data.db`, so they can never be pushed. Deduped by content hash against `data.db`. Sync honors the last-set preference; it does not change it.
    - For each remote branch: decode wire format (`rekal.body` + `dict.bin`), insert into `turns_ft`, `session_facets`, `files_index` — **skip tool calls** for remote data
    - Create FTS index (BM25)
    - LSA embedding pass
    - Nomic deep semantic embedding pass (non-fatal, skipped on unsupported platforms)
    - Write index state
-6. **Print summary** — `rekal: synced — N local sessions, N remote sessions from M team member(s)`.
+6. **Print summary** — `rekal: synced — N local sessions, N remote sessions from M team member(s)`, plus `, N cross-repo sessions from M project(s)` when local import is enabled.
 
 ### Self sync: `rekal sync --self`
 

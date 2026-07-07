@@ -72,6 +72,27 @@ func SessionExistsByHash(d *sql.DB, hash string) (bool, error) {
 	return count > 0, nil
 }
 
+// QueryAllSessionHashes returns the set of content hashes of every session in
+// the data DB. The cross-repo local import uses it to skip sessions that this
+// repo already captured (dedup by content, not ID).
+func QueryAllSessionHashes(d *sql.DB) (map[string]bool, error) {
+	rows, err := d.Query("SELECT session_hash FROM sessions")
+	if err != nil {
+		return nil, fmt.Errorf("query session hashes: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	hashes := make(map[string]bool)
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, fmt.Errorf("scan session hash: %w", err)
+		}
+		hashes[h] = true
+	}
+	return hashes, rows.Err()
+}
+
 // QuerySessionIDByHash returns the ID of the most recently captured session
 // with the given content hash. Used to link subagent sessions to a trunk
 // session captured in an earlier checkpoint run.

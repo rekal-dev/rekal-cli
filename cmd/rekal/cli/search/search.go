@@ -100,6 +100,12 @@ type SessionDetail struct {
 	AgentType   string `json:"agent_type,omitempty"`
 	Description string `json:"description,omitempty"`
 	SpawnDepth  int    `json:"spawn_depth,omitempty"`
+
+	// Origin labels a cross-repo local import (rekal index --include*):
+	// "repo:/path" or "shell:/path" for the working directory the session was
+	// recorded in. Omitted (empty) for this repo's own sessions and synced
+	// teammate sessions.
+	Origin string `json:"origin,omitempty"`
 }
 
 type Output struct {
@@ -307,7 +313,7 @@ func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error)
 
 // sessionFacetCols is the column list matching sessionFacetRow.scan. The
 // harness-metadata columns are nullable — NULL for agents without the concept.
-const sessionFacetCols = "session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, agent_id, team_name, workflow_name, parent_session_id, agent_type, description, spawn_depth"
+const sessionFacetCols = "session_id, user_email, git_branch, actor_type, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, agent_id, team_name, workflow_name, parent_session_id, agent_type, description, spawn_depth, origin"
 
 type sessionFacetRow struct {
 	sessionID     string
@@ -332,6 +338,10 @@ type sessionFacetRow struct {
 	agentType   sql.NullString
 	description sql.NullString
 	spawnDepth  sql.NullInt64
+
+	// origin — NULL for this repo's own sessions and synced teammate data;
+	// set only for cross-repo local imports.
+	origin sql.NullString
 }
 
 // scanner abstracts *sql.Row and *sql.Rows for sessionFacetRow.scan.
@@ -343,7 +353,7 @@ func (sf *sessionFacetRow) scan(s scanner) error {
 	return s.Scan(&sf.sessionID, &sf.email, &sf.branch, &sf.actorType, &sf.capturedAt,
 		&sf.turnCount, &sf.toolCallCount, &sf.fileCount, &sf.checkpointID, &sf.gitSHA,
 		&sf.agentID, &sf.teamName, &sf.workflowName, &sf.parentSessionID,
-		&sf.agentType, &sf.description, &sf.spawnDepth)
+		&sf.agentType, &sf.description, &sf.spawnDepth, &sf.origin)
 }
 
 // detail builds the JSON session detail; optional metadata fields are only
@@ -365,6 +375,7 @@ func (sf *sessionFacetRow) detail(files []string) SessionDetail {
 		AgentType:       nullStr(sf.agentType),
 		Description:     nullStr(sf.description),
 		SpawnDepth:      int(sf.spawnDepth.Int64),
+		Origin:          nullStr(sf.origin),
 	}
 }
 

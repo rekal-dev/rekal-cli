@@ -31,6 +31,16 @@ func ExportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		return nil, nil, nil, nil
 	}
 
+	// Merged-only gate: share only sessions whose code has landed on the
+	// mainline. data.db keeps every branch locally; only the wire is filtered,
+	// so unmerged/abandoned work never reaches teammates. Held-back checkpoints
+	// stay unexported and re-evaluate on the next push, releasing automatically
+	// once their branch merges. See docs/design/merged-only-sharing.md.
+	checkpoints = filterMerged(gitRoot, checkpoints)
+	if len(checkpoints) == 0 {
+		return nil, nil, nil, nil
+	}
+
 	// Load existing wire format from orphan branch.
 	branch := gitx.RekalBranchName()
 	bodyData := gitx.ShowFile(gitRoot, branch, codec.BodyFilename)
@@ -51,11 +61,15 @@ func ExportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 	return encodeCheckpointFrames(dataDB, body, dict, checkpoints)
 }
 
-// ExportAllFrames re-encodes every checkpoint in data.db into a fresh body
-// and dict, ignoring the orphan branch's current contents and exported flags.
-// Used by `rekal push --re-export` to regenerate a branch whose wire data is
-// corrupt (frames written before the v2 count fix) or bloated (stale meta
-// frames) — data.db is the source of truth, the branch is derived.
+// ExportAllFrames re-encodes every merged checkpoint in data.db into a fresh
+// body and dict, ignoring the orphan branch's current contents and exported
+// flags. Used by `rekal push --re-export` to regenerate a branch whose wire
+// data is corrupt (frames written before the v2 count fix) or bloated (stale
+// meta frames) — data.db is the source of truth, the branch is derived.
+//
+// The merged-only gate applies here too: a repair regenerates the branch as
+// merged-only, so it can never re-leak unmerged work that a plain push would
+// have held back.
 func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
@@ -71,7 +85,45 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		return nil, nil, nil, nil
 	}
 
+	checkpoints = filterMerged(gitRoot, checkpoints)
+	if len(checkpoints) == 0 {
+		return nil, nil, nil, nil
+	}
+
 	return encodeCheckpointFrames(dataDB, codec.NewBody(), codec.NewDict(), checkpoints)
+}
+
+// filterMerged returns only the checkpoints whose code has merged into the
+// mainline (git_sha reachable from the default branch), or nil when the
+// mainline can't be resolved. Shared by the incremental (ExportNewFrames) and
+// full re-export (ExportAllFrames) paths so every route that writes the wire
+// honors the merged-only guarantee — unmerged work must never be encoded,
+// including by a repair. See docs/design/merged-only-sharing.md.
+func filterMerged(gitRoot string, checkpoints []db.CheckpointRow) []db.CheckpointRow {
+	defaultRef := gitx.DefaultBranch(gitRoot)
+	if defaultRef == "" {
+		// No resolvable mainline — nothing is provably merged, so share
+		// nothing (fail closed).
+		return nil
+	}
+	return shareableCheckpoints(checkpoints, func(sha string) bool {
+		return gitx.IsAncestor(gitRoot, sha, defaultRef)
+	})
+}
+
+// shareableCheckpoints keeps only checkpoints whose code has merged into the
+// mainline, as decided by isMerged (true ⇒ the checkpoint's git_sha is an
+// ancestor of the default branch). It never mutates the input slice — the
+// held-back checkpoints must stay untouched so they remain unexported and are
+// re-evaluated on the next push. A checkpoint with no git_sha is never shared.
+func shareableCheckpoints(checkpoints []db.CheckpointRow, isMerged func(sha string) bool) []db.CheckpointRow {
+	out := make([]db.CheckpointRow, 0, len(checkpoints))
+	for _, cp := range checkpoints {
+		if cp.GitSHA != "" && isMerged(cp.GitSHA) {
+			out = append(out, cp)
+		}
+	}
+	return out
 }
 
 // appendBatch encodes members as one FrameBatch and appends it to body. If the

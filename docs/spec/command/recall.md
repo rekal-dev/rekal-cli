@@ -108,6 +108,13 @@ workflow steps, other agents in the same team) share this result's trunk
 conversation via `parent_session_id`; omitted otherwise. `total` counts
 top-level (grouped) results, not raw session hits.
 
+`session.origin` is present only on sessions folded in by the cross-repo
+local import (`rekal index --include-all` / `--include`): `repo:/path` for
+another repo's working directory, `shell:/path` for a non-repo one. Omitted
+for this repo's own sessions and synced teammate sessions. It labels where a
+cross-context hit came from so an agent (or human) can judge its relevance —
+see [cross-repo-import design](../../design/cross-repo-import.md).
+
 ---
 
 ## Examples

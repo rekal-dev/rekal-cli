@@ -24,6 +24,12 @@ func newPushCmd() *cobra.Command {
 Only YOUR unexported checkpoints are pushed — team data imported via 'rekal sync'
 is never re-exported. Each user pushes to their own branch (rekal/<email>).
 
+Only merged work is shared: a checkpoint reaches the wire only when its commit
+is an ancestor of the default branch. Sessions on unmerged branches stay local
+and are re-checked on every push, so they ship automatically once the branch
+merges — and never if it is abandoned. The local data DB always keeps every
+branch; only what crosses the wire is filtered.
+
 Checkpoints contain sessions (conversation turns, tool calls) and file change
 metadata anchored to git commits. They are encoded into a compact binary wire
 format (rekal.body + dict.bin) using zstd compression and string interning —
@@ -36,7 +42,8 @@ Use --re-export to regenerate the branch's wire data from scratch out of the
 local data DB and force-push it. This repairs a branch whose wire data was
 written by a rekal version with the frame-count bug (sessions with more than
 255 turns or tool calls were corrupted on the wire) and drops accumulated
-stale meta frames. Implies --force.
+stale meta frames. The merged-only rule applies here too: the rebuilt branch
+contains only merged checkpoints. Implies --force.
 
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
 You do not need to run this manually.`,

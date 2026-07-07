@@ -34,6 +34,11 @@ By default, fetches all rekal/* branches (whole team). Use --self to fetch
 only your own rekal branch — useful when syncing across your own machines
 (e.g. pulling context from your work laptop to your home machine).
 
+The rebuild honors the cross-repo local import preference set via
+'rekal index --include-all' / '--include' (see 'rekal index --help'):
+if enabled, your other repos' and shell sessions are re-imported into the
+index — locally recallable, never pushed.
+
 Typical usage:
   Developer:  Run 'rekal sync' at the start of the day
   Agent:      Run 'rekal sync' at the start of a session if team context matters

@@ -106,27 +106,28 @@ Under **squash-merge**, the branch is rewritten into a single new commit on
 never qualify to share. Most GitHub teams squash by default, so this decides
 the design, not an edge case.
 
-**Chosen default: ancestor + squash fallback.** Primary signal is the ancestor
-test. Fallback for squash: a session's branch is treated as merged when that
-branch no longer exists on the remote (`git ls-remote --heads origin <branch>`
-is empty) **and** the default branch has advanced past the point the branch
-forked from. This releases squash-merged branches by branch-name association
-without a perfect commit match. It accepts a small heuristic risk (a
-force-deleted-but-unmerged branch could be treated as merged); acceptable
-because the data is the developer's own and the alternative — dropping squash
-teams' entire history — is worse.
+**Shipped v1: pure ancestor, fail-closed.** Only the exact ancestor test is
+implemented. Under squash-merge (or an unresolvable mainline) a checkpoint is
+held back rather than risk sharing unmerged work — the failure mode is
+"shares less," never "leaks more." Held-back checkpoints stay unexported, so
+whichever squash mechanism lands later releases them retroactively on the
+next push; nothing is lost in the meantime, only deferred.
 
-This is the one assumption to confirm. Alternatives if it's wrong:
+The squash follow-up, in preference order:
 
-- **Pure ancestor** — exact, zero heuristics, but squash teams share nearly
-  nothing.
+- **Ancestor + squash fallback** — treat a session's branch as merged when it
+  no longer exists on the remote (`git ls-remote --heads origin <branch>` is
+  empty) **and** the default branch has advanced past its fork point. Releases
+  squash-merged work by branch-name association, at a small fail-open risk (a
+  force-deleted-but-unmerged branch would be treated as merged) — the reason
+  it did not ship as the v1 default.
 - **Explicit promote** — nothing auto-shares; `rekal push --promote <branch>`
   releases a branch's sessions. Deterministic and workflow-agnostic, at the
   cost of a manual step.
-- **`share_policy` config** — expose all of the above as a `.rekal/config.json`
-  knob (`merged-ancestor | merged-or-squash | manual | all`), safest default.
-  `config.json` already exists as the home for exactly this kind of durable
-  local setting.
+- **`share_policy` config** — expose the above as a `.rekal/config.json` knob
+  (`merged-ancestor | merged-or-squash | manual`), defaulting to the shipped
+  fail-closed behavior. `config.json` already exists as the home for exactly
+  this kind of durable local setting.
 
 ## Mechanism 2 — worktree-shared state
 

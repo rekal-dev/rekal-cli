@@ -123,6 +123,34 @@ func TestIsSquashMergedInto(t *testing.T) {
 	}
 }
 
+func TestMainWorktreeRoot(t *testing.T) {
+	t.Parallel()
+	main := t.TempDir()
+	git(t, main, "init", "-b", "main")
+	commit(t, main, "base")
+
+	// In the main checkout, the resolver is a no-op (equals the checkout root).
+	if got := MainWorktreeRoot(main); got != filepath.Clean(main) {
+		t.Fatalf("main worktree: MainWorktreeRoot(%q) = %q, want the same", main, got)
+	}
+
+	// Add a linked worktree; from inside it, the resolver must point back at
+	// the main checkout so the .rekal store is shared.
+	linked := t.TempDir() + "-wt"
+	git(t, main, "worktree", "add", "-b", "feature", linked)
+	if got := MainWorktreeRoot(linked); got != filepath.Clean(main) {
+		t.Fatalf("linked worktree: MainWorktreeRoot(%q) = %q, want main %q", linked, got, filepath.Clean(main))
+	}
+}
+
+func TestMainWorktreeRoot_NonRepoFallsBack(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir() // not a git repo
+	if got := MainWorktreeRoot(dir); got != dir {
+		t.Fatalf("non-repo: MainWorktreeRoot(%q) = %q, want fallback to input", dir, got)
+	}
+}
+
 func TestBranchTip(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

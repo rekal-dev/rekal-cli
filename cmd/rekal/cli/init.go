@@ -288,7 +288,7 @@ func printAgentHints(w io.Writer, gitRoot string) {
 	}
 
 	// Write reference instructions file.
-	refPath := filepath.Join(gitRoot, ".rekal", "agent-instructions.md")
+	refPath := filepath.Join(RekalDir(gitRoot), "agent-instructions.md")
 	_ = os.WriteFile(refPath, []byte(agentInstructionsContent), 0o644)
 
 	for _, agent := range agents {

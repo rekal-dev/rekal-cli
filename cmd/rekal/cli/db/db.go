@@ -6,23 +6,31 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+
 	_ "github.com/marcboeker/go-duckdb"
 )
 
-// OpenData opens (or creates) the data DB at <gitRoot>/.rekal/data.db.
-func OpenData(gitRoot string) (*sql.DB, error) {
-	path := filepath.Join(gitRoot, ".rekal", "data.db")
-	return open(path)
+// StoreDir returns the .rekal store directory for gitRoot, resolved to the
+// repository's main worktree so every linked worktree shares one store. For a
+// non-worktree repo (or the main worktree itself) this is just <gitRoot>/.rekal.
+func StoreDir(gitRoot string) string {
+	return filepath.Join(gitx.MainWorktreeRoot(gitRoot), ".rekal")
 }
 
-// OpenIndex opens (or creates) the index DB at <gitRoot>/.rekal/index.db.
+// OpenData opens (or creates) the data DB at <store>/data.db.
+func OpenData(gitRoot string) (*sql.DB, error) {
+	return open(filepath.Join(StoreDir(gitRoot), "data.db"))
+}
+
+// OpenIndex opens (or creates) the index DB at <store>/index.db.
 func OpenIndex(gitRoot string) (*sql.DB, error) {
 	return OpenIndexAt(IndexPath(gitRoot))
 }
 
-// IndexPath returns the path to the index DB for gitRoot.
+// IndexPath returns the path to the index DB for gitRoot (in the shared store).
 func IndexPath(gitRoot string) string {
-	return filepath.Join(gitRoot, ".rekal", "index.db")
+	return filepath.Join(StoreDir(gitRoot), "index.db")
 }
 
 // OpenIndexAt opens (or creates) an index DB at an arbitrary path. Used by

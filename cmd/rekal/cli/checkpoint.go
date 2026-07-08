@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -332,7 +331,7 @@ func sha256Hex(data []byte) string {
 // subagent-session scores relative to trunk turns (docs/agent-metadata.md),
 // so a temporarily BM25-only subagent hit is a small, self-correcting gap.
 func updateIndexIncremental(gitRoot string, sessionIDs, embeddableSessionIDs []string, checkpointID string, w io.Writer) error {
-	indexPath := filepath.Join(gitRoot, ".rekal", "index.db")
+	indexPath := db.IndexPath(gitRoot)
 	if _, err := os.Stat(indexPath); err != nil {
 		// No index DB yet — skip incremental update. Next 'rekal index' or 'rekal sync' will build it.
 		return nil

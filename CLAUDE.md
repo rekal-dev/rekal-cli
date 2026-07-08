@@ -36,6 +36,13 @@ Two databases in `.rekal/`:
 
 This split is a direct consequence of the soul: thin on the wire, rich on the machine.
 
+The `.rekal/` store lives in the repository's **main worktree**; every linked
+git worktree resolves to that one shared store via `gitx.MainWorktreeRoot`
+(a no-op for non-worktree repos, so existing installs need no migration). All
+store-path helpers (`db.StoreDir`, `cli.RekalDir`, and the `Open*`/`*Path`
+functions) funnel through it; git-state helpers (`HeadSHA`/`CurrentBranch`) and
+session discovery keep using the invoking worktree.
+
 ## Key Directories
 
 ### Commands (`cmd/rekal/`)
@@ -85,8 +92,8 @@ This split is a direct consequence of the soul: thin on the wire, rich on the ma
   stays local (see `docs/design/merged-only-sharing.md`)
 - `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
   `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
-  `BranchTip` for the merged-only export gate) shared by the command and
-  transport layers
+  `BranchTip` for the merged-only export gate, `MainWorktreeRoot` for the
+  worktree-shared store) shared by the command and transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring with
   configurable weights (`weights.go`; query-time only), signal weighting
   (steering-turn boost, subagent down-weight), conversation grouping

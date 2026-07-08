@@ -193,6 +193,15 @@ Rekal keeps two local DuckDB databases. The split is deliberate.
 
 Thin on the wire, rich on the machine.
 
+### Worktrees
+
+Linked git worktrees (`git worktree add`) share **one** `.rekal/` store — the
+one in the main checkout. Init once in the main repo; every worktree then reads
+and writes the same data, index, and config, so there's no per-worktree
+`rekal sync` or reindex. Checkpoints still record the branch and commit of
+whichever worktree you committed in. A repo that never uses worktrees is
+unaffected — the store is just its own `.rekal/`.
+
 ### Orphan branches
 
 Rekal data lives on git orphan branches named `rekal/<email>`. These branches have no common ancestor with your code branches — they do not appear in your project history, do not affect merges, and do not clutter your working tree. Standard git push and fetch move the data.

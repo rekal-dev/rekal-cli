@@ -97,7 +97,7 @@ func migrateDataAt(gitRoot string) error {
 
 // PopulateIndex attaches the data DB and bulk-populates all index tables.
 func PopulateIndex(d *sql.DB, gitRoot string) error {
-	dataPath := filepath.Join(gitRoot, ".rekal", "data.db")
+	dataPath := filepath.Join(StoreDir(gitRoot), "data.db")
 
 	// The data DB may have been written by an older rekal (it is shared via
 	// git); make sure schema migrations ran before querying new columns.
@@ -328,7 +328,7 @@ func toFloat64Slice(v interface{}) ([]float64, error) {
 // PopulateIndexIncremental adds new sessions to the index without a full rebuild.
 // sessionIDs are the newly captured sessions. checkpointID is the new checkpoint.
 func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, checkpointID string) error {
-	dataPath := filepath.Join(gitRoot, ".rekal", "data.db")
+	dataPath := filepath.Join(StoreDir(gitRoot), "data.db")
 
 	// See PopulateIndex: migrate before querying new columns.
 	if err := migrateDataAt(gitRoot); err != nil {

@@ -22,9 +22,9 @@ import (
 // The cache is an optimization, never a dependency: every caller treats a
 // missing or unopenable cache as "embed everything".
 
-// EmbedCachePath returns the cache DB path inside .rekal/.
+// EmbedCachePath returns the cache DB path inside the shared .rekal/ store.
 func EmbedCachePath(gitRoot string) string {
-	return filepath.Join(gitRoot, ".rekal", "embed-cache.db")
+	return filepath.Join(StoreDir(gitRoot), "embed-cache.db")
 }
 
 // OpenEmbedCache opens (creating if needed) the embedding cache DB and

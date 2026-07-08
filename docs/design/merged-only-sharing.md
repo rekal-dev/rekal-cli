@@ -1,11 +1,12 @@
 # Merged-only sharing (and worktree-shared state)
 
-**Status:** partially implemented (2026-07). **Mechanism 1 (merged-only export
-gate) is built, including squash support** — `push`/`--re-export` share only
-checkpoints whose `git_sha` is an ancestor of the default branch or whose
-branch landed as a patch-equivalent squash commit (both fail-closed).
-**Mechanism 2 (worktree-shared store + one-time cutover) remains design.**
-This note captures both — they are one idea seen from two sides.
+**Status:** implemented (2026-07). **Mechanism 1 (merged-only export gate)** —
+`push`/`--re-export` share only checkpoints whose `git_sha` is an ancestor of
+the default branch or whose branch landed as a patch-equivalent squash commit
+(both fail-closed). **Mechanism 2 (worktree-shared store)** — every linked
+worktree resolves the one shared `.rekal/` store in the main checkout
+(`gitx.MainWorktreeRoot`); no relocation, no migration. This note captures
+both — they are one idea seen from two sides.
 
 ## Problem
 
@@ -139,68 +140,43 @@ deleted locally *and* has no later sibling checkpoint has no provable squash
 point and stays held. Escape hatches if this bites in practice: an explicit
 `rekal push --promote <branch>`, or a `share_policy` knob in `config.json`.
 
-## Mechanism 2 — worktree-shared state
+## Mechanism 2 — worktree-shared state (implemented)
 
 Because the shared ledger is defined by "reachable from main," it is the same
-for every worktree of a repo. So it should live in the repo's **common git
-dir**, not the per-worktree checkout.
+for every worktree of a repo. The store therefore lives in **the main
+worktree's `.rekal/`**, and every linked worktree *resolves* to it.
 
-- Resolve the store root with `git rev-parse --git-common-dir` (returns the
-  shared `.git` even from a linked worktree), and put the store at
-  `<common-git-dir>/rekal/` — i.e. `.git/rekal/` for a normal repo. One store,
-  read/written by every worktree.
-- Everything moves together — `data.db`, `index.db`, and `config.json` — so a
-  checkpoint taken in any worktree lands in the one shared ledger, and one
-  `rekal sync` serves them all.
-- Putting the store inside the git dir also means it is **never tracked** (git
-  never versions its own internals), so the `.gitignore` entry for `.rekal/`
-  becomes unnecessary — the store is invisible to `git status` by construction
-  rather than by a rule that has to be maintained.
-- The only genuinely per-worktree fact is *which branch is checked out right
-  now*, which recall already reads live (`gitx.CurrentBranch`) for ranking. The
-  store is one; the branch is a lens over it, not a partition of it.
+**Resolution, not relocation.** An earlier draft of this section proposed
+moving the store into the common git dir (`.git/rekal/`) with a one-time
+cutover of existing installs. The shipped design is simpler and needs neither:
 
-## One-time cutover (existing installs)
+- `gitx.MainWorktreeRoot(gitRoot)` resolves the primary worktree via
+  `git worktree list --porcelain` (its first entry), caching the result.
+  Every `.rekal` path builder — `db.StoreDir`/`OpenData`/`IndexPath`/
+  `EmbedCachePath` and `cli.RekalDir`/`configPath`/`EnsureInitDone` — funnels
+  its `gitRoot` through it. Callers are unchanged.
+- For a normal (non-worktree) repository, or the main checkout itself, the
+  resolver returns `gitRoot` unchanged — a pure no-op. **So existing installs
+  need zero migration:** `.rekal/` stays exactly where it always was, a normal
+  gitignored directory in the main checkout, transparent and `clean`-able.
+- `data.db`, `index.db`, `config.json`, and `embed-cache.db` all resolve to
+  that one store, so a checkpoint taken in any worktree lands in the one shared
+  ledger and one `rekal sync`/`rekal index` serves them all.
+- `git worktree list` is robust where the parent-of-common-git-dir heuristic is
+  not: in a **submodule** the common dir lives under `.git/modules/<name>`, but
+  `worktree list` still reports the submodule's own checkout as its main
+  worktree, so the store lands correctly beside the submodule's code.
+- The only genuinely per-worktree facts stay per-worktree: the current branch
+  and HEAD (`gitx.CurrentBranch`/`HeadSHA`, used by checkpoint against the
+  invoking worktree) and Claude Code session discovery (keyed by the worktree's
+  own cwd under `~/.claude/projects/*`). The store is one; the branch is a lens
+  over it, not a partition of it.
 
-Today's installs put `.rekal/` in the **working tree root**, gitignored —
-*not* under `.git`. The move to `<common-git-dir>/rekal/` therefore needs a
-one-time, automatic cutover so nobody has to think about it and nobody loses
-history.
-
-**Detection.** On any command, resolve both the legacy path
-(`<worktree-root>/.rekal`) and the new path (`<common-git-dir>/rekal`). The
-cutover is needed exactly when the legacy dir exists and the new one does not.
-
-**The move — safe and idempotent:**
-
-1. If new exists and legacy does not → already cut over; use new. (Steady state.)
-2. If legacy exists and new does not → **cut over now:**
-   - `os.Rename(legacy, new)` when both are on the same filesystem (atomic —
-     the common git dir is almost always under the same mount as the worktree).
-   - Fall back to copy-then-remove if rename crosses a filesystem boundary
-     (e.g. `.git` is a `gitdir:` pointer file into another volume — rare, but
-     submodules and some worktree setups do this). Copy first, fsync, verify,
-     then remove the legacy dir, so an interrupted copy never destroys the only
-     copy.
-   - After a successful move, drop the now-obsolete `.rekal/` line from
-     `.gitignore` (best-effort; leaving it is harmless).
-3. If **both** exist → do not merge blindly. This means a cutover was
-   interrupted, or a worktree wrote a fresh legacy `.rekal/` after an earlier
-   cutover. Prefer the new (shared) store, and print a one-line notice pointing
-   at the leftover legacy dir so the user can inspect/remove it. Never silently
-   delete data we didn't just write.
-4. If neither exists → fresh repo; `init` creates the store at the new path
-   directly.
-
-**Properties:** runs at most once per repo (step 1 is the fast path forever
-after), touches nothing on a fresh install, and is crash-safe (rename is
-atomic; the copy path removes the source only after the destination is
-verified). `rekal clean` learns the new path and removes
-`<common-git-dir>/rekal/` (plus any stray legacy dir).
-
-A repo that never uses worktrees still benefits: its store simply lives in
-`.git/rekal/` instead of `./.rekal/`, with no behavior change the user notices
-beyond the one-time move.
+Why not `.git/rekal/`? Keeping the store a visible gitignored directory honors
+*transparent* (the user can see and remove it) and *simple* (no cutover, no
+migration path, no both-exist reconciliation to get wrong). The one property
+`.git/rekal/` would have added — being untracked by construction — is already
+covered by the `.gitignore` entry `init` writes.
 
 ## How the two link
 

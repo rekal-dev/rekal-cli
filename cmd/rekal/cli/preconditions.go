@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,7 @@ func EnsureGitRoot() (string, error) {
 // EnsureInitDone checks that Rekal has been initialized in the given git root.
 // It verifies that .rekal/ exists and contains the expected database files.
 func EnsureInitDone(gitRoot string) error {
-	rekalDir := filepath.Join(gitRoot, ".rekal")
+	rekalDir := RekalDir(gitRoot)
 	info, err := os.Stat(rekalDir)
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("rekal not initialized; run 'rekal init' in a git repository")
@@ -36,9 +37,11 @@ func EnsureInitDone(gitRoot string) error {
 	return nil
 }
 
-// RekalDir returns the path to .rekal/ within the given git root.
+// RekalDir returns the path to the .rekal/ store, resolved to the repository's
+// main worktree so all linked worktrees share one store (see
+// gitx.MainWorktreeRoot). For a normal repo this is just <gitRoot>/.rekal.
 func RekalDir(gitRoot string) string {
-	return filepath.Join(gitRoot, ".rekal")
+	return filepath.Join(gitx.MainWorktreeRoot(gitRoot), ".rekal")
 }
 
 // RequireInitializedRepo runs the two preconditions shared by every command

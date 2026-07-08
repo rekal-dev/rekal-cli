@@ -6,8 +6,52 @@ package gitx
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 )
+
+// mainWorktreeCache memoizes MainWorktreeRoot per input path. The resolution
+// shells out to git, and the .rekal path builders call it several times per
+// command run; the mapping is stable for a process's lifetime.
+var mainWorktreeCache sync.Map // gitRoot → resolved main worktree root
+
+// MainWorktreeRoot returns the repository's primary (main) worktree root — the
+// checkout every linked worktree shares a store with. For a normal repository
+// this is gitRoot itself (a no-op, so existing installs need no migration).
+// For a `git worktree add` checkout it is the main checkout, so Rekal's
+// .rekal/ store resolves to one shared place across all worktrees. Falls back
+// to gitRoot on any error.
+//
+// This is why worktree support needs no relocation into .git and no cutover:
+// the store stays a normal gitignored directory in the main checkout, and
+// linked worktrees simply resolve to it.
+func MainWorktreeRoot(gitRoot string) string {
+	if v, ok := mainWorktreeCache.Load(gitRoot); ok {
+		return v.(string)
+	}
+	root := resolveMainWorktreeRoot(gitRoot)
+	mainWorktreeCache.Store(gitRoot, root)
+	return root
+}
+
+func resolveMainWorktreeRoot(gitRoot string) string {
+	// `git worktree list --porcelain` lists the main worktree first, then any
+	// linked ones. This is robust where the parent-of-git-common-dir heuristic
+	// is not (submodules, where the common dir lives under .git/modules/<name>).
+	out, err := exec.Command("git", "-C", gitRoot, "worktree", "list", "--porcelain").Output()
+	if err != nil {
+		return gitRoot
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if rest, ok := strings.CutPrefix(line, "worktree "); ok {
+			if path := strings.TrimSpace(rest); path != "" {
+				return filepath.Clean(path)
+			}
+		}
+	}
+	return gitRoot
+}
 
 // HeadSHA returns the current HEAD commit SHA, or 40 zeros if it can't be read.
 func HeadSHA(gitRoot string) string {

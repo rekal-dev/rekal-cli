@@ -242,7 +242,17 @@ Rekal is zero-config by default. When you do want to tune it, there is exactly o
 ```
 
 - **`weights`** tunes recall ranking (layer mix, steering-turn boost, subagent discount). Applied at query time — changing them takes effect on the next search, no reindex, any corpus size.
-- **`embedding`** switches deep semantic embeddings from the embedded nomic model to any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI). `endpoint` and `api_key` expand `$VAR` references; `api_key_env` names an env var — secrets can stay in the environment entirely. Requests are batched and hard-timeboxed so a slow server can never stall a commit (embedding is always non-fatal). Pointed at localhost, your data still never leaves the machine; pointed at a cloud API, session text leaves — your call, made explicitly.
+- **`embedding`** switches deep semantic embeddings from the embedded nomic model to any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI). Requests are batched and hard-timeboxed so a slow server can never stall a commit (embedding is always non-fatal). Pointed at localhost, your data still never leaves the machine; pointed at a cloud API, session text leaves — your call, made explicitly.
+
+### API key: three ways, pick one
+
+| Form | Example | Where the secret lives |
+|---|---|---|
+| Real string | `"api_key": "sk-abc123"` | In the file (gitignored, this machine only) |
+| Env reference | `"api_key": "$MY_KEY"` | In the environment, expanded at run time |
+| Env var name | `"api_key_env": "EMBED_API_KEY"` | In the environment, read directly |
+
+Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise `api_key` (after `$VAR` expansion) is used; no key at all just omits the `Authorization` header — the normal case for a localhost server. `endpoint` expands `$VAR` the same way. One edge: a *hardcoded* `api_key` containing a literal `$` would be treated as an env reference — real provider keys never contain `$`, and `api_key_env` is the unambiguous form for anything sensitive.
 - Switching embedding model/endpoint requires one `rekal index` to regenerate vectors. A content-hash-keyed cache (`.rekal/embed-cache.db`, vectors only, never text) makes routine rebuilds embed only new sessions — and makes a model switch cost exactly one full pass.
 
 ## Commands reference

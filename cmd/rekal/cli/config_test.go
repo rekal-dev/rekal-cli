@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
 
@@ -194,5 +195,88 @@ func TestConfigPath(t *testing.T) {
 	want := filepath.Join(gitRoot, ".rekal", "config.json")
 	if got := configPath(gitRoot); got != want {
 		t.Fatalf("configPath = %q, want %q", got, want)
+	}
+}
+
+func fp(v float64) *float64 { return &v }
+
+func TestWeightsConfig_Resolve(t *testing.T) {
+	t.Parallel()
+
+	// Absent config → defaults.
+	var absent *weightsConfig
+	w, err := absent.resolve()
+	if err != nil || w != search.DefaultWeights() {
+		t.Fatalf("absent resolve = %+v, %v; want defaults", w, err)
+	}
+
+	// Partial override keeps other defaults.
+	w, err = (&weightsConfig{BM25: fp(0.5)}).resolve()
+	if err != nil {
+		t.Fatalf("partial resolve: %v", err)
+	}
+	if w.BM25 != 0.5 || w.Nomic != search.DefaultWeights().Nomic {
+		t.Fatalf("partial resolve = %+v", w)
+	}
+
+	// Explicit zero disables a layer (distinct from absent).
+	w, err = (&weightsConfig{LSA: fp(0)}).resolve()
+	if err != nil || w.LSA != 0 {
+		t.Fatalf("lsa=0 resolve = %+v, %v", w, err)
+	}
+
+	// Invalid values rejected.
+	if _, err := (&weightsConfig{BM25: fp(-1)}).resolve(); err == nil {
+		t.Fatal("negative layer weight must be rejected")
+	}
+	if _, err := (&weightsConfig{SteeringBoost: fp(0)}).resolve(); err == nil {
+		t.Fatal("zero steering_boost must be rejected")
+	}
+	if _, err := (&weightsConfig{BM25: fp(0), LSA: fp(0), Nomic: fp(0)}).resolve(); err == nil {
+		t.Fatal("all-zero layers must be rejected")
+	}
+}
+
+func TestEmbeddingConfig_Resolve(t *testing.T) {
+	t.Setenv("REKAL_TEST_ENDPOINT", "http://127.0.0.1:9999/v1")
+	t.Setenv("REKAL_TEST_KEY", "from-env")
+
+	// Env expansion in endpoint; api_key_env wins over api_key.
+	cfg, err := (&embeddingConfig{
+		Endpoint:  "$REKAL_TEST_ENDPOINT",
+		Model:     "nomic-embed-text-v1.5",
+		APIKey:    "hardcoded",
+		APIKeyEnv: "REKAL_TEST_KEY",
+	}).resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if cfg.Endpoint != "http://127.0.0.1:9999/v1" {
+		t.Fatalf("endpoint = %q, want env-expanded", cfg.Endpoint)
+	}
+	if cfg.APIKey != "from-env" {
+		t.Fatalf("api_key = %q, want the env var to win", cfg.APIKey)
+	}
+	// Nomic-family model gets the embedded backend's prefixes by default.
+	if cfg.QueryPrefix != "search_query: " || cfg.DocumentPrefix != "search_document: " {
+		t.Fatalf("nomic prefixes not defaulted: %+v", cfg)
+	}
+
+	// Non-nomic model: no implicit prefixes; explicit override respected.
+	empty := ""
+	cfg, err = (&embeddingConfig{Endpoint: "http://x/v1", Model: "bge-m3", QueryPrefix: &empty}).resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if cfg.QueryPrefix != "" || cfg.DocumentPrefix != "" {
+		t.Fatalf("non-nomic prefixes should be empty: %+v", cfg)
+	}
+
+	// Missing required fields rejected.
+	if _, err := (&embeddingConfig{Model: "m"}).resolve(); err == nil {
+		t.Fatal("empty endpoint must be rejected")
+	}
+	if _, err := (&embeddingConfig{Endpoint: "http://x/v1"}).resolve(); err == nil {
+		t.Fatal("empty model must be rejected")
 	}
 }

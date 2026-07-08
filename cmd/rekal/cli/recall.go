@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +47,28 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		}
 	}
 
-	out, err := search.Run(indexDB, filters, gitRoot)
+	// Recall tuning + embedding backend come from .rekal/config.json. A bad
+	// config falls back to defaults with a warning — recall must keep working.
+	cfg, err := readConfig(gitRoot)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: config unreadable, using defaults: %v\n", err)
+		cfg = Config{}
+	}
+	weights, err := cfg.Weights.resolve()
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: %v — using default weights\n", err)
+		weights = search.DefaultWeights()
+	}
+	var qe search.QueryEmbedder
+	if cfg.Embedding != nil {
+		if ec, eerr := cfg.Embedding.resolve(); eerr != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: %v — semantic layer uses the embedded model\n", eerr)
+		} else {
+			qe = embedhttp.New(ec)
+		}
+	}
+
+	out, err := search.Run(indexDB, filters, gitRoot, weights, qe)
 	if err != nil {
 		return err
 	}

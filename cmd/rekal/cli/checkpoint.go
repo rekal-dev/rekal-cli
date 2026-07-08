@@ -364,7 +364,7 @@ func updateIndexIncremental(gitRoot string, sessionIDs, embeddableSessionIDs []s
 		return err
 	}
 
-	if err := buildNomicEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
+	if err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
 		fmt.Fprintf(w, "rekal: warning: nomic embeddings skipped: %v\n", err)
 	}
 

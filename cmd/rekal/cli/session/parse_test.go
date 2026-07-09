@@ -1,7 +1,9 @@
 package session
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestSanitizeRepoPath(t *testing.T) {
@@ -453,5 +455,27 @@ func TestParseTranscriptWithOptions_IncludeSidechain(t *testing.T) {
 	}
 	if payload.Turns[0].Content != "Subagent finding: the bug is in parse.go." {
 		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+}
+
+func TestTruncate_DoesNotSplitRunes(t *testing.T) {
+	t.Parallel()
+	// "é" is 2 bytes (0xC3 0xA9). A string of 60 "é" is 120 bytes; cutting at
+	// 100 bytes lands mid-rune with a naive slice, producing invalid UTF-8.
+	s := strings.Repeat("é", 60)
+	got := truncate(s, 100)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncate produced invalid UTF-8: %q", got)
+	}
+	if len(got) > 100 {
+		t.Fatalf("truncate returned %d bytes, want <= 100", len(got))
+	}
+	// It must back up at most one rune (1 byte here) below the limit.
+	if len(got) < 100-1 {
+		t.Fatalf("truncate cut too much: %d bytes", len(got))
+	}
+	// A string that already fits is returned unchanged.
+	if truncate("abc", 100) != "abc" {
+		t.Fatal("truncate altered a short string")
 	}
 }

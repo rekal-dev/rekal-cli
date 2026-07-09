@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // SessionPayload is the parsed, filtered representation of an AI agent session.
@@ -628,11 +629,21 @@ func extractToolResultText(content json.RawMessage) string {
 	return combined
 }
 
+// truncate returns at most maxLen bytes of s without splitting a multi-byte
+// UTF-8 rune at the boundary. A split rune is invalid UTF-8, which DuckDB
+// rejects on insert ("could not bind parameter") — so a naive s[:maxLen] made
+// checkpoints intermittently fail on commands whose byte-maxLen boundary
+// landed mid-rune. Returns s unchanged when it already fits.
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen]
+	cut := maxLen
+	// Back up off any UTF-8 continuation byte so the last kept rune is whole.
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 func parseTimestamp(s string) time.Time {

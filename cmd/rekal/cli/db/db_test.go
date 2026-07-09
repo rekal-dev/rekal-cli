@@ -210,3 +210,39 @@ func TestQuerySessionIDByHash(t *testing.T) {
 		t.Fatal("expected error for an unknown hash")
 	}
 }
+
+// TestInsertToolCall_UTF8Constraint documents the invariant behind the
+// checkpoint "could not bind parameter" bug: DuckDB rejects a VARCHAR bind of
+// invalid UTF-8, so scrub.SanitizeText must run before insert. A valid string
+// inserts fine; the raw invalid one is what used to crash checkpoints.
+func TestInsertToolCall_UTF8Constraint(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+	if err := InsertSession(d, "s1", "", "h1", "human", "", "a@b.c", "main", "2026-01-01T00:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession: %v", err)
+	}
+
+	// Invalid UTF-8 in cmd_prefix — the exact shape a mid-rune truncation
+	// produced — must be rejected by DuckDB (that's why we sanitize upstream).
+	badErr := InsertToolCall(d, "tc-bad", "s1", 0, "Bash", "", "run \xc3")
+	if badErr == nil {
+		t.Fatal("expected DuckDB to reject invalid-UTF-8 cmd_prefix bind")
+	}
+
+	// The sanitized equivalent inserts cleanly.
+	if err := InsertToolCall(d, "tc-ok", "s1", 1, "Bash", "", "run �"); err != nil {
+		t.Fatalf("sanitized cmd_prefix should insert: %v", err)
+	}
+}

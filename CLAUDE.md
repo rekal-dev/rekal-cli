@@ -102,7 +102,7 @@ session discovery keep using the invoking worktree.
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
-- `scrub/`: Redact secrets and anonymize file paths in a session payload before any DB insert (runs in `checkpoint` after parse)
+- `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) in a session payload before any DB insert (runs in `checkpoint` and cross-repo import after parse). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter`.
 - `db/`: DuckDB backend — open, close, schema, insert helpers, index population.
   `embedcache.go` is the content-hash-keyed embedding cache
   (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;

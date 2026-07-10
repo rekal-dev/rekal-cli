@@ -32,7 +32,11 @@ Creates:
   agent skill        .claude/skills/rekal/SKILL.md for Claude Code
 
 If the remote already has data on your rekal branch, it is fetched and
-imported into the local data DB automatically.`,
+imported into the local data DB automatically.
+
+If Rekal is already initialized, 'init' leaves your data untouched and only
+refreshes the version-managed skills and hooks — run it after upgrading the
+binary to pick up new or changed skills.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
@@ -44,8 +48,17 @@ imported into the local data DB automatically.`,
 
 			rekalDir := RekalDir(gitRoot)
 
+			// Already initialized: don't rebuild the store, but do refresh the
+			// version-managed assets (skills and hooks). These ship inside the
+			// binary and are meant to track it, so `rekal init` after an upgrade
+			// is how they get updated — without this, new/changed skills would
+			// never reach an existing repo short of a full clean+init.
 			if _, err := os.Stat(rekalDir); err == nil {
-				fmt.Fprintln(cmd.OutOrStdout(), "Rekal is already initialized. Run 'rekal clean' first to reinitialize.")
+				if err := refreshManaged(gitRoot, cmd.ErrOrStderr()); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), err)
+					return NewSilentError(err)
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), "Rekal already initialized. Refreshed skills and hooks.")
 				return nil
 			}
 
@@ -229,14 +242,39 @@ func writeHook(path, content string) (bool, error) {
 	return true, nil
 }
 
-// installSkill writes the Rekal skill to .claude/skills/rekal/SKILL.md.
-// Always overwrites — the skill is managed by rekal and updated with each version.
-func installSkill(gitRoot string) error {
-	skillDir := filepath.Join(gitRoot, ".claude", "skills", "rekal")
-	if err := os.MkdirAll(skillDir, 0o755); err != nil {
-		return err
+// refreshManaged re-installs the assets that ship with the binary and are
+// meant to track its version — the skill suite and the git hooks — plus the
+// .claude gitignore entry. It touches no data: the store, orphan branch, and
+// index are left exactly as they are. This is the upgrade path: run `rekal
+// init` after updating the binary to pull new or changed skills into an
+// existing repo without a clean+reimport.
+func refreshManaged(gitRoot string, errOut io.Writer) error {
+	if err := installHooks(gitRoot, errOut); err != nil {
+		return fmt.Errorf("refresh hooks: %w", err)
 	}
-	return os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skill.RekalSkill), 0o644)
+	if err := installSkill(gitRoot); err != nil {
+		return fmt.Errorf("refresh skills: %w", err)
+	}
+	if err := ensureClaudeGitignore(gitRoot); err != nil {
+		return fmt.Errorf("update .gitignore for .claude: %w", err)
+	}
+	return nil
+}
+
+// installSkill writes the Rekal skill suite to .claude/skills/<name>/SKILL.md.
+// Always overwrites — the skills are managed by rekal and updated with each
+// version.
+func installSkill(gitRoot string) error {
+	for _, s := range skill.All() {
+		skillDir := filepath.Join(gitRoot, ".claude", "skills", s.Name)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(s.Content), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ensureClaudeGitignore adds the appropriate .claude gitignore entry.

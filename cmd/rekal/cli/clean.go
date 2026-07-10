@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/skill"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +21,7 @@ Removes:
   .rekal/            Data DB, index DB, and all local state
   post-commit hook   Only if it contains the rekal marker
   pre-push hook      Only if it contains the rekal marker
-  agent skill        .claude/skills/rekal/ installed by 'rekal init'
+  agent skills       .claude/skills/rekal*/ installed by 'rekal init'
 
 Run 'rekal init' to reinitialize after cleaning.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -55,12 +56,13 @@ func runClean(gitRoot string) error {
 	return nil
 }
 
-// removeSkill deletes the rekal-managed skill directory installed by init,
+// removeSkill deletes every rekal-managed skill directory installed by init,
 // then prunes .claude/skills/ and .claude/ if that left them empty — a
 // user's own .claude content (settings, other skills) is never touched.
 func removeSkill(gitRoot string) {
-	skillDir := filepath.Join(gitRoot, ".claude", "skills", "rekal")
-	_ = os.RemoveAll(skillDir)
+	for _, s := range skill.All() {
+		_ = os.RemoveAll(filepath.Join(gitRoot, ".claude", "skills", s.Name))
+	}
 	// os.Remove refuses non-empty directories, which is exactly the
 	// behavior wanted here.
 	_ = os.Remove(filepath.Join(gitRoot, ".claude", "skills"))

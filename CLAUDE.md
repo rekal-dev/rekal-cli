@@ -112,7 +112,15 @@ session discovery keep using the invoking worktree.
   over the embedded nomic model via config
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
-- `skill/`: Rekal Skill definition for Claude Code integration
+- `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are
+  embedded via `//go:embed all:skills`; `skill.All()` returns them (`rekal`
+  first). `init` installs each to `.claude/skills/<name>/SKILL.md`, `clean`
+  removes them. The suite: `rekal` (base search/drill), `rekal-provenance`
+  (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
+  `human_steering` turns into rules), `rekal-distill` (four-library knowledge
+  map + topic/session zoom), `rekal-census` (exhaustive full-corpus
+  scan+summarise via raw SQL, bounded by an explicit scope). Adding a skill =
+  adding `skills/<name>/SKILL.md`; no other wiring.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 

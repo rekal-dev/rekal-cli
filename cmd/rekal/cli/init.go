@@ -229,14 +229,20 @@ func writeHook(path, content string) (bool, error) {
 	return true, nil
 }
 
-// installSkill writes the Rekal skill to .claude/skills/rekal/SKILL.md.
-// Always overwrites — the skill is managed by rekal and updated with each version.
+// installSkill writes the Rekal skill suite to .claude/skills/<name>/SKILL.md.
+// Always overwrites — the skills are managed by rekal and updated with each
+// version.
 func installSkill(gitRoot string) error {
-	skillDir := filepath.Join(gitRoot, ".claude", "skills", "rekal")
-	if err := os.MkdirAll(skillDir, 0o755); err != nil {
-		return err
+	for _, s := range skill.All() {
+		skillDir := filepath.Join(gitRoot, ".claude", "skills", s.Name)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(s.Content), 0o644); err != nil {
+			return err
+		}
 	}
-	return os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skill.RekalSkill), 0o644)
+	return nil
 }
 
 // ensureClaudeGitignore adds the appropriate .claude gitignore entry.

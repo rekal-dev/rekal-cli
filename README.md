@@ -11,7 +11,7 @@
 
 [Website](https://rekal.dev) · [GitHub](https://github.com/rekal-dev/rekal-cli) · [Discord](https://discord.gg/eNNabp4b)
 
-> **Beta** — works with Claude Code. More agents coming.
+> Works with Claude Code.
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.

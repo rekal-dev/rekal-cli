@@ -1,28 +1,42 @@
 # Rekal
 
+**Your AI agent starts every session blank — no idea why the code looks the way it does, or what your team already tried and threw away. Rekal is the memory it's missing: the *why* behind the code, stored in git, not someone else's cloud.**
+
+[![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=e94560)](https://github.com/rekal-dev/rekal-cli/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rekal-dev/rekal-cli)](https://goreportcard.com/report/github.com/rekal-dev/rekal-cli)
+[![License](https://img.shields.io/github/license/rekal-dev/rekal-cli?color=blue)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eNNabp4b)
+[![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
+
 [Website](https://rekal.dev) · [GitHub](https://github.com/rekal-dev/rekal-cli) · [Discord](https://discord.gg/eNNabp4b)
 
-> **Beta** — Works with Claude Code. More agents coming.
+> **Beta** — works with Claude Code. More agents coming.
 
-## Two problems
+<!--
+  TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
+  One loop, ~15s: `git commit` → new session → `rekal "why did we drop batching?"`
+  → the agent recalls the abandoned approach and the reason. Until this exists, the
+  reader has to *imagine* the product. Record with asciinema/vhs, export to .gif or .svg,
+  commit under docs/assets/, and replace this comment with the image.
+-->
 
-### Intent has no ledger
+Code has git — every line, every author, recorded forever. The *reasoning* behind it has nothing: the conversations where you and your AI weighed approaches, rejected alternatives, and decided — gone the moment the session ends. Rekal is the ledger for that. It hooks into git, captures the AI session behind every commit, and hands the precise prior context back to your agent the next time it works the same problem — including the dead-ends your team already ruled out.
 
-Code has git. Every line, every change, every author — recorded forever.
+**In three lines:**
 
-But the reasoning behind the code has nothing. The conversations where a developer and an AI explored a problem, debated approaches, rejected alternatives, arrived at a decision — those vanish the moment the session ends.
+- **Commit** → Rekal snapshots the conversation that produced the change into an append-only log.
+- **Push** → only *merged* work rides a git orphan branch to your team. No server, no API, no telemetry.
+- **Recall** → `rekal "<problem>"` returns scored prior context — decisions, rejected alternatives, dead-ends — as JSON your agent drills into.
 
-The code says *what*. The intent says *why*. The *why* has no permanent record.
+## Why not just…?
 
-### Agents can't remember
-
-An AI agent starts every session blank. It reads the code. It does not know why the code looks the way it does. It does not know what was tried and rejected last week. It does not know that the team already explored and abandoned the approach it is about to suggest.
-
-Humans have institutional memory. Agents have none.
-
-## What Rekal does
-
-Rekal hooks into git and captures your AI session context at every commit. That context becomes a permanent, immutable, shared part of your project history — distributed through git, not through a separate service. When your agent starts a new session, it recalls the precise prior context for the problem it is working on. It knows why the code looks the way it does.
+| Instead of | The gap | Rekal |
+|---|---|---|
+| a `MEMORY.md` / notes file | rots, hand-maintained, tied to one branch | captured automatically at every commit, immutable, branch-aware |
+| a RAG / memory SaaS | your code's intent lives on someone else's server | never leaves git and your machine — no server, no API, no telemetry |
+| editor rules (Cursor/Copilot) | per-user, per-editor, not shared team history | team-wide, editor-agnostic, travels with the repo |
+| `git log` / `git blame` | tell you *what* changed, never *why* | the conversation and reasoning behind the change |
 
 ## What makes Rekal different
 

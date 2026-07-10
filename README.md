@@ -29,6 +29,41 @@ Code has git — every line, every author, recorded forever. The *reasoning* beh
 - **Push** → only *merged* work rides a git orphan branch to your team. No server, no API, no telemetry.
 - **Recall** → `rekal "<problem>"` returns scored prior context — decisions, rejected alternatives, dead-ends — as JSON your agent drills into.
 
+## See it in action
+
+Last week, one engineer and their agent settled how webhook retries should work. This week, a *different* agent is about to re-propose the approach that was already rejected — until it asks Rekal first:
+
+```console
+$ rekal "should webhook retries use a fixed delay?"
+```
+```json
+{
+  "query": "should webhook retries use a fixed delay?",
+  "total": 3,
+  "results": [
+    {
+      "session_id": "01JNQX8F2K9M...",
+      "score": 0.87,
+      "snippet": "...no, a fixed 5s delay stampedes the downstream on
+                  recovery. Use exponential backoff with jitter instead.",
+      "snippet_role": "human_steering",
+      "session": {
+        "author": "dev@team.dev",
+        "branch": "feat/webhooks",
+        "commit": "a1b2c3d",
+        "files": ["services/webhooks/delivery.go"]
+      }
+    }
+  ]
+}
+```
+
+The agent gets the decision **and the reason the alternative was rejected** — sourced from the human's own mid-course correction — before it wastes a round re-proposing it. That is the whole product in one exchange. It drills in for the full reasoning with one more call:
+
+```console
+$ rekal query --session 01JNQX8F2K9M... --role human_steering
+```
+
 ## Why not just…?
 
 | Instead of | The gap | Rekal |

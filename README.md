@@ -311,37 +311,6 @@ Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise
 
 Full details: [docs/spec/command/](docs/spec/command/).
 
-## Benchmarks
-
-Measured on two real repositories. All times in seconds, wall clock, macOS/arm64.
-
-### Dataset size
-
-| Metric | 165 sessions | 57 sessions |
-|--------|-------------|------------|
-| Turns | 14,019 | 3,929 |
-| data.db | 13 MB | 7.3 MB |
-| index.db | 18 MB | 10 MB |
-
-### Operation timing
-
-| Operation | 165 sessions | 57 sessions |
-|-----------|-------------|------------|
-| init (cold) | 4.60s | 0.98s |
-| checkpoint (cold) | 0.50s | 2.66s |
-| checkpoint (incremental) | 0.51s | 0.23s |
-| index | 0.85s | 0.61s |
-| push | 0.18s | 1.93s |
-| sync | 2.06s | 1.78s |
-| search "authentication" | 0.15s | 0.13s |
-| search "database migration" | 0.17s | 0.14s |
-| search "error handling" | 0.16s | 0.13s |
-| query | 0.14s | 0.10s |
-| log | 0.14s | 0.10s |
-| clean | 0.13s | 0.10s |
-
-Search stays under 200ms at 14k turns.
-
 ## Development
 
 ```bash

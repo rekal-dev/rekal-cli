@@ -118,8 +118,9 @@ session discovery keep using the invoking worktree.
   removes them. The suite: `rekal` (base search/drill), `rekal-provenance`
   (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
   `human_steering` turns into rules), `rekal-distill` (four-library knowledge
-  map + topic/session zoom). Adding a skill = adding `skills/<name>/SKILL.md`;
-  no other wiring.
+  map + topic/session zoom), `rekal-census` (exhaustive full-corpus
+  scan+summarise via raw SQL, bounded by an explicit scope). Adding a skill =
+  adding `skills/<name>/SKILL.md`; no other wiring.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 

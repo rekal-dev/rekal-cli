@@ -106,7 +106,7 @@ Run `rekal query --help` for the full data DB and index DB schemas.
 
 ## Companion skills
 
-This is the base skill — search and drill. Three focused skills build on it;
+This is the base skill — search and drill. Four focused skills build on it;
 reach for them when the task matches:
 
 - **rekal-provenance** — "how/why was this change made?" Anchor on a file or
@@ -118,6 +118,10 @@ reach for them when the task matches:
 - **rekal-distill** — navigate memory as four libraries (context / decision /
   rules / boundary) and "zoom" around a topic or session. Use when you need a
   structured survey of what is known, undecided, preferred, and abandoned.
+- **rekal-census** — read and summarise the *whole* corpus (or a bounded slice)
+  exhaustively, not just the top matches. Use for "summarise everything",
+  onboarding digests, or retrospectives — it scans on raw SQL for coverage,
+  not relevance.
 
 ## Self-Service
 

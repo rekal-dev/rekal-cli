@@ -71,9 +71,15 @@ rekal init
 
 - `.rekal/` directory containing `data.db` (shared truth) and `index.db` (local search index)
 - A `post-commit` and `pre-push` git hook (marked `# managed by rekal`)
-- A Claude Code skill at `.claude/skills/rekal/SKILL.md`
+- The Claude Code skill suite under `.claude/skills/` (see [Agent skills](#agent-skills))
 - An orphan branch `rekal/<your-email>` for transport
 - Appends `.rekal/` to your `.gitignore`
+
+Running `rekal init` again in an already-initialized repo does **not** rebuild
+your store. It refreshes the version-managed skills and hooks and leaves your
+data untouched — so after you upgrade the binary, `rekal init` is how new or
+changed skills reach an existing repo. A full reinitialize still requires
+`rekal clean` first.
 
 ### Tear down
 
@@ -85,6 +91,9 @@ rekal clean
 
 - Deletes the `.rekal/` directory and all its contents
 - Removes the git hooks (only the ones marked `# managed by rekal`)
+- Removes the installed skill suite (`.claude/skills/rekal*/`), pruning
+  `.claude/skills/` and `.claude/` only if they are left empty — your own
+  `.claude` content is never touched
 
 No residue. If you want to start over, run `clean` then `init`.
 
@@ -138,7 +147,7 @@ The flow: commit → capture → push → sync → recall.
 
 | You do | Rekal does |
 |--------|------------|
-| `rekal init` (once per repo) | Creates `.rekal/`, installs git hooks, writes agent skill file |
+| `rekal init` (once per repo) | Creates `.rekal/`, installs git hooks, writes the agent skill suite |
 | `git commit` | Hook runs `rekal checkpoint` — snapshots your active AI session into `data.db` (append-only) |
 | `git push` | Hook runs `rekal push` — encodes only your unexported data into compact wire format (zstd + string interning) and pushes to your orphan branch `rekal/<email>` |
 | `rekal sync` (manual, when you want team context) | Fetches teammates' orphan branches, imports their sessions into your local DB and rebuilds the search index |
@@ -155,6 +164,8 @@ Day-to-day: commit and push as normal. Everything else is automatic.
 | `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
 | `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |
 | `rekal --file src/billing/ "discount"` | Scoped search filtered by file path |
+| `rekal --commit <sha>` | Finds the session(s) that produced a commit — the anchor for change provenance |
+| `rekal query --session <id> --role human_steering` | Returns only the mid-course corrections — the highest-signal turns for intent and preferences |
 | `rekal sync` (optional, at session start) | Pulls team context before the agent starts working |
 
 The agent controls how much context it loads. Search first, drill down progressively, full sessions only when needed.
@@ -169,6 +180,24 @@ rekal query --session 01JNQX... --offset 10 --limit 5
 # Agent loads full detail only if needed
 rekal query --session 01JNQX... --full
 ```
+
+### Agent skills
+
+The raw commands above are the interface; the **skills** are the playbooks.
+`rekal init` installs a suite of Claude Code skills under `.claude/skills/`, so
+the agent reaches for the right Rekal workflow on its own. Each is a focused
+recipe over the same commands — the agent loads only the one the task needs.
+
+| Skill | Use it when | What it does |
+|-------|-------------|--------------|
+| **rekal** | any recall | Base search + progressive drill. The entry point every other skill builds on. |
+| **rekal-provenance** | reading unfamiliar code, onboarding, reviewing a diff | Walks *artifact → commit → session → intent*: anchor on a file or commit, find the session that produced it, emit the why-chain git alone can't give you. |
+| **rekal-reflect** | before or after a task | Mines your own prior sessions — especially the `human_steering` corrections — for recurring mistakes and distills them into explicit rules, so a correction happens once, not every session. |
+| **rekal-distill** | scoping a problem space | Reads memory as four libraries — **context** (what's known), **decision** (what's open), **rules** (what's preferred), **boundary** (what's been abandoned) — and "zooms" around a topic by file co-occurrence and session lineage. |
+| **rekal-census** | "summarise everything", retrospectives, onboarding digests | Exhaustively scans a bounded scope (all / a branch / a time window / a subsystem) on raw SQL and folds it into one faithful summary — coverage, not relevance. |
+
+Skills are versioned with the binary. After you upgrade, run `rekal init` once
+to refresh them (it leaves your data untouched).
 
 ### Ad-hoc usage
 
@@ -276,8 +305,8 @@ Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise
 | `rekal sync [--self]` | Sync team context from remote rekal branches |
 | `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB; optionally fold in cross-repo local sessions |
 | `rekal log [--limit N]` | Show recent checkpoints |
-| `rekal [filters...] [query]` | Hybrid search over sessions |
-| `rekal query --session <id> [--full]` | Drill into a session |
+| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [query]` | Hybrid search over sessions, optionally scoped by file, commit, author, or actor |
+| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full]` | Drill into a session — window by turn, filter by role (`human`/`assistant`/`human_steering`), or load full detail |
 | `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 
 Full details: [docs/spec/command/](docs/spec/command/).

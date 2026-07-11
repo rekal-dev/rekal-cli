@@ -26,6 +26,7 @@ func TestAll_ShipsSuite(t *testing.T) {
 		"rekal-reflect":    false,
 		"rekal-distill":    false,
 		"rekal-census":     false,
+		"rekal-wiki":       false,
 	}
 	for _, s := range skills {
 		if s.Content == "" {

@@ -26,7 +26,7 @@
    - Hooks contain the marker `# managed by rekal`. Existing non-Rekal hooks are not overwritten.
 8. **Create orphan branch** — `rekal/<email>` with empty `rekal.body` and `dict.bin`. If the branch exists on the remote, fetch it. If it exists locally, leave it.
 9. **Import existing data** — If the orphan branch has data (body > 9 bytes), import sessions and checkpoints into data DB.
-10. **Install Claude Code skills** — Write the skill suite to `.claude/skills/<name>/SKILL.md` (rekal, rekal-provenance, rekal-reflect, rekal-distill, rekal-census) for agent integration. Always overwritten — skills are managed by rekal and track the binary version.
+10. **Install Claude Code skills** — Write the skill suite to `.claude/skills/<name>/SKILL.md` (rekal, rekal-provenance, rekal-reflect, rekal-distill, rekal-census, rekal-wiki) for agent integration. Always overwritten — skills are managed by rekal and track the binary version.
 11. **Gitignore `.claude`** — If `.claude/` already existed (user has settings, CLAUDE.md, etc.), only ignore `.claude/skills/`. Otherwise ignore the entire `.claude/` directory.
 12. **Initial checkpoint** — Capture any existing sessions.
 13. **Print** — `Rekal initialized.`

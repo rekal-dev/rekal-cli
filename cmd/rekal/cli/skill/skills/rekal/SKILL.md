@@ -125,6 +125,10 @@ reach for them when the task matches:
 - **rekal-distill** — navigate memory as four libraries (context / decision /
   rules / boundary) and "zoom" around a topic or session. Use when you need a
   structured survey of what is known, undecided, preferred, and abandoned.
+- **rekal-wiki** — materialize memory into committed `docs/wiki/<topic>.md`
+  pages: topics from file co-occurrence, summaries from the sessions behind
+  them (never from noisy commit messages), shipped as a PR so review admits
+  the knowledge. Use to bootstrap or refresh a browsable knowledge base.
 - **rekal-census** — read and summarise the *whole* corpus (or a bounded slice)
   exhaustively, not just the top matches. Use for "summarise everything",
   onboarding digests, or retrospectives — it scans on raw SQL for coverage,

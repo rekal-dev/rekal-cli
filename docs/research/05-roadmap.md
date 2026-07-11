@@ -77,12 +77,31 @@ maintained scripts — decision after v0 results. Publishing the harness is
 what makes the benchmark a community artifact (and RekalBench citable).
 *Effort: medium. Source: 03 §6.*
 
+## R11 — Committed wiki materialization (rekal-wiki skill; L3 stays bench-gated)
+Shipped as a skill, not engine: `rekal-wiki` discovers topic clusters from
+file co-occurrence at generation time, assembles each topic from its
+sessions (compaction summaries → intent → steering, cheapest first, with a
+dirty-commit rule: noise subjects like "update" are cited by SHA but never
+quoted as evidence), and writes `docs/wiki/<topic>.md` pages that ship as a
+PR. The merge gate is the admission control (EDV's verified admission,
+implemented by git); staleness is git-visible (generation watermark vs
+newest session); the graph stays virtual — no store, only markdown.
+This is NOT the compile-time wiki rejected below: nothing is engine-
+maintained, and regeneration is an explicit skill run producing a reviewable
+diff. A *cached* L3 layer (precomputed topic summaries in index.db) remains
+bench-gated: build only if the rung-3 drill proxy shows query-time assembly
+too expensive on broad T1/T3 queries.
+*Effort: small (one SKILL.md). Source: LLM-Wiki (steal the shape, not the
+store), EDV, TencentDB L3 discussion.*
+
 ## Explicit non-goals (decided against, with reasons)
 
 - **Compile-time knowledge graph / wiki over sessions** (LLM-Wiki, MRAgent
   storage layer): re-introduces the maintenance problem Rekal's architecture
   exists to avoid; SAG shows query-time joins suffice. Revisit only if T4
-  multi-hop numbers embarrass us.
+  multi-hop numbers embarrass us. (R11's committed-markdown wiki is the
+  permitted variant: agent-generated at read time, admitted by review,
+  maintained by git — never by the engine.)
 - **Write-time summarization/consolidation** (AdaMem tiers): EMem's result +
   contamination paper both argue for preserve-raw; Rekal distills at query
   time via skills instead.

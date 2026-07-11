@@ -245,6 +245,7 @@ recipe over the same commands — the agent loads only the one the task needs.
 | **rekal-reflect** | before or after a task | Mines your own prior sessions — especially the `human_steering` corrections — for recurring mistakes and distills them into explicit rules, so a correction happens once, not every session. |
 | **rekal-distill** | scoping a problem space | Reads memory as four libraries — **context** (what's known), **decision** (what's open), **rules** (what's preferred), **boundary** (what's been abandoned) — and "zooms" around a topic by file co-occurrence and session lineage. |
 | **rekal-census** | "summarise everything", retrospectives, onboarding digests | Exhaustively scans a bounded scope (all / a branch / a time window / a subsystem) on raw SQL and folds it into one faithful summary — coverage, not relevance. |
+| **rekal-wiki** | bootstrapping a knowledge base; repos too big to map by hand; noisy commit messages | Discovers topics from file co-occurrence, summarises each from its sessions (never from "update"-grade commit messages), and writes provenance-linked `docs/wiki/` pages that ship as a PR — review is the admission gate. |
 
 Skills are versioned with the binary. After you upgrade, run `rekal init` once
 to refresh them (it leaves your data untouched).

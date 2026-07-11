@@ -308,10 +308,11 @@ justified it. The agent then drills *inside* the bounded set: the pointed-at
 summary as the cheapest whole-session overview, windowed turn ranges, role
 filters, tool-call and file views, full transcript only as a last resort.
 In RISE's terms @rise2026, search constructs the interaction space and the
-drill tools explore it; the skill layer (five shipped playbooks: base
+drill tools explore it; the skill layer (six shipped playbooks: base
 search, provenance, self-reflection, four-library distillation, exhaustive
-census) is the active-reconstruction policy @mragent2026 that sequences
-those primitives.
+census, and wiki materialization — committed topic pages whose admission
+gate is code review, not a judge model) is the active-reconstruction policy
+@mragent2026 that sequences those primitives.
 
 == Sharing: the merge is the verifier
 

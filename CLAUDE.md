@@ -131,8 +131,11 @@ session discovery keep using the invoking worktree.
   (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
   `human_steering` turns into rules), `rekal-distill` (four-library knowledge
   map + topic/session zoom), `rekal-census` (exhaustive full-corpus
-  scan+summarise via raw SQL, bounded by an explicit scope). Adding a skill =
-  adding `skills/<name>/SKILL.md`; no other wiring.
+  scan+summarise via raw SQL, bounded by an explicit scope), `rekal-wiki`
+  (materialize `docs/wiki/<topic>.md` pages from co-occurrence clusters +
+  the sessions behind them, shipped as a PR — review is the admission gate;
+  noise commit messages cited by SHA, never quoted as evidence). Adding a
+  skill = adding `skills/<name>/SKILL.md`; no other wiring.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 

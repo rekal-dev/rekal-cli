@@ -27,6 +27,14 @@ The presence of this skill file means the binary is installed.
 
 ## Workflow
 
+### 0. Wiki shortcut — one existence check
+
+If `docs/wiki/index.md` exists, a materialized topic map of this memory is
+already committed (see **rekal-wiki**): for broad "what do we know about X"
+questions, read the topic page first — it may answer in one file read. Check
+its watermark; anything newer, and any pointed or verification question,
+goes through recall below. The wiki is a cache of memory, not the memory.
+
 ### 1. Search — find relevant sessions
 
 ```bash

@@ -16,6 +16,53 @@ func seedFile(t *testing.T, indexDB *sql.DB, sessionID, path string) {
 	}
 }
 
+// TestAttachSummaryPointers verifies the summary-pointer enrichment: a
+// result whose session has compaction-summary turns gets the index of the
+// latest one (summaries are cumulative — the latest subsumes the rest), a
+// folded child gets its own pointer, and sessions without a summary keep the
+// field absent. The pointer, not the payload: recall output must stay thin.
+func TestAttachSummaryPointers(t *testing.T) {
+	t.Parallel()
+
+	indexDB := openTempIndexDB(t)
+
+	for _, r := range []struct {
+		id, sid string
+		idx     int
+		role    string
+	}{
+		{"t1", "s1", 3, "summary"},
+		{"t2", "s1", 41, "summary"}, // latest must win
+		{"t3", "s1", 50, "human"},
+		{"t4", "s2", 0, "human"}, // no summary at all
+		{"t5", "child1", 7, "summary"},
+	} {
+		if _, err := indexDB.Exec(
+			`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
+			 VALUES ($1, $2, $3, $4, 'x', '')`,
+			r.id, r.sid, r.idx, r.role,
+		); err != nil {
+			t.Fatalf("seed turn %s: %v", r.id, err)
+		}
+	}
+
+	results := []Result{
+		{SessionID: "s1", Children: []Result{{SessionID: "child1"}}},
+		{SessionID: "s2"},
+	}
+	attachSummaryPointers(indexDB, results)
+
+	if results[0].SummaryTurnIdx == nil || *results[0].SummaryTurnIdx != 41 {
+		t.Errorf("s1 SummaryTurnIdx = %v, want 41 (latest summary)", results[0].SummaryTurnIdx)
+	}
+	if c := results[0].Children[0].SummaryTurnIdx; c == nil || *c != 7 {
+		t.Errorf("child1 SummaryTurnIdx = %v, want 7", c)
+	}
+	if results[1].SummaryTurnIdx != nil {
+		t.Errorf("s2 SummaryTurnIdx = %v, want absent (no summary turn)", *results[1].SummaryTurnIdx)
+	}
+}
+
 // TestAttachRelated verifies the query-time co-occurrence join: sessions
 // sharing touched files become Related entries, ordered by shared-file
 // count, capped at relatedLimit, and absent for sessions with no overlap.

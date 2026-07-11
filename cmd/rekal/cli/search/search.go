@@ -79,6 +79,15 @@ type Result struct {
 	// conversationChildBudget.
 	Children []Result `json:"children,omitempty"`
 
+	// SummaryTurnIdx points at the session's latest compaction-summary turn
+	// (role "summary"), when one exists — summaries are cumulative, so the
+	// latest subsumes the rest. It is a pointer, not a payload: the summary
+	// itself is 10-17KB and inlining it would spend tokens before anyone
+	// knows it's wanted. The drill is one command:
+	// rekal query --session <id> --role summary. Absent when the session
+	// has no summary turn.
+	SummaryTurnIdx *int `json:"summary_turn_index,omitempty"`
+
 	// Layers and Related are the --explain enrichments; nil/absent without
 	// the flag so default output is unchanged.
 	Layers  *Layers   `json:"layers,omitempty"`
@@ -659,6 +668,61 @@ func buildResults(indexDB *sql.DB, scored []scored, filters Filters, limit int) 
 	return results, nil
 }
 
+// attachSummaryPointers sets SummaryTurnIdx on every result (and folded
+// child) whose session has a compaction-summary turn — the pointer that
+// makes the cheap-overview drill discoverable without inlining a 10-17KB
+// payload into recall output (progressive disclosure; see Result doc). One
+// batched query for the whole result set; failures are non-fatal and simply
+// leave the field absent.
+func attachSummaryPointers(indexDB *sql.DB, results []Result) {
+	if len(results) == 0 {
+		return
+	}
+	var ids []string
+	for _, r := range results {
+		ids = append(ids, r.SessionID)
+		for _, c := range r.Children {
+			ids = append(ids, c.SessionID)
+		}
+	}
+	inClause, args := sqlInClause(ids)
+	rows, err := indexDB.Query(`
+		SELECT session_id, MAX(turn_index)
+		FROM turns_ft
+		WHERE role = 'summary' AND session_id IN (`+inClause+`)
+		GROUP BY session_id`, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close() //nolint:errcheck
+
+	latest := make(map[string]int)
+	for rows.Next() {
+		var sid string
+		var idx int
+		if err := rows.Scan(&sid, &idx); err != nil {
+			return
+		}
+		latest[sid] = idx
+	}
+	if rows.Err() != nil {
+		return
+	}
+
+	for i := range results {
+		if idx, ok := latest[results[i].SessionID]; ok {
+			v := idx
+			results[i].SummaryTurnIdx = &v
+		}
+		for j := range results[i].Children {
+			if idx, ok := latest[results[i].Children[j].SessionID]; ok {
+				v := idx
+				results[i].Children[j].SummaryTurnIdx = &v
+			}
+		}
+	}
+}
+
 // relatedLimit caps the co-occurrence join per result — enough edges to zoom
 // along, thin enough to stay cheap on the wire.
 const relatedLimit = 3
@@ -1107,6 +1171,8 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 	if err != nil {
 		return Output{}, err
 	}
+
+	attachSummaryPointers(indexDB, results)
 
 	if filters.Explain {
 		attachRelated(indexDB, results)

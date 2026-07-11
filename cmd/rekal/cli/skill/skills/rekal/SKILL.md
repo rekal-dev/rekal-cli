@@ -43,6 +43,7 @@ Output is scored JSON. Each result includes:
 - `snippet` — the matching text from the best-matching turn
 - `snippet_turn_index` — the turn index of the snippet (use as `--offset` for drill-down)
 - `snippet_role` — the snippet's turn role: `human`, `human_steering` (a human correcting the agent mid-task — high intent), `assistant`, or `summary` (a harness-written distillation of the whole session — dense but machine text; drill into the raw turns beneath it for specifics)
+- `summary_turn_index` — present when the session has a compaction summary: the turn index of the latest one. The cheapest overview of a long session is one drill away: `rekal query --session <id> --role summary`
 - `score`, `actor`, `author`, `branch`, `files` — metadata for filtering
 - `children` — subagent/workflow transcripts grouped under this result's trunk conversation (when any matched)
 - `origin` — present only on cross-repo hits (see below): `repo:/path` or `shell:/path`, the working directory the session came from. The hit is from *another project on this machine* — weigh its relevance to this repo accordingly. Absent means the session belongs to this repo or a teammate.

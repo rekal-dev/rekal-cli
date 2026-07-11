@@ -100,9 +100,12 @@ session discovery keep using the invoking worktree.
   (steering-turn boost, compaction-summary boost, subagent down-weight),
   conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, the LSA
-  query-projection cache (`projection.go`), and the `--explain` enrichments
-  (per-layer normalized scores + query-time related-session joins over
-  `files_index`; default output unchanged without the flag)
+  query-projection cache (`projection.go`), the per-result
+  `summary_turn_index` pointer (latest compaction-summary turn — pointer,
+  never the 10-17KB payload; drill with `--role summary`), and the
+  `--explain` enrichments (per-layer normalized scores + query-time
+  related-session joins over `files_index`; default output unchanged
+  without the flag)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the

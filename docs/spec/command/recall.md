@@ -70,6 +70,7 @@ Multiple filters = AND.
       "snippet": "...",
       "snippet_turn_index": 3,
       "snippet_role": "assistant",
+      "summary_turn_index": 41,
       "session": {
         "author": "alice@example.com",
         "actor": "human",
@@ -108,6 +109,12 @@ Multiple filters = AND.
 workflow steps, other agents in the same team) share this result's trunk
 conversation via `parent_session_id`; omitted otherwise. `total` counts
 top-level (grouped) results, not raw session hits.
+
+`summary_turn_index` points at the session's latest compaction-summary turn
+(role `summary`) when one exists; omitted otherwise. It is a pointer, not a
+payload — the summary itself is 10-17KB and is never inlined into recall
+output (progressive disclosure). Drill it with
+`rekal query --session <id> --role summary`.
 
 `session.origin` is present only on sessions folded in by the cross-repo
 local import (`rekal index --include-all` / `--include`): `repo:/path` for

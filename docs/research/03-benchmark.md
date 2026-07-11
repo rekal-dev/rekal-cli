@@ -92,6 +92,13 @@ same turn budget as B6.
 
 ## 4. Metrics
 
+All runs report against the pre-registered predictions **P1–P8** in the
+paper (§6 of `paper/rekal-paper.typ`): P1 retrievability (B5 > B1), P2
+signal ablations, P3 drill strategies, P4 judged efficiency, P5 the scale
+crossover, P6 freshness, P7 the L3/wiki gate, P8 label validity. Results
+tables carry explicit verdict slots; a failed prediction is reported as
+failed, never reframed.
+
 - **Rung 1:** MRR, Recall@{1,5,10}, nDCG@10; per-task and pooled;
   bootstrap CIs (1k resamples over queries).
 - **Rung 2:** answer accuracy by LLM judge (rubric: matches source turn's

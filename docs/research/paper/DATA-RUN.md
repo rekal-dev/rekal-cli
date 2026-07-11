@@ -138,21 +138,30 @@ is exactly what this step measures.
 
 ## 5. Write results into the paper
 
+The paper is organized around pre-registered predictions **P1–P8** (§6 of
+the paper); every results table carries a `Verdict:` slot. Fill values AND
+verdicts — a verdict is `holds` / `fails` (P7 may also be `cache not
+built`). Never reframe a failed prediction; report it.
+
 In `docs/research/paper/rekal-paper.typ`, replace only the `tbd[…]` values
 this run measured:
 
-| Paper location | Source |
-|---|---|
-| Abstract: N sessions / N turns, MRR vs baseline | corpus-card.json, rung1.md |
-| §1 corpus parenthetical | corpus-card.json |
-| `tab-tasks` n column (T1–T3 only; T4/T5 stay tbd) | wc -l labels-*.jsonl / queries.jsonl |
-| §4 label-precision value | only if you hand-audit 50 T1 pairs; else leave tbd |
-| §5.1 corpus card | corpus-card.json |
-| Table 3 (`tab-rung1`) B1/B3/B4/B5 rows | rung1.md test split |
-| `tab-drill` both rows | rung3.md pooled table |
-| `tab-wiki` (only if step 4b ran) | ledger lineage query + page-vs-drill proxy |
-| `tab-wiki` cross-repo row (only if 4c ran) | origin counts + mode A/B coverage delta |
-| §6.3 scale/freshness, Table 4, rung 4 | NOT this run — leave tbd |
+| Paper location | Prediction | Source |
+|---|---|---|
+| Abstract: N sessions / N turns, MRR vs baseline, k× tokens | — | corpus-card.json, rung1.md |
+| `tab-tasks` n column (T1–T3 only; T4/T5 stay tbd) | — | wc -l labels-*.jsonl / queries.jsonl |
+| §5 corpus card sentence | — | corpus-card.json |
+| `tab-rung1` rows + verdict | P1, P2 | rung1.md test split |
+| `tab-drill` rows + verdict | P3 | rung3.md pooled table (per-task split for the verdict) |
+| `tab-wiki` rows + verdict (only if step 4b ran) | P7 | ledger lineage query + page-vs-drill proxy |
+| `tab-wiki` cross-repo row (only if 4c ran) | P7 | origin counts + mode A/B coverage delta |
+| Label-precision value (§5 + P8 verdict) | P8 | 50-pair T1 hand audit — do this one; it's cheap |
+| `tab-rung23` (judged), scale/freshness curves, rung 4 | P4, P5, P6 | NOT this run — leave tbd |
+
+Optional but high-value: replace the §2 worked example's illustrative JSON
+with a real (redacted) recall result from this corpus — pick a T2 label
+whose steering turn is quotable, run the query, paste the actual output,
+and delete the "(Illustrative…)" caveat sentence.
 
 Then:
 

@@ -7,8 +7,9 @@ description: |
   decisions, and provenance links (sessions, commits, files). Topics are
   discovered from Rekal's own correlations — files that change together,
   sessions that touch them — so it works on repos too large to map by hand
-  (thousands of files). Pages ship as ordinary commits/PRs, so review and
-  merge are the admission gate. Reach for it to bootstrap a wiki from
+  (thousands of files). A docs/wiki/index.md entry page carries a mermaid
+  map of the topics, browsable on GitHub with no tooling. Pages ship as
+  ordinary commits/PRs, so review and merge are the admission gate. Reach for it to bootstrap a wiki from
   history, to regenerate stale topic pages, or when commit messages are too
   noisy ("update") to navigate by and the sessions behind them are the only
   real record.
@@ -142,6 +143,46 @@ the work) and from dead-ends (sessions on never-merged branches — see the
 rekal-distill boundary library). Every claim cites a session ID: a page line
 without provenance is not knowledge, it's an opinion.
 
+### 4b. The index page — a mermaid map of the whole wiki
+
+Alongside the topic pages, maintain `docs/wiki/index.md`: the entry point a
+human (or an agent without Rekal) browses. It holds a one-line-per-topic
+list and a mermaid overview graph — topics as nodes, edges where clusters
+share files or sessions. GitHub renders mermaid natively, so the map costs
+no tooling.
+
+```markdown
+# Wiki index
+
+```mermaid
+graph LR
+  webhooks((webhooks)) ---|4 files| delivery((delivery))
+  webhooks ---|2 sessions| auth((auth))
+  auth ---|3 files| tokens((tokens))
+```
+
+| Topic | One-liner | Sessions | Updated |
+|---|---|---|---|
+| [webhooks](webhooks.md) | retry/backoff design and its dead-ends | 14 | 2026-07-11 |
+```
+
+Bounds: the graph shows only materialized topics (≤ K per run, so it stays
+readable — mermaid degrades fast past ~25 nodes); edges only above the same
+co-occurrence threshold used for clustering; no per-file nodes on the index
+(files live on topic pages). Optionally give a large topic page its own
+small mermaid (a session timeline or file cluster, ≤ 15 nodes) — never more
+than one diagram per page.
+
+Regenerate the index whenever any topic page regenerates; it is derived
+from the pages plus the same SQL, and must never disagree with them.
+
+**What the index is not.** The wiki (index + pages) is a *cache of memory,
+not the memory*: it answers browse-questions for the topics someone chose
+to materialize. Arbitrary questions, verification, and anything newer than
+a page's watermark still go through `rekal` — an agent that trusts a page
+over fresh recall is reading a static snapshot and should expect it to age.
+When you cite a page, check its watermark first; when in doubt, recall.
+
 ### 5. Staleness check — regenerate only what moved
 
 Before writing a page that already exists, compare its generation watermark
@@ -180,3 +221,8 @@ the loop closes on the same ledger.
 - Do not edit pages by hand and regenerate over the edits silently — if a
   page has manual commits since generation, flag it in the PR body instead
   of overwriting.
+- Keep the meta-work out of the record's foreground: sessions spent
+  generating the wiki are captured like any other. If they start crowding
+  real work out of recall results, scope queries away from them
+  (`rekal --file '<subsystem>/' "<q>"` or exclude `docs/wiki/` paths) —
+  original sessions, which every page cites, remain the evidence.

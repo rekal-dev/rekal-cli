@@ -82,8 +82,12 @@ Shipped as a skill, not engine: `rekal-wiki` discovers topic clusters from
 file co-occurrence at generation time, assembles each topic from its
 sessions (compaction summaries → intent → steering, cheapest first, with a
 dirty-commit rule: noise subjects like "update" are cited by SHA but never
-quoted as evidence), and writes `docs/wiki/<topic>.md` pages that ship as a
-PR. The merge gate is the admission control (EDV's verified admission,
+quoted as evidence), and writes `docs/wiki/<topic>.md` pages plus a
+mermaid-mapped `index.md` that ship as a PR. The wiki is a *cache of
+memory, not the memory*: browse-surface for materialized topics; arbitrary
+queries, verification, and anything past a page's watermark still go
+through recall — trusting pages over recall recreates the static-notes
+baseline (B2). The merge gate is the admission control (EDV's verified admission,
 implemented by git); staleness is git-visible (generation watermark vs
 newest session); the graph stays virtual — no store, only markdown.
 This is NOT the compile-time wiki rejected below: nothing is engine-

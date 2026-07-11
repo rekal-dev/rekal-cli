@@ -108,6 +108,17 @@ same turn budget as B6.
   compaction summary exists. This measures context-assembly cost, not answer
   quality — never present it as rung 2. Implemented:
   `scripts/bench/run_rung3.py`.
+- **L3 gate (wiki experiment):** both sides of the materialized-browsing-
+  layer trade. Generation cost: turns/tool-calls per topic page from the
+  ledger's own lineage (`SELECT ... FROM session_facets WHERE workflow_name
+  = '<run>'` — the wiki playbook fans out one subagent per topic, and Rekal
+  captures each transcript with `parent_session_id`/`workflow_name`), plus
+  tokens ingested from harness accounting. Cache payoff: on broad (T1/T3-
+  style) queries, answering from the page vs recall+drill, same
+  tokens/coverage proxy as the drill-strategy rows. Maintenance price:
+  regeneration diff rate — pages invalidated per week of new sessions (the
+  B2 static-notes failure mode made continuous). A cached in-index L3 layer
+  is built only if this experiment says so (roadmap R11).
 - **Scale sweep (C4/RISE reproduction):** rung-1 metrics and B1 latency at
   corpus subsets {10%, 25%, 50%, 100%} by capture date — where does grep
   degrade, where does Rekal hold?
@@ -130,9 +141,14 @@ same turn budget as B6.
    full query set — no extra models needed; fills the paper's drill-strategy
    table (`tab-drill`).
 6. Run rung 2–3 (judged) on a 200-query stratified subset for B0–B6.
-7. Rung 4: 10–20 real tasks in the richest repo, A/B (B0 vs B1 vs B6);
+7. L3-gate wiki experiment (optional, after rung 1): generate K topic pages
+   via the rekal-wiki workflow on a named `workflow_name`, pull generation
+   cost from the ledger lineage, re-answer a broad-query subset from pages
+   vs recall+drill with the rung-3 proxy, and record the regeneration diff
+   rate over the following weeks. Fills the paper's `tab-wiki`.
+8. Rung 4: 10–20 real tasks in the richest repo, A/B (B0 vs B1 vs B6);
    measure steering count, dead-end re-proposals, time-to-done.
-8. Every run emits a manifest (corpus card, model ids, prompts, weights,
+9. Every run emits a manifest (corpus card, model ids, prompts, weights,
    metrics, CIs) into `docs/research/runs/` — the regression baseline for
    all future engine changes (RHO's incumbent-vs-candidate rule).
 

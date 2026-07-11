@@ -198,6 +198,37 @@ Newer sessions → regenerate. Otherwise skip — an unchanged page must not
 produce a diff. Staleness is git-visible by design: `git log docs/wiki/`
 dates every page, and the regeneration diff shows exactly what drifted.
 
+### 5b. Scale: fan the topics out as a dynamic workflow
+
+Wiki generation is a large-read job with a natural decomposition: topics
+are independent, and one topic's sessions fit one context window. On
+anything beyond a handful of topics, run it as a workflow instead of one
+long session:
+
+- **Trunk** (cheap, no session reads): clustering SQL (step 2), spawn one
+  subagent per topic, then the reduce below.
+- **One subagent per topic**: receives the cluster's file list + session
+  IDs, does the cheapest-first reads (step 3), writes its single
+  `docs/wiki/<topic>.md`, returns only the page path and its one-liner.
+- **Reduce** (trunk): validate each page (provenance lines present,
+  watermark set), build `index.md` from the pages plus the clustering SQL
+  — the trunk never reads raw sessions.
+
+This keeps every context bounded regardless of repo size, and it has a
+property worth knowing: Rekal captures each subagent transcript with
+`parent_session_id` and `workflow_name`, so after the run the ledger holds
+the full lineage of the generation job. The cost of distillation is
+measurable from the store it distilled:
+
+```bash
+rekal query --index "SELECT session_id, turn_count, tool_call_count
+  FROM session_facets WHERE workflow_name = '<run name>'"
+```
+
+Recall already down-weights these subagent sessions, and every page cites
+the *original* sessions — the meta-work records itself without polluting
+what it recorded.
+
 ### 6. Ship as a branch
 
 ```bash

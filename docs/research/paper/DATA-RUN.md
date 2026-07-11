@@ -77,6 +77,34 @@ went in the caption).
 Honesty boundary: this is context-assembly cost + gold-term coverage, NOT
 answer quality. It must never be reported as rung 2.
 
+## 4b. Optional: L3-gate wiki experiment (fills `tab-wiki`)
+
+Only if time permits; requires the rekal-wiki skill (installed by `rekal
+init` on a current binary).
+
+1. Generate K=10 topic pages with the rekal-wiki skill, **as a dynamic
+   workflow with a memorable name** (one subagent per topic) — the name is
+   how the ledger finds the run afterwards.
+2. Generation cost, from the ledger itself (after the wiki PR merges and
+   the checkpoint lands):
+   ```bash
+   rekal query --index "SELECT session_id, turn_count, tool_call_count
+     FROM session_facets WHERE workflow_name = '<run name>'"
+   ```
+   Record turns and tool calls per page; take tokens-ingested per topic
+   from the harness's own usage accounting if available.
+3. Cache payoff: pick 20 broad queries (T1/T3-style) whose gold sessions
+   are cited by some generated page. For each, measure both paths with the
+   rung-3 proxy method (tokens = bytes/4, gold-term coverage):
+   - page path: read only the topic page (+ index.md)
+   - recall path: `rekal "<q>"` + the winning drill from `rung3.md`
+4. Maintenance price: re-run the staleness check weekly; record pages
+   invalidated per week of new sessions.
+
+Honesty: same boundary as the drill proxy — cost and coverage, not answer
+quality. If pages age fast or lose on coverage, that IS the result: the
+cached L3 layer doesn't get built (roadmap R11).
+
 ## 5. Write results into the paper
 
 In `docs/research/paper/rekal-paper.typ`, replace only the `tbd[…]` values
@@ -91,6 +119,7 @@ this run measured:
 | §5.1 corpus card | corpus-card.json |
 | Table 3 (`tab-rung1`) B1/B3/B4/B5 rows | rung1.md test split |
 | `tab-drill` both rows | rung3.md pooled table |
+| `tab-wiki` (only if step 4b ran) | ledger lineage query + page-vs-drill proxy |
 | §6.3 scale/freshness, Table 4, rung 4 | NOT this run — leave tbd |
 
 Then:

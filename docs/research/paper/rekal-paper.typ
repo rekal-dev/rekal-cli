@@ -24,7 +24,7 @@
 #place(top, scope: "parent", float: true, clearance: 18pt)[
   #align(center)[
     #text(size: 17pt, weight: "bold")[
-      The Commit Is the Label: Git-Native, Self-Verifying\ Memory for AI Coding Agents
+      The Commit Is the Label: Four Problems in Agent Memory\ That Version Control Already Solves
     ]
     #v(6pt)
     #text(size: 10.5pt)[Frank Guo#super[1]]

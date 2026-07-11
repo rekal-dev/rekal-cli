@@ -97,8 +97,10 @@ session discovery keep using the invoking worktree.
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring with
   configurable weights (`weights.go`; query-time only), signal weighting
   (steering-turn boost, subagent down-weight), conversation grouping
-  (see `docs/agent-metadata.md`), snippet extraction, and the LSA
-  query-projection cache (`projection.go`)
+  (see `docs/agent-metadata.md`), snippet extraction, the LSA
+  query-projection cache (`projection.go`), and the `--explain` enrichments
+  (per-layer normalized scores + query-time related-session joins over
+  `files_index`; default output unchanged without the flag)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
@@ -129,6 +131,13 @@ session discovery keep using the invoking worktree.
 - `DEVELOPMENT.md`: Dev process, testing, CI/CD
 - `git-transportation.md`: Git transport layer design
 - `db/`: Database schema and design
+- `research/`: Memory-research program — positioning claim + evidence ladder,
+  17-paper literature map, RekalBench spec (self-labeled repo-grounded intent
+  recall), local-corpus data plan, literature-derived product roadmap, and
+  `paper/` (Typst source + PDF of "The Commit Is the Label"). The runnable
+  rung-1 harness lives in `scripts/bench/` (corpus card, label mining, query
+  generation with leakage filter, system runner incl. weight ablations +
+  grep-rank baseline, scorer)
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
 

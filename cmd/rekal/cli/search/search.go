@@ -36,6 +36,29 @@ type Filters struct {
 	Author string // email
 	Actor  string // "human" | "agent"
 	Limit  int
+
+	// Explain enriches results with per-layer scores (Layers) and
+	// query-time related-session joins (Related). Off by default so the
+	// standard output stays thin; benchmarking and skill-driven zooming
+	// turn it on.
+	Explain bool
+}
+
+// Layers exposes each retrieval signal's normalized [0,1] score for a
+// result, before weighting — the ablation view of the hybrid rank. Present
+// only under --explain and only in hybrid mode.
+type Layers struct {
+	BM25  float64 `json:"bm25"`
+	LSA   float64 `json:"lsa"`
+	Nomic float64 `json:"nomic"`
+}
+
+// Related is a query-time join to sessions that touched the same files —
+// the co-occurrence "zoom" edge, instantiated per query instead of being a
+// precomputed graph. Present only under --explain.
+type Related struct {
+	SessionID   string `json:"session_id"`
+	SharedFiles int    `json:"shared_files"`
 }
 
 // Result is a single search result for JSON output.
@@ -55,6 +78,11 @@ type Result struct {
 	// output is byte-identical to before grouping existed. Capped at
 	// conversationChildBudget.
 	Children []Result `json:"children,omitempty"`
+
+	// Layers and Related are the --explain enrichments; nil/absent without
+	// the flag so default output is unchanged.
+	Layers  *Layers   `json:"layers,omitempty"`
+	Related []Related `json:"related,omitempty"`
 }
 
 type SessionDetail struct {
@@ -218,13 +246,13 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		if maxLSA > 0 {
 			lsaNorm = sh.lsaScore / maxLSA
 		}
+		nomicNorm := 0.0
+		if useNomic && maxNomic > 0 {
+			nomicNorm = sh.nomicScore / maxNomic
+		}
 
 		var hybrid float64
 		if useNomic {
-			nomicNorm := 0.0
-			if maxNomic > 0 {
-				nomicNorm = sh.nomicScore / maxNomic
-			}
 			hybrid = bm25W3*bm25Norm + lsaW3*lsaNorm + nomicW3*nomicNorm
 		} else {
 			hybrid = bm25W2*bm25Norm + lsaW2*lsaNorm
@@ -234,7 +262,11 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		if parentIDs[sid] != "" {
 			hybrid *= w.SubagentDownweight
 		}
-		scoredResults = append(scoredResults, scored{sid, hybrid, sh})
+		sc := scored{sessionID: sid, score: hybrid, hit: sh}
+		if filters.Explain {
+			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm)}
+		}
+		scoredResults = append(scoredResults, sc)
 	}
 
 	// Sort by score descending.
@@ -614,10 +646,59 @@ func buildResults(indexDB *sql.DB, scored []scored, filters Filters, limit int) 
 			SnippetTurnIdx: snippetIdx,
 			SnippetRole:    snippetRole,
 			Session:        sf.detail(files),
+			Layers:         s.layers,
 		})
 	}
 
 	return results, nil
+}
+
+// relatedLimit caps the co-occurrence join per result — enough edges to zoom
+// along, thin enough to stay cheap on the wire.
+const relatedLimit = 3
+
+// attachRelated enriches top-level results with query-time joins to sessions
+// sharing touched files (file co-occurrence, instantiated per query — no
+// precomputed graph). One batched query for the whole result set; failures
+// are non-fatal and simply leave Related empty.
+func attachRelated(indexDB *sql.DB, results []Result) {
+	if len(results) == 0 {
+		return
+	}
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.SessionID
+	}
+	inClause, args := sqlInClause(ids)
+	rows, err := indexDB.Query(`
+		SELECT a.session_id, b.session_id, count(DISTINCT b.file_path) AS shared
+		FROM files_index a
+		JOIN files_index b ON a.file_path = b.file_path AND b.session_id <> a.session_id
+		WHERE a.session_id IN (`+inClause+`)
+		GROUP BY a.session_id, b.session_id
+		ORDER BY a.session_id, shared DESC`, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close() //nolint:errcheck
+
+	related := make(map[string][]Related, len(results))
+	for rows.Next() {
+		var src, dst string
+		var shared int
+		if err := rows.Scan(&src, &dst, &shared); err != nil {
+			return
+		}
+		if len(related[src]) < relatedLimit {
+			related[src] = append(related[src], Related{SessionID: dst, SharedFiles: shared})
+		}
+	}
+	if rows.Err() != nil {
+		return
+	}
+	for i := range results {
+		results[i].Related = related[results[i].SessionID]
+	}
 }
 
 // sqlInClause builds a "$1,$2,...,$N" placeholder list and the matching args
@@ -850,7 +931,11 @@ type scored struct {
 	sessionID string
 	score     float64
 	hit       *sessionHit
+	layers    *Layers // populated only under Filters.Explain
 }
+
+// round2 rounds to two decimals for stable, thin JSON output.
+func round2(f float64) float64 { return math.Round(f*100) / 100 }
 
 type sessionHit struct {
 	bestHit    bm25Hit
@@ -1015,6 +1100,10 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 	}
 	if err != nil {
 		return Output{}, err
+	}
+
+	if filters.Explain {
+		attachRelated(indexDB, results)
 	}
 
 	return Output{

@@ -354,7 +354,7 @@ Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise
 | `rekal sync [--self]` | Sync team context from remote rekal branches |
 | `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB; optionally fold in cross-repo local sessions |
 | `rekal log [--limit N]` | Show recent checkpoints |
-| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [query]` | Hybrid search over sessions, optionally scoped by file, commit, author, or actor |
+| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [query]` | Hybrid search over sessions, optionally scoped by file, commit, author, or actor; `--explain` adds per-layer scores and related-session joins |
 | `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full]` | Drill into a session — window by turn, filter by role (`human`/`assistant`/`human_steering`), or load full detail |
 | `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 

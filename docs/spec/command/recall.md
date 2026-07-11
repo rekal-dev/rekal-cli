@@ -53,6 +53,7 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 | `--author <email>` | Sessions by this author email |
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20) |
+| `--explain` | Adds per-layer scores (`layers`: bm25/lsa/nomic, normalized, pre-weight) and `related` (sessions sharing touched files, query-time join) to each result |
 
 Multiple filters = AND.
 

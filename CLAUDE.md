@@ -129,6 +129,9 @@ session discovery keep using the invoking worktree.
 - `DEVELOPMENT.md`: Dev process, testing, CI/CD
 - `git-transportation.md`: Git transport layer design
 - `db/`: Database schema and design
+- `research/`: Memory-research program — positioning claim + evidence ladder,
+  17-paper literature map, RekalBench spec (self-labeled repo-grounded intent
+  recall), local-corpus data plan, literature-derived product roadmap
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
 

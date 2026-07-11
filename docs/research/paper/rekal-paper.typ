@@ -25,9 +25,9 @@
       The Commit Is the Label: Git-Native, Self-Verifying\ Memory for AI Coding Agents
     ]
     #v(6pt)
-    #text(size: 10.5pt)[Cong Guo#super[1] #h(1.5em) #tbd[author list]]
+    #text(size: 10.5pt)[Frank Guo#super[1]]
     #v(2pt)
-    #text(size: 9pt)[#super[1]Rekal — #link("https://rekal.dev")[rekal.dev] · #link("https://github.com/rekal-dev/rekal-cli")[github.com/rekal-dev/rekal-cli]]
+    #text(size: 9pt)[#super[1]Rekal — #link("https://rekal.dev")[rekal.dev] · #link("mailto:guocongmit@gmail.com")[guocongmit\@gmail.com] · #link("https://github.com/rekal-dev/rekal-cli")[github.com/rekal-dev/rekal-cli]]
     #v(6pt)
     #text(size: 8.5pt, fill: rgb("#b91c1c"), style: "italic")[
       DRAFT v0.1 — architecture and benchmark design are final; all empirical values marked ⟨·⟩ are pending the corpus run of \u{00A7}5.

@@ -125,6 +125,16 @@ are true: the cross-repo import preference is enabled, and the user asked
 for cross-repo pages **in this run**. Never include foreign-origin evidence
 by default.
 
+The import must have run FIRST — foreign sessions exist only as
+origin-labeled index rows created by that rebuild. Verify before
+generating, and treat zero as "not imported", never as "no foreign
+evidence":
+
+```bash
+rekal query --index "SELECT origin, count(*) FROM session_facets
+  GROUP BY origin"   # only NULL rows → run: rekal index --include-all
+```
+
 Mechanics: topic *discovery* stays own-repo (files_index has no imported
 rows — clusters always come from this repo's files). Cross-repo enters at
 *assembly*: recall the topic's terms and accept origin-labeled hits as

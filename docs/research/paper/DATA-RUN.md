@@ -105,6 +105,37 @@ Honesty: same boundary as the drill proxy — cost and coverage, not answer
 quality. If pages age fast or lose on coverage, that IS the result: the
 cached L3 layer doesn't get built (roadmap R11).
 
+## 4c. Optional: cross-repo wiki A/B (explicit — read before running)
+
+This step folds the operator's OTHER repos' sessions into this repo's
+index and lets wiki pages cite them. It is doubly gated: the import is an
+explicit preference, and foreign evidence is used only because this step
+says so. Everything stays index-only and unpushable; the ONLY place
+foreign knowledge can become committed text is the wiki PR itself — which
+is exactly what this step measures.
+
+1. Enable and verify the import:
+   ```bash
+   rekal index --include-all        # or --include <specific project dirs>
+   rekal query --index "SELECT origin, count(*) FROM session_facets
+     GROUP BY origin"               # NULL = own repo; repo:/... = foreign
+   ```
+2. Pick the K'=5 topics from step 4b most likely to span repos. Generate
+   each topic page TWICE, in separate workflow runs with distinct
+   `workflow_name`s:
+   - mode A: own-repo evidence only (ignore origin-labeled recall hits)
+   - mode B: cross-repo mode per the rekal-wiki skill (foreign citations
+     labeled with origins; PR body declares the origin list)
+3. Record: per-page foreign-citation count (mode B), and re-run the step-4b
+   broad-query coverage measurement against both page sets — the coverage
+   delta is what foreign evidence bought. Fills the `tab-wiki` cross-repo
+   row (`n pages with foreign citations / coverage delta`).
+4. Privacy: the mode-B pages quote nothing verbatim from foreign sessions
+   (the skill's rule); before any push, read the pages once specifically
+   checking for foreign content that shouldn't be visible to this repo's
+   audience. If in doubt, keep mode-B pages on their branch unmerged —
+   the measurement works from the branch; the merge is the operator's call.
+
 ## 5. Write results into the paper
 
 In `docs/research/paper/rekal-paper.typ`, replace only the `tbd[…]` values
@@ -120,6 +151,7 @@ this run measured:
 | Table 3 (`tab-rung1`) B1/B3/B4/B5 rows | rung1.md test split |
 | `tab-drill` both rows | rung3.md pooled table |
 | `tab-wiki` (only if step 4b ran) | ledger lineage query + page-vs-drill proxy |
+| `tab-wiki` cross-repo row (only if 4c ran) | origin counts + mode A/B coverage delta |
 | §6.3 scale/freshness, Table 4, rung 4 | NOT this run — leave tbd |
 
 Then:

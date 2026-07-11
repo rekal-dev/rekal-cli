@@ -333,6 +333,26 @@ verification gate, in contrast to self- or consensus-judged admission
 labeled *negative* knowledge: RekalBench task T3 tests exactly whether a
 system can warn "we tried this; it didn't land."
 
+== Scopes: wide reads locally, narrow writes globally
+
+Rekal's memory has three scopes with asymmetric permeability. The *repo
+ledger* is truth. The *machine-wide index* optionally folds in the
+operator's other repos' sessions (explicit opt-in) — index-only,
+origin-labeled, and structurally unpushable: an imported session has no
+checkpoint in this repo's ledger, so no code path can ever export it. The
+*team wire* admits merged work only. Knowledge crosses a scope boundary
+exclusively through a human-visible artifact: sessions reach the team when
+their commit merges, and cross-repo experience becomes committed text in a
+repo through exactly one channel — a wiki page, generated in an explicit
+cross-repo mode that labels every foreign citation with its origin, shipped
+as a PR whose body declares what is crossing. Machine-wide memory stores in
+the literature @automem2026 @adamem2026 make the opposite choice: one pool,
+implicitly readable and writable everywhere — precisely the open write path
+the security analyses identify as the contamination and exfiltration
+surface @memsecurity2026 @statecontam2026. Rekal's rule compresses to:
+*wide reads locally, narrow writes globally — egress is always a diff
+someone approved.*
+
 = RekalBench
 
 No benchmark exists for repo-grounded intent recall: conversational-memory
@@ -450,7 +470,12 @@ removed edge is one that decayed, each transition reviewed before it is
 admitted. Mutating graph stores @adamem2026 @sag2026 cannot show this
 drift to anyone; here `git log` over the index is a reviewed time series
 of the project's conceptual structure, and the maintenance problem is
-converted into code review. Scale sweep: metrics and B1 latency at 10/25/50/100%
+converted into code review. Finally, *cross-repo contribution*: pages
+generated twice, own-repo evidence only versus explicit cross-repo mode
+(\u{00A7}3.4's reviewed-egress channel), report the fraction of pages with
+foreign citations and the broad-query coverage delta the foreign evidence
+buys — the value of machine-wide memory, measured at the only gate through
+which it can become shared. Scale sweep: metrics and B1 latency at 10/25/50/100%
 date-cut subsets. Freshness: recall bucketed by target-session age; index
 rebuild wall-clock versus corpus size. Rung 4 (agent-in-the-loop): 10–20
 real tasks, A/B on human-steering count, re-proposal of known dead ends, and
@@ -529,6 +554,7 @@ on/off delta on T2, and label-precision-adjusted upper bounds.
     [broad-query answering: page vs recall+drill, tokens], tbd[· vs ·], [proxy, drill-table columns],
     [broad-query answering: page vs recall+drill, coverage], tbd[· vs ·], [proxy, drill-table columns],
     [regeneration diff rate (pages invalidated / week)], tbd[·], [watermark vs new sessions],
+    [cross-repo mode: pages with foreign citations / coverage delta], tbd[· / ·], [origin labels; A/B on generation mode],
   ),
   caption: [The wiki experiment. A committed topic-page layer is a *cache of
   memory*: generation cost is measured from the ledger's own lineage records

@@ -87,7 +87,11 @@ mermaid-mapped `index.md` that ship as a PR. The wiki is a *cache of
 memory, not the memory*: browse-surface for materialized topics; arbitrary
 queries, verification, and anything past a page's watermark still go
 through recall — trusting pages over recall recreates the static-notes
-baseline (B2). The merge gate is the admission control (EDV's verified admission,
+baseline (B2). Cross-repo mode is doubly explicit (import preference AND
+per-run request): foreign evidence is origin-labeled on the page and
+declared in the PR body — the wiki PR is the only channel by which
+machine-wide (index-only, unpushable) memory can become committed text,
+so the reviewer sees exactly what crosses the scope boundary. The merge gate is the admission control (EDV's verified admission,
 implemented by git); staleness is git-visible (generation watermark vs
 newest session); the graph stays virtual — no store, only markdown.
 This is NOT the compile-time wiki rejected below: nothing is engine-

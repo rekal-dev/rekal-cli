@@ -116,6 +116,38 @@ subjects may be quoted normally. Keep a per-page count of noise commits; it
 belongs in the page footer (it tells readers how much to trust `git log`
 here).
 
+### 3b. Cross-repo mode — explicit, twice over
+
+Rekal can fold this machine's *other* repos' sessions into the local index
+(`rekal index --include-all` / `--include`) — index-only, origin-labeled,
+structurally unpushable. The wiki can use that memory, but only when BOTH
+are true: the cross-repo import preference is enabled, and the user asked
+for cross-repo pages **in this run**. Never include foreign-origin evidence
+by default.
+
+Mechanics: topic *discovery* stays own-repo (files_index has no imported
+rows — clusters always come from this repo's files). Cross-repo enters at
+*assembly*: recall the topic's terms and accept origin-labeled hits as
+supplementary evidence.
+
+```bash
+rekal "<topic terms>"        # results with an "origin" field are foreign
+```
+
+Rules for a page that cites foreign sessions:
+
+- Every foreign citation shows its origin: `[session 01XYZ…, from
+  repo:/path/to/other-repo]`. No unlabeled cross-repo knowledge, ever.
+- Summarize minimally; never quote foreign session content verbatim — the
+  page needs the lesson, not the transcript.
+- The PR body must declare it: "includes knowledge derived from: <origin
+  list>". The wiki PR is the *only* channel by which cross-repo memory can
+  become committed text — the reviewer must see exactly what is crossing
+  the boundary, because after merge it is visible to this repo's whole
+  audience.
+- A topic whose evidence is entirely foreign gets a page only if the user
+  asked for exactly that; otherwise skip it.
+
 ### 4. Write the page
 
 One file per topic, `docs/wiki/<topic>.md`, always this shape:

@@ -117,8 +117,12 @@ same turn budget as B6.
   style) queries, answering from the page vs recall+drill, same
   tokens/coverage proxy as the drill-strategy rows. Maintenance price:
   regeneration diff rate — pages invalidated per week of new sessions (the
-  B2 static-notes failure mode made continuous). A cached in-index L3 layer
-  is built only if this experiment says so (roadmap R11).
+  B2 static-notes failure mode made continuous). Cross-repo contribution:
+  A/B the generation mode (own-repo evidence vs explicit cross-repo mode)
+  and report pages-with-foreign-citations plus the broad-query coverage
+  delta — the value of machine-wide memory measured at its reviewed-egress
+  gate. A cached in-index L3 layer is built only if this experiment says so
+  (roadmap R11).
 - **Scale sweep (C4/RISE reproduction):** rung-1 metrics and B1 latency at
   corpus subsets {10%, 25%, 50%, 100%} by capture date — where does grep
   degrade, where does Rekal hold?

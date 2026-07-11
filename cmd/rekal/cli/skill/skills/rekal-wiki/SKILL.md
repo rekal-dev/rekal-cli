@@ -176,6 +176,17 @@ than one diagram per page.
 Regenerate the index whenever any topic page regenerates; it is derived
 from the pages plus the same SQL, and must never disagree with them.
 
+**Emit deterministically — the diff is the point.** Sort topics
+alphabetically, edges by (source, target), thresholds fixed; then a re-run
+over unchanged history produces an empty diff, and any non-empty diff *is*
+structural drift: a new mermaid edge is a correlation that didn't exist
+last run, a removed edge is one that decayed, a new node is a topic being
+born. `git log docs/wiki/index.md` becomes a reviewed time series of the
+project's conceptual structure — the drift that mutating graph stores
+cannot show anyone, here made visible, attributable, and gated on review.
+Nondeterministic ordering destroys all of this; treat a noisy diff as a
+bug.
+
 **What the index is not.** The wiki (index + pages) is a *cache of memory,
 not the memory*: it answers browse-questions for the topics someone chose
 to materialize. Arbitrary questions, verification, and anything newer than

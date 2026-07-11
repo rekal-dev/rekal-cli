@@ -441,7 +441,16 @@ broad queries (T1/T3-style): answering from the materialized page versus
 recall+drill, on tokens and gold-term coverage — the same proxy columns as
 the drill table. The static-notes baseline (B2) predicts the failure mode:
 pages age. We therefore also report the regeneration diff rate (pages
-invalidated per week of new sessions) as the cache's maintenance price. Scale sweep: metrics and B1 latency at 10/25/50/100%
+invalidated per week of new sessions) as the cache's maintenance price.
+The diff is itself the observable: generation is deterministic (stable
+topic and edge ordering), so a re-run over unchanged history is an empty
+diff, and any non-empty diff *is* structural drift — an edge appearing in
+the index's topic graph is a correlation that did not exist last run, a
+removed edge is one that decayed, each transition reviewed before it is
+admitted. Mutating graph stores @adamem2026 @sag2026 cannot show this
+drift to anyone; here `git log` over the index is a reviewed time series
+of the project's conceptual structure, and the maintenance problem is
+converted into code review. Scale sweep: metrics and B1 latency at 10/25/50/100%
 date-cut subsets. Freshness: recall bucketed by target-session age; index
 rebuild wall-clock versus corpus size. Rung 4 (agent-in-the-loop): 10–20
 real tasks, A/B on human-steering count, re-proposal of known dead ends, and

@@ -99,6 +99,15 @@ same turn budget as B6.
 - **Rung 3:** context tokens loaded until first correct answer; wall-clock;
   $-cost at list prices. Report the full trade-off curve (accuracy vs tokens),
   RISE-style.
+- **Rung 3 (judge-free drill-strategy proxy, runnable today):** on queries
+  where the gold session reaches recall's top-k, compare the two drills an
+  agent can make — a 5-turn raw window around the matched turn vs the single
+  turn `summary_turn_index` points at — on tokens ingested (bytes/4) and
+  gold-term coverage (fraction of the label's distinctive content words
+  present in the drilled text). Paired: summary column only where a
+  compaction summary exists. This measures context-assembly cost, not answer
+  quality — never present it as rung 2. Implemented:
+  `scripts/bench/run_rung3.py`.
 - **Scale sweep (C4/RISE reproduction):** rung-1 metrics and B1 latency at
   corpus subsets {10%, 25%, 50%, 100%} by capture date — where does grep
   degrade, where does Rekal hold?
@@ -117,22 +126,28 @@ same turn budget as B6.
 3. Split: 10% dev (prompt/weight tuning allowed), 90% test (one shot —
    RHO discipline: no peeking, changes accepted only on dev).
 4. Run rung 1 for B1–B5 (B0 not applicable). Publish.
-5. Run rung 2–3 on a 200-query stratified subset for B0–B6.
-6. Rung 4: 10–20 real tasks in the richest repo, A/B (B0 vs B1 vs B6);
+5. Run the judge-free rung-3 drill-strategy proxy (`run_rung3.py`) on the
+   full query set — no extra models needed; fills the paper's drill-strategy
+   table (`tab-drill`).
+6. Run rung 2–3 (judged) on a 200-query stratified subset for B0–B6.
+7. Rung 4: 10–20 real tasks in the richest repo, A/B (B0 vs B1 vs B6);
    measure steering count, dead-end re-proposals, time-to-done.
-7. Every run emits a manifest (corpus card, model ids, prompts, weights,
+8. Every run emits a manifest (corpus card, model ids, prompts, weights,
    metrics, CIs) into `docs/research/runs/` — the regression baseline for
    all future engine changes (RHO's incumbent-vs-candidate rule).
 
 ## 6. Harness (v0 = scripts, not product code)
 
-- `scripts/bench/` (to be created when we run): label extraction (SQL via
-  `rekal query`), query generation (any LLM CLI), runner (loops queries
-  through each system; for B5 that is literally `rekal --limit 10 "<q>"`
-  parsing the scored JSON), scorer, report.
-- No new `rekal` commands required for rung 1. Rung 3's token accounting
-  needs the runner to count tokens it feeds the answering model — harness
-  concern, not product.
+- `scripts/bench/` (implemented; see its README for the runnable flow):
+  `corpus_card.sh` (aggregate stats), `mine_labels.sh` (T1–T3 gold),
+  `gen_queries.py` (LLM paraphrase + leakage filter + dev split),
+  `run_rung1.py` (B5 hybrid, B3/B4 weight ablations, B1 grep-rank),
+  `score.py` (MRR/Recall@k/nDCG with bootstrap CIs), `run_rung3.py`
+  (judge-free drill-strategy proxy). T4/T5 miners and the judged rungs
+  remain future work.
+- No new `rekal` commands required for rung 1. Judged rung 3's token
+  accounting needs the runner to count tokens it feeds the answering model —
+  harness concern, not product.
 - Product hooks that would help later (`05-roadmap.md`): a `--bench` JSON
   echo of per-layer scores, and opt-in query→drill logging (LRAT labels).
 

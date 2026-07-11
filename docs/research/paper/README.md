@@ -18,10 +18,13 @@ Every pending value renders as a red `⟨…⟩` marker, produced by the `#tbd[�
 function at the top of the source. Workflow:
 
 1. Run the corpus extraction and benchmark (`../04-data-plan.md`,
-   `../03-benchmark.md`).
+   `../03-benchmark.md`; runnable harness: `../../../scripts/bench/README.md`).
+   The rung-1 flow fills Table 3; `run_rung3.py`'s pooled table fills the
+   drill-strategy table (`tab-drill`) directly — its three columns (tokens,
+   coverage, coverage/1k) match one-to-one.
 2. Grep the source for `tbd[` and replace each with the measured value
-   (abstract numbers, corpus card in §5.1, Tables 3–4, §6.3 curves —
-   add figures as `#image(...)` once the plots exist).
+   (abstract numbers, corpus card in §5.1, Tables 3–4, the drill-strategy
+   table, §6.3 curves — add figures as `#image(...)` once the plots exist).
 3. Delete the DRAFT banner in the title block and this section's caveat
    when no `tbd[` remains: `grep -c 'tbd\[' rekal-paper.typ` → the residual
    count is the to-do list.

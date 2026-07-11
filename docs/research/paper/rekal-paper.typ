@@ -267,6 +267,18 @@ carries `snippet_turn_index` attribution back to its source turn. Write-time
 compression is lossy and unfixable; query-time distillation improves with
 every model generation.
 
+One class of distillation is nonetheless *harvested*: when the harness
+compacts a long session it writes an LLM summary of the conversation so far
+back into the transcript (10–17KB enumerating files touched, decisions,
+errors and fixes). Rekal captures these as turns with a dedicated role
+`summary` — already paid for, cumulative (the latest subsumes the rest),
+and never confused with human intent. Rekal generates no summaries of its
+own: a commit-time summary would be query-blind, written before any
+question exists, whereas the drill is query-aware and paid lazily. Rows
+stored before the role existed are reclassified in the derived views by a
+stable content fingerprint, scoped to the originating harness — the
+append-only ledger is never rewritten.
+
 == Storage: one ledger, disposable indexes
 
 `data.db` is the only source of truth and is append-only. `index.db` holds
@@ -283,11 +295,17 @@ structure you can throw away is not a research problem.*
 
 `rekal "<question>"` scores sessions by a weighted hybrid of BM25, LSA, and
 neural similarity, boosts turns where a human redirected the agent
-(`human_steering` — the moments decisions actually got made), down-weights
-subagent chatter, and returns scored JSON with per-session snippets. Weights
-live in local config and apply at *query time* — changing them requires no
-reindex, which is also what makes single-signal ablations free (\u{00A7}5).
-The agent then drills *inside* the bounded set: windowed turn ranges, role
+(`human_steering` — the moments decisions actually got made), boosts
+harvested compaction summaries by a smaller factor (dense anchors, but
+machine text must not outrank human intent at equal relevance),
+down-weights subagent chatter, and returns scored JSON with per-session
+snippets. Weights live in local config and apply at *query time* — changing
+them requires no reindex, which is also what makes single-signal ablations
+free (\u{00A7}5). Each result additionally carries `summary_turn_index` — a
+pointer to the session's latest compaction summary, never the payload
+itself: inlining 10–17KB per result would spend context before any question
+justified it. The agent then drills *inside* the bounded set: the pointed-at
+summary as the cheapest whole-session overview, windowed turn ranges, role
 filters, tool-call and file views, full transcript only as a last resort.
 In RISE's terms @rise2026, search constructs the interaction space and the
 drill tools explore it; the skill layer (five shipped playbooks: base
@@ -395,7 +413,14 @@ CIs. Rung 2 (answer quality): LLM-judged correctness against the gold turn
 (distinct generate/answer/judge models; 50-sample human agreement check).
 Rung 3 (efficiency): context tokens loaded until first correct answer,
 wall-clock, and dollar cost — the axis RISE and MRAgent make primary
-@rise2026 @mragent2026. Scale sweep: metrics and B1 latency at 10/25/50/100%
+@rise2026 @mragent2026. Rung 3 additionally includes a *judge-free
+drill-strategy proxy*: on queries where recall places the gold session in
+the top results, we compare the two drills an agent can make — a raw
+turn window around the matched turn versus the single turn
+`summary_turn_index` points at — on tokens ingested and gold-term coverage
+(fraction of the label's distinctive content words present in the drilled
+text). It measures context-assembly cost, not answer quality, and runs
+with no LLM in the loop. Scale sweep: metrics and B1 latency at 10/25/50/100%
 date-cut subsets. Freshness: recall bucketed by target-session age; index
 rebuild wall-clock versus corpus size. Rung 4 (agent-in-the-loop): 10–20
 real tasks, A/B on human-steering count, re-proposal of known dead ends, and
@@ -444,6 +469,22 @@ on/off delta on T2, and label-precision-adjusted upper bounds.
   The headline claim has the shape: equal-or-better accuracy at
   #tbd[k]$times$ fewer tokens.],
 ) <tab-rung23>
+
+#figure(
+  table(
+    columns: (auto, auto, auto, auto),
+    align: (left, center, center, center),
+    table.header([*Drill strategy*], [*Tokens*], [*Coverage*], [*Cov. / 1k tok*]),
+    [window (5-turn, at match)], tbd[·], tbd[·], tbd[·],
+    [summary-first (pointer)], tbd[·], tbd[·], tbd[·],
+  ),
+  caption: [Judge-free drill-strategy proxy (`run_rung3.py`), paired on
+  queries where recall reaches the gold session and a compaction summary
+  exists. Hypothesis: the trade is question-shaped — summary-first buys
+  broad coverage at a fixed 10–17KB price and should win "what happened
+  here" queries (T1/T3); the window should win pointed lookups (T2). The
+  corpus run decides.],
+) <tab-drill>
 
 == Scale and freshness (the RISE crossover, C4)
 

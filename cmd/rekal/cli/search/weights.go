@@ -19,6 +19,13 @@ type Weights struct {
 	// signal in the corpus (docs/agent-metadata.md).
 	SteeringBoost float64
 
+	// SummaryBoost multiplies BM25 scores of summary turns — harness-written
+	// compaction distillations. The densest recall anchors in the corpus
+	// (files touched, decisions, errors and fixes, all in one turn), but
+	// machine text: boosted below SteeringBoost, and kept a separate role so
+	// they never masquerade as human intent.
+	SummaryBoost float64
+
 	// SubagentDownweight multiplies the hybrid score of sessions that are not
 	// the trunk of their conversation (non-null parent_session_id).
 	SubagentDownweight float64
@@ -31,6 +38,7 @@ func DefaultWeights() Weights {
 		LSA:                0.10,
 		Nomic:              0.55,
 		SteeringBoost:      1.3,
+		SummaryBoost:       1.15,
 		SubagentDownweight: 0.7,
 	}
 }

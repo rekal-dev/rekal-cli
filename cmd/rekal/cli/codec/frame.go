@@ -37,10 +37,18 @@ const (
 // (queue-operation/enqueue captures) — the highest-intent text in the corpus,
 // used to boost recall ranking. It costs nothing on the wire: same byte
 // field, one more value.
+//
+// RoleSummary marks harness-written compaction summaries (Claude Code's
+// isCompactSummary turns) — machine distillations, boosted for recall density
+// but never confused with human intent. Same free-byte trick. Decoders that
+// predate a value fall back to "human" (their switch default), so old
+// binaries importing new frames degrade to the pre-tagging behavior instead
+// of failing.
 const (
 	RoleHuman         byte = 0x00
 	RoleAssistant     byte = 0x01
 	RoleHumanSteering byte = 0x02
+	RoleSummary       byte = 0x03
 )
 
 // Change type values (ASCII bytes).

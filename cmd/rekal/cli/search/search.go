@@ -164,9 +164,15 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		}
 		// Steering turns (queue-operation captures) are the highest-intent
 		// text in the corpus — boost them so they win the best-turn slot.
+		// Summary turns (compaction distillations) are the densest — boosted
+		// too, but below steering: machine text never outranks human intent
+		// at equal relevance.
 		weighted := hit.score
-		if hit.role == "human_steering" {
+		switch hit.role {
+		case "human_steering":
 			weighted *= w.SteeringBoost
+		case "summary":
+			weighted *= w.SummaryBoost
 		}
 		if weighted > sh.bm25Max {
 			sh.bm25Max = weighted

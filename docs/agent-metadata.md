@@ -167,6 +167,34 @@ a steering message.
   like every other migration in this codebase; there is no backfill, and
   none is attempted.
 
+### 3b. Compaction summaries are tagged `summary`, boosted below steering
+
+When a Claude Code session runs out of context, the harness writes an
+LLM-generated distillation of the conversation back into the transcript as a
+user turn flagged `isCompactSummary: true` — typically 10–17KB enumerating
+files touched, decisions made, errors and fixes, pending work. It is the
+densest recall anchor in the corpus, but it is machine text, not human
+intent. The parser tags it role `summary` (previously it masqueraded as
+`human`); the wire codec gained `RoleSummary = 0x03` — the same free-byte
+trick as steering.
+
+- Ranking: `summary_boost` (default 1.15×) multiplies BM25 the same way
+  `steering_boost` does, but below it — machine text never outranks human
+  intent at equal relevance. Query-time only, configurable, no reindex.
+- Summaries are cumulative: each new one is generated from a context that
+  begins with the previous one, so the latest subsumes the rest.
+  Conversation grouping already collapses a session's turns into one
+  result, so multiple summaries can't occupy multiple slots.
+- Back-compat has one refinement over the steering pattern: instead of
+  leaving pre-change rows untagged, index population (and the drill-down's
+  role read) reclassifies legacy `human` rows by the summary's stable
+  content prefix (`db.SummaryFingerprint`). data.db is never rewritten —
+  the reclassification lives entirely in the derived views, so one
+  `rekal index` after an upgrade re-tags all history. Old binaries decoding
+  new frames fall back to `human` via their switch default (today's
+  behavior); new binaries re-tag those rows the same way on the next
+  rebuild.
+
 ### 4. Per-conversation result budget (`conversationChildBudget`)
 
 Folding hits under their trunk (§1) means one giant workflow could still

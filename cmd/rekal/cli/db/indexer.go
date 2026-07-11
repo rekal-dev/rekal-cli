@@ -95,6 +95,21 @@ func migrateDataAt(gitRoot string) error {
 	return nil
 }
 
+// SummaryFingerprint is the stable prefix Claude Code puts on every
+// compaction-summary turn. New checkpoints store these with role "summary"
+// natively (the parser reads the isCompactSummary flag), but the flag never
+// reaches data.db rows written by older rekal versions — or rows encoded by
+// an old binary, which never tags the role byte. data.db is append-only and
+// never rewritten, so the reclassification lives on the index side instead:
+// population rewrites the role in the derived turns_ft view (transport's
+// sync import applies the same rule), and one `rekal index` after an upgrade
+// re-tags all history.
+const SummaryFingerprint = "This session is being continued from a previous conversation"
+
+// summaryRoleExpr is the turns_ft role column expression applying that
+// reclassification (see SummaryFingerprint).
+const summaryRoleExpr = `CASE WHEN role = 'human' AND content LIKE '` + SummaryFingerprint + `%' THEN 'summary' ELSE role END`
+
 // PopulateIndex attaches the data DB and bulk-populates all index tables.
 func PopulateIndex(d *sql.DB, gitRoot string) error {
 	dataPath := filepath.Join(StoreDir(gitRoot), "data.db")
@@ -113,7 +128,7 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 	// turns_ft
 	if _, err := d.Exec(`
 		INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
-		SELECT id, session_id, turn_index, role, content, CAST(ts AS VARCHAR)
+		SELECT id, session_id, turn_index, ` + summaryRoleExpr + `, content, CAST(ts AS VARCHAR)
 		FROM data_db.turns
 	`); err != nil {
 		return fmt.Errorf("populate turns_ft: %w", err)
@@ -344,7 +359,7 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		// turns_ft
 		if _, err := d.Exec(`
 			INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
-			SELECT id, session_id, turn_index, role, content, CAST(ts AS VARCHAR)
+			SELECT id, session_id, turn_index, `+summaryRoleExpr+`, content, CAST(ts AS VARCHAR)
 			FROM data_db.turns WHERE session_id = $1
 		`, sid); err != nil {
 			return fmt.Errorf("incremental turns_ft: %w", err)

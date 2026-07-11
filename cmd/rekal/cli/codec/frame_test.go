@@ -611,6 +611,49 @@ func BenchmarkDecodeSessionFrame(b *testing.B) {
 
 // mustEncodeSession / mustEncodeCheckpoint / mustEncodeMeta wrap the Encode*
 // methods for tests where encoding a well-formed frame must succeed.
+// TestSessionFrame_RoleSummaryRoundtrip pins the RoleSummary byte through
+// encode/decode. The value must survive exactly: decoders that predate it
+// fall back to "human" via their switch default (the graceful-degradation
+// contract documented on the Role constants), so a silent re-mapping here
+// would break new↔new fidelity without failing anything else.
+func TestSessionFrame_RoleSummaryRoundtrip(t *testing.T) {
+	enc, err := NewEncoder()
+	if err != nil {
+		t.Fatalf("NewEncoder: %v", err)
+	}
+	defer enc.Close()
+
+	dec, err := NewDecoder()
+	if err != nil {
+		t.Fatalf("NewDecoder: %v", err)
+	}
+	defer dec.Close()
+
+	sf := &SessionFrame{
+		CapturedAt: time.Date(2026, 7, 11, 10, 0, 0, 0, time.UTC),
+		ActorType:  ActorHuman,
+		Turns: []TurnRecord{
+			{Role: RoleSummary, Text: "This session is being continued from a previous conversation."},
+			{Role: RoleHuman, TsDelta: 5, Text: "continue"},
+		},
+	}
+
+	encoded := mustEncodeSession(t, enc, sf)
+	decoded, err := dec.DecodeSessionFrame(encoded[frameEnvSize:])
+	if err != nil {
+		t.Fatalf("DecodeSessionFrame: %v", err)
+	}
+	if len(decoded.Turns) != 2 {
+		t.Fatalf("Turns: got %d, want 2", len(decoded.Turns))
+	}
+	if decoded.Turns[0].Role != RoleSummary {
+		t.Errorf("turn 0 role: got %d, want RoleSummary (%d)", decoded.Turns[0].Role, RoleSummary)
+	}
+	if decoded.Turns[1].Role != RoleHuman {
+		t.Errorf("turn 1 role: got %d, want RoleHuman (%d)", decoded.Turns[1].Role, RoleHuman)
+	}
+}
+
 func mustEncodeSession(tb testing.TB, enc *Encoder, sf *SessionFrame) []byte {
 	tb.Helper()
 	b, err := enc.EncodeSessionFrame(sf)

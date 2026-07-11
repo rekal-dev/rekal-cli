@@ -42,7 +42,7 @@ Output is scored JSON. Each result includes:
 - `session_id` — use with `rekal query --session <id>` to drill down
 - `snippet` — the matching text from the best-matching turn
 - `snippet_turn_index` — the turn index of the snippet (use as `--offset` for drill-down)
-- `snippet_role` — whether the snippet is from a `human` or `assistant` turn
+- `snippet_role` — the snippet's turn role: `human`, `human_steering` (a human correcting the agent mid-task — high intent), `assistant`, or `summary` (a harness-written distillation of the whole session — dense but machine text; drill into the raw turns beneath it for specifics)
 - `score`, `actor`, `author`, `branch`, `files` — metadata for filtering
 - `children` — subagent/workflow transcripts grouped under this result's trunk conversation (when any matched)
 - `origin` — present only on cross-repo hits (see below): `repo:/path` or `shell:/path`, the working directory the session came from. The hit is from *another project on this machine* — weigh its relevance to this repo accordingly. Absent means the session belongs to this repo or a teammate.
@@ -58,6 +58,10 @@ rekal query --session 01JNQX... --offset 10 --limit 5
 
 # Step 2: If you need broader context, fetch human turns to understand intent
 rekal query --session 01JNQX... --role human
+
+# Cheap overview of a long session: its compaction summaries (if any) — a
+# harness-written distillation of files touched, decisions, errors and fixes
+rekal query --session 01JNQX... --role summary
 
 # Step 3: Only fetch full output when you actually need tool calls and files
 rekal query --session 01JNQX... --full

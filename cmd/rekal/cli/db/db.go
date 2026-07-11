@@ -480,11 +480,13 @@ func QueryTurnsPageFromIndex(d *sql.DB, sessionID string, opts TurnPageOptions) 
 }
 
 func queryTurnsPageFrom(d *sql.DB, table, sessionID string, opts TurnPageOptions) ([]TurnRow, int, error) {
-	// Build WHERE clause.
+	// Build WHERE clause. Roles are read through the summary reclassification
+	// (see SummaryFingerprint) so drilling data.db rows written before the
+	// "summary" role existed filters and displays the same as the index.
 	where := "session_id = $1"
 	args := []interface{}{sessionID}
 	if opts.Role != "" {
-		where += " AND role = $2"
+		where += " AND " + summaryRoleExpr + " = $2"
 		args = append(args, opts.Role)
 	}
 
@@ -495,7 +497,7 @@ func queryTurnsPageFrom(d *sql.DB, table, sessionID string, opts TurnPageOptions
 	}
 
 	// Build paginated query.
-	q := "SELECT turn_index, role, content, COALESCE(CAST(ts AS VARCHAR), '') FROM " + table + " WHERE " + where + " ORDER BY turn_index"
+	q := "SELECT turn_index, " + summaryRoleExpr + " AS role, content, COALESCE(CAST(ts AS VARCHAR), '') FROM " + table + " WHERE " + where + " ORDER BY turn_index"
 	if opts.Limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d", opts.Limit)
 	}

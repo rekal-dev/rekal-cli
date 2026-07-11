@@ -65,8 +65,9 @@ session discovery keep using the invoking worktree.
   persistent preference and rebuild
 - `config.go`: `.rekal/config.json` (gitignored, never committed) — Rekal's
   durable local config. Holds the cross-repo `local_import` preference, the
-  recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost, subagent
-  discount — applied at query time, no reindex), and the `embedding` section
+  recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost, summary
+  boost, subagent discount — applied at query time, no reindex), and the
+  `embedding` section
   (OpenAI-compatible HTTP backend: endpoint/model/api_key with `$VAR`
   expansion and `api_key_env`)
 - `local_import.go`: Cross-repo local session import — folds this machine's
@@ -96,12 +97,17 @@ session discovery keep using the invoking worktree.
   worktree-shared store) shared by the command and transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring with
   configurable weights (`weights.go`; query-time only), signal weighting
-  (steering-turn boost, subagent down-weight), conversation grouping
+  (steering-turn boost, compaction-summary boost, subagent down-weight),
+  conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, the LSA
   query-projection cache (`projection.go`), and the `--explain` enrichments
   (per-layer normalized scores + query-time related-session joins over
   `files_index`; default output unchanged without the flag)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
+  Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
+  `summary` (isCompactSummary compaction distillations; rows written before the
+  role existed stay `human` in append-only data.db and are reclassified by
+  content fingerprint in the derived views — `db.SummaryFingerprint`).
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) in a session payload before any DB insert (runs in `checkpoint` and cross-repo import after parse). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter`.

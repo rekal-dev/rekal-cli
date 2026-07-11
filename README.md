@@ -215,6 +215,7 @@ Day-to-day: commit and push as normal. Everything else is automatic.
 | `rekal --file src/billing/ "discount"` | Scoped search filtered by file path |
 | `rekal --commit <sha>` | Finds the session(s) that produced a commit — the anchor for change provenance |
 | `rekal query --session <id> --role human_steering` | Returns only the mid-course corrections — the highest-signal turns for intent and preferences |
+| `rekal query --session <id> --role summary` | Returns the harness-written compaction distillations — the cheapest overview of a long session |
 | `rekal sync` (optional, at session start) | Pulls team context before the agent starts working |
 
 The agent controls how much context it loads. Search first, drill down progressively, full sessions only when needed.
@@ -355,7 +356,7 @@ Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise
 | `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB; optionally fold in cross-repo local sessions |
 | `rekal log [--limit N]` | Show recent checkpoints |
 | `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [query]` | Hybrid search over sessions, optionally scoped by file, commit, author, or actor; `--explain` adds per-layer scores and related-session joins |
-| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full]` | Drill into a session — window by turn, filter by role (`human`/`assistant`/`human_steering`), or load full detail |
+| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full]` | Drill into a session — window by turn, filter by role (`human`/`assistant`/`human_steering`/`summary`), or load full detail |
 | `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 
 Full details: [docs/spec/command/](docs/spec/command/).

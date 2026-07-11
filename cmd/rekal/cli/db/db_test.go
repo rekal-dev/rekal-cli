@@ -232,6 +232,29 @@ func TestQueryTurnsPage_LegacySummaryReclassified(t *testing.T) {
 	if len(rows) != 2 || rows[0].Role != "summary" || rows[1].Role != "human" {
 		t.Fatalf("unfiltered roles: %+v", rows)
 	}
+
+	// The reclassification is scoped to source 'claude': a Codex session
+	// whose human turn happens to start with the same text keeps its role.
+	if err := InsertSession(d, "s2", "", "hash2", "human", "", "a@b.c", "main", "2026-07-11T00:00:00Z", "codex"); err != nil {
+		t.Fatalf("InsertSession codex: %v", err)
+	}
+	if err := InsertTurn(d, "t3", "s2", 0, "human", legacy, ""); err != nil {
+		t.Fatalf("InsertTurn codex: %v", err)
+	}
+	rows, total, err = QueryTurnsPage(d, "s2", TurnPageOptions{Role: "summary"})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(codex summary): %v", err)
+	}
+	if total != 0 || len(rows) != 0 {
+		t.Fatalf("codex session must have no summary turns: total=%d rows=%+v", total, rows)
+	}
+	rows, total, err = QueryTurnsPage(d, "s2", TurnPageOptions{Role: "human"})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(codex human): %v", err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].Role != "human" {
+		t.Fatalf("codex turn must stay human: total=%d rows=%+v", total, rows)
+	}
 }
 
 // TestQuerySessionIDByHash covers checkpoint's subagent→trunk linking

@@ -107,7 +107,8 @@ session discovery keep using the invoking worktree.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the
   role existed stay `human` in append-only data.db and are reclassified by
-  content fingerprint in the derived views — `db.SummaryFingerprint`).
+  content fingerprint in the derived views, scoped to source='claude' sessions
+  so other agent types are untouched — `db.SummaryFingerprint`).
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) in a session payload before any DB insert (runs in `checkpoint` and cross-repo import after parse). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter`.

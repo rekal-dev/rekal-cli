@@ -194,6 +194,11 @@ trick as steering.
   new frames fall back to `human` via their switch default (today's
   behavior); new binaries re-tag those rows the same way on the next
   rebuild.
+- The fingerprint is scoped to `sessions.source = 'claude'`: the boilerplate
+  is Claude Code's, and a Codex/Gemini/OpenCode turn that merely starts with
+  the same text (e.g. pasted) keeps its stored role. Only the Claude parser
+  can emit role `summary` at capture time. Wire imports carry no source and
+  are stored as `'claude'`, so teammate frames remain covered.
 
 ### 4. Per-conversation result budget (`conversationChildBudget`)
 

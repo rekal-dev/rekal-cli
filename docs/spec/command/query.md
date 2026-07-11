@@ -55,7 +55,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `--full` | Include tool calls and files in session output (requires `--session`) |
 | `--offset <n>` | Skip first N turns (default: 0, requires `--session`) |
 | `--limit <n>` | Max turns to return, 0 = no limit (default: 0, requires `--session`) |
-| `--role <human\|assistant\|human_steering\|summary>` | Filter turns by role (requires `--session`). Matches exactly — queue-operation steering turns are stored as role `human_steering` (see [agent-metadata.md](../../agent-metadata.md)) and are not returned by `--role human`; `summary` turns are harness-written compaction distillations (rows stored as `human` by pre-summary versions are reclassified by content fingerprint at read time); omit `--role` to see all turns. |
+| `--role <human\|assistant\|human_steering\|summary>` | Filter turns by role (requires `--session`). Matches exactly — queue-operation steering turns are stored as role `human_steering` (see [agent-metadata.md](../../agent-metadata.md)) and are not returned by `--role human`; `summary` turns are harness-written compaction distillations (rows stored as `human` by pre-summary versions are reclassified by content fingerprint at read time, scoped to `source = 'claude'` sessions so other agent types are untouched); omit `--role` to see all turns. |
 
 ---
 

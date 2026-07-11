@@ -36,6 +36,7 @@ func NewRootCmd() *cobra.Command {
 		authorFilter string
 		actorFilter  string
 		limitFlag    int
+		explainFlag  bool
 	)
 
 	cmd := &cobra.Command{
@@ -68,12 +69,13 @@ func NewRootCmd() *cobra.Command {
 			}
 
 			filters := search.Filters{
-				Query:  strings.Join(args, " "),
-				File:   fileFilter,
-				Commit: commitFilter,
-				Author: authorFilter,
-				Actor:  actorFilter,
-				Limit:  limitFlag,
+				Query:   strings.Join(args, " "),
+				File:    fileFilter,
+				Commit:  commitFilter,
+				Author:  authorFilter,
+				Actor:   actorFilter,
+				Limit:   limitFlag,
+				Explain: explainFlag,
 			}
 
 			return runRecall(cmd, gitRoot, filters)
@@ -86,6 +88,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20)")
+	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

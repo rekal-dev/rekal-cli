@@ -65,7 +65,14 @@ etiquette, "don't touch X."
 
 A correction seen *once* is a one-off. A correction seen **three or more times
 across different sessions** is a rule the project has but never wrote down.
-Promote those:
+
+Admission gate (so distilled rules never encode a dead end): promote a rule
+only if **at least one** of its supporting sessions belongs to work that
+merged — check with `git merge-base --is-ancestor <session's commit>
+origin/main` on the session's `git_sha`. A correction observed only on
+abandoned branches is boundary knowledge ("we tried this"), not a rule;
+self-judged experience without an external verifier is how memory poisons
+itself. Promote the survivors:
 
 ```
 Observed (5 sessions): human re-ran `mise run lint` after I said "done".
@@ -105,6 +112,26 @@ rekal query --index "SELECT session_id, count(*) AS c FROM turns_ft \
   (SELECT session_id FROM session_facets WHERE parent_session_id IS NULL) \
   GROUP BY session_id ORDER BY c DESC LIMIT 10"
 ```
+
+## Reflect on Rekal usage itself (metamemory)
+
+The corpus also records how well *you* use this memory: every past `rekal`
+invocation is a tool call in some session. Periodically audit your own
+retrieval behavior and improve the playbook, not just the code rules:
+
+```bash
+# every rekal call ever made, in context
+rekal query --index "SELECT session_id, cmd_prefix FROM tool_calls_index \
+  WHERE cmd_prefix LIKE 'rekal%' ORDER BY session_id, call_order"
+```
+
+Look for flailing signatures: the same query issued repeatedly with small
+rewordings (the search vocabulary is wrong — note better anchor terms);
+searches never followed by a `rekal query --session` drill (results weren't
+trusted — check whether `--explain` shows one layer dominating); drills that
+immediately fall back to `--full` (snippet landed on the wrong turn). Each
+recurring signature is a rule about *how to remember*, promoted to CLAUDE.md
+exactly like a code rule — same ≥3 occurrences, same merge-verified gate.
 
 ## Guidelines
 

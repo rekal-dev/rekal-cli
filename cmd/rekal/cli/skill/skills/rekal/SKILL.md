@@ -35,6 +35,7 @@ rekal --file src/auth/ "token refresh"  # filter by file path (regex)
 rekal --actor agent "migration"         # filter by actor type
 rekal --author alice@co.com "billing"   # filter by author
 rekal -n 5 "error handling"            # limit results
+rekal --explain "error handling"       # + per-layer scores and related sessions (zoom edges)
 ```
 
 Output is scored JSON. Each result includes:
@@ -103,6 +104,7 @@ Run `rekal query --help` for the full data DB and index DB schemas.
 | `--author <email>` | Filter by author email |
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20, 0 = no limit) |
+| `--explain` | Adds `layers` (normalized bm25/lsa/nomic scores) and `related` (sessions sharing touched files — zoom edges) to each result |
 
 ## Companion skills
 

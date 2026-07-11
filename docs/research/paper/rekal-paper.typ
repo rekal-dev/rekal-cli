@@ -478,6 +478,19 @@ re-proposals, time-to-done.
 
 = Predictions (registered before the run)
 
+The four guarantees of @tab-thesis divide by *how they are verified*.
+Problems 3 and 4 are answered by construction: the merge gate and the
+egress restriction are code paths, checkable by reading them — an imported
+session has no checkpoint, so no export path exists; no experiment can add
+to that. What experiments test is each guarantee's *yield*: whether the
+commit-link supervision produces clean labels (P8 — problem 1), whether
+the freshness discipline is affordable and the browsing cache earns its
+keep (P6, P7 — problem 2), whether the negative knowledge the merge gate
+preserves is actually recallable (T3 inside P1 — problem 3), and whether
+reviewed cross-repo egress buys measurable coverage (P7's A/B — problem
+4). P1–P5 are the table stakes beneath all four: a memory whose recall
+loses to grep needs no philosophy.
+
 Stated falsifiably, before any table is filled; \u{00A7}7's tables are
 keyed to them. Where a prediction fails, the failure is reported, not
 reframed.
@@ -494,14 +507,17 @@ reframed.
 + *P5 (scale, the RISE crossover).* B1's accuracy and latency degrade
   monotonically with corpus size; B5 holds flat within CI. A crossover
   point exists on session data @rise2026.
-+ *P6 (freshness).* Rung-1 quality shows no decay with target-session age;
-  full index rebuild stays under minutes at the corpus's full size.
-+ *P7 (the L3 gate).* Wiki pages beat recall+drill on tokens for broad
-  queries at comparable coverage; pages decay at a measurable weekly rate;
-  cross-repo mode adds coverage on topics that span repos. If pages age
-  fast or lose on coverage, the cached L3 layer is not built — that
-  negative result is a finding of this paper, not a gap in it.
-+ *P8 (label validity).* T1 label precision ≥ 0.9 on a 50-pair human audit.
++ *P6 (freshness — problem 2).* Rung-1 quality shows no decay with
+  target-session age; full index rebuild stays under minutes at the
+  corpus's full size.
++ *P7 (the L3 gate — problems 2 and 4).* Wiki pages beat recall+drill on
+  tokens for broad queries at comparable coverage; pages decay at a
+  measurable weekly rate; cross-repo mode adds coverage on topics that
+  span repos. If pages age fast or lose on coverage, the cached L3 layer
+  is not built — that negative result is a finding of this paper, not a
+  gap in it.
++ *P8 (label validity — problem 1).* T1 label precision ≥ 0.9 on a
+  50-pair human audit.
 
 = Results
 

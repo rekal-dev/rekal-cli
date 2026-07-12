@@ -157,8 +157,10 @@ session discovery keep using the invoking worktree.
   multi-hop label mining, T5 candidate miner, query generation with leakage
   filter + multi-hop validation, system runner incl. weight ablations +
   grep-rank baseline with UUID→ULID sidmap join, scorer with T4 both@10,
-  dev-tuned/test-validated weight tuner, and `usage_mine.py` for
-  observational Rekal-usage/effectiveness signals)
+  dev-tuned/test-validated weight tuner, `usage_mine.py` for observational
+  Rekal-usage/effectiveness signals, and `mine_wild.py` for real in-the-wild
+  recall — replaying actual queries against the sessions agents drilled into,
+  with cross-repo drills flagged)
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
 

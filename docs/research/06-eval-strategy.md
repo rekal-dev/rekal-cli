@@ -106,6 +106,47 @@ or scripted rater); scope to ~10–20 tasks per repo across two or three repos.
 This is the gold-standard confirmation of whatever 4a's natural experiment
 suggests.
 
+### 4c. Real recall performance — in-the-wild, self-labeled by behavior
+
+RekalBench's T1–T4 queries are *synthetic* (mined labels, LLM-paraphrased).
+The corpus also holds the *real* queries agents actually typed — every
+`rekal "<q>"` invocation — and what they did next. When a real recall is
+followed by `rekal query --session <sid>`, that drilled session is an implicit
+relevance label: it is what the agent, in real work, judged worth reading for
+that real question. This is the realest retrievability test available and it
+needs no query generation — `mine_wild.py` pairs `(real query → drilled
+session)` from the tool-call history (the query text and the drilled id both
+survive in `cmd_prefix`), and the pairs run through `run_rung1.py` /
+`score.py` unchanged. Report MRR/Recall\@k of current recall against the
+sessions agents genuinely drilled into. Also report, straight from the
+history: real recall **return rate** (invocations that surfaced anything),
+**drill-through rate**, and query-length/topic distribution — Rekal graded on
+its own usage, not a constructed proxy. Caveat: the drilled session is a
+positive label, not an exhaustive one (other sessions may also have been
+relevant), so this measures recall of *acted-on* results, an underestimate.
+
+### 4d. Cross-repo effectiveness
+
+Does folding in the machine's other repos actually help, or just add noise?
+Two measurements:
+
+- **In the wild, free.** `mine_wild.py` flags every real drill into an
+  *imported* (origin-labeled) session. The cross-repo drill rate — how often an
+  agent, having searched in one repo, chose to read a session from another —
+  is direct evidence that machine-wide memory gets used in practice, at zero
+  cost.
+- **A/B on the index.** Score the same query set twice: against the own-repo
+  index (`rekal index --no-local`) and the machine-wide index (`rekal index
+  --include-all`). The coverage delta on queries whose answer plausibly lives
+  in another repo is the value cross-repo import buys; any *drop* on own-repo
+  queries is the noise it costs. Heavier (two reindexes; note the RHO rule —
+  each index state is its own snapshot), so run it once as a focused A/B, not
+  per-system.
+
+The contamination guarantee (§4.4 of the paper) means this is safe to
+measure: imported sessions are index-only and structurally unpushable, so
+cross-repo evidence stays local unless it crosses the reviewed wiki egress.
+
 ## 5. Scale and validity
 
 - **Scale sweep (RISE/C4)** — rung-1 metrics and B1 latency at 10/25/50/100%
@@ -124,8 +165,16 @@ suggests.
 ## 6. What lands in the paper
 
 One harmonised manifest supersedes `runs/2026-07-12/`. The retrieval tables
-gain per-repo variance and T4; the paper gains an effectiveness section
-(4a headline numbers, 4b A/B where available); T5 appears only if a clean
-sample exists. The four-problems framing is unchanged — this run strengthens
-the *annotation* demonstration (more repos, more tasks) and begins to put
-numbers behind the claim that the memory is not just findable but used.
+gain per-repo variance and T4. The paper gains:
+
+- an **effectiveness section** — 4a usage/steering-delta headline numbers, 4b
+  A/B where available, and, most convincingly, **4c real in-the-wild recall
+  performance** graded against the sessions agents actually drilled into (the
+  synthetic benchmark validated by real behavior);
+- a **cross-repo result** — 4d's in-the-wild cross-repo drill rate and, where
+  run, the own-repo-vs-machine-wide coverage A/B.
+
+T5 appears only if a clean sample exists. The four-problems framing is
+unchanged — this run strengthens the *annotation* demonstration (more repos,
+more tasks) and puts numbers behind the claim that the memory is not just
+findable in a constructed benchmark but findable, and used, in real work.

@@ -61,6 +61,11 @@ $BENCH/mine_t5.sh $OUT             # labels-t5-candidates.jsonl
 
 # 10. Rekal usage & effectiveness (observational, no LLM)
 python3 $BENCH/usage_mine.py $OUT  # usage.md + usage.json
+
+# 11. Real in-the-wild recall: replay actual queries vs sessions agents drilled
+python3 $BENCH/mine_wild.py $OUT              # $OUT/wild/queries.jsonl (self-labeled)
+python3 $BENCH/run_rung1.py $OUT/wild --systems b5,b3
+python3 $BENCH/score.py $OUT/wild            # real MRR/Recall@k; cross_repo flagged
 ```
 
 Multi-repo (06-eval-strategy.md): the miners are per-repo (gold needs a
@@ -88,6 +93,11 @@ Notes
 - `usage_mine.py` is observational (a natural experiment): the steering delta
   between rekal-using and non-using sessions is confounded and directional,
   not causal — it sets priors for the interventional A/B (06 §4b).
+- `mine_wild.py` is the realest retrievability test: it grades current recall
+  against the sessions agents *actually drilled into* after their real
+  queries (06 §4c) — a positive-only label, so it measures recall of
+  acted-on results (an underestimate). It also flags drills into imported
+  sessions, the free cross-repo-effectiveness signal (06 §4d).
 - `tune_weights.py` enforces the RHO rule: grid search on the dev split
   only, then winner-vs-incumbent on test with a paired-bootstrap CI; SHIP
   only on a test win. Tuning is valid only against the index state it ran

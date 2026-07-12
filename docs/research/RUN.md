@@ -91,13 +91,16 @@ python3 $BENCH/usage_mine.py $RUN                      # usage.md + usage.json
 ## 7. Rung 2 — judged answer quality (LLM judge)  →  judged table
 
 ```bash
-python3 $BENCH/run_rung2.py $RUN --sample 150 \
+python3 $BENCH/run_rung2.py $RUN \
   --transcripts ~/.claude/projects/<this-repo-dir> > $RUN/rung2.md
 ```
 
-Distinct answer/judge models; the judge sees the gold turn. Reports judged
-accuracy and context tokens for B0 (no memory) / B1 (grep) / B5 (Rekal). Also
-hand-check 50 judgements for agreement and record the rate.
+Distinct answer/judge models; the judge sees the gold turn. Context is
+generous by design — tokens are not the metric here (that is rung 3), so let
+the answering model see plenty; the question is whether the system surfaced
+the answer at all. Reports judged accuracy **per task and pooled**, with the
+CORRECT/PARTIAL/WRONG breakdown, for B0 (no memory) / B1 (grep) / B5 (Rekal).
+Also hand-check 50 judgements for agreement and record the rate.
 
 ## 8. Rung 3 — drill-cost proxy  →  efficiency figure
 
@@ -139,7 +142,7 @@ summary.
 | `rung1.md` (test split) | retrieval table | P1 (vs grep), P2 (ablations), per-task, **T4 both@10**, per-repo variance |
 | `wild/rung1.md` + `wild/wild-meta.json` | §4c real-recall table | recall vs sessions agents really drilled; real return/drill rates; **cross-repo drills** |
 | `usage.md` | §4a effectiveness | adoption, drill-through, steering delta |
-| `rung2.md` | judged table | **answer accuracy** B0/B1/B5 + context tokens (the LLM-judge result) |
+| `rung2.md` | judged table | **answer accuracy** per task + pooled, CORRECT/PARTIAL/WRONG, B0/B1/B5 (the LLM-judge result) |
 | `rung3.md` | efficiency | drill tokens vs gold-term coverage |
 | `tune-verdict.md` | footnote | weights SHIP/REJECT on held-out test |
 | `manifest.json` | reproducibility | one canonical run record |

@@ -69,7 +69,7 @@ python3 $BENCH/score.py $OUT/wild            # real MRR/Recall@k; cross_repo fla
 
 # 12. Rung 2 — judged answer quality (LLM judge; distinct answer/judge models)
 export BENCH_ANSWER_LLM="<model B>"; export BENCH_JUDGE_LLM="<model C>"
-python3 $BENCH/run_rung2.py $OUT --sample 150 \
+python3 $BENCH/run_rung2.py $OUT \
   --transcripts ~/.claude/projects/<this-repo-dir> > $OUT/rung2.md
 ```
 

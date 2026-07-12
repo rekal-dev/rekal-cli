@@ -149,12 +149,14 @@ session discovery keep using the invoking worktree.
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent
-  recall), local-corpus data plan, literature-derived product roadmap, and
-  `paper/` (Typst source + PDF of "The Commit Is the Label"). The runnable
-  rung-1 harness lives in `scripts/bench/` (corpus card, label mining, query
-  generation with leakage filter, system runner incl. weight ablations +
-  grep-rank baseline with UUID→ULID sidmap join, scorer, dev-tuned/
-  test-validated weight tuner)
+  recall), local-corpus data plan, literature-derived product roadmap,
+  the multi-repo-at-scale + Rekal-usage/effectiveness eval strategy
+  (`06-eval-strategy.md`), and `paper/` (Typst source + PDF of "The Commit Is
+  the Label"; empirical values from `runs/2026-07-12/manifest.json`). The
+  runnable rung-1 harness lives in `scripts/bench/` (corpus card, label
+  mining, query generation with leakage filter, system runner incl. weight
+  ablations + grep-rank baseline with UUID→ULID sidmap join, scorer,
+  dev-tuned/test-validated weight tuner)
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
 

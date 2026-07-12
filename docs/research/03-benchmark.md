@@ -10,6 +10,15 @@ baseline runnable by anyone, all data stays on the operator's machine, and
 the harness reports the honesty caveats (label precision, leakage controls)
 alongside the headline numbers.
 
+> **Forward strategy (`06-eval-strategy.md`).** The next run moves from one
+> repo to **every repo on the machine at scale** (gold from checkpoint-bearing
+> repos, scored against the full machine-wide index as the haystack), reports
+> **per-repo variance**, prioritizes **T4 multi-hop**, treats **T5 as
+> opportunistic**, and adds a second pillar — **does using Rekal help**,
+> measured observationally from the ledger's own `rekal` invocations (free, at
+> scale) and interventionally by A/B on real tasks (small N). This spec's task
+> and metric definitions still hold; 06 is how they get exercised at scale.
+
 ## 1. Corpus
 
 Built from a real machine's session store via `rekal index --include-all`
@@ -65,7 +74,7 @@ query is always a session id (rung 1) or a source turn (rung 2).
   signal here. This is the MRAgent-motivated task: one-shot top-k should
   visibly struggle; skills-driven multi-step recall should not.
 
-### T5 — Decision drift (latest decision wins)
+### T5 — Decision drift (latest decision wins) — *opportunistic, deprioritized*
 - **Label:** decision pairs where a later session touching the same files
   reverses/supersedes an earlier one (candidate-mined by SQL: same file set,
   ≥2 sessions apart in time, steering turns in both; human-confirmed on a
@@ -73,6 +82,10 @@ query is always a session id (rung 1) or a source turn (rung 2).
 - **Query:** "what is our current approach to X?"
 - **Metric:** top hit is the *later* decision; reversal mentioned in answer
   (rung 2). From BeliefShift; small N is fine (20–50 pairs).
+- **Status:** corpus-gated — needs a genuine reversal history plus manual
+  confirmation, so it is opportunistic, not a deliverable. Report it only
+  where a repo yields a clean sample; otherwise omit rather than manufacture.
+  See `06-eval-strategy.md`.
 
 ## 3. Systems under test
 

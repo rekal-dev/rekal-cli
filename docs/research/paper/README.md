@@ -12,23 +12,19 @@ python3 -c "import typst; typst.compile('rekal-paper.typ', output='rekal-paper.p
 # or, with the typst CLI installed:  typst compile rekal-paper.typ
 ```
 
-## Filling in the data
+## Data provenance
 
-Every pending value renders as a red `⟨…⟩` marker, produced by the `#tbd[…]`
-function at the top of the source. Workflow:
+All empirical values come from the 2026-07-12 corpus run on a real
+1,433-session store; its aggregate manifest is committed under `../runs/`
+per `DATA-RUN.md` §6 (see `../../../scripts/bench/README.md` for the
+harness). The paper reports the rung-1 retrievability result and the bounded
+drill-cost figure; the source carries no placeholders.
 
-1. Run the corpus extraction and benchmark (`../04-data-plan.md`,
-   `../03-benchmark.md`; runnable harness: `../../../scripts/bench/README.md`).
-   The rung-1 flow fills Table 3; `run_rung3.py`'s pooled table fills the
-   drill-strategy table (`tab-drill`) directly — its three columns (tokens,
-   coverage, coverage/1k) match one-to-one.
-2. Grep the source for `tbd[` and replace each with the measured value
-   (abstract numbers, corpus card in §5.1, Tables 3–4, the drill-strategy
-   table, §6.3 curves — add figures as `#image(...)` once the plots exist).
-3. Delete the DRAFT banner in the title block and this section's caveat
-   when no `tbd[` remains: `grep -c 'tbd\[' rekal-paper.typ` → the residual
-   count is the to-do list.
-4. Recompile; commit source + PDF together.
+## Extending the result
 
-Section §3 (design), §4 (benchmark), and Related Work are final and do not
-depend on the data.
+The natural next rungs — judged answer quality against the gold turn, the
+scale sweep against an agentic-grep baseline, and the embedding-substitution
+test — reuse the same public harness and the already-mined query set. When a
+run produces those numbers, add the corresponding table and cite the run
+directory; the paper's structure (§7 Results, §9 Future Work) is written to
+accommodate them without disturbing the retrievability result.

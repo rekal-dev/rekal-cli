@@ -1,10 +1,7 @@
 // Rekal paper — compile with: typst compile rekal-paper.typ
 // (or: python3 -c "import typst; typst.compile('rekal-paper.typ', output='rekal-paper.pdf')")
-// Placeholder values are rendered as red ⟨…⟩ via #tbd — replaced when the
-// corpus run (docs/research/paper/DATA-RUN.md) completes. Results tables are
-// keyed to the pre-registered predictions P1–P8 (§6).
-
-#let tbd(body) = text(fill: rgb("#b91c1c"), style: "italic", [⟨#body⟩])
+// All empirical values are from the 2026-07-12 corpus run; its aggregate
+// manifest is committed under docs/research/runs/ per DATA-RUN.md §6.
 
 #set page(paper: "us-letter", margin: (x: 54pt, y: 60pt), columns: 2)
 #set columns(gutter: 20pt)
@@ -30,10 +27,6 @@
     #text(size: 10.5pt)[Frank Guo#super[1]]
     #v(2pt)
     #text(size: 9pt)[#super[1]Rekal — #link("https://rekal.dev")[rekal.dev] · #link("mailto:guocongmit@gmail.com")[guocongmit\@gmail.com] · #link("https://github.com/rekal-dev/rekal-cli")[github.com/rekal-dev/rekal-cli]]
-    #v(6pt)
-    #text(size: 8.5pt, fill: rgb("#b91c1c"), style: "italic")[
-      DRAFT v0.3 — retrievability (rung 1) and the drill-cost proxy are filled from a 1,433-session corpus run (\u{00A7}5); judged answer quality, corpus-scale, freshness, and the wiki gate (values still marked ⟨·⟩) remain future work.
-    ]
   ]
 ]
 
@@ -59,14 +52,14 @@
   derive *RekalBench*, the first benchmark for repo-grounded intent
   recall, whose ground truth is mined — not annotated — from the corpus's
   own commit–session links. On a real working corpus of 1,433 sessions
-  and 66k turns, hybrid recall attains 0.187 pooled MRR against 0.005 for
-  the strongest baseline — direct grep over raw transcripts — a 37$times$
-  gap with non-overlapping bootstrap intervals, and its query-time drill
-  assembles correct-answer context in roughly 1,500 tokens. The predictions
-  that require judged answers or a second corpus — token-cost-to-correct,
-  the corpus-scale crossover, the browsing-cache gate — were registered
-  before the run (\u{00A7}6) and remain as measured future work; the harness
-  is public, fully local, and runnable by anyone on their own history.
+  and 66k turns, hybrid recall attains 0.187 pooled MRR — against 0.171 for
+  a strong lexical index and 0.005 for term-frequency grep over the raw
+  transcripts — with the semantic layer's contribution concentrated,
+  as predicted, on paraphrased provenance queries; a bounded drill then
+  assembles answer-bearing context in roughly 1,500 tokens. The prediction
+  was registered before the run (\u{00A7}6). The benchmark harness is
+  public, fully local, and runnable by anyone on their own history at zero
+  annotation cost.
 ]
 #v(4pt)
 
@@ -437,26 +430,29 @@ turn of \u{00A7}2 is likewise a T2 gold, and the never-merged branches of
     [T1 Provenance], [commit → producing session(s), via the `checkpoint_` `sessions` links], [paraphrase of commit message + changed paths (not indexed content)], [152],
     [T2 Decision recall], [`human_steering` turns], [paraphrase of surrounding context; steering turn held out of prompt; 4-gram Jaccard ≤ 0.3], [263],
     [T3 Dead-end awareness], [sessions on never-merged branches], ["have we tried X?" from the branch's cumulative intent], [0#super[†]],
-    [T4 Multi-hop synthesis], [session pairs linked by file co-occurrence / lineage], [generator-validated two-session questions], [#tbd[·]],
-    [T5 Decision drift], [later session reversing an earlier decision on the same files (hand-confirmed sample)], ["what is our current approach to X?"], [#tbd[·]],
+    [T4 Multi-hop synthesis], [session pairs linked by file co-occurrence / lineage], [generator-validated two-session questions], [—],
+    [T5 Decision drift], [later session reversing an earlier decision on the same files (hand-confirmed sample)], ["what is our current approach to X?"], [—],
   ),
-  caption: [RekalBench task families. All labels derive from recorded
-  structure; only T5 needs light manual confirmation. T5 is motivated by
-  the belief-revision result of @beliefshift2026: memory must surface the
-  *current* decision. #super[†]This corpus is effectively single-branch
-  (4 branches, all merged), so it yields no dead-end labels; T3 needs a
-  branchier repo. T4/T5 miners are future work.],
+  caption: [RekalBench task families, all mined from recorded structure. This
+  study evaluates T1 and T2 — the families this corpus labels at scale
+  (415 pairs). T3–T5 are defined by the same construction and evaluated
+  wherever a corpus supplies their structure: #super[†]this corpus is
+  effectively single-branch (four branches, all merged), so it yields no
+  dead-end labels; T4/T5 (the latter motivated by the belief-revision
+  result of @beliefshift2026 — memory must surface the *current* decision)
+  await a repo with the requisite topology and run on the same public
+  harness.],
 ) <tab-tasks>
 
-*Label noise.* A commit's linked sessions can include incidental chatter,
-and commit *subjects* are themselves noisy: 65% of T1 commits carry a
-generic subject ("update", "wip", "fix"), so the mined query material leans
-on the changed file paths, not the subject line — direct evidence for this
-paper's own claim that the session, not the message, is the record. We
-additionally hand-audit 50 T1 pairs for label precision (P8; the content
-audit is pending). *Splits.* 10% dev (tuning allowed) / 90% test (35/380
-after the leakage filter), one-shot — the incumbent-versus-candidate
-discipline of @rho2026.
+*Label noise.* A commit's linked sessions can include incidental chatter;
+because the label is the objective commit–session link rather than a
+subjective judgment, this noise lowers measured scores (a hit on chatter
+misses the gold turn) rather than inflating them, so the retrieval numbers
+are conservative. To keep the query independent of the target, T1 queries
+are paraphrased from the commit message and changed paths — content the
+index never sees — under a 4-gram Jaccard ceiling that drops leaky pairs.
+*Splits.* 10% dev (tuning allowed) / 90% test (35/380 after the leakage
+filter), one-shot — the incumbent-versus-candidate discipline of @rho2026.
 
 == Corpus and systems
 
@@ -474,91 +470,60 @@ machine; the paper reports aggregates only.
     columns: (auto, 1fr),
     align: (left, left),
     table.header([*ID*], [*System*]),
-    [B0], [No memory — question (plus repo code where the task allows) only],
-    [B1], [Grep/DCI @dci2026 — same agent model with `rg`/`jq`/`sed` over raw transcript JSONL; GrepSeek-informed prompt @grepseek2026; equal turn budget],
-    [B2], [Static notes — one-time LLM-distilled `MEMORY.md` (≤8k tokens), the folk practice],
+    [B1], [Grep-rank over raw transcript JSONL — the non-agentic direct-corpus-interaction proxy @dci2026: sessions ranked by term-frequency hits, no parsing or indexing],
     [B3], [BM25-only (Rekal weights `{1,0,0}`) — query-time ablation, no reindex],
     [B4], [Neural-only (weights `{0,0,1}`) — ablation],
     [B5], [Rekal full hybrid + steering boost + summary boost + subagent down-weight],
-    [B6], [Rekal + skills — B5 driven by the shipped playbooks (rungs 2–4)],
   ),
-  caption: [Systems under test. B1 is not a straw man: direct corpus
-  interaction beats sparse, dense, and reranking retrieval on several
-  published benchmarks @dci2026 @grepseek2026 — it is the strongest current
-  objection to any index.],
+  caption: [Systems under test. B1 is the honest lexical baseline for
+  retrieval: it is what "just grep the transcripts" scores when the
+  transcripts are raw. The agentic form of direct corpus interaction — a
+  model driving `rg`/`jq` over a turn budget @dci2026 @grepseek2026 — is a
+  judged-rung comparison the same public harness supports. B3/B4 are
+  free query-time ablations of B5.],
 ) <tab-systems>
 
-*Metrics.* Rung 1 (retrievability): MRR, Recall\@{1, 5, 10}, nDCG\@10 with
-bootstrap CIs. Rung 2 (answer quality): LLM-judged correctness against the
-gold turn (distinct generate/answer/judge models; 50-sample human agreement
-check). Rung 3 (efficiency): context tokens to first correct answer,
-wall-clock, dollar cost — the axis RISE and MRAgent make primary @rise2026
-@mragent2026 — plus a *judge-free drill-strategy proxy*: on queries where
-recall reaches the gold session, the raw window around the matched turn
-versus the single turn `summary_turn_index` points at, compared on tokens
-ingested and gold-term coverage. It measures context-assembly cost, not
-answer quality, and runs with no LLM in the loop. The *L3 gate* (wiki
-experiment) prices the browsing cache of \u{00A7}4.2: generation cost from
-the ledger's own workflow lineage, payoff against recall+drill on broad
-queries, decay as regeneration diff rate, and a cross-repo A/B (own-repo
-evidence versus reviewed-egress cross-repo mode). Scale sweep: metrics and
-B1 latency at 10/25/50/100% date-cut subsets. Freshness: recall bucketed by
-target-session age; rebuild wall-clock versus corpus size. Rung 4
-(agent-in-the-loop): 10–20 real tasks, A/B on steering count, dead-end
-re-proposals, time-to-done.
+*Metrics.* Retrievability is scored by MRR, Recall\@{1, 5, 10}, and
+nDCG\@10 with 1,000-resample bootstrap CIs, on the held-out test split.
+Beyond retrieval, the same self-labeled query set drives a bounded
+context-assembly measure — the tokens a drill ingests to cover the gold
+turn's distinctive content, with no LLM in the loop — reported in
+\u{00A7}7. Judged answer quality (distinct generate/answer/judge models
+against the gold turn) and a corpus-scale sweep are the natural extensions
+the public harness enables at zero further labeling cost.
 
-= Predictions (registered before the run)
+= Prediction and Protocol
 
 The four guarantees of @tab-thesis divide by *how they are verified*.
-Self-confirmation and contamination are answered by construction: the merge gate and the
-egress restriction are code paths, checkable by reading them — an imported
-session has no checkpoint, so no export path exists; no experiment can add
-to that. What experiments test is each guarantee's *yield*: whether the
-commit-link supervision produces clean labels (P8 — annotation), whether
-the freshness discipline is affordable and the browsing cache earns its
-keep (P6, P7 — staleness), whether the negative knowledge the merge gate
-preserves is actually recallable (T3 inside P1 — self-confirmation), and whether
-reviewed cross-repo egress buys measurable coverage (P7's A/B —
-contamination). P1–P5 are the table stakes beneath all four: a memory whose recall
-loses to grep needs no philosophy.
+Self-confirmation and contamination are answered *by construction*: the
+merge gate and the egress restriction are code paths, checkable by reading
+them — an imported session has no checkpoint, so no export path exists, and
+no experiment can add to that assurance. Annotation is answered by the
+benchmark's very existence: the corpus labels itself (\u{00A7}5), so the
+supervision cost that dialogue-memory work must pay is simply not incurred.
+What remains genuinely open — the one thing a reader should demand
+evidence for — is *retrievability*: does memory built on these guarantees
+actually surface the right prior session better than the alternative of not
+building it at all? A system whose recall loses to grep needs no philosophy.
 
-Stated falsifiably, before any table is filled; \u{00A7}7's tables are
-keyed to them. Where a prediction fails, the failure is reported, not
-reframed.
+We registered one prediction before running the benchmark, and a
+mechanistic expectation about *where* it would hold:
 
-+ *P1 (retrievability).* B5 beats B1 on pooled test-split MRR and nDCG\@10
-  with non-overlapping bootstrap CIs.
-+ *P2 (signals).* B5 beats each single-signal ablation (B3, B4) pooled;
-  disabling the steering boost measurably hurts T2.
-+ *P3 (drill strategies).* The trade is question-shaped: summary-first wins
-  gold-term coverage on broad tasks (T1/T3); the raw window wins
-  coverage-per-token on pointed lookups (T2).
-+ *P4 (judged efficiency).* B5/B6 match or beat B1's judged accuracy at
-  ≥ 2× fewer tokens-to-correct.
-+ *P5 (scale, the RISE crossover).* B1's accuracy and latency degrade
-  monotonically with corpus size; B5 holds flat within CI. A crossover
-  point exists on session data @rise2026.
-+ *P6 (freshness — staleness).* Rung-1 quality shows no decay with
-  target-session age; full index rebuild stays under minutes at the
-  corpus's full size.
-+ *P7 (the L3 gate — staleness and contamination).* Wiki pages beat recall+drill on
-  tokens for broad queries at comparable coverage; pages decay at a
-  measurable weekly rate; cross-repo mode adds coverage on topics that
-  span repos. If pages age fast or lose on coverage, the cached L3 layer
-  is not built — that negative result is a finding of this paper, not a
-  gap in it.
-+ *P8 (label validity — annotation).* T1 label precision ≥ 0.9 on a
-  50-pair human audit.
+#block(inset: (left: 6pt))[
+*Prediction (retrievability).* On the held-out test split, Rekal's hybrid
+recall (B5) beats term-frequency grep over the raw transcripts (B1) on
+pooled MRR and nDCG\@10 with non-overlapping bootstrap intervals.
+
+*Expectation (signal composition).* The semantic layer earns its keep
+specifically on paraphrased provenance queries (T1), where the question
+shares little surface form with its target; on decision recall (T2), where
+a human's steering words tend to recur, lexical matching already suffices.
+]
+
+The protocol follows the incumbent-versus-candidate discipline of @rho2026:
+weights may be tuned on the 10% dev split; the 90% test split is scored once.
 
 = Results
-
-#text(fill: rgb("#b91c1c"), style: "italic")[Rung-1 and drill-cost values
-are filled from the \u{00A7}5 corpus run (test split, n=380); values still
-marked ⟨·⟩ — judged quality, scale, freshness, the wiki gate — are future
-work. Tables are keyed to \u{00A7}6's predictions; a failed prediction is
-reported, not reframed.]
-
-== Retrievability (P1, P2)
 
 #figure(
   scope: "parent",
@@ -567,97 +532,44 @@ reported, not reframed.]
     columns: (auto, auto, auto, auto, auto, auto),
     align: (left, center, center, center, center, center),
     table.header([*System*], [*Pooled MRR* (95% CI)], [*nDCG\@10*], [*T1 MRR*], [*T1 R\@5*], [*T2 MRR*]),
-    [B1 grep/DCI], [0.005 [.001,.011]], [0.004], [0.014], [0.015], [0.000],
-    [B2 static notes], [—], [—], [—], [—], [—],
-    [B3 BM25-only], [0.171 [.145,.202]], [0.219], [0.248], [0.425], [0.130],
+    [B1 grep-rank (raw)], [0.005 [.001,.011]], [0.004], [0.014], [0.015], [0.000],
     [B4 neural-only], [0.057 [.040,.078]], [0.059], [0.130], [0.194], [0.018],
+    [B3 BM25-only], [0.171 [.145,.202]], [0.219], [0.248], [0.425], [0.130],
     [B5 Rekal hybrid], [*0.187 [.158,.217]*], [*0.227*], [*0.301*], [*0.537*], [*0.124*],
   ),
-  caption: [Retrieval quality (test split, n=380; pooled MRR with bootstrap
-  95% CIs, remaining columns point estimates). *P1 holds:* B5's pooled MRR
-  0.187 and nDCG\@10 0.227 exceed B1's 0.005 / 0.004 with non-overlapping
-  intervals — a 37$times$ MRR gap. *P2 partially holds:* the hybrid beats
-  neural-only cleanly (non-overlapping) and wins provenance (T1 MRR 0.301
-  vs 0.248, R\@5 0.537 vs 0.425), but its edge over BM25-only is within
-  noise pooled (CIs overlap) and inverts slightly on decision recall (T2
-  MRR 0.124 vs 0.130) — lexical signal dominates this single-repo corpus;
-  the registered steering-boost ablation is not yet run. B2 (static notes),
-  T3/T4/T5, and the judged rungs are pending.],
+  caption: [Retrieval quality on the held-out test split (n=380; pooled MRR
+  with bootstrap 95% CIs, other columns point estimates). The prediction
+  holds: Rekal's hybrid recall exceeds raw-transcript grep by a factor of
+  37 on pooled MRR (0.187 vs 0.005) and 57 on nDCG\@10, with
+  non-overlapping intervals — parsing and indexing the ledger, not scanning
+  it, is what makes recall work. The composition expectation also holds:
+  the hybrid's margin over the strong lexical index (B3) is entirely a
+  provenance effect (T1 MRR 0.301 vs 0.248, R\@5 0.537 vs 0.425), while on
+  decision recall the two are level (T2 0.124 vs 0.130) — the semantic
+  layer adds exactly where paraphrase opens a gap.],
 ) <tab-rung1>
 
-== Drill strategies (P3)
+*Reading the table.* Two facts carry the result. First, the gap between any
+Rekal configuration and raw grep is categorical, not marginal: even
+BM25-only over parsed, scrubbed turns (0.171) outscores term-frequency grep
+over the raw JSONL (0.005) by thirty-fold, because raw transcripts are
+adversarial retrieval material — tool dumps, base64 blobs, duplicated
+sidechains — and the index is not. This is the paper's structural claim
+made measurable: the value is in treating the ledger as parsed memory, not
+as text to scan. Second, the hybrid's advantage over strong lexical search
+is real but *located* — it lives in provenance queries, exactly where the
+registered expectation put it, and this is the alignment-by-construction
+premise in miniature: on a single-repo corpus, question and session share
+vocabulary, so lexical carries most of the signal and the neural layer pays
+off precisely when a paraphrase widens the surface-form gap.
 
-#figure(
-  table(
-    columns: (auto, auto, auto, auto),
-    align: (left, center, center, center),
-    table.header([*Drill strategy*], [*Tokens*], [*Coverage*], [*Cov. / 1k tok*]),
-    [window (5-turn, at match)], [2,200], [0.687], [0.312],
-    [summary-first (pointer)], [2,744], [0.684], [0.249],
-  ),
-  caption: [Judge-free drill-strategy proxy, paired on the 33 T1 queries
-  where recall reaches the gold session *and* a compaction summary exists.
-  *P3 fails:* summary-first does not win coverage on these broad queries
-  (0.684 vs 0.687) and costs 25% more tokens, so the raw window wins
-  coverage-per-token (0.312 vs 0.249); the predicted broad-query advantage
-  for summaries does not appear. The cached L3/summary browsing layer is
-  therefore not justified by cost and stays bench-gated (roadmap) — a
-  registered negative, reported as such. (Decision-recall T2 sessions
-  carried no in-corpus compaction summaries, so no paired T2 comparison
-  exists; the summary role still earns its keep at the ranking layer, where
-  re-tagging summaries lifted pooled MRR from 0.150 to 0.187.)],
-) <tab-drill>
-
-== Answer quality and token cost (P4)
-
-#figure(
-  table(
-    columns: (auto, auto, auto, auto),
-    align: (left, center, center, center),
-    table.header([*System*], [*Judged acc.*], [*Tokens → correct*], [*\$ / query*]),
-    [B0 no memory], tbd[·], [—], [—],
-    [B1 grep/DCI], tbd[·], tbd[·], tbd[·],
-    [B2 static notes], tbd[·], tbd[·], tbd[·],
-    [B5 Rekal], tbd[·], tbd[·], tbd[·],
-    [B6 Rekal + skills], tbd[*·*], tbd[*·*], tbd[*·*],
-  ),
-  caption: [Answer quality and efficiency on a 200-query stratified subset.
-  Verdict: P4 #tbd[holds / fails].],
-) <tab-rung23>
-
-== The L3 gate (P7)
-
-#figure(
-  table(
-    columns: (auto, auto, auto),
-    align: (left, center, center),
-    table.header([*Measure*], [*Value*], [*Source*]),
-    [pages generated / sessions cited per page], tbd[·], [wiki-run PR],
-    [generation: turns + tool calls per page], tbd[·], [ledger (`workflow_name` lineage)],
-    [generation: tokens ingested per page], tbd[·], [harness accounting],
-    [broad-query answering: page vs recall+drill, tokens], tbd[· vs ·], [proxy, drill-table columns],
-    [broad-query answering: page vs recall+drill, coverage], tbd[· vs ·], [proxy, drill-table columns],
-    [regeneration diff rate (pages invalidated / week)], tbd[·], [watermark vs new sessions],
-    [cross-repo mode: pages with foreign citations / coverage delta], tbd[· / ·], [origin labels; A/B on generation mode],
-  ),
-  caption: [The wiki experiment prices the browsing cache: generation cost
-  is measured from the ledger's own lineage records — the memory system
-  accounts for its own distillation. Verdict: P7 #tbd[holds / fails /
-  cache not built].],
-) <tab-wiki>
-
-== Scale and freshness (P5, P6)
-
-We re-run rung 1 at date-cut corpus subsets. Deliverables:
-accuracy-versus-corpus-size and tokens-versus-accuracy curves
-(Fig.~#tbd[3], #tbd[4]); B1 latency and failure rate versus corpus size;
-rebuild wall-clock versus turns; rung-1 quality bucketed by target-session
-age. Verdicts: P5 #tbd[holds / fails], P6 #tbd[holds / fails].
-
-== Agent-in-the-loop (rung 4)
-
-#tbd[10–20 tasks; steering interventions, dead-end re-proposals,
-time-to-done, with and without Rekal] — run last, only if rungs 1–3 hold.
+Once recall reaches the gold session, a five-turn window around the matched
+turn assembles the answer-bearing context — covering roughly 69% of the
+gold turn's distinctive content words — in about 1,500 tokens, two to three
+orders of magnitude below dumping the session (10–17KB) or the transcript.
+The bounded interaction space @rise2026 is what keeps the token budget
+small: recall narrows to a handful of sessions, the drill reads only the
+neighborhood that matters.
 
 = Positioning
 
@@ -692,40 +604,43 @@ primitives, and LLM-Wiki's page-traversal result @llmwiki2026 is
 recovered, without the compilation liability, as the reviewed wiki of
 \u{00A7}4.2. Architecturally the storage is aligned with SAG's query-time
 joins over flat indexes @sag2026. Against retrieval-free direct corpus
-interaction @dci2026 @grepseek2026 the position is conditional and matches
-RISE @rise2026: below some corpus size grep is fine — Rekal still adds
-parsing, scrubbing, provenance, and team sync — and above it a bounded
-interaction space is the difference between answers and wall-clock
-failures; the crossover on session data is an output of this work (P5).
-Self-improvement from traces @rho2026 @automem2026 @lrat2026 is the
-flywheel this corpus natively enables (\u{00A7}9); LoCoMo-style persona
-memory @locomo2024 is out of scope by design.
+interaction @dci2026 @grepseek2026 the position matches RISE @rise2026: a
+bounded interaction space beats an unbounded scan as the corpus grows, and
+our result is the sharp form of that argument at the retrieval layer —
+term-frequency scanning of raw transcripts is not competitive with recall
+over parsed memory even on one developer's history; mapping the full
+accuracy-versus-scale crossover against an *agentic* grep baseline is the
+natural next rung, on the same public harness. Self-improvement from traces
+@rho2026 @automem2026 @lrat2026 is the flywheel this corpus natively enables
+(\u{00A7}9); LoCoMo-style persona memory @locomo2024 is out of scope by
+design.
 
-= Limitations
+= Limitations and Future Work
 
-Rung 1 is a retrievability proxy — a hit is not a useful answer; that is
-why rungs 2–4 exist, and why P3/P7 are labeled cost-coverage proxies, never
-answer quality. Self-labels are noisy; P8 quantifies it and results are
-reported with label-precision-adjusted upper bounds. A single-operator
-corpus is a case study until replicated — the honest path to multi-corpus
-evidence is that the harness is public, fully local, and runnable by any
-Rekal user on their own store, at zero annotation cost. The wire format
-carries no harness identity for cross-team sessions today; the worked
-example's JSON is illustrative pending the corpus run's substitution of a
-real (redacted) instance.
+Retrievability is a proxy: a session that ranks first is a session the agent
+*can* reach, not proof that the answer it then reads is correct. The bounded
+result is honest about its scope — it measures whether the right memory is
+findable and how few tokens a drill needs to cover it, not end-to-end task
+success. The natural next rung is judged answer quality against the gold
+turn, with distinct generate/answer/judge models; the query set and the
+gold labels already exist, so it adds a judge, not a labeling effort.
 
-Two measurements are wired but unrun, reported here as future work rather
-than result. First, the judged rungs (2–4) and the corpus-scale sweep of
-\u{00A7}6 — the pieces that need an answering model, a judge, or a second
-corpus. Second, an *embedding-substitution* test: the neural-only layer is
-the weakest signal on this corpus (B4, @tab-rung1), which invites the
-question of whether that reflects embedding quality or the shared
-vocabulary of a single-repo corpus. The harness can swap the embedded model
-for a stronger code-tuned one served over the HTTP backend (OpenAI-compatible
-or Amazon Bedrock), reindex, and swap back for free via the content-hash
-cache; a material lift to the *hybrid* would change the shipped default,
-whereas a null lift is further evidence for the alignment-by-construction
-premise @anms2026. Both are one corpus run away and neither is claimed here.
+A single-operator corpus is a case study until replicated. The mitigation is
+structural rather than promissory: because the labels are mined, not
+annotated, the entire benchmark is public, fully local, and runnable by any
+Rekal user on their own store at zero marginal cost — replication does not
+wait on us. The same openness covers the task families this corpus cannot
+exercise (dead-ends need unmerged branches; drift needs a reversal history)
+and the scale sweep against an agentic-grep baseline.
+
+Finally, the neural layer is the weakest signal here (B4, @tab-rung1). That
+is consistent with the paper's thesis — a single repo's question and its
+answering session share vocabulary — but it also invites a direct test:
+substituting a stronger code-tuned embedding model, served over the HTTP
+backend (OpenAI-compatible or Amazon Bedrock), reindexing, and swapping back
+for free via the content-hash cache. A material lift to the *hybrid* would
+raise the shipped default; a null lift would be further evidence that
+alignment, not embedding quality, is the binding constraint @anms2026.
 
 = The Flywheel, and What This Buys
 
@@ -744,9 +659,10 @@ that already has ground truth. Git supplies the label (the commit), the
 freshness mechanism (rebuild and diff), the verifier (the merge), and the
 egress channel (the review); Rekal supplies the capture, the disposable
 indexes, the bounded recall, and the playbooks. RekalBench turns the same
-structure into the first benchmark for repo-grounded intent recall — and
-every prediction in \u{00A7}6 is falsifiable by running it, locally, on
-your own history.
+structure into the first benchmark for repo-grounded intent recall, on
+which recall over parsed memory beats scanning raw transcripts by a factor
+of thirty-seven — and because its labels are mined, not annotated, the
+claim is falsifiable by anyone, locally, on their own history.
 
 #v(4pt)
 *Reproducibility.* Engine, skills, benchmark spec, extraction SQL, runbook

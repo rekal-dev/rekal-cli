@@ -23,6 +23,16 @@ def metrics_for(ranked: list[str], gold: set[str]) -> dict:
     return {"mrr": mrr, "r@1": rec[1], "r@5": rec[5], "r@10": rec[10], "ndcg@10": ndcg}
 
 
+def metrics_t4(ranked: list[str], gold: set[str]) -> dict:
+    """T4 multi-hop: both gold sessions in the top-k (the paper's b@10), plus
+    the fraction of the pair found (partial credit)."""
+    top = set(ranked[:10])
+    return {
+        "both@10": 1.0 if gold <= top else 0.0,
+        "partial@10": len(gold & top) / len(gold) if gold else 0.0,
+    }
+
+
 def bootstrap_ci(values: list[float], n: int = 1000) -> tuple[float, float]:
     if not values:
         return (0.0, 0.0)
@@ -50,16 +60,20 @@ def main() -> None:
 
     for run_path in sorted(outdir.glob("run-*.jsonl")):
         system = run_path.stem.removeprefix("run-")
-        per_task: dict[str, list[dict]] = {}
+        per_task: dict[str, list[dict]] = {}   # t1/t2/t3: ranking metrics
+        t4: list[dict] = []                     # t4: both-in-top-k
         seconds: list[float] = []
         for line in run_path.read_text().splitlines():
             row = json.loads(line)
             q = queries.get(row["qid"])
             if not q or q.get("split") == "dev":
                 continue
-            per_task.setdefault(q["task"], []).append(
-                metrics_for(row["ranked"], set(q["gold"]))
-            )
+            if q["task"] == "t4":
+                t4.append(metrics_t4(row["ranked"], set(q["gold"])))
+            else:
+                per_task.setdefault(q["task"], []).append(
+                    metrics_for(row["ranked"], set(q["gold"]))
+                )
             seconds.append(row.get("seconds", 0.0))
 
         print(f"\n## {system}  (test split; mean [95% CI]; "
@@ -75,6 +89,13 @@ def main() -> None:
         if pooled:
             cols = [fmt([m[k] for m in pooled]) for k in ("mrr", "r@1", "r@5", "r@10", "ndcg@10")]
             print(f"| **all** | {len(pooled)} | " + " | ".join(cols) + " |")
+
+        if t4:
+            print(f"\n### {system} — T4 multi-hop (test split; mean [95% CI])")
+            print("| task | n | both@10 | partial@10 |")
+            print("|---|---|---|---|")
+            cols = [fmt([m[k] for m in t4]) for k in ("both@10", "partial@10")]
+            print(f"| t4 | {len(t4)} | " + " | ".join(cols) + " |")
 
 
 if __name__ == "__main__":

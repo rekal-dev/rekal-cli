@@ -41,7 +41,23 @@ PROMPTS = {
         'of the form "have we tried / should we do X?" that this history '
         "answers, in fresh wording. Output only the question."
     ),
+    "t4": (
+        "Two past AI coding sessions in this repo touched overlapping files.\n"
+        "Session A raised:\n---\n{s1_snippet}\n---\nSession B raised:\n---\n"
+        "{s2_snippet}\n---\nShared files: {files}.\nWrite ONE natural developer "
+        "question whose answer genuinely requires facts from BOTH sessions — "
+        "not answerable from either one alone — in fresh wording that quotes "
+        "neither. Output only the question."
+    ),
 }
+
+# T4 multi-hop validation: a question only qualifies if it needs both halves.
+VALIDATE_T4 = (
+    "Question: {q}\n\nContext A:\n{a}\n\nContext B:\n{b}\n\nCan this question be "
+    "fully answered using ONLY Context A, or using ONLY Context B? Reply with "
+    "exactly one token: A (A alone suffices), B (B alone suffices), or BOTH "
+    "(needs both)."
+)
 
 
 def ngrams(text: str, n: int = 4) -> set:
@@ -74,7 +90,7 @@ def main() -> None:
     outdir = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     queries, skipped = [], []
 
-    for task in ("t1", "t2", "t3"):
+    for task in ("t1", "t2", "t3", "t4"):
         path = outdir / f"labels-{task}.jsonl"
         if not path.exists():
             continue
@@ -86,6 +102,8 @@ def main() -> None:
                 files=", ".join(src.get("files", [])[:8]),
                 content=src.get("content", ""),
                 intent=src.get("intent", ""),
+                s1_snippet=src.get("s1_snippet", ""),
+                s2_snippet=src.get("s2_snippet", ""),
             )
             src_grams = ngrams(source_text(label))
             query = ""
@@ -98,6 +116,13 @@ def main() -> None:
             if not query:
                 skipped.append({"qid": qid, "task": task, "reason": "leakage-or-empty"})
                 continue
+            # T4 only counts if the question genuinely needs both sessions.
+            if task == "t4":
+                verdict = llm(VALIDATE_T4.format(
+                    q=query, a=src.get("s1_snippet", ""), b=src.get("s2_snippet", "")))
+                if "BOTH" not in verdict.upper():
+                    skipped.append({"qid": qid, "task": task, "reason": "not-multi-hop"})
+                    continue
             rec = {
                 "qid": qid,
                 "task": task,

@@ -50,7 +50,24 @@ python3 $BENCH/tune_weights.py $OUT # writes tune-results.jsonl + tune-verdict.m
 # 7. (optional) embedding-model substitution — B4'/B5', prediction P9
 python3 $BENCH/run_rung1.py $OUT --systems b4x,b5x \
   --embedding-config embed-sub.json  # {"endpoint": ..., "model": ...}
+
+# 8. T4 multi-hop: mine session pairs, generate both-needed questions, score
+$BENCH/mine_t4.sh $OUT              # labels-t4.jsonl (own-repo pairs)
+python3 $BENCH/gen_queries.py $OUT # now also emits t4 (validates multi-hop)
+python3 $BENCH/run_rung1.py $OUT   # ranks; then score.py prints a T4 both@10 table
+
+# 9. (opportunistic) T5 decision-drift candidates — MANUAL confirm before use
+$BENCH/mine_t5.sh $OUT             # labels-t5-candidates.jsonl
+
+# 10. Rekal usage & effectiveness (observational, no LLM)
+python3 $BENCH/usage_mine.py $OUT  # usage.md + usage.json
 ```
+
+Multi-repo (06-eval-strategy.md): the miners are per-repo (gold needs a
+checkpoint ledger). Run steps 1, 8, 9 in each labeled repo and concatenate
+the `labels-*.jsonl`; run `rekal index --include-all` once so run_rung1 scores
+against the full machine-wide index as the haystack. `usage_mine.py` already
+spans the whole indexed corpus.
 
 Notes
 - Weight ablations rewrite `.rekal/config.json` temporarily and restore it
@@ -64,6 +81,13 @@ Notes
   distinctive turn substring per gold session into the transcripts dir;
   `sidmap-report.json` records coverage. Unmapped gold sessions deflate b1 —
   treat its numbers as a lower bound below 100% coverage.
+- T4 gold is a session *pair*; `score.py` reports `both@10` (both in the top
+  ten, the paper's b@10) plus `partial@10`. Query generation runs a second
+  LLM check that discards questions answerable from either session alone, so
+  only genuine multi-hop pairs survive.
+- `usage_mine.py` is observational (a natural experiment): the steering delta
+  between rekal-using and non-using sessions is confounded and directional,
+  not causal — it sets priors for the interventional A/B (06 §4b).
 - `tune_weights.py` enforces the RHO rule: grid search on the dev split
   only, then winner-vs-incumbent on test with a paired-bootstrap CI; SHIP
   only on a test win. Tuning is valid only against the index state it ran

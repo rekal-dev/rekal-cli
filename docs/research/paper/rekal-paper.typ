@@ -2,7 +2,7 @@
 // (or: python3 -c "import typst; typst.compile('rekal-paper.typ', output='rekal-paper.pdf')")
 // Placeholder values are rendered as red ⟨…⟩ via #tbd — replaced when the
 // corpus run (docs/research/paper/DATA-RUN.md) completes. Results tables are
-// keyed to the pre-registered predictions P1–P9 (§6).
+// keyed to the pre-registered predictions P1–P8 (§6).
 
 #let tbd(body) = text(fill: rgb("#b91c1c"), style: "italic", [⟨#body⟩])
 
@@ -32,7 +32,7 @@
     #text(size: 9pt)[#super[1]Rekal — #link("https://rekal.dev")[rekal.dev] · #link("mailto:guocongmit@gmail.com")[guocongmit\@gmail.com] · #link("https://github.com/rekal-dev/rekal-cli")[github.com/rekal-dev/rekal-cli]]
     #v(6pt)
     #text(size: 8.5pt, fill: rgb("#b91c1c"), style: "italic")[
-      DRAFT v0.2 — architecture, benchmark design, and predictions (\u{00A7}6) are final; all empirical values marked ⟨·⟩ are pending the corpus run of \u{00A7}5.
+      DRAFT v0.3 — retrievability (rung 1) and the drill-cost proxy are filled from a 1,433-session corpus run (\u{00A7}5); judged answer quality, corpus-scale, freshness, and the wiki gate (values still marked ⟨·⟩) remain future work.
     ]
   ]
 ]
@@ -58,13 +58,15 @@
   local-first, single-binary memory engine, on these four guarantees, and
   derive *RekalBench*, the first benchmark for repo-grounded intent
   recall, whose ground truth is mined — not annotated — from the corpus's
-  own commit–session links. On a real working corpus of #tbd[N] sessions
-  and #tbd[N] turns, hybrid recall attains #tbd[MRR] versus #tbd[MRR] for
-  the strongest baseline (direct grep over raw transcripts), reaches
-  correct answers at #tbd[k]$times$ fewer context tokens, and holds flat
-  with corpus scale where unbounded grep degrades. All predictions were
-  registered before the run (\u{00A7}6); the harness is public, fully
-  local, and runnable by anyone on their own history.
+  own commit–session links. On a real working corpus of 1,433 sessions
+  and 66k turns, hybrid recall attains 0.187 pooled MRR against 0.005 for
+  the strongest baseline — direct grep over raw transcripts — a 37$times$
+  gap with non-overlapping bootstrap intervals, and its query-time drill
+  assembles correct-answer context in roughly 1,500 tokens. The predictions
+  that require judged answers or a second corpus — token-cost-to-correct,
+  the corpus-scale crossover, the browsing-cache gate — were registered
+  before the run (\u{00A7}6) and remain as measured future work; the harness
+  is public, fully local, and runnable by anyone on their own history.
 ]
 #v(4pt)
 
@@ -432,30 +434,39 @@ turn of \u{00A7}2 is likewise a T2 gold, and the never-merged branches of
     columns: (auto, 1fr, 1fr, auto),
     align: (left, left, left, left),
     table.header([*Task*], [*Gold label source*], [*Query generation*], [*n*]),
-    [T1 Provenance], [commit → producing session(s), via the `checkpoint_` `sessions` links], [paraphrase of commit message + changed paths (not indexed content)], [#tbd[≈500]],
-    [T2 Decision recall], [`human_steering` turns], [paraphrase of surrounding context; steering turn held out of prompt; 4-gram Jaccard ≤ 0.3], [#tbd[≈300]],
-    [T3 Dead-end awareness], [sessions on never-merged branches], ["have we tried X?" from the branch's cumulative intent], [#tbd[≈50]],
-    [T4 Multi-hop synthesis], [session pairs linked by file co-occurrence / lineage], [generator-validated two-session questions], [#tbd[≈100]],
-    [T5 Decision drift], [later session reversing an earlier decision on the same files (hand-confirmed sample)], ["what is our current approach to X?"], [#tbd[≈30]],
+    [T1 Provenance], [commit → producing session(s), via the `checkpoint_` `sessions` links], [paraphrase of commit message + changed paths (not indexed content)], [152],
+    [T2 Decision recall], [`human_steering` turns], [paraphrase of surrounding context; steering turn held out of prompt; 4-gram Jaccard ≤ 0.3], [263],
+    [T3 Dead-end awareness], [sessions on never-merged branches], ["have we tried X?" from the branch's cumulative intent], [0#super[†]],
+    [T4 Multi-hop synthesis], [session pairs linked by file co-occurrence / lineage], [generator-validated two-session questions], [#tbd[·]],
+    [T5 Decision drift], [later session reversing an earlier decision on the same files (hand-confirmed sample)], ["what is our current approach to X?"], [#tbd[·]],
   ),
   caption: [RekalBench task families. All labels derive from recorded
   structure; only T5 needs light manual confirmation. T5 is motivated by
   the belief-revision result of @beliefshift2026: memory must surface the
-  *current* decision.],
+  *current* decision. #super[†]This corpus is effectively single-branch
+  (4 branches, all merged), so it yields no dead-end labels; T3 needs a
+  branchier repo. T4/T5 miners are future work.],
 ) <tab-tasks>
 
-*Label noise.* A commit's linked sessions can include incidental chatter;
-we hand-audit 50 T1 pairs and report label precision (P8). *Splits.* 10%
-dev (tuning allowed) / 90% test, one-shot — the incumbent-versus-candidate
+*Label noise.* A commit's linked sessions can include incidental chatter,
+and commit *subjects* are themselves noisy: 65% of T1 commits carry a
+generic subject ("update", "wip", "fix"), so the mined query material leans
+on the changed file paths, not the subject line — direct evidence for this
+paper's own claim that the session, not the message, is the record. We
+additionally hand-audit 50 T1 pairs for label precision (P8; the content
+audit is pending). *Splits.* 10% dev (tuning allowed) / 90% test (35/380
+after the leakage filter), one-shot — the incumbent-versus-candidate
 discipline of @rho2026.
 
 == Corpus and systems
 
 One operator's real working store, folded per-repo (labels require the
 repo's own checkpoint ledger) plus machine-wide for scale sweeps. The
-primary repo alone holds approximately 500 sessions, 63k turns, and 48k
-tool calls (final corpus card: #tbd[repos, sessions, turns, tool calls,
-steering turns, linked commits, date range]). No session content leaves the
+primary repo holds 1,433 sessions, 66,323 turns, and 88,144 tool calls,
+with 1,219 steering turns and 432 harvested compaction summaries across
+152 commits carrying linked sessions (1,060 commit–session links), spanning
+2026-03-22 to 2026-07-10; the machine-wide fold adds 3,618 imported sessions
+from 18 other projects for the scale sweeps. No session content leaves the
 machine; the paper reports aggregates only.
 
 #figure(
@@ -538,62 +549,41 @@ reframed.
   gap in it.
 + *P8 (label validity — annotation).* T1 label precision ≥ 0.9 on a
   50-pair human audit.
-+ *P9 (embedding substitution).* #emph[Registered after the first rung-1
-  run motivated it, before any embedding measurement] — the one prediction
-  in this list with that provenance, stated so the reader can weigh it.
-  The motivating finding: the neural-only ablation (B4) was the weakest
-  signal and dev tuning pushed its layer weight down. The prediction:
-  substituting a stronger code-tuned embedding model for the embedded one
-  (a config-only swap to the OpenAI-compatible HTTP backend; the
-  content-hash-keyed cache makes the swap and the swap back one reindex
-  each) lifts neural-only (B4′ over B4) materially, but lifts the hybrid
-  (B5′ over B5) by little — on a single-repo corpus the question and its
-  answering session share vocabulary (identifiers, error strings, file
-  names), so the binding constraint is workload alignment, not embedding
-  quality. Either direction is a finding: a large hybrid lift changes the
-  shipped default model and weights; a null lift is direct evidence for
-  this paper's alignment-by-construction premise @anms2026.
 
 = Results
 
-#text(fill: rgb("#b91c1c"), style: "italic")[All values in this section are
-placeholders pending the corpus run; tables define the exact shape of the
-report and are keyed to \u{00A7}6's predictions.]
+#text(fill: rgb("#b91c1c"), style: "italic")[Rung-1 and drill-cost values
+are filled from the \u{00A7}5 corpus run (test split, n=380); values still
+marked ⟨·⟩ — judged quality, scale, freshness, the wiki gate — are future
+work. Tables are keyed to \u{00A7}6's predictions; a failed prediction is
+reported, not reframed.]
 
 == Retrievability (P1, P2)
 
 #figure(
+  scope: "parent",
+  placement: top,
   table(
     columns: (auto, auto, auto, auto, auto, auto),
     align: (left, center, center, center, center, center),
-    table.header([*System*], [*T1\ MRR*], [*T1\ R\@5*], [*T2\ MRR*], [*T3\ R\@5*], [*T4\ b\@10*]),
-    [B1 grep/DCI], tbd[·], tbd[·], tbd[·], tbd[·], tbd[·],
+    table.header([*System*], [*Pooled MRR* (95% CI)], [*nDCG\@10*], [*T1 MRR*], [*T1 R\@5*], [*T2 MRR*]),
+    [B1 grep/DCI], [0.005 [.001,.011]], [0.004], [0.014], [0.015], [0.000],
     [B2 static notes], [—], [—], [—], [—], [—],
-    [B3 BM25-only], tbd[·], tbd[·], tbd[·], tbd[·], tbd[·],
-    [B4 neural-only], tbd[·], tbd[·], tbd[·], tbd[·], tbd[·],
-    [B5 Rekal hybrid], tbd[*·*], tbd[*·*], tbd[*·*], tbd[*·*], tbd[*·*],
+    [B3 BM25-only], [0.171 [.145,.202]], [0.219], [0.248], [0.425], [0.130],
+    [B4 neural-only], [0.057 [.040,.078]], [0.059], [0.130], [0.194], [0.018],
+    [B5 Rekal hybrid], [*0.187 [.158,.217]*], [*0.227*], [*0.301*], [*0.537*], [*0.124*],
   ),
-  caption: [Retrieval quality by task (test split, bootstrap 95% CIs).
-  Verdicts: P1 #tbd[holds / fails], P2 #tbd[holds / fails]. B2 has no
-  per-query retrieval and is evaluated at rungs 2–3 only.],
+  caption: [Retrieval quality (test split, n=380; pooled MRR with bootstrap
+  95% CIs, remaining columns point estimates). *P1 holds:* B5's pooled MRR
+  0.187 and nDCG\@10 0.227 exceed B1's 0.005 / 0.004 with non-overlapping
+  intervals — a 37$times$ MRR gap. *P2 partially holds:* the hybrid beats
+  neural-only cleanly (non-overlapping) and wins provenance (T1 MRR 0.301
+  vs 0.248, R\@5 0.537 vs 0.425), but its edge over BM25-only is within
+  noise pooled (CIs overlap) and inverts slightly on decision recall (T2
+  MRR 0.124 vs 0.130) — lexical signal dominates this single-repo corpus;
+  the registered steering-boost ablation is not yet run. B2 (static notes),
+  T3/T4/T5, and the judged rungs are pending.],
 ) <tab-rung1>
-
-== Embedding substitution (P9)
-
-#figure(
-  table(
-    columns: (auto, auto, auto, auto),
-    align: (left, center, center, center),
-    table.header([*System*], [*Pooled MRR*], [*T1 MRR*], [*T2 MRR*]),
-    [B4 neural-only, embedded model], tbd[·], tbd[·], tbd[·],
-    [B4′ neural-only, substituted], tbd[·], tbd[·], tbd[·],
-    [B5 hybrid, embedded model], tbd[·], tbd[·], tbd[·],
-    [B5′ hybrid, substituted], tbd[·], tbd[·], tbd[·],
-  ),
-  caption: [Embedding-model substitution (test split, same weights within
-  each pairing; substituted model served over the HTTP backend, model id
-  in the run manifest). Verdict: P9 #tbd[holds / fails].],
-) <tab-embed>
 
 == Drill strategies (P3)
 
@@ -602,12 +592,20 @@ report and are keyed to \u{00A7}6's predictions.]
     columns: (auto, auto, auto, auto),
     align: (left, center, center, center),
     table.header([*Drill strategy*], [*Tokens*], [*Coverage*], [*Cov. / 1k tok*]),
-    [window (5-turn, at match)], tbd[·], tbd[·], tbd[·],
-    [summary-first (pointer)], tbd[·], tbd[·], tbd[·],
+    [window (5-turn, at match)], [2,200], [0.687], [0.312],
+    [summary-first (pointer)], [2,744], [0.684], [0.249],
   ),
-  caption: [Judge-free drill-strategy proxy, paired on queries where recall
-  reaches the gold session and a compaction summary exists. Verdict: P3
-  #tbd[holds / fails] (per-task split reported alongside).],
+  caption: [Judge-free drill-strategy proxy, paired on the 33 T1 queries
+  where recall reaches the gold session *and* a compaction summary exists.
+  *P3 fails:* summary-first does not win coverage on these broad queries
+  (0.684 vs 0.687) and costs 25% more tokens, so the raw window wins
+  coverage-per-token (0.312 vs 0.249); the predicted broad-query advantage
+  for summaries does not appear. The cached L3/summary browsing layer is
+  therefore not justified by cost and stays bench-gated (roadmap) — a
+  registered negative, reported as such. (Decision-recall T2 sessions
+  carried no in-corpus compaction summaries, so no paired T2 comparison
+  exists; the summary role still earns its keep at the ranking layer, where
+  re-tagging summaries lifted pooled MRR from 0.150 to 0.187.)],
 ) <tab-drill>
 
 == Answer quality and token cost (P4)
@@ -715,6 +713,19 @@ Rekal user on their own store, at zero annotation cost. The wire format
 carries no harness identity for cross-team sessions today; the worked
 example's JSON is illustrative pending the corpus run's substitution of a
 real (redacted) instance.
+
+Two measurements are wired but unrun, reported here as future work rather
+than result. First, the judged rungs (2–4) and the corpus-scale sweep of
+\u{00A7}6 — the pieces that need an answering model, a judge, or a second
+corpus. Second, an *embedding-substitution* test: the neural-only layer is
+the weakest signal on this corpus (B4, @tab-rung1), which invites the
+question of whether that reflects embedding quality or the shared
+vocabulary of a single-repo corpus. The harness can swap the embedded model
+for a stronger code-tuned one served over the HTTP backend (OpenAI-compatible
+or Amazon Bedrock), reindex, and swap back for free via the content-hash
+cache; a material lift to the *hybrid* would change the shipped default,
+whereas a null lift is further evidence for the alignment-by-construction
+premise @anms2026. Both are one corpus run away and neither is claimed here.
 
 = The Flywheel, and What This Buys
 

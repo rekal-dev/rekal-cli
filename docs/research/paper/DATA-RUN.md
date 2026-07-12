@@ -76,15 +76,25 @@ is valid only against the index state it ran on — after any reindex or
 re-tag (e.g. the summary re-tag), delete `tune-results.jsonl` and re-run
 before trusting a SHIP. Record weights, verdict, and CI in the manifest.
 
-## 3c. Optional: embedding-model substitution (fills `tab-embed`, P9)
+## 3c. Future work: embedding-model substitution (B4′/B5′)
 
-Requires a running OpenAI-compatible embedding endpoint (Ollama, vLLM,
-TEI) serving a stronger code-tuned model. Write its config to a file:
+Not part of this run — the paper reports embedding substitution in its
+Limitations, not as a registered prediction. The harness is wired; run it
+when you want the measurement. Requires an HTTP embedding endpoint serving
+a stronger code-tuned model — either OpenAI-compatible (Ollama, vLLM, TEI)
+or Amazon Bedrock (Cohere Embed). Write its config to a file:
 
 ```bash
+# OpenAI-compatible:
 cat > $RUN/embed-sub.json <<'EOF'
-{"endpoint": "http://localhost:11434/v1/embeddings",
- "model": "<substituted-model-id>"}
+{"endpoint": "http://localhost:11434/v1", "model": "<model-id>"}
+EOF
+# or Amazon Bedrock (Cohere Embed, Bedrock API key as bearer token):
+cat > $RUN/embed-sub.json <<'EOF'
+{"provider": "bedrock",
+ "endpoint": "https://bedrock-runtime.us-east-1.amazonaws.com",
+ "model": "cohere.embed-english-v3",
+ "api_key_env": "AWS_BEARER_TOKEN_BEDROCK"}
 EOF
 python3 $BENCH/run_rung1.py $RUN --systems b4x,b5x \
   --embedding-config $RUN/embed-sub.json
@@ -96,9 +106,9 @@ Notes:
   and reindexes back automatically); budget the time on a large corpus.
 - Compare b4x against b4 and b5x against b5 from the SAME run (same index
   state, same splits). Record the substituted model id in the manifest.
-- P9's registered prediction: B4′ improves materially, B5′ barely — if
-  the hybrid jumps instead, that's the finding, and the shipped default
-  model/weights change.
+- The open question: B4′ improving materially while B5′ barely moves would
+  confirm workload alignment (not embedding quality) is the binding
+  constraint; a hybrid jump instead would change the shipped default.
 
 ## 4. Rung 3 proxy — drill strategies (fills `tab-drill`)
 
@@ -177,7 +187,7 @@ is exactly what this step measures.
 
 ## 5. Write results into the paper
 
-The paper is organized around pre-registered predictions **P1–P9** (§6 of
+The paper is organized around pre-registered predictions **P1–P8** (§6 of
 the paper); every results table carries a `Verdict:` slot. Fill values AND
 verdicts — a verdict is `holds` / `fails` (P7 may also be `cache not
 built`). Never reframe a failed prediction; report it.
@@ -191,7 +201,6 @@ this run measured:
 | `tab-tasks` n column (T1–T3 only; T4/T5 stay tbd) | — | wc -l labels-*.jsonl / queries.jsonl |
 | §5 corpus card sentence | — | corpus-card.json |
 | `tab-rung1` rows + verdict | P1, P2 | rung1.md test split |
-| `tab-embed` rows + verdict (only if step 3c ran) | P9 | rung1.md b4/b4x/b5/b5x test split |
 | `tab-drill` rows + verdict | P3 | rung3.md pooled table (per-task split for the verdict) |
 | `tab-wiki` rows + verdict (only if step 4b ran) | P7 | ledger lineage query + page-vs-drill proxy |
 | `tab-wiki` cross-repo row (only if 4c ran) | P7 | origin counts + mode A/B coverage delta |

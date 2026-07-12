@@ -11,6 +11,15 @@ Systems (docs/research/03-benchmark.md §3):
 Weight ablations rewrite .rekal/config.json in place and ALWAYS restore the
 original (backup kept beside it until success). Query-time weights: no
 reindex between systems. Writes run-<system>.jsonl: {qid, ranked, seconds}.
+
+B1 id-space join: transcript filenames are the harness's session UUIDs while
+gold labels are Rekal ULIDs, so b1 first builds sidmap.json — for each gold
+session, a distinctive turn substring is matched into the transcripts dir
+with rg -F to find its file. Ranked transcripts then translate to ULIDs
+(unmapped ones stay in the ranking as competitors, so recall is not
+inflated); subagent transcripts nested under a trunk's directory fold into
+the trunk. Coverage is reported in sidmap-report.json — unmapped GOLD
+sessions deflate b1, so read its metrics as a lower bound at <100% coverage.
 """
 import argparse
 import collections
@@ -44,7 +53,92 @@ def rekal_search(query: str) -> list[str]:
     return ranked[:TOPK]
 
 
-def grep_rank(query: str, transcripts: pathlib.Path) -> list[str]:
+def rekal_sql(sql: str) -> list[dict]:
+    out = subprocess.run(
+        ["rekal", "query", "--index", sql], capture_output=True, text=True, timeout=120
+    )
+    if out.returncode != 0:
+        return []
+    rows = []
+    for line in out.stdout.splitlines():
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def transcript_id(path: str, root: pathlib.Path) -> str | None:
+    """Trunk transcript id for a hit: the stem of a top-level <uuid>.jsonl,
+    or the first-level directory name for subagent files nested under it."""
+    try:
+        rel = pathlib.Path(path).resolve().relative_to(root.resolve())
+    except ValueError:
+        return None
+    return rel.stem if len(rel.parts) == 1 else rel.parts[0]
+
+
+# Substrings that survive both scrubbing and JSON string encoding verbatim:
+# no quotes/backslashes/newlines/non-ASCII, and no "/" (scrub anonymizes
+# file paths before insert, so pathy text differs between index and raw).
+SAFE_RUN = re.compile(r"[A-Za-z0-9 ,.;:()\[\]{}=+*_<>'!?%&#@^~|-]{40,}")
+
+
+def build_sidmap(
+    gold_sids: set[str], transcripts: pathlib.Path, outdir: pathlib.Path
+) -> dict[str, list[str]]:
+    """Map transcript id (filename UUID) -> Rekal session ULIDs, for the gold
+    sessions. A trunk and its subagent sessions share one transcript id, so
+    the value is a list. Cached in sidmap.json; coverage in sidmap-report.json.
+    """
+    cache = outdir / "sidmap.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
+    sidmap: dict[str, list[str]] = {}
+    unmapped: list[str] = []
+    for i, sid in enumerate(sorted(gold_sids)):
+        print(f"[sidmap] {i + 1}/{len(gold_sids)}", end="\r", file=sys.stderr)
+        rows = rekal_sql(
+            f"SELECT content FROM turns_ft WHERE session_id = '{sid}' "
+            "AND role IN ('human','human_steering','assistant') "
+            "ORDER BY length(content) DESC LIMIT 6"
+        )
+        needles = []
+        for row in rows:
+            for m in SAFE_RUN.finditer(row.get("content", "")):
+                needles.append(m.group(0).strip()[:80])
+        hit = None
+        for needle in needles[:8]:
+            out = subprocess.run(
+                ["rg", "-lF", "--no-messages", "--", needle, str(transcripts)],
+                capture_output=True, text=True, timeout=300,
+            )
+            ids = {
+                t
+                for t in (transcript_id(p, transcripts) for p in out.stdout.splitlines())
+                if t
+            }
+            if len(ids) == 1:  # unique match; boilerplate hits many files and is skipped
+                hit = ids.pop()
+                break
+        if hit:
+            sidmap.setdefault(hit, []).append(sid)
+        else:
+            unmapped.append(sid)
+    cache.write_text(json.dumps(sidmap, indent=1))
+    coverage = 1 - len(unmapped) / max(len(gold_sids), 1)
+    (outdir / "sidmap-report.json").write_text(
+        json.dumps({"gold_sessions": len(gold_sids), "mapped": len(gold_sids) - len(unmapped),
+                    "coverage": round(coverage, 3), "unmapped": unmapped}, indent=1)
+    )
+    print(f"[sidmap] coverage {coverage:.1%} ({len(unmapped)} gold sessions unmapped; "
+          "b1 metrics are a lower bound below 100%)", file=sys.stderr)
+    return sidmap
+
+
+def grep_rank(
+    query: str, transcripts: pathlib.Path, sidmap: dict[str, list[str]]
+) -> list[str]:
     terms = [t for t in re.findall(r"[a-zA-Z0-9]+", query.lower()) if len(t) > 2][:12]
     scores: collections.Counter[str] = collections.Counter()
     for term in terms:
@@ -56,12 +150,23 @@ def grep_rank(query: str, transcripts: pathlib.Path) -> list[str]:
             path, _, count = line.rpartition(":")
             if not path.endswith(".jsonl"):
                 continue
-            sid = pathlib.Path(path).stem
+            tid = transcript_id(path, transcripts)
+            if not tid:
+                continue
             try:
-                scores[sid] += int(count)
+                scores[tid] += int(count)
             except ValueError:
                 pass
-    return [sid for sid, _ in scores.most_common(TOPK)]
+    ranked: list[str] = []
+    for tid, _ in scores.most_common():
+        # Translate to Rekal ULIDs; unmapped transcripts stay in the ranking
+        # under their own id so they still displace gold as competitors.
+        for sid in sidmap.get(tid, [tid]):
+            if sid not in ranked:
+                ranked.append(sid)
+        if len(ranked) >= TOPK:
+            break
+    return ranked[:TOPK]
 
 
 def run_system(name: str, queries: list[dict], search, outdir: pathlib.Path) -> None:
@@ -127,7 +232,11 @@ def main() -> None:
             if not args.transcripts:
                 print("[b1] skipped: pass --transcripts DIR", file=sys.stderr)
                 continue
-            run_system(name, queries, lambda q: grep_rank(q, args.transcripts), args.outdir)
+            gold_sids = {sid for q in queries for sid in q["gold"]}
+            sidmap = build_sidmap(gold_sids, args.transcripts, args.outdir)
+            run_system(
+                name, queries, lambda q: grep_rank(q, args.transcripts, sidmap), args.outdir
+            )
         else:
             sys.exit(f"unknown system {name!r}")
 

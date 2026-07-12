@@ -60,6 +60,21 @@ Rules (RHO discipline, non-negotiable):
 - Report bootstrap CIs exactly as score.py emits them.
 - B1 grep-rank is the non-agentic DCI proxy — do not present it as DCI's
   best case (that is rungs 2–4).
+- B1's id-space join is automatic (`sidmap.json`); check
+  `sidmap-report.json` coverage and record it in the manifest. Below 100%,
+  B1's numbers are a lower bound — say so wherever they're reported.
+
+## 3b. Optional: weight tuning (dev-tuned, test-validated)
+
+```bash
+python3 $BENCH/tune_weights.py $RUN        # tune-verdict.md: SHIP/REJECT
+```
+
+The sweep sees the dev split only; the verdict compares the dev winner
+against the incumbent on TEST with a paired-bootstrap CI. A tuning result
+is valid only against the index state it ran on — after any reindex or
+re-tag (e.g. the summary re-tag), delete `tune-results.jsonl` and re-run
+before trusting a SHIP. Record weights, verdict, and CI in the manifest.
 
 ## 4. Rung 3 proxy — drill strategies (fills `tab-drill`)
 

@@ -150,7 +150,8 @@ session discovery keep using the invoking worktree.
   `paper/` (Typst source + PDF of "The Commit Is the Label"). The runnable
   rung-1 harness lives in `scripts/bench/` (corpus card, label mining, query
   generation with leakage filter, system runner incl. weight ablations +
-  grep-rank baseline, scorer)
+  grep-rank baseline with UUID→ULID sidmap join, scorer, dev-tuned/
+  test-validated weight tuner)
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
 

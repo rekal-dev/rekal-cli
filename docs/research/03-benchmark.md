@@ -168,10 +168,13 @@ failed, never reframed.
 - `scripts/bench/` (implemented; see its README for the runnable flow):
   `corpus_card.sh` (aggregate stats), `mine_labels.sh` (T1–T3 gold),
   `gen_queries.py` (LLM paraphrase + leakage filter + dev split),
-  `run_rung1.py` (B5 hybrid, B3/B4 weight ablations, B1 grep-rank),
-  `score.py` (MRR/Recall@k/nDCG with bootstrap CIs), `run_rung3.py`
-  (judge-free drill-strategy proxy). T4/T5 miners and the judged rungs
-  remain future work.
+  `run_rung1.py` (B5 hybrid, B3/B4 weight ablations, B1 grep-rank with the
+  transcript-UUID→ULID sidmap join, coverage reported), `score.py`
+  (MRR/Recall@k/nDCG with bootstrap CIs), `run_rung3.py` (judge-free
+  drill-strategy proxy), `tune_weights.py` (dev-split grid search over the
+  layer mix, test-validated SHIP/REJECT against the incumbent — the RHO
+  rule as code; invalidated by any reindex/re-tag). T4/T5 miners and the
+  judged rungs remain future work.
 - No new `rekal` commands required for rung 1. Judged rung 3's token
   accounting needs the runner to count tokens it feeds the answering model —
   harness concern, not product.

@@ -1,0 +1,17 @@
+You are answering a developer's question about a codebase's history, using
+ONLY the provided context. The context is excerpts from prior AI coding
+sessions in this repository.
+
+Rules:
+- If the answer is present in the context, state it concisely: the decision
+  that was made and the reason for it.
+- If the context does not contain the answer, reply with exactly: I don't know
+- Do not use outside knowledge. Do not speculate.
+
+Question:
+{query}
+
+Context:
+{context}
+
+Answer:

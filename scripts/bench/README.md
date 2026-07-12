@@ -66,7 +66,16 @@ python3 $BENCH/usage_mine.py $OUT  # usage.md + usage.json
 python3 $BENCH/mine_wild.py $OUT              # $OUT/wild/queries.jsonl (self-labeled)
 python3 $BENCH/run_rung1.py $OUT/wild --systems b5,b3
 python3 $BENCH/score.py $OUT/wild            # real MRR/Recall@k; cross_repo flagged
+
+# 12. Rung 2 — judged answer quality (LLM judge; distinct answer/judge models)
+export BENCH_ANSWER_LLM="<model B>"; export BENCH_JUDGE_LLM="<model C>"
+python3 $BENCH/run_rung2.py $OUT --sample 150 \
+  --transcripts ~/.claude/projects/<this-repo-dir> > $OUT/rung2.md
 ```
+
+The full multi-repo run with the exact command sequence and the data-pack
+manifest is `docs/research/RUN.md` — hand that to an agent on the corpus
+machine.
 
 Multi-repo (06-eval-strategy.md): the miners are per-repo (gold needs a
 checkpoint ledger). Run steps 1, 8, 9 in each labeled repo and concatenate
@@ -98,6 +107,12 @@ Notes
   queries (06 §4c) — a positive-only label, so it measures recall of
   acted-on results (an underestimate). It also flags drills into imported
   sessions, the free cross-repo-effectiveness signal (06 §4d).
+- `run_rung2.py` is the LLM-judged rung: the ranked gold session needs no
+  LLM (score.py has it), but grading whether the *answer* is right does.
+  Bias controls: `BENCH_ANSWER_LLM` ≠ `BENCH_JUDGE_LLM` ≠ `BENCH_LLM`, and
+  the judge is shown the gold turn. Prompts are committed under `prompts/`
+  (auditable, part of reproducibility). B6 (skills/agentic) is the
+  agent-in-the-loop rung, run manually (06 §4b), not by this script.
 - `tune_weights.py` enforces the RHO rule: grid search on the dev split
   only, then winner-vs-incumbent on test with a paired-bootstrap CI; SHIP
   only on a test win. Tuning is valid only against the index state it ran

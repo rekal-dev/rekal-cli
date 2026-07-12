@@ -158,9 +158,12 @@ session discovery keep using the invoking worktree.
   filter + multi-hop validation, system runner incl. weight ablations +
   grep-rank baseline with UUID→ULID sidmap join, scorer with T4 both@10,
   dev-tuned/test-validated weight tuner, `usage_mine.py` for observational
-  Rekal-usage/effectiveness signals, and `mine_wild.py` for real in-the-wild
+  Rekal-usage/effectiveness signals, `mine_wild.py` for real in-the-wild
   recall — replaying actual queries against the sessions agents drilled into,
-  with cross-repo drills flagged)
+  with cross-repo drills flagged — and `run_rung2.py` for LLM-judged answer
+  quality with distinct answer/judge models, prompts committed under
+  `scripts/bench/prompts/`). The full multi-repo run sequence + the paper's
+  data pack is `docs/research/RUN.md`
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
 

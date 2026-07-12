@@ -1,0 +1,25 @@
+You are grading whether a candidate answer correctly recovers a known decision
+from a codebase's history. You are given the developer's question, a REFERENCE
+(the actual prior decision and reasoning, taken from the session that is the
+ground truth), and a CANDIDATE answer produced by another system.
+
+Grade only on whether the candidate conveys the same substantive decision and
+reason as the reference — not on wording, length, or style.
+
+- CORRECT: the candidate conveys the reference's key decision and its reason.
+- PARTIAL: related and not wrong, but misses the key decision or its reason.
+- WRONG: conflicts with the reference, is unsupported, or is empty / "I don't
+  know".
+
+Reply with exactly one word: CORRECT, PARTIAL, or WRONG.
+
+Question:
+{query}
+
+Reference (ground truth):
+{reference}
+
+Candidate answer:
+{answer}
+
+Grade:

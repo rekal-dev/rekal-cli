@@ -40,21 +40,23 @@
 // ---------- Abstract ----------
 #block(inset: (x: 2pt))[
   *Abstract.* Memory systems for AI coding agents are rebuilding, in
-  software, guarantees that version control already provides. The
-  literature answers agent amnesia with compiled knowledge structures —
-  tiered stores, memory graphs, wikis — that must themselves be maintained;
-  with self- or consensus-judged admission that is vulnerable to
-  self-confirmation; with hand-annotated benchmarks because dialogue has no
-  ground truth; and with machine-wide memory pools whose open write path is
-  the documented contamination surface. We observe that in the
-  software-engineering setting, each of these four open problems is already
-  solved by a git primitive every team runs: the *commit* labels which
-  sessions produced which verified change (free supervision); *rebuild and
-  diff* replace maintenance (derived structure that can be thrown away
-  cannot go stale, and structure that regenerates deterministically turns
-  drift into a reviewable diff); the *merge* is an external verifier for
-  what enters shared memory; and *code review* is the sole, auditable
-  channel by which private cross-repo memory can cross a scope boundary. We
+  software, guarantees that version control already provides. We name four
+  problems the literature's machinery creates or inherits: *annotation* —
+  dialogue has no ground truth, so supervision and evaluation are
+  hand-labeled; *staleness* — compiled knowledge structures (tiered stores,
+  memory graphs, wikis) must themselves be maintained; *self-confirmation*
+  — self- or consensus-judged admission stores its own mistakes as
+  successes; and *contamination* — one machine-wide memory pool whose open
+  write path is the documented attack surface. We observe that in the
+  software-engineering setting, each is already solved by a git primitive
+  every team runs: the *commit* labels which sessions produced which
+  verified change (annotation); *rebuild and diff* replace maintenance —
+  derived structure that can be thrown away cannot go stale, and structure
+  that regenerates deterministically turns drift into a reviewable diff
+  (staleness); the *merge* is an external verifier for what enters shared
+  memory (self-confirmation); and *code review* is the sole, auditable
+  channel by which private cross-repo memory crosses a scope boundary
+  (contamination). We
   present *Rekal*, a local-first, single-binary memory engine built on
   these four guarantees, and *RekalBench*, the first benchmark for
   repo-grounded intent recall, whose ground truth is mined — not annotated
@@ -78,21 +80,42 @@ in AI-assistant transcripts that expire with the terminal window. The cost
 compounds as agents do more of the work: an agent that cannot remember what
 its own team already tried will confidently re-propose it.
 
-The research community has converged on the diagnosis, and its cure is
-*machinery*: organize dialogue history into tiered stores @adamem2026,
-associative graphs @mragent2026, or compiled wikis @llmwiki2026; guard the
-store with model-judged admission @edv2026; evaluate on hand-annotated
-conversational suites @locomo2024. Each piece of machinery then becomes its
-own research problem — the compiled structure must be maintained, the judge
-can confirm its own mistakes, the annotation does not scale, and the shared
-pool becomes an attack surface @memsecurity2026.
+Start from what memory *is* for an agent. The context window is the scarce
+resource, so memory is not a store — it is *context assembly under a token
+budget*: for each question, deliver the few thousand tokens that change the
+answer, out of millions of recorded ones. That framing fixes the
+requirements. Recall must be *bounded* — a budget-shaped set the agent can
+drill, not an unbounded scan @rise2026. What it returns must be *fresh* —
+reflecting the repository as of the last commit, not a compaction of last
+month. Every memory must be *lineaged* — dereferenceable to the source
+turn and the commit it produced, because an unattributable memory cannot
+be trusted or audited. Anything *shared* must be verified by something
+other than the model's own judgment. And the whole system must be *cheaply
+evaluable* — a memory whose quality cannot be measured without an
+annotation team will not be measured at all.
 
-This paper's claim is that for coding agents, the machinery is unnecessary:
-*the four open problems it addresses are already solved by infrastructure
-every software team runs* (@tab-thesis). The contribution is not a new
-structure beside git but a memory system built *into* it — plus the
-benchmark that this construction makes possible, because a corpus whose
-labels are commits needs no annotators.
+The research community meets these requirements with *machinery*: organize
+dialogue history into tiered stores @adamem2026, associative graphs
+@mragent2026, or compiled wikis @llmwiki2026; guard the store with
+model-judged admission @edv2026; evaluate on hand-annotated conversational
+suites @locomo2024. Each piece of machinery then becomes its own research
+problem, and we name the four: *staleness* — the compiled structure must
+be maintained; *self-confirmation* — the judge can admit its own mistakes;
+*annotation* — the evaluation does not scale; *contamination* — the shared
+pool becomes an attack surface @memsecurity2026. A recent systematic
+evaluation
+from the data-management perspective — twelve memory systems, five
+workloads, eleven datasets — reaches the fitting verdict: *no single
+architecture dominates; effectiveness depends on aligning memory structure
+with the workload* @anms2026.
+
+This paper takes that verdict literally. For coding agents, the workload
+already has a structure — the repository — and *the four open problems the
+machinery addresses are already solved by infrastructure every software
+team runs* (@tab-thesis). The contribution is not a new structure beside
+git but a memory system built *into* it — plus the benchmark that this
+construction makes possible, because a corpus whose labels are commits
+needs no annotators.
 
 #figure(
   scope: "parent",
@@ -101,16 +124,16 @@ labels are commits needs no annotators.
     columns: (0.8fr, 1fr, 1.3fr),
     align: (left, left, left),
     table.header([*Open problem*], [*The literature's machinery*], [*The git-native answer (Rekal mechanism)*]),
-    [Supervision — where do labels come from?],
+    [*Annotation.* Where does supervision come from?],
     [Human annotation of dialogue corpora @locomo2024; LLM judges grading themselves],
     [*The commit.* A post-commit hook links sessions to the change they produced — free, objective, abundant (\u{00A7}4.1); RekalBench mines its gold from these links (\u{00A7}5)],
-    [Freshness — how does derived memory stay current?],
+    [*Staleness.* How does derived memory stay current?],
     [Consolidation daemons; compiled wikis and graphs whose maintenance is "future work" @llmwiki2026 @adamem2026],
     [*Rebuild + diff.* Indexes are disposable and rebuilt (\u{00A7}4.2); materialized views regenerate deterministically, so drift arrives as a reviewable `git diff`],
-    [Verification — who admits experience to shared memory?],
+    [*Self-confirmation.* Who verifies what enters shared memory?],
     [Self- or consensus-judged admission @edv2026],
     [*The merge.* Only sessions whose commit landed on the default branch are shared; review + CI + merge are the external verifier (\u{00A7}4.3)],
-    [Scope — how does private memory cross a boundary?],
+    [*Contamination.* How does private memory cross a boundary?],
     [One machine-wide pool, implicitly readable and writable everywhere @automem2026 @adamem2026 — the documented contamination surface @memsecurity2026 @statecontam2026],
     [*The review.* Cross-repo memory is index-only and structurally unpushable; its sole egress is an origin-labeled page on a PR (\u{00A7}4.4)],
   ),
@@ -274,7 +297,7 @@ sequences those primitives.
 The engine is ordinary; the guarantees are not. This section walks
 @tab-thesis row by row, confronting in each row the machinery it replaces.
 
-== Supervision: the commit is the label
+== Annotation: the commit is the label
 
 Every checkpoint records which sessions produced which commit
 (`checkpoint_sessions`). This single join is the paper's namesake and its
@@ -288,7 +311,7 @@ provenance answers in recall (\u{00A7}2), the merged-only sharing gate
 (\u{00A7}4.3), and the entire benchmark (\u{00A7}5), whose five task
 families are all mined from this one link plus git topology.
 
-== Freshness: rebuild and diff
+== Staleness: rebuild and diff
 
 `data.db` is the only source of truth and is append-only. `index.db` holds
 everything derived — full-text, embeddings, co-occurrence, lineage, facets
@@ -316,7 +339,7 @@ prediction and \u{00A7}7.4 prices the cache (generation cost from the
 ledger's own lineage records, payoff against recall+drill, decay as a
 measured rate — the static-notes failure mode made continuous).
 
-== Verification: the merge is the gate
+== Self-confirmation: the merge is the gate
 
 `rekal push` exports to a per-author git orphan branch only those
 checkpoints whose commit is reachable from the default branch (with
@@ -332,7 +355,7 @@ and abandoned branches remain in the local ledger as labeled *negative*
 knowledge — the map of dead ends — and \u{00A7}5's task T3 tests exactly
 whether a system can warn "we tried this; it didn't land."
 
-== Scope: review as the egress channel
+== Contamination: review as the egress channel
 
 Rekal's memory has three scopes with asymmetric permeability. The *repo
 ledger* is truth. The *machine-wide index* optionally folds in the
@@ -479,16 +502,16 @@ re-proposals, time-to-done.
 = Predictions (registered before the run)
 
 The four guarantees of @tab-thesis divide by *how they are verified*.
-Problems 3 and 4 are answered by construction: the merge gate and the
+Self-confirmation and contamination are answered by construction: the merge gate and the
 egress restriction are code paths, checkable by reading them — an imported
 session has no checkpoint, so no export path exists; no experiment can add
 to that. What experiments test is each guarantee's *yield*: whether the
-commit-link supervision produces clean labels (P8 — problem 1), whether
+commit-link supervision produces clean labels (P8 — annotation), whether
 the freshness discipline is affordable and the browsing cache earns its
-keep (P6, P7 — problem 2), whether the negative knowledge the merge gate
-preserves is actually recallable (T3 inside P1 — problem 3), and whether
-reviewed cross-repo egress buys measurable coverage (P7's A/B — problem
-4). P1–P5 are the table stakes beneath all four: a memory whose recall
+keep (P6, P7 — staleness), whether the negative knowledge the merge gate
+preserves is actually recallable (T3 inside P1 — self-confirmation), and whether
+reviewed cross-repo egress buys measurable coverage (P7's A/B —
+contamination). P1–P5 are the table stakes beneath all four: a memory whose recall
 loses to grep needs no philosophy.
 
 Stated falsifiably, before any table is filled; \u{00A7}7's tables are
@@ -507,16 +530,16 @@ reframed.
 + *P5 (scale, the RISE crossover).* B1's accuracy and latency degrade
   monotonically with corpus size; B5 holds flat within CI. A crossover
   point exists on session data @rise2026.
-+ *P6 (freshness — problem 2).* Rung-1 quality shows no decay with
++ *P6 (freshness — staleness).* Rung-1 quality shows no decay with
   target-session age; full index rebuild stays under minutes at the
   corpus's full size.
-+ *P7 (the L3 gate — problems 2 and 4).* Wiki pages beat recall+drill on
++ *P7 (the L3 gate — staleness and contamination).* Wiki pages beat recall+drill on
   tokens for broad queries at comparable coverage; pages decay at a
   measurable weekly rate; cross-repo mode adds coverage on topics that
   span repos. If pages age fast or lose on coverage, the cached L3 layer
   is not built — that negative result is a finding of this paper, not a
   gap in it.
-+ *P8 (label validity — problem 1).* T1 label precision ≥ 0.9 on a
++ *P8 (label validity — annotation).* T1 label precision ≥ 0.9 on a
   50-pair human audit.
 
 = Results
@@ -612,7 +635,26 @@ time-to-done, with and without Rekal] — run last, only if rungs 1–3 hold.
 = Positioning
 
 The design confrontations live inline in \u{00A7}4; what remains is where
-Rekal sits on the literature's two axes. On the *compression axis* —
+Rekal sits in the field's own coordinate systems.
+
+On the four-module anatomy of the data-management evaluation @anms2026 —
+representation & storage, extraction, retrieval & routing, maintenance —
+Rekal classifies as a multi-paradigm hybrid on the first three:
+heterogeneous multi-engine storage (relational + full-text + vector in one
+embedded database), *deterministic* extraction (parsing and harvesting;
+uniquely among the taxonomy's systems, no LLM sits anywhere in the write
+path — the property the contamination analyses require), and multi-stage
+hybrid retrieval with agentic routing via the skill layer. On the fourth
+module it exits the taxonomy's design space entirely: that survey's
+maintenance column enumerates LLM-driven semantic consolidation,
+capacity-driven eviction, and timestamp multi-versioning — each a paid,
+lossy, or complexity-bearing liability — whereas Rekal's maintenance is
+*rebuild, diff, and review*: nothing is consolidated (append-only), nothing
+is evicted (raw is cheap), and versioning is git itself. The same
+evaluation's no-free-lunch finding — effectiveness depends on aligning
+memory structure with the workload — is this paper's premise taken to its
+limit: the coding workload's structure is the repository, and Rekal aligns
+by construction rather than by tuning. On the *compression axis* —
 aggressive consolidation @adamem2026 versus preservation with attribution
 @emem2025 — Rekal takes EMem's side at the storage layer (raw turns,
 attributed snippets) and harvests, rather than generates, distillation. On

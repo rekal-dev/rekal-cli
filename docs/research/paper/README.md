@@ -1,7 +1,7 @@
 # Paper: "The Commit Is the Label"
 
 - `rekal-paper.typ` — Typst source (canonical)
-- `refs.bib` — bibliography (BibTeX; the 17-paper source set + LoCoMo)
+- `refs.bib` — bibliography (BibTeX; the 18-paper source set + LoCoMo)
 - `rekal-paper.pdf` — compiled output, checked in for convenience
 
 ## Build

@@ -209,6 +209,25 @@ evidence reused as trustworthy.
   (artifact→commit→session→turn; `rekal-provenance`). The survey supplies the
   vocabulary for why that chain matters.
 
+### 18. Agent-Native Memory evaluation (arXiv 2606.24775)
+"Are We Ready For An Agent-Native Memory System?" (Zhou et al., SJTU).
+Treats agent memory as a data-management problem; four-module anatomy
+(representation & storage, extraction, retrieval & routing, maintenance);
+12 systems + 2 baselines across 5 workloads / 11 datasets. Headline: **no
+single architecture dominates — effectiveness depends on aligning memory
+structure with the workload bottleneck.** Names the underexplored system
+concerns: operational cost, module trade-offs, robustness under dynamic
+updates.
+- **Verdict: FRAME + SUPPORT (the anchor survey).** Their anatomy is the
+  requirements frame the paper's intro now opens with; their no-free-lunch
+  finding is our premise taken literally (the coding workload's structure
+  IS the repository — alignment by construction, not tuning). On their
+  taxonomy Rekal is multi-paradigm hybrid on three modules and **exits the
+  design space on maintenance**: their maintenance column is LLM
+  consolidation / eviction / multi-versioning — all liabilities; ours is
+  rebuild + diff + review. Also uniquely LLM-free on the extraction/write
+  path. Cited in intro + positioning.
+
 ---
 
 ## Summary table
@@ -232,3 +251,4 @@ evidence reused as trustworthy.
 | 15 governed memory | FRAME | enterprise page, later |
 | 16 state contamination | SUPPORT | scrub-before-store is the proven-safe order |
 | 17 provenance survey | SUPPORT | vocabulary for the provenance chain |
+| 18 agent-native memory eval | FRAME/SUPPORT | anchor survey: four-module anatomy = our requirements frame; no-free-lunch = our premise; we exit their maintenance design space |

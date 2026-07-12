@@ -145,7 +145,7 @@ session discovery keep using the invoking worktree.
 - `git-transportation.md`: Git transport layer design
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
-  17-paper literature map, RekalBench spec (self-labeled repo-grounded intent
+  18-paper literature map, RekalBench spec (self-labeled repo-grounded intent
   recall), local-corpus data plan, literature-derived product roadmap, and
   `paper/` (Typst source + PDF of "The Commit Is the Label"). The runnable
   rung-1 harness lives in `scripts/bench/` (corpus card, label mining, query

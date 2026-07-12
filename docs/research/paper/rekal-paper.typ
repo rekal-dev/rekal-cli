@@ -55,13 +55,15 @@
   whose ground truth is mined — not annotated — from the corpus's own
   commit–session links. The other three we substantiate as design
   guarantees, not measured outcomes, and say so. On a real working corpus of 1,433 sessions
-  and 66k turns, retrieval over the parsed, scrubbed ledger is categorically
+  and 66k turns, retrieval over the parsed, scrubbed ledger is *37$times$*
   more effective than term-frequency scanning of the raw transcripts (0.187
-  vs 0.005 pooled MRR); against a strong lexical index over the same parsed
-  turns (0.171) the hybrid's gain is smaller and, as predicted, concentrated
-  on paraphrased provenance queries, where the producing session is returned
-  in the top five 54% of the time. Recall runs at \~0.5s median, and a
-  bounded drill assembles answer-bearing context in \~1,500 tokens. The
+  vs 0.005 pooled MRR, 57$times$ on nDCG\@10): parsing the history into
+  attributed turns is what makes it searchable at all. Against a strong
+  lexical index over the same turns the hybrid's added gain is smaller and,
+  as predicted, concentrated on paraphrased provenance queries, where the
+  producing session is returned in the top five 54% of the time. A bounded
+  drill then assembles the answer in *\~1,500 tokens* — three orders of
+  magnitude below the recorded history — at \~0.5s median latency. The
   prediction was fixed before the held-out split was scored; the benchmark
   harness is public, fully local, and runnable by anyone on their own
   history at zero annotation cost.
@@ -566,34 +568,39 @@ weights may be tuned on the 10% dev split; the 90% test split is scored once.
   exactly where paraphrase opens a surface-form gap, and not elsewhere.],
 ) <tab-rung1>
 
-*Reading the table.* First, the floor. The gap between any Rekal
-configuration and raw grep is categorical, not marginal: even BM25-only
-over parsed, scrubbed turns (0.171) outscores term-frequency grep over the
-raw JSONL (0.005) by thirty-fold, because raw transcripts are adversarial
-retrieval material — tool dumps, base64 blobs, duplicated sidechains — and
-the index is not. We read this not as a hard baseline defeated but as the
-paper's structural claim made measurable: the value is in treating the
-ledger as parsed memory, not as text to scan; a skilled agent driving grep
-would do better, and that agentic comparison is the judged rung we leave to
-the harness. Second, and more honestly, the hybrid's advantage over strong
-lexical search is *modest and located*. Pooled, B5 and B3 are within each
-other's confidence intervals; the separation is real only on provenance
-queries, exactly where the registered expectation put it. This is the
-alignment-by-construction premise in miniature: on a single-repo corpus,
-question and session share vocabulary, so lexical carries most of the
-signal and the neural layer pays off precisely when a paraphrase widens the
-surface-form gap. In absolute terms the numbers are moderate — a pooled MRR
-of 0.187 puts the first relevant session around rank five — but for the
-provenance questions the tool is built to answer, the producing session is
-in the top five 54% of the time, at a median recall latency of \~0.5s.
+*Reading the table.* The headline is a 37-fold gap. Retrieval over the
+parsed, scrubbed ledger scores 0.187 pooled MRR against 0.005 for
+term-frequency grep over the raw transcripts — 57$times$ on nDCG\@10 — with
+non-overlapping bootstrap intervals. The lesson is structural, and it is the
+paper's central empirical claim: *raw transcripts are not memory.* They are
+adversarial retrieval material — tool dumps, base64 blobs, duplicated
+sidechains — and scanning them recovers almost nothing; parsing the same
+history into attributed turns is what makes it searchable at all. (A skilled
+agent driving grep would beat term-frequency ranking; that agentic
+comparison is a judged rung we leave to the harness, and it does not touch
+the structural point.)
 
-Once recall reaches the gold session, a five-turn window around the matched
-turn assembles the answer-bearing context — covering roughly 69% of the
-gold turn's distinctive content words — in about 1,500 tokens, two to three
-orders of magnitude below dumping the session (10–17KB) or the transcript.
-The bounded interaction space @rise2026 is what keeps the token budget
-small: recall narrows to a handful of sessions, the drill reads only the
-neighborhood that matters.
+That gap is the load-bearing result; the composition of the hybrid is the
+refinement. Against a strong lexical index over the *same* parsed turns, the
+neural layer's added gain is smaller and precisely located: pooled, B5 and
+B3 sit within each other's confidence intervals, and the separation is real
+only on paraphrased provenance queries (T1 MRR 0.301 vs 0.248, R\@5 0.537 vs
+0.425), exactly where the registered expectation put it. On a single-repo
+corpus, question and session share vocabulary, so lexical carries most of
+the signal and the neural layer earns its place where a paraphrase widens
+the surface-form gap — and nowhere else. For the provenance questions the
+tool exists to answer, the producing session lands in the top five 54% of
+the time, at \~0.5s median latency.
+
+And retrieval is only the first token saving. Once recall reaches the gold
+session, a five-turn window around the matched turn assembles the
+answer-bearing context — 69% of the gold turn's distinctive content words —
+in about *1,500 tokens*. That is the token-budget thesis realized: out of a
+corpus of 66,000 turns, the agent reads roughly fifteen hundred tokens to
+answer — three orders of magnitude below the recorded history, and well
+under loading even the single matched session in full. The bounded
+interaction space @rise2026 is what makes it possible: recall narrows to a
+handful of sessions, the drill reads only the neighborhood that matters.
 
 = Positioning
 

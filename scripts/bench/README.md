@@ -43,6 +43,13 @@ python3 $BENCH/score.py $OUT        # markdown tables + per-task breakdown
 
 # 5. (optional) rung-3 proxy: drill-strategy token/coverage comparison
 python3 $BENCH/run_rung3.py $OUT    # writes rung3.jsonl + markdown table
+
+# 6. (optional) weight tuning: dev-split grid search, test-validated verdict
+python3 $BENCH/tune_weights.py $OUT # writes tune-results.jsonl + tune-verdict.md
+
+# 7. (optional) embedding-model substitution — B4'/B5', prediction P9
+python3 $BENCH/run_rung1.py $OUT --systems b4x,b5x \
+  --embedding-config embed-sub.json  # {"endpoint": ..., "model": ...}
 ```
 
 Notes
@@ -52,6 +59,19 @@ Notes
   rg term-hit counts over raw JSONL. The agentic grep baseline belongs to
   rungs 2–3 (see 03-benchmark.md §3) — do not present grep-rank as DCI's
   best case.
+- B1 id-space join: transcript filenames (harness UUIDs) ≠ gold labels
+  (Rekal ULIDs). `run_rung1.py` builds `sidmap.json` by matching a
+  distinctive turn substring per gold session into the transcripts dir;
+  `sidmap-report.json` records coverage. Unmapped gold sessions deflate b1 —
+  treat its numbers as a lower bound below 100% coverage.
+- `tune_weights.py` enforces the RHO rule: grid search on the dev split
+  only, then winner-vs-incumbent on test with a paired-bootstrap CI; SHIP
+  only on a test win. Tuning is valid only against the index state it ran
+  on — after a reindex/re-tag, delete `tune-results.jsonl` and re-run.
+- b4x/b5x swap the embedding backend via the config's `embedding` section
+  and reindex each way (the embed cache makes the swap back re-embed
+  nothing). Compare against b4/b5 from the same run only, and record the
+  substituted model id in the manifest.
 - `--explain` per-layer scores (`rekal --explain`) make the per-signal
   analysis in §6.1 of the paper directly observable.
 - Splits: `gen_queries.py` tags 10% of queries `"split":"dev"`; tune on dev

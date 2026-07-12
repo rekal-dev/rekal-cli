@@ -83,28 +83,30 @@ query is always a session id (rung 1) or a source turn (rung 2).
 | B2 | Static notes | a MEMORY.md/CLAUDE.md distilled once from the corpus by an LLM (token-capped at 8k) — the folk practice |
 | B3 | BM25-only | Rekal with weights `{bm25:1, lsa:0, nomic:0}` — ablation via `.rekal/config.json`, no code changes |
 | B4 | Vector-only | weights `{bm25:0, lsa:0, nomic:1}` — ablation |
-| B4′ | Vector-only, substituted embedding model | B4 with the `embedding` config pointed at a stronger HTTP-served model (harness id `b4x`) — tests P9 |
+| B4′ | Vector-only, substituted embedding model | B4 with the `embedding` config pointed at a stronger HTTP-served model (harness id `b4x`) — future work (see below) |
 | B5 | **Rekal full** | default hybrid weights + steering boost + subagent down-weight |
-| B5′ | Rekal full, substituted embedding model | B5 with the same substitution (harness id `b5x`) |
+| B5′ | Rekal full, substituted embedding model | B5 with the same substitution (harness id `b5x`) — future work |
 | B6 | Rekal + skills | B5 driven by the skill playbooks (active reconstruction) — rungs 2–4 only |
 
 Weight ablations B3/B4 are free: query-time weights mean no reindex between
-systems. B4′/B5′ are not free: the embedding swap costs one `rekal index`
-each way (the `(model, content_hash)` embed cache makes the swap back
-re-embed nothing); record the substituted model id in the manifest. B1 must
-be run honestly (see 02 §9–10): good prompt, same model, same turn budget
-as B6.
+systems. B4′/B5′ (embedding substitution) are **future work** — the harness
+(`run_rung1.py --systems b4x,b5x --embedding-config`) and the HTTP backends
+(OpenAI-compatible and Amazon Bedrock Cohere) are wired, but the experiment
+is unrun; the swap costs one `rekal index` each way (the
+`(model, content_hash)` embed cache makes the swap back re-embed nothing),
+and the substituted model id goes in the manifest. B1 must be run honestly
+(see 02 §9–10): good prompt, same model, same turn budget as B6.
 
 ## 4. Metrics
 
-All runs report against the pre-registered predictions **P1–P9** in the
+All runs report against the pre-registered predictions **P1–P8** in the
 paper (§6 of `paper/rekal-paper.typ`): P1 retrievability (B5 > B1), P2
 signal ablations, P3 drill strategies, P4 judged efficiency, P5 the scale
-crossover, P6 freshness, P7 the L3/wiki gate, P8 label validity, P9
-embedding substitution (B4′/B5′; registered after the first rung-1 run
-motivated it, before any embedding measurement — the paper states this
-provenance). Results tables carry explicit verdict slots; a failed
-prediction is reported as failed, never reframed.
+crossover, P6 freshness, P7 the L3/wiki gate, P8 label validity. Embedding
+substitution (B4′/B5′) is future work — wired but unrun, so it is reported
+in the paper's Limitations, not as a registered prediction. Results tables
+carry explicit verdict slots; a failed prediction is reported as failed,
+never reframed.
 
 - **Rung 1:** MRR, Recall@{1,5,10}, nDCG@10; per-task and pooled;
   bootstrap CIs (1k resamples over queries).

@@ -1,9 +1,11 @@
 // Package embedhttp is the HTTP embedding backend: an OpenAI-compatible
 // /embeddings client (vLLM, Ollama, LM Studio, TEI, llamafile all speak it)
-// as an alternative to the embedded nomic model. Pointed at a localhost
-// server, "the data never leaves the machine" still holds — pointed anywhere
-// else, session text leaves the machine, which is the caller's deliberate,
-// documented choice (see docs/spec/command/recall.md).
+// as an alternative to the embedded nomic model, plus an Amazon Bedrock
+// variant (Cohere Embed models, bearer API key — no SigV4, no AWS SDK).
+// Pointed at a localhost server, "the data never leaves the machine" still
+// holds — pointed anywhere else, session text leaves the machine, which is
+// the caller's deliberate, documented choice (see
+// docs/spec/command/recall.md).
 //
 // Two constraints shape this client:
 //   - It runs inside the post-commit hook (incremental index update), so it
@@ -19,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -31,16 +34,35 @@ const (
 
 	// BatchSize is how many inputs ride one /embeddings request. Large enough
 	// to amortize round-trips against a remote GPU server, small enough to
-	// stay inside typical request-size limits.
+	// stay inside typical request-size limits (Cohere Embed on Bedrock caps
+	// at 96 texts per invoke).
 	BatchSize = 64
+)
+
+// Provider values select the wire protocol.
+const (
+	// ProviderOpenAI (the default, also selected by an empty Provider) speaks
+	// OpenAI-compatible POST {endpoint}/embeddings.
+	ProviderOpenAI = "openai"
+	// ProviderBedrock speaks the Amazon Bedrock runtime InvokeModel REST
+	// shape for Cohere Embed models: POST {endpoint}/model/{model}/invoke,
+	// authenticated by a Bedrock API key as a bearer token. Query/document
+	// asymmetry rides the Cohere input_type field, not text prefixes.
+	ProviderBedrock = "bedrock"
 )
 
 // Config configures the HTTP embedding client. Values come from the
 // "embedding" section of .rekal/config.json (resolved by the cli package,
 // including env expansion — this package never reads the environment).
 type Config struct {
-	// Endpoint is the API base URL up to and including the version prefix,
-	// e.g. "http://127.0.0.1:8000/v1". "/embeddings" is appended.
+	// Provider selects the wire protocol: ProviderOpenAI (default when
+	// empty) or ProviderBedrock.
+	Provider string
+	// Endpoint is the API base URL. For OpenAI-compatible servers, up to and
+	// including the version prefix, e.g. "http://127.0.0.1:8000/v1"
+	// ("/embeddings" is appended). For Bedrock, the runtime endpoint, e.g.
+	// "https://bedrock-runtime.us-east-1.amazonaws.com"
+	// ("/model/{model}/invoke" is appended).
 	Endpoint string
 	// Model is the model name sent with each request and the key vectors are
 	// stored under in session_embeddings.
@@ -83,7 +105,7 @@ func (c *Client) Close() {}
 
 // EmbedQuery embeds a recall query.
 func (c *Client) EmbedQuery(text string) ([]float64, error) {
-	vecs, err := c.embed([]string{c.cfg.QueryPrefix + text})
+	vecs, err := c.embed([]string{c.cfg.QueryPrefix + text}, true)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +128,7 @@ func (c *Client) EmbedSessions(sessions map[string]string) (map[string][]float64
 		for i, id := range batch {
 			inputs[i] = c.cfg.DocumentPrefix + sessions[id]
 		}
-		vecs, err := c.embed(inputs)
+		vecs, err := c.embed(inputs, false)
 		if err != nil {
 			return nil, err
 		}
@@ -133,35 +155,23 @@ type embedResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// embed sends one /embeddings request and returns vectors in input order.
-func (c *Client) embed(inputs []string) ([][]float64, error) {
+// embed sends one embeddings request and returns vectors in input order.
+func (c *Client) embed(inputs []string, query bool) ([][]float64, error) {
+	if c.cfg.Provider == ProviderBedrock {
+		return c.embedBedrock(inputs, query)
+	}
+	return c.embedOpenAI(inputs)
+}
+
+// embedOpenAI speaks OpenAI-compatible POST {endpoint}/embeddings.
+func (c *Client) embedOpenAI(inputs []string) ([][]float64, error) {
 	body, err := json.Marshal(embedRequest{Model: c.cfg.Model, Input: inputs})
 	if err != nil {
 		return nil, err
 	}
-
-	url := strings.TrimRight(c.cfg.Endpoint, "/") + "/embeddings"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	respBody, err := c.post(strings.TrimRight(c.cfg.Endpoint, "/")+"/embeddings", body)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("embedding endpoint: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
-	if err != nil {
-		return nil, fmt.Errorf("read embedding response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("embedding endpoint returned %s: %s", resp.Status, truncate(string(respBody), 200))
 	}
 
 	var parsed embedResponse
@@ -190,6 +200,84 @@ func (c *Client) embed(inputs []string) ([][]float64, error) {
 		}
 	}
 	return out, nil
+}
+
+// bedrockCohereRequest/bedrockCohereResponse are the Cohere Embed wire
+// shapes on the Bedrock runtime — the only Bedrock embedding family with
+// batched input. input_type carries the query/document asymmetry that
+// OpenAI-style backends express as text prefixes; truncate END keeps
+// over-length documents from failing the whole batch.
+type bedrockCohereRequest struct {
+	Texts     []string `json:"texts"`
+	InputType string   `json:"input_type"`
+	Truncate  string   `json:"truncate"`
+}
+
+type bedrockCohereResponse struct {
+	Embeddings [][]float64 `json:"embeddings"`
+	Message    string      `json:"message,omitempty"` // Bedrock error shape
+}
+
+// embedBedrock speaks POST {endpoint}/model/{model}/invoke.
+func (c *Client) embedBedrock(inputs []string, query bool) ([][]float64, error) {
+	inputType := "search_document"
+	if query {
+		inputType = "search_query"
+	}
+	body, err := json.Marshal(bedrockCohereRequest{Texts: inputs, InputType: inputType, Truncate: "END"})
+	if err != nil {
+		return nil, err
+	}
+	reqURL := strings.TrimRight(c.cfg.Endpoint, "/") + "/model/" + url.PathEscape(c.cfg.Model) + "/invoke"
+	respBody, err := c.post(reqURL, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var parsed bedrockCohereResponse
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, fmt.Errorf("parse embedding response: %w", err)
+	}
+	if parsed.Message != "" && len(parsed.Embeddings) == 0 {
+		return nil, fmt.Errorf("embedding endpoint error: %s", parsed.Message)
+	}
+	if len(parsed.Embeddings) != len(inputs) {
+		return nil, fmt.Errorf("embedding endpoint returned %d vectors for %d inputs", len(parsed.Embeddings), len(inputs))
+	}
+	for i, v := range parsed.Embeddings {
+		if len(v) == 0 {
+			return nil, fmt.Errorf("embedding endpoint returned no vector for input %d", i)
+		}
+	}
+	return parsed.Embeddings, nil
+}
+
+// post sends one JSON request with bearer auth and returns the body of a
+// 200 response.
+func (c *Client) post(reqURL string, body []byte) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.cfg.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("embedding endpoint: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read embedding response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("embedding endpoint returned %s: %s", resp.Status, truncate(string(respBody), 200))
+	}
+	return respBody, nil
 }
 
 func truncate(s string, n int) string {

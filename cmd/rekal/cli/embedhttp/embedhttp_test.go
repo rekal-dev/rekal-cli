@@ -125,6 +125,87 @@ func TestEmbed_ServerErrorSurfaces(t *testing.T) {
 	}
 }
 
+// fakeBedrock implements the Cohere-on-Bedrock invoke shape: it echoes the
+// input_type into each vector's first component so tests can assert
+// query/document routing, and returns embeddings under the Cohere key.
+func fakeBedrock(t *testing.T, gotInputType *string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/model/") || !strings.HasSuffix(r.URL.Path, "/invoke") {
+			http.Error(w, "wrong path: "+r.URL.Path, http.StatusNotFound)
+			return
+		}
+		var req bedrockCohereRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if gotInputType != nil {
+			*gotInputType = req.InputType
+		}
+		marker := 0.0
+		if req.InputType == "search_query" {
+			marker = 1.0
+		}
+		resp := bedrockCohereResponse{}
+		for range req.Texts {
+			resp.Embeddings = append(resp.Embeddings, []float64{marker, 2, 3})
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+}
+
+func TestEmbedBedrock_QueryVsDocumentInputType(t *testing.T) {
+	t.Parallel()
+	var inputType string
+	srv := fakeBedrock(t, &inputType)
+	defer srv.Close()
+
+	c := New(Config{
+		Provider: ProviderBedrock,
+		Endpoint: srv.URL,
+		Model:    "cohere.embed-english-v3",
+		APIKey:   "bedrock-key",
+	})
+
+	qvec, err := c.EmbedQuery("how does retry backoff work")
+	if err != nil {
+		t.Fatalf("EmbedQuery: %v", err)
+	}
+	if inputType != "search_query" {
+		t.Fatalf("query input_type = %q, want search_query", inputType)
+	}
+	if qvec[0] != 1.0 {
+		t.Fatalf("query marker = %v, want 1", qvec[0])
+	}
+
+	got, err := c.EmbedSessions(map[string]string{"s1": "doc one", "s2": "doc two"})
+	if err != nil {
+		t.Fatalf("EmbedSessions: %v", err)
+	}
+	if inputType != "search_document" {
+		t.Fatalf("session input_type = %q, want search_document", inputType)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d vectors, want 2", len(got))
+	}
+}
+
+func TestEmbedBedrock_ErrorMessageSurfaces(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(bedrockCohereResponse{Message: "malformed input"})
+	}))
+	defer srv.Close()
+
+	c := New(Config{Provider: ProviderBedrock, Endpoint: srv.URL, Model: "cohere.embed-english-v3"})
+	_, err := c.EmbedQuery("x")
+	if err == nil || !strings.Contains(err.Error(), "400") {
+		t.Fatalf("err = %v, want status surfaced", err)
+	}
+}
+
 func TestEmbed_CountMismatchRejected(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

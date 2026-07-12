@@ -232,6 +232,19 @@ func TestWeightsConfig_Resolve(t *testing.T) {
 	if _, err := (&weightsConfig{SteeringBoost: fp(0)}).resolve(); err == nil {
 		t.Fatal("zero steering_boost must be rejected")
 	}
+	if _, err := (&weightsConfig{SummaryBoost: fp(0)}).resolve(); err == nil {
+		t.Fatal("zero summary_boost must be rejected")
+	}
+
+	// summary_boost overrides; absent keeps the default.
+	w, err = (&weightsConfig{SummaryBoost: fp(2)}).resolve()
+	if err != nil || w.SummaryBoost != 2 {
+		t.Fatalf("summary_boost resolve = %+v, %v", w, err)
+	}
+	w, err = (&weightsConfig{BM25: fp(0.5)}).resolve()
+	if err != nil || w.SummaryBoost != search.DefaultWeights().SummaryBoost {
+		t.Fatalf("absent summary_boost should keep default, got %+v", w)
+	}
 	if _, err := (&weightsConfig{BM25: fp(0), LSA: fp(0), Nomic: fp(0)}).resolve(); err == nil {
 		t.Fatal("all-zero layers must be rejected")
 	}

@@ -2,6 +2,54 @@ package session
 
 import "testing"
 
+// TestNonClaudeAdapters_NeverEmitSummaryRole pins that the "summary" role is
+// a Claude-parser concern only: Codex, Gemini, and OpenCode have no
+// compaction-summary concept, and a user message that merely starts with
+// Claude's continuation boilerplate must parse as an ordinary human turn.
+// (The db-side fingerprint reclassification is likewise scoped to
+// source = 'claude' — see db.SummaryFingerprint.)
+func TestNonClaudeAdapters_NeverEmitSummaryRole(t *testing.T) {
+	t.Parallel()
+
+	const boiler = "This session is being continued from a previous conversation that ran out of context."
+
+	codexFixture := `{"type":"session_meta","session_id":"codex-fp","timestamp":"2025-06-01T10:00:00Z","payload":{"cwd":"/tmp/repo"}}
+{"type":"event_msg","session_id":"codex-fp","timestamp":"2025-06-01T10:00:01Z","payload":{"type":"user_message","message":"` + boiler + `"}}
+`
+	geminiFixture := `{"sessionId":"gemini-fp","startTime":"2025-06-01T10:00:00Z","messages":[{"type":"user","content":"` + boiler + `"}]}`
+
+	dir := t.TempDir()
+	cases := []struct {
+		name    string
+		adapter Adapter
+		file    string
+		content string
+	}{
+		{"codex", &CodexAdapter{}, dir + "/codex.jsonl", codexFixture},
+		{"gemini", &GeminiAdapter{}, dir + "/gemini-fp.json", geminiFixture},
+	}
+	for _, tc := range cases {
+		if err := writeTestFile(tc.file, tc.content); err != nil {
+			t.Fatal(err)
+		}
+		payload, err := tc.adapter.Parse(SessionRef{Path: tc.file})
+		if err != nil {
+			t.Fatalf("%s Parse: %v", tc.name, err)
+		}
+		if len(payload.Turns) == 0 {
+			t.Fatalf("%s: no turns parsed", tc.name)
+		}
+		for i, turn := range payload.Turns {
+			if turn.Role == "summary" {
+				t.Errorf("%s turn %d: role summary must never come from a non-Claude adapter", tc.name, i)
+			}
+		}
+		if payload.Turns[0].Role != "human" {
+			t.Errorf("%s Turns[0].Role = %q, want human", tc.name, payload.Turns[0].Role)
+		}
+	}
+}
+
 // TestToolCallArgsFromMap covers the shared file_path/path precedence and
 // command-truncation logic factored out of codex.go, opencode.go, and
 // gemini.go — previously three independent, identical copies of this same

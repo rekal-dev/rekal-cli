@@ -278,6 +278,35 @@ func TestParseTranscript_CmdPrefixTruncation(t *testing.T) {
 	}
 }
 
+func TestParseTranscript_CompactSummaryTaggedAsSummary(t *testing.T) {
+	t.Parallel()
+
+	// Format verified against a real ~/.claude/projects/*.jsonl session file:
+	// the post-compaction turn is type "user" with top-level
+	// isCompactSummary:true (no isMeta), content a plain string.
+	input := `{"type":"user","isCompactSummary":true,"timestamp":"2026-07-02T12:20:03.322Z","sessionId":"sess-c1","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion."}}
+{"type":"user","timestamp":"2026-07-02T12:21:00.000Z","sessionId":"sess-c1","message":{"role":"user","content":"continue with the refactor"}}`
+
+	payload, err := ParseTranscript([]byte(input))
+	if err != nil {
+		t.Fatalf("ParseTranscript: %v", err)
+	}
+
+	if len(payload.Turns) != 2 {
+		t.Fatalf("len(Turns) = %d, want 2", len(payload.Turns))
+	}
+	if payload.Turns[0].Role != "summary" {
+		t.Errorf("Turns[0].Role = %q, want summary", payload.Turns[0].Role)
+	}
+	if !strings.HasPrefix(payload.Turns[0].Content, "This session is being continued") {
+		t.Errorf("Turns[0].Content = %q", payload.Turns[0].Content)
+	}
+	// The ordinary user turn after it stays human.
+	if payload.Turns[1].Role != "human" {
+		t.Errorf("Turns[1].Role = %q, want human", payload.Turns[1].Role)
+	}
+}
+
 func TestParseTranscript_QueueOperationEnqueueCaptured(t *testing.T) {
 	t.Parallel()
 

@@ -65,8 +65,9 @@ session discovery keep using the invoking worktree.
   persistent preference and rebuild
 - `config.go`: `.rekal/config.json` (gitignored, never committed) — Rekal's
   durable local config. Holds the cross-repo `local_import` preference, the
-  recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost, subagent
-  discount — applied at query time, no reindex), and the `embedding` section
+  recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost, summary
+  boost, subagent discount — applied at query time, no reindex), and the
+  `embedding` section
   (OpenAI-compatible HTTP backend: endpoint/model/api_key with `$VAR`
   expansion and `api_key_env`)
 - `local_import.go`: Cross-repo local session import — folds this machine's
@@ -96,12 +97,21 @@ session discovery keep using the invoking worktree.
   worktree-shared store) shared by the command and transport layers
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring with
   configurable weights (`weights.go`; query-time only), signal weighting
-  (steering-turn boost, subagent down-weight), conversation grouping
+  (steering-turn boost, compaction-summary boost, subagent down-weight),
+  conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, the LSA
-  query-projection cache (`projection.go`), and the `--explain` enrichments
-  (per-layer normalized scores + query-time related-session joins over
-  `files_index`; default output unchanged without the flag)
+  query-projection cache (`projection.go`), the per-result
+  `summary_turn_index` pointer (latest compaction-summary turn — pointer,
+  never the 10-17KB payload; drill with `--role summary`), and the
+  `--explain` enrichments (per-layer normalized scores + query-time
+  related-session joins over `files_index`; default output unchanged
+  without the flag)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
+  Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
+  `summary` (isCompactSummary compaction distillations; rows written before the
+  role existed stay `human` in append-only data.db and are reclassified by
+  content fingerprint in the derived views, scoped to source='claude' sessions
+  so other agent types are untouched — `db.SummaryFingerprint`).
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) in a session payload before any DB insert (runs in `checkpoint` and cross-repo import after parse). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter`.
@@ -121,8 +131,11 @@ session discovery keep using the invoking worktree.
   (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
   `human_steering` turns into rules), `rekal-distill` (four-library knowledge
   map + topic/session zoom), `rekal-census` (exhaustive full-corpus
-  scan+summarise via raw SQL, bounded by an explicit scope). Adding a skill =
-  adding `skills/<name>/SKILL.md`; no other wiring.
+  scan+summarise via raw SQL, bounded by an explicit scope), `rekal-wiki`
+  (materialize `docs/wiki/<topic>.md` pages from co-occurrence clusters +
+  the sessions behind them, shipped as a PR — review is the admission gate;
+  noise commit messages cited by SHA, never quoted as evidence). Adding a
+  skill = adding `skills/<name>/SKILL.md`; no other wiring.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 
@@ -132,7 +145,7 @@ session discovery keep using the invoking worktree.
 - `git-transportation.md`: Git transport layer design
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
-  17-paper literature map, RekalBench spec (self-labeled repo-grounded intent
+  18-paper literature map, RekalBench spec (self-labeled repo-grounded intent
   recall), local-corpus data plan, literature-derived product roadmap, and
   `paper/` (Typst source + PDF of "The Commit Is the Label"). The runnable
   rung-1 harness lives in `scripts/bench/` (corpus card, label mining, query

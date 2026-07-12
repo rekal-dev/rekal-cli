@@ -174,6 +174,8 @@ func importSessionFrame(dataDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 			role = "assistant"
 		case codec.RoleHumanSteering:
 			role = "human_steering"
+		case codec.RoleSummary:
+			role = "summary"
 		}
 		if err := db.InsertTurn(dataDB, newID(), sessionID, i, role, t.Text, ""); err != nil {
 			return false, fmt.Errorf("insert turn: %w", err)

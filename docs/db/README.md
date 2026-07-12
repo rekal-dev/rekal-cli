@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS turns (
 | `id` | ULID |
 | `session_id` | FK → `sessions.id` |
 | `turn_index` | 0-based position within the session |
-| `role` | Who said this: `"human"` (user prompt), `"human_steering"` (out-of-band queue-operation message typed while an agent was already working — the highest-intent signal in the corpus; boosted in recall ranking, see [agent-metadata.md](../agent-metadata.md)), or `"assistant"` (Claude response). See [role vs actor_type](#role-vs-actor_type) |
+| `role` | Who said this: `"human"` (user prompt), `"human_steering"` (out-of-band queue-operation message typed while an agent was already working — the highest-intent signal in the corpus; boosted in recall ranking, see [agent-metadata.md](../agent-metadata.md)), `"summary"` (harness-written compaction distillation — densest recall anchor, boosted below steering; rows written before this role existed are stored as `human` and reclassified by content fingerprint in the derived views, scoped to `source = 'claude'` sessions), or `"assistant"` (Claude response). See [role vs actor_type](#role-vs-actor_type) |
 | `content` | Text content of the turn. Tool results and thinking blocks are excluded |
 | `ts` | Timestamp from the JSONL line (UTC) |
 

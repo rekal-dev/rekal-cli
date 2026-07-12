@@ -6,16 +6,16 @@ set -euo pipefail
 q() { rekal query "$1"; }
 
 jq -n \
-  --argjson sessions        "$(q 'SELECT count(*) AS n FROM sessions' | jq '.[0].n')" \
-  --argjson turns           "$(q 'SELECT count(*) AS n FROM turns' | jq '.[0].n')" \
-  --argjson tool_calls      "$(q 'SELECT count(*) AS n FROM tool_calls' | jq '.[0].n')" \
-  --argjson checkpoints     "$(q 'SELECT count(*) AS n FROM checkpoints' | jq '.[0].n')" \
-  --argjson linked          "$(q 'SELECT count(*) AS n FROM checkpoint_sessions' | jq '.[0].n')" \
-  --argjson steering_turns  "$(q "SELECT count(*) AS n FROM turns WHERE role = 'human_steering'" | jq '.[0].n')" \
-  --argjson roles           "$(q 'SELECT role, count(*) AS n FROM turns GROUP BY role ORDER BY n DESC')" \
-  --argjson branches        "$(q 'SELECT count(DISTINCT git_branch) AS n FROM checkpoints' | jq '.[0].n')" \
-  --arg     first           "$(q 'SELECT min(captured_at) AS t FROM sessions' | jq -r '.[0].t')" \
-  --arg     last            "$(q 'SELECT max(captured_at) AS t FROM sessions' | jq -r '.[0].t')" \
+  --argjson sessions        "$(q 'SELECT count(*) AS n FROM sessions' | jq '.n')" \
+  --argjson turns           "$(q 'SELECT count(*) AS n FROM turns' | jq '.n')" \
+  --argjson tool_calls      "$(q 'SELECT count(*) AS n FROM tool_calls' | jq '.n')" \
+  --argjson checkpoints     "$(q 'SELECT count(*) AS n FROM checkpoints' | jq '.n')" \
+  --argjson linked          "$(q 'SELECT count(*) AS n FROM checkpoint_sessions' | jq '.n')" \
+  --argjson steering_turns  "$(q "SELECT count(*) AS n FROM turns WHERE role = 'human_steering'" | jq '.n')" \
+  --argjson roles           "$(q 'SELECT role, count(*) AS n FROM turns GROUP BY role ORDER BY n DESC' | jq -sc .)" \
+  --argjson branches        "$(q 'SELECT count(DISTINCT git_branch) AS n FROM checkpoints' | jq '.n')" \
+  --arg     first           "$(q 'SELECT min(captured_at) AS t FROM sessions' | jq -r '.t')" \
+  --arg     last            "$(q 'SELECT max(captured_at) AS t FROM sessions' | jq -r '.t')" \
   --arg     rekal_version   "$(rekal version 2>/dev/null | head -1)" \
   --arg     generated       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{generated: $generated, rekal_version: $rekal_version,

@@ -51,7 +51,7 @@ type SessionPayload struct {
 
 // Turn represents a single conversation turn (human prompt or assistant reply).
 type Turn struct {
-	Role      string    `json:"role"` // "human" | "human_steering" | "assistant"
+	Role      string    `json:"role"` // "human" | "human_steering" | "assistant" | "summary"
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -79,6 +79,15 @@ type rawLine struct {
 	// isMeta marks harness-injected user turns (e.g. skill bodies, command
 	// wrappers) rather than real human input. Filtered out.
 	IsMeta bool `json:"isMeta"`
+
+	// isCompactSummary marks the user turn Claude Code injects after context
+	// compaction: an LLM-written distillation of the conversation so far
+	// (10-17KB of files touched, decisions, errors and fixes). It is machine
+	// text, not human intent — tagged role "summary" so recall can boost it
+	// for density without it masquerading as a human turn. Summaries are
+	// cumulative: each new one is generated from a context that begins with
+	// the previous one, so the latest subsumes the rest.
+	IsCompactSummary bool `json:"isCompactSummary"`
 
 	// TeamName is the active team name on entries written during a
 	// teammates run; AgentID is transcript membership (which agent's
@@ -238,6 +247,9 @@ func ParseTranscriptWithOptions(data []byte, opts TranscriptOptions) (*SessionPa
 					delete(pendingQueueTexts, t.Content)
 					delete(pendingQueueTurnIdx, t.Content)
 					continue
+				}
+				if t.Role == "human" && raw.IsCompactSummary {
+					t.Role = "summary"
 				}
 				payload.Turns = append(payload.Turns, t)
 			}

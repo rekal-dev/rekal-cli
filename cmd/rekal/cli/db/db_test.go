@@ -171,6 +171,92 @@ func TestQuerySessionContentByIDs_ZeroTurnSession(t *testing.T) {
 	}
 }
 
+// TestQueryTurnsPage_LegacySummaryReclassified covers the back-compat path
+// for the "summary" role: data.db rows written before the role existed carry
+// compaction summaries as role "human" (data.db is append-only, never
+// rewritten), and queryTurnsPageFrom reads roles through the
+// SummaryFingerprint reclassification so filtering and display match the
+// index side.
+func TestQueryTurnsPage_LegacySummaryReclassified(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rekalDir := filepath.Join(dir, ".rekal")
+	if err := os.MkdirAll(rekalDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	if err := InsertSession(d, "s1", "", "hash1", "human", "", "a@b.c", "main", "2026-07-11T00:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession: %v", err)
+	}
+	// A legacy compaction summary stored as role "human", and a real human turn.
+	legacy := SummaryFingerprint + " that ran out of context. Summary of prior work."
+	if err := InsertTurn(d, "t1", "s1", 0, "human", legacy, ""); err != nil {
+		t.Fatalf("InsertTurn: %v", err)
+	}
+	if err := InsertTurn(d, "t2", "s1", 1, "human", "continue the refactor", ""); err != nil {
+		t.Fatalf("InsertTurn: %v", err)
+	}
+
+	// --role summary finds the legacy row.
+	rows, total, err := QueryTurnsPage(d, "s1", TurnPageOptions{Role: "summary"})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(summary): %v", err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].Role != "summary" {
+		t.Fatalf("summary filter: total=%d rows=%+v", total, rows)
+	}
+
+	// --role human no longer matches it, but keeps the real human turn.
+	rows, total, err = QueryTurnsPage(d, "s1", TurnPageOptions{Role: "human"})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(human): %v", err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].Content != "continue the refactor" {
+		t.Fatalf("human filter: total=%d rows=%+v", total, rows)
+	}
+
+	// Unfiltered reads show the reclassified role too.
+	rows, _, err = QueryTurnsPage(d, "s1", TurnPageOptions{})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(all): %v", err)
+	}
+	if len(rows) != 2 || rows[0].Role != "summary" || rows[1].Role != "human" {
+		t.Fatalf("unfiltered roles: %+v", rows)
+	}
+
+	// The reclassification is scoped to source 'claude': a Codex session
+	// whose human turn happens to start with the same text keeps its role.
+	if err := InsertSession(d, "s2", "", "hash2", "human", "", "a@b.c", "main", "2026-07-11T00:00:00Z", "codex"); err != nil {
+		t.Fatalf("InsertSession codex: %v", err)
+	}
+	if err := InsertTurn(d, "t3", "s2", 0, "human", legacy, ""); err != nil {
+		t.Fatalf("InsertTurn codex: %v", err)
+	}
+	rows, total, err = QueryTurnsPage(d, "s2", TurnPageOptions{Role: "summary"})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(codex summary): %v", err)
+	}
+	if total != 0 || len(rows) != 0 {
+		t.Fatalf("codex session must have no summary turns: total=%d rows=%+v", total, rows)
+	}
+	rows, total, err = QueryTurnsPage(d, "s2", TurnPageOptions{Role: "human"})
+	if err != nil {
+		t.Fatalf("QueryTurnsPage(codex human): %v", err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].Role != "human" {
+		t.Fatalf("codex turn must stay human: total=%d rows=%+v", total, rows)
+	}
+}
+
 // TestQuerySessionIDByHash covers checkpoint's subagent→trunk linking
 // fallback: when the trunk was captured in an earlier run, the subagent finds
 // its parent row by the trunk file's content hash — most recent capture wins.

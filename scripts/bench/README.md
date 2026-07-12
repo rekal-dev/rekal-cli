@@ -1,10 +1,17 @@
-# RekalBench harness (v0 — rung 1)
+# RekalBench harness (v0 — rung 1, plus a rung-3 proxy)
 
 Implements the retrievability rung of `docs/research/03-benchmark.md`:
 self-labeled queries from your own corpus, run against Rekal (full hybrid +
 single-signal ablations) and a grep-rank baseline over raw transcripts, then
 scored (MRR / Recall@k / nDCG with bootstrap CIs). Everything runs locally;
 nothing but aggregate numbers is meant to leave the machine.
+
+`run_rung3.py` adds a tokens-to-context PROXY for rung 3: after recall lands
+on the gold session, it compares the raw-window drill against the
+summary-first drill (via the per-result `summary_turn_index` pointer) on
+tokens ingested vs gold-term coverage. It is a cost/coverage measurement,
+not LLM-judged answer quality — rung 2 remains future work; do not present
+its numbers as rung 2.
 
 Requirements: an initialized rekal repo with history, `jq`, `rg`, `python3`
 (stdlib only), and — for query generation — any LLM CLI that reads a prompt
@@ -33,6 +40,9 @@ python3 $BENCH/run_rung1.py $OUT \
 
 # 4. score
 python3 $BENCH/score.py $OUT        # markdown tables + per-task breakdown
+
+# 5. (optional) rung-3 proxy: drill-strategy token/coverage comparison
+python3 $BENCH/run_rung3.py $OUT    # writes rung3.jsonl + markdown table
 ```
 
 Notes

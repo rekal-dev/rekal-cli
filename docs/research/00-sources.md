@@ -162,3 +162,14 @@ content later reused as trustworthy context.
   individual systems.
 - The single most-repeated open problem across papers 2, 3, 4, and 6 is freshness /
   maintenance of derived structure over time — each defers or only partially addresses it.
+
+## 18. Are We Ready For An Agent-Native Memory System? (added post-v0.1)
+- Zhou, Wei, et al. (Shanghai Jiao Tong). arXiv 2606.24775, June 2026.
+- https://arxiv.org/abs/2606.24775
+- Data-management evaluation: four-module anatomy (representation & storage,
+  extraction, retrieval & routing, maintenance); 12 systems + 2 baselines,
+  5 workloads / 11 datasets; finds no single architecture dominates —
+  effectiveness depends on aligning memory structure with the workload.
+- Role here: the anchor survey — its anatomy opens the paper's intro
+  (requirements under the token constraint), its no-free-lunch verdict is
+  the premise, and its maintenance column is the design space Rekal exits.

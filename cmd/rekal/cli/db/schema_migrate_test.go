@@ -156,6 +156,78 @@ func TestMigrateIndexSchema_OldIndexDB(t *testing.T) {
 	}
 }
 
+// TestPopulateIndex_SummaryReclassificationScopedToClaude verifies the
+// legacy-summary fingerprint (SummaryFingerprint) is applied per source when
+// building turns_ft: a pre-summary-role Claude row is re-tagged, a natively
+// tagged row passes through, and a Codex/Gemini turn that merely starts with
+// the same text keeps its stored role — other agent types must be unaffected.
+func TestPopulateIndex_SummaryReclassificationScopedToClaude(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	legacy := SummaryFingerprint + " that ran out of context. Prior work summary."
+	for _, s := range []struct{ id, source string }{
+		{"claude1", "claude"},
+		{"codex1", "codex"},
+		{"gemini1", "gemini"},
+	} {
+		if err := InsertSession(dataDB, s.id, "", "h-"+s.id, "human", "", "a@b.c", "main", "2026-07-11T00:00:00Z", s.source); err != nil {
+			t.Fatalf("InsertSession %s: %v", s.id, err)
+		}
+		// Same fingerprint-prefixed human turn in every session.
+		if err := InsertTurn(dataDB, s.id+":0", s.id, 0, "human", legacy, ""); err != nil {
+			t.Fatalf("InsertTurn %s: %v", s.id, err)
+		}
+	}
+	// A natively tagged summary turn (written by a current binary).
+	if err := InsertTurn(dataDB, "claude1:1", "claude1", 1, "summary", legacy, ""); err != nil {
+		t.Fatalf("InsertTurn native summary: %v", err)
+	}
+	// An ordinary human turn that must never be touched.
+	if err := InsertTurn(dataDB, "codex1:1", "codex1", 1, "human", "plain question", ""); err != nil {
+		t.Fatalf("InsertTurn plain: %v", err)
+	}
+	dataDB.Close()
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close()
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	want := map[string]string{
+		"claude1:0": "summary", // legacy claude row re-tagged
+		"claude1:1": "summary", // native tag passes through
+		"codex1:0":  "human",   // same text, wrong source — untouched
+		"codex1:1":  "human",
+		"gemini1:0": "human",
+	}
+	for id, wantRole := range want {
+		var got string
+		if err := indexDB.QueryRow("SELECT role FROM turns_ft WHERE id = $1", id).Scan(&got); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		if got != wantRole {
+			t.Errorf("turns_ft role for %s = %q, want %q", id, got, wantRole)
+		}
+	}
+}
+
 // TestPopulateIndex_OptionalMetadataAcrossAgents verifies that sessions
 // without harness metadata (Codex etc.) index cleanly with NULLs while
 // sessions with metadata carry it into session_facets — no per-agent

@@ -95,6 +95,32 @@ func migrateDataAt(gitRoot string) error {
 	return nil
 }
 
+// SummaryFingerprint is the stable prefix Claude Code puts on every
+// compaction-summary turn. New checkpoints store these with role "summary"
+// natively (the parser reads the isCompactSummary flag), but the flag never
+// reaches data.db rows written by older rekal versions — or rows encoded by
+// an old binary, which never tags the role byte. data.db is append-only and
+// never rewritten, so the reclassification lives on the derived side instead:
+// index population and the data-side drill-down rewrite the role on read
+// (transport's sync import applies the same rule), and one `rekal index`
+// after an upgrade re-tags all history.
+//
+// The reclassification is scoped to source = 'claude' sessions: the
+// boilerplate is Claude Code's, and a Codex/Gemini/OpenCode turn that merely
+// starts with the same text (e.g. pasted) must keep its stored role. Wire
+// imports carry no source and are stored as 'claude' (InsertSessionMeta's
+// default), so teammate frames remain covered.
+const SummaryFingerprint = "This session is being continued from a previous conversation"
+
+// summaryRoleExprJoined applies the reclassification in queries that join
+// data_db.turns t with data_db.sessions s (index population).
+const summaryRoleExprJoined = `CASE WHEN t.role = 'human' AND s.source = 'claude' AND t.content LIKE '` + SummaryFingerprint + `%' THEN 'summary' ELSE t.role END`
+
+// summaryRoleExprData applies it in single-table queries against the data
+// DB's turns, resolving the session's source with a correlated subquery
+// (drill-down reads; one session at a time, so the subquery is cheap).
+const summaryRoleExprData = `CASE WHEN role = 'human' AND content LIKE '` + SummaryFingerprint + `%' AND (SELECT source FROM sessions WHERE id = session_id) = 'claude' THEN 'summary' ELSE role END`
+
 // PopulateIndex attaches the data DB and bulk-populates all index tables.
 func PopulateIndex(d *sql.DB, gitRoot string) error {
 	dataPath := filepath.Join(StoreDir(gitRoot), "data.db")
@@ -110,11 +136,13 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 	}
 	defer d.Exec("DETACH data_db") //nolint:errcheck
 
-	// turns_ft
+	// turns_ft — LEFT JOIN so a turn with a missing session row (anomalous)
+	// still indexes, with its stored role.
 	if _, err := d.Exec(`
 		INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
-		SELECT id, session_id, turn_index, role, content, CAST(ts AS VARCHAR)
-		FROM data_db.turns
+		SELECT t.id, t.session_id, t.turn_index, ` + summaryRoleExprJoined + `, t.content, CAST(t.ts AS VARCHAR)
+		FROM data_db.turns t
+		LEFT JOIN data_db.sessions s ON s.id = t.session_id
 	`); err != nil {
 		return fmt.Errorf("populate turns_ft: %w", err)
 	}
@@ -344,8 +372,10 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		// turns_ft
 		if _, err := d.Exec(`
 			INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
-			SELECT id, session_id, turn_index, role, content, CAST(ts AS VARCHAR)
-			FROM data_db.turns WHERE session_id = $1
+			SELECT t.id, t.session_id, t.turn_index, `+summaryRoleExprJoined+`, t.content, CAST(t.ts AS VARCHAR)
+			FROM data_db.turns t
+			LEFT JOIN data_db.sessions s ON s.id = t.session_id
+			WHERE t.session_id = $1
 		`, sid); err != nil {
 			return fmt.Errorf("incremental turns_ft: %w", err)
 		}

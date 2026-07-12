@@ -53,6 +53,7 @@ type weightsConfig struct {
 	LSA                *float64 `json:"lsa,omitempty"`
 	Nomic              *float64 `json:"nomic,omitempty"`
 	SteeringBoost      *float64 `json:"steering_boost,omitempty"`
+	SummaryBoost       *float64 `json:"summary_boost,omitempty"`
 	SubagentDownweight *float64 `json:"subagent_downweight,omitempty"`
 }
 
@@ -84,6 +85,9 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 		return w, err
 	}
 	if err := set(&w.SteeringBoost, wc.SteeringBoost, "steering_boost", false); err != nil {
+		return w, err
+	}
+	if err := set(&w.SummaryBoost, wc.SummaryBoost, "summary_boost", false); err != nil {
 		return w, err
 	}
 	if err := set(&w.SubagentDownweight, wc.SubagentDownweight, "subagent_downweight", false); err != nil {

@@ -301,6 +301,8 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 					role = codec.RoleAssistant
 				case "human_steering":
 					role = codec.RoleHumanSteering
+				case "summary":
+					role = codec.RoleSummary
 				}
 				var tsDelta uint64
 				if t.Ts != "" {

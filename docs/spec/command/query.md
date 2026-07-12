@@ -2,7 +2,7 @@
 
 **Role:** Two modes: raw SQL over the Rekal data model, or session drill-down. The `--session` flag is the second step in progressive context loading — after recall returns snippets, the agent drills into specific sessions for full turns.
 
-**Invocation:** `rekal query "<sql>"`, `rekal query --index "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering]`.
+**Invocation:** `rekal query "<sql>"`, `rekal query --index "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]`.
 
 ---
 
@@ -55,7 +55,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `--full` | Include tool calls and files in session output (requires `--session`) |
 | `--offset <n>` | Skip first N turns (default: 0, requires `--session`) |
 | `--limit <n>` | Max turns to return, 0 = no limit (default: 0, requires `--session`) |
-| `--role <human\|assistant\|human_steering>` | Filter turns by role (requires `--session`). Matches exactly — queue-operation steering turns are stored as role `human_steering` (see [agent-metadata.md](../../agent-metadata.md)) and are not returned by `--role human`; use `--role human_steering` to see only steering turns, or omit `--role` to see all turns. |
+| `--role <human\|assistant\|human_steering\|summary>` | Filter turns by role (requires `--session`). Matches exactly — queue-operation steering turns are stored as role `human_steering` (see [agent-metadata.md](../../agent-metadata.md)) and are not returned by `--role human`; `summary` turns are harness-written compaction distillations (rows stored as `human` by pre-summary versions are reclassified by content fingerprint at read time, scoped to `source = 'claude'` sessions so other agent types are untouched); omit `--role` to see all turns. |
 
 ---
 

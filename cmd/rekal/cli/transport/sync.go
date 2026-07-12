@@ -214,6 +214,18 @@ func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 			role = "assistant"
 		case codec.RoleHumanSteering:
 			role = "human_steering"
+		case codec.RoleSummary:
+			role = "summary"
+		}
+		// Frames encoded by binaries that predate RoleSummary carry
+		// compaction summaries as plain human turns; reclassify by the same
+		// fingerprint the index rebuild uses (see db.SummaryFingerprint).
+		// The wire carries no source and every wire import is stored as
+		// source 'claude' (InsertSessionMeta's default), so applying the
+		// fingerprint unscoped here matches the source-scoped rule used on
+		// the data side.
+		if role == "human" && strings.HasPrefix(t.Text, db.SummaryFingerprint) {
+			role = "summary"
 		}
 		if _, err := indexDB.Exec(
 			`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)

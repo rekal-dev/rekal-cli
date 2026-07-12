@@ -40,34 +40,31 @@
 // ---------- Abstract ----------
 #block(inset: (x: 2pt))[
   *Abstract.* Memory systems for AI coding agents are rebuilding, in
-  software, guarantees that version control already provides. We name four
-  problems the literature's machinery creates or inherits: *annotation* —
-  dialogue has no ground truth, so supervision and evaluation are
-  hand-labeled; *staleness* — compiled knowledge structures (tiered stores,
-  memory graphs, wikis) must themselves be maintained; *self-confirmation*
-  — self- or consensus-judged admission stores its own mistakes as
-  successes; and *contamination* — one machine-wide memory pool whose open
-  write path is the documented attack surface. We observe that in the
-  software-engineering setting, each is already solved by a git primitive
-  every team runs: the *commit* labels which sessions produced which
-  verified change (annotation); *rebuild and diff* replace maintenance —
-  derived structure that can be thrown away cannot go stale, and structure
-  that regenerates deterministically turns drift into a reviewable diff
-  (staleness); the *merge* is an external verifier for what enters shared
-  memory (self-confirmation); and *code review* is the sole, auditable
-  channel by which private cross-repo memory crosses a scope boundary
-  (contamination). We
-  present *Rekal*, a local-first, single-binary memory engine built on
-  these four guarantees, and *RekalBench*, the first benchmark for
-  repo-grounded intent recall, whose ground truth is mined — not annotated
-  — from the corpus's own commit–session structure. On a real working
-  corpus of #tbd[N] sessions and #tbd[N] turns, Rekal's hybrid recall
-  attains #tbd[MRR] versus #tbd[MRR] for the strongest baseline (direct
-  grep over raw transcripts), reaches correct answers at #tbd[k]$times$
-  fewer context tokens, and holds retrieval quality flat as the corpus
-  scales while unbounded grep degrades. All predictions were registered
-  before the run (\u{00A7}6); the harness is public, fully local, and
-  runnable by any user on their own history.
+  software, guarantees that version control already provides. An agent's
+  memory is context assembly under a token budget — for each question, the
+  few thousand recorded tokens that change the answer — and the literature
+  assembles it with machinery: tiered stores, memory graphs, and compiled
+  wikis, guarded by model-judged admission and evaluated on hand-annotated
+  benchmarks. The machinery imports four problems it then cannot
+  discharge: *annotation* (no ground truth without human labels),
+  *staleness* (compiled structure must be maintained), *self-confirmation*
+  (a judge that can admit its own mistakes), and *contamination* (one
+  shared pool, one open write path). In the software-engineering setting,
+  each is answered by a git primitive every team already runs: the commit
+  labels which sessions produced which verified change; rebuild and diff
+  make derived structure disposable and its drift reviewable; the merge
+  externally verifies what enters shared memory; and code review is the
+  sole, audited channel across scope boundaries. We build *Rekal*, a
+  local-first, single-binary memory engine, on these four guarantees, and
+  derive *RekalBench*, the first benchmark for repo-grounded intent
+  recall, whose ground truth is mined — not annotated — from the corpus's
+  own commit–session links. On a real working corpus of #tbd[N] sessions
+  and #tbd[N] turns, hybrid recall attains #tbd[MRR] versus #tbd[MRR] for
+  the strongest baseline (direct grep over raw transcripts), reaches
+  correct answers at #tbd[k]$times$ fewer context tokens, and holds flat
+  with corpus scale where unbounded grep degrades. All predictions were
+  registered before the run (\u{00A7}6); the harness is public, fully
+  local, and runnable by anyone on their own history.
 ]
 #v(4pt)
 

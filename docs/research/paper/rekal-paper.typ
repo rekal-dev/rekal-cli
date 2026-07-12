@@ -21,7 +21,7 @@
 #place(top, scope: "parent", float: true, clearance: 18pt)[
   #align(center)[
     #text(size: 17pt, weight: "bold")[
-      The Commit Is the Label: Four Problems in Agent Memory\ That Version Control Already Solves
+      The Commit Is the Label: Four Problems in Agent Memory\ That Version Control Already Answers
     ]
     #v(6pt)
     #text(size: 10.5pt)[Frank Guo#super[1]]
@@ -47,19 +47,24 @@
   labels which sessions produced which verified change; rebuild and diff
   make derived structure disposable and its drift reviewable; the merge
   externally verifies what enters shared memory; and code review is the
-  sole, audited channel across scope boundaries. We build *Rekal*, a
-  local-first, single-binary memory engine, on these four guarantees, and
-  derive *RekalBench*, the first benchmark for repo-grounded intent
-  recall, whose ground truth is mined — not annotated — from the corpus's
-  own commit–session links. On a real working corpus of 1,433 sessions
-  and 66k turns, hybrid recall attains 0.187 pooled MRR — against 0.171 for
-  a strong lexical index and 0.005 for term-frequency grep over the raw
-  transcripts — with the semantic layer's contribution concentrated,
-  as predicted, on paraphrased provenance queries; a bounded drill then
-  assembles answer-bearing context in roughly 1,500 tokens. The prediction
-  was registered before the run (\u{00A7}6). The benchmark harness is
-  public, fully local, and runnable by anyone on their own history at zero
-  annotation cost.
+  sole, audited channel across scope boundaries. These are answers *by
+  construction* — properties of how the system is built, checkable by
+  reading it. This paper puts the first to an empirical test: we build
+  *Rekal*, a local-first, single-binary memory engine, and derive
+  *RekalBench*, a self-labeling benchmark for repo-grounded intent recall
+  whose ground truth is mined — not annotated — from the corpus's own
+  commit–session links. The other three we substantiate as design
+  guarantees, not measured outcomes, and say so. On a real working corpus of 1,433 sessions
+  and 66k turns, retrieval over the parsed, scrubbed ledger is categorically
+  more effective than term-frequency scanning of the raw transcripts (0.187
+  vs 0.005 pooled MRR); against a strong lexical index over the same parsed
+  turns (0.171) the hybrid's gain is smaller and, as predicted, concentrated
+  on paraphrased provenance queries, where the producing session is returned
+  in the top five 54% of the time. Recall runs at \~0.5s median, and a
+  bounded drill assembles answer-bearing context in \~1,500 tokens. The
+  prediction was fixed before the held-out split was scored; the benchmark
+  harness is public, fully local, and runnable by anyone on their own
+  history at zero annotation cost.
 ]
 #v(4pt)
 
@@ -103,11 +108,18 @@ with the workload* @anms2026.
 
 This paper takes that verdict literally. For coding agents, the workload
 already has a structure — the repository — and *the four open problems the
-machinery addresses are already solved by infrastructure every software
-team runs* (@tab-thesis). The contribution is not a new structure beside
-git but a memory system built *into* it — plus the benchmark that this
-construction makes possible, because a corpus whose labels are commits
-needs no annotators.
+machinery addresses are already answered by infrastructure every software
+team runs* (@tab-thesis). We are precise about what "answered" means, and
+it differs across the four. Annotation is answered *and demonstrated*: the
+commit–session link is a free label, and this paper builds a working
+retrieval benchmark on it. The other three — staleness, self-confirmation,
+contamination — are answered *by construction*: they are properties of how
+Rekal is built (a disposable index, a merge-gated export path, a
+review-only egress), verifiable by reading the design, but we do not here
+measure their downstream benefit and do not claim to. The contribution is
+thus a memory system built *into* git, the self-labeling benchmark that
+construction makes possible, and a first retrieval result on it — not a
+claim to have empirically closed four problems at once.
 
 #figure(
   scope: "parent",
@@ -130,24 +142,26 @@ needs no annotators.
     [*The review.* Cross-repo memory is index-only and structurally unpushable; its sole egress is an origin-labeled page on a PR (\u{00A7}4.4)],
   ),
   caption: [The thesis. Four problems the agent-memory literature treats as
-  open research, and the git primitive that answers each. The paper walks
-  this table: \u{00A7}4 gives the mechanisms, \u{00A7}6 registers the
-  predictions, \u{00A7}7 reports the measurements.],
+  open research, and the git primitive that answers each by construction.
+  \u{00A7}4 gives the mechanisms. Only the first — annotation — is put to an
+  empirical test in this paper (\u{00A7}5–7); the other three are argued as
+  design guarantees, not measured here.],
 ) <tab-thesis>
 
 *Contributions.* (1) The design and implementation of Rekal, a local-first,
 git-native memory engine for coding agents (single binary; capture, storage,
 hybrid recall, and team sync with no server, API, or telemetry), with an
 agent-facing skill layer that operationalizes active, multi-step memory
-reconstruction @mragent2026. (2) *RekalBench*, the first benchmark for
-repo-grounded intent recall, whose ground truth is mined from the corpus's
-own commit–session structure rather than annotated. (3) A pre-registered
-empirical study (predictions fixed before the run, \u{00A7}6) on a real
-working corpus against the baselines that matter in practice — including
-the strongest current objection, direct shell interaction over raw
-transcripts @dci2026 — with token-cost, drill-strategy, and corpus-scale
-analyses. (4) Ablations isolating each recall signal, enabled by query-time
-weighting that requires no reindexing.
+reconstruction @mragent2026. (2) *RekalBench*, a self-labeling benchmark
+methodology for repo-grounded intent recall, whose ground truth is mined
+from the corpus's own commit–session structure rather than annotated,
+together with a first instantiation on two task families. (3) A
+retrieval evaluation on a real working corpus, with single-signal ablations
+(free under query-time weighting) and a judge-free context-assembly measure,
+whose one prediction was fixed before the held-out split was scored; the
+judged-answer and corpus-scale rungs are specified for the same public
+harness but not run here, and we say so plainly rather than implying a
+completeness the study does not have.
 
 = A Worked Example
 
@@ -326,10 +340,10 @@ Mutating graph stores cannot show this drift to anyone; here `git log` over
 the index is a reviewed time series of the project's conceptual structure.
 The maintenance problem is not solved — it is *converted into code review*,
 a process teams already run. Because pages are a cache of memory, not the
-memory, their value is an empirical question: \u{00A7}6 registers the
-prediction and \u{00A7}7.4 prices the cache (generation cost from the
-ledger's own lineage records, payoff against recall+drill, decay as a
-measured rate — the static-notes failure mode made continuous).
+memory, whether that cache pays for itself is an empirical question this
+paper does not settle: the generation cost is recoverable from the ledger's
+own lineage records and the payoff is measurable against recall+drill, but
+we report the mechanism here and leave the economics to the harness.
 
 == Self-confirmation: the merge is the gate
 
@@ -412,7 +426,7 @@ turn of \u{00A7}2 is likewise a T2 gold, and the never-merged branches of
     alabel(122pt, 88pt)[LLM paraphrase +\ n-gram leakage filter]
     archbox(58pt, 106pt, 112pt, 24pt, rgb("#eff6ff"))[query set (JSONL)\ dev 10% / test 90%]
     arrow(113pt, 130pt, 113pt, 142pt)
-    archbox(14pt, 142pt, 200pt, 28pt, rgb("#f5f5f4"))[systems B0–B6 → MRR · Recall\@k ·\ judged accuracy · tokens-to-correct · scale sweep]
+    archbox(14pt, 142pt, 200pt, 28pt, rgb("#f5f5f4"))[systems B1–B5 → MRR · Recall\@k ·\ nDCG\@10 · bounded drill-cost]
   }),
   kind: image,
   caption: [RekalBench pipeline. Labels are mined from structure the tool
@@ -506,8 +520,9 @@ evidence for — is *retrievability*: does memory built on these guarantees
 actually surface the right prior session better than the alternative of not
 building it at all? A system whose recall loses to grep needs no philosophy.
 
-We registered one prediction before running the benchmark, and a
-mechanistic expectation about *where* it would hold:
+We fixed one prediction, and a mechanistic expectation about *where* it
+would hold, before scoring the held-out test split (the source commit
+predates the results in the project's own history):
 
 #block(inset: (left: 6pt))[
 *Prediction (retrievability).* On the held-out test split, Rekal's hybrid
@@ -538,30 +553,39 @@ weights may be tuned on the 10% dev split; the 90% test split is scored once.
     [B5 Rekal hybrid], [*0.187 [.158,.217]*], [*0.227*], [*0.301*], [*0.537*], [*0.124*],
   ),
   caption: [Retrieval quality on the held-out test split (n=380; pooled MRR
-  with bootstrap 95% CIs, other columns point estimates). The prediction
-  holds: Rekal's hybrid recall exceeds raw-transcript grep by a factor of
-  37 on pooled MRR (0.187 vs 0.005) and 57 on nDCG\@10, with
-  non-overlapping intervals — parsing and indexing the ledger, not scanning
-  it, is what makes recall work. The composition expectation also holds:
-  the hybrid's margin over the strong lexical index (B3) is entirely a
-  provenance effect (T1 MRR 0.301 vs 0.248, R\@5 0.537 vs 0.425), while on
-  decision recall the two are level (T2 0.124 vs 0.130) — the semantic
-  layer adds exactly where paraphrase opens a gap.],
+  with bootstrap 95% CIs, other columns point estimates). The registered
+  prediction holds — hybrid recall beats raw-transcript grep with
+  non-overlapping intervals — but that comparison only establishes a floor:
+  grep-rank over raw JSONL is near-zero because the transcripts are
+  adversarial material, so the informative contrast is against the strong
+  lexical index over the *same parsed turns* (B3). There the pooled gap is
+  small and its CIs overlap (0.187 vs 0.171); the hybrid's advantage is not
+  uniform but *located* — it is a provenance effect (T1 MRR 0.301 vs 0.248,
+  R\@5 0.537 vs 0.425) and vanishes on decision recall, where lexical is if
+  anything ahead (T2 0.124 vs 0.130). The semantic layer earns its place
+  exactly where paraphrase opens a surface-form gap, and not elsewhere.],
 ) <tab-rung1>
 
-*Reading the table.* Two facts carry the result. First, the gap between any
-Rekal configuration and raw grep is categorical, not marginal: even
-BM25-only over parsed, scrubbed turns (0.171) outscores term-frequency grep
-over the raw JSONL (0.005) by thirty-fold, because raw transcripts are
-adversarial retrieval material — tool dumps, base64 blobs, duplicated
-sidechains — and the index is not. This is the paper's structural claim
-made measurable: the value is in treating the ledger as parsed memory, not
-as text to scan. Second, the hybrid's advantage over strong lexical search
-is real but *located* — it lives in provenance queries, exactly where the
-registered expectation put it, and this is the alignment-by-construction
-premise in miniature: on a single-repo corpus, question and session share
-vocabulary, so lexical carries most of the signal and the neural layer pays
-off precisely when a paraphrase widens the surface-form gap.
+*Reading the table.* First, the floor. The gap between any Rekal
+configuration and raw grep is categorical, not marginal: even BM25-only
+over parsed, scrubbed turns (0.171) outscores term-frequency grep over the
+raw JSONL (0.005) by thirty-fold, because raw transcripts are adversarial
+retrieval material — tool dumps, base64 blobs, duplicated sidechains — and
+the index is not. We read this not as a hard baseline defeated but as the
+paper's structural claim made measurable: the value is in treating the
+ledger as parsed memory, not as text to scan; a skilled agent driving grep
+would do better, and that agentic comparison is the judged rung we leave to
+the harness. Second, and more honestly, the hybrid's advantage over strong
+lexical search is *modest and located*. Pooled, B5 and B3 are within each
+other's confidence intervals; the separation is real only on provenance
+queries, exactly where the registered expectation put it. This is the
+alignment-by-construction premise in miniature: on a single-repo corpus,
+question and session share vocabulary, so lexical carries most of the
+signal and the neural layer pays off precisely when a paraphrase widens the
+surface-form gap. In absolute terms the numbers are moderate — a pooled MRR
+of 0.187 puts the first relevant session around rank five — but for the
+provenance questions the tool is built to answer, the producing session is
+in the top five 54% of the time, at a median recall latency of \~0.5s.
 
 Once recall reaches the gold session, a five-turn window around the matched
 turn assembles the answer-bearing context — covering roughly 69% of the
@@ -658,11 +682,14 @@ maintain or another self-judged store to poison itself. It needs a ledger
 that already has ground truth. Git supplies the label (the commit), the
 freshness mechanism (rebuild and diff), the verifier (the merge), and the
 egress channel (the review); Rekal supplies the capture, the disposable
-indexes, the bounded recall, and the playbooks. RekalBench turns the same
-structure into the first benchmark for repo-grounded intent recall, on
-which recall over parsed memory beats scanning raw transcripts by a factor
-of thirty-seven — and because its labels are mined, not annotated, the
-claim is falsifiable by anyone, locally, on their own history.
+indexes, the bounded recall, and the playbooks. Three of those four answers
+we make by construction and leave for a reader to verify in the design; the
+fourth — the label — we put to work, and it yields a benchmark that labels
+itself and a retrieval result whose one firm lesson is that parsed,
+provenance-linked memory is findable where raw transcripts are not, with a
+semantic layer that earns its place on paraphrased questions. Because the
+labels are mined, not annotated, every part of that is falsifiable by
+anyone, locally, on their own history.
 
 #v(4pt)
 *Reproducibility.* Engine, skills, benchmark spec, extraction SQL, runbook

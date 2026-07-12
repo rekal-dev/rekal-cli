@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
@@ -291,5 +292,36 @@ func TestEmbeddingConfig_Resolve(t *testing.T) {
 	}
 	if _, err := (&embeddingConfig{Endpoint: "http://x/v1"}).resolve(); err == nil {
 		t.Fatal("empty model must be rejected")
+	}
+
+	// Default provider is openai.
+	cfg, err = (&embeddingConfig{Endpoint: "http://x/v1", Model: "m"}).resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if cfg.Provider != embedhttp.ProviderOpenAI {
+		t.Fatalf("default provider = %q, want %q", cfg.Provider, embedhttp.ProviderOpenAI)
+	}
+
+	// Bedrock provider: no text prefixes even for a nomic-shaped name (the
+	// asymmetry rides input_type, so prefixes would double-encode).
+	cfg, err = (&embeddingConfig{
+		Provider: "bedrock",
+		Endpoint: "https://bedrock-runtime.us-east-1.amazonaws.com",
+		Model:    "cohere.embed-english-v3",
+	}).resolve()
+	if err != nil {
+		t.Fatalf("resolve bedrock: %v", err)
+	}
+	if cfg.Provider != embedhttp.ProviderBedrock {
+		t.Fatalf("provider = %q, want bedrock", cfg.Provider)
+	}
+	if cfg.QueryPrefix != "" || cfg.DocumentPrefix != "" {
+		t.Fatalf("bedrock must not set text prefixes: %+v", cfg)
+	}
+
+	// Unknown provider rejected.
+	if _, err := (&embeddingConfig{Provider: "azure", Endpoint: "http://x", Model: "m"}).resolve(); err == nil {
+		t.Fatal("unknown provider must be rejected")
 	}
 }

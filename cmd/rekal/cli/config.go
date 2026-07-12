@@ -104,8 +104,15 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 // an env var to read — so secrets can stay in the environment entirely. The
 // config file itself is gitignored either way.
 type embeddingConfig struct {
-	// Endpoint is the OpenAI-compatible base URL including the version
+	// Provider selects the wire protocol: "openai" (default) for any
+	// OpenAI-compatible /embeddings server, or "bedrock" for the Amazon
+	// Bedrock runtime (Cohere Embed models, authenticated by a Bedrock API
+	// key as the bearer token — no SigV4).
+	Provider string `json:"provider,omitempty"`
+	// Endpoint is the base URL. OpenAI-compatible: include the version
 	// prefix, e.g. "http://127.0.0.1:8000/v1" or "$EMBED_ENDPOINT".
+	// Bedrock: the runtime endpoint, e.g.
+	// "https://bedrock-runtime.us-east-1.amazonaws.com".
 	Endpoint string `json:"endpoint"`
 	// Model is sent with each request and keys the stored vectors.
 	Model string `json:"model"`
@@ -128,7 +135,16 @@ func (ec *embeddingConfig) resolve() (embedhttp.Config, error) {
 	if ec == nil {
 		return embedhttp.Config{}, errors.New("embedding config absent")
 	}
+	provider := ec.Provider
+	if provider == "" {
+		provider = embedhttp.ProviderOpenAI
+	}
+	if provider != embedhttp.ProviderOpenAI && provider != embedhttp.ProviderBedrock {
+		return embedhttp.Config{}, fmt.Errorf("embedding.provider must be %q or %q, got %q",
+			embedhttp.ProviderOpenAI, embedhttp.ProviderBedrock, provider)
+	}
 	cfg := embedhttp.Config{
+		Provider: provider,
 		Endpoint: os.ExpandEnv(ec.Endpoint),
 		Model:    ec.Model,
 		APIKey:   os.ExpandEnv(ec.APIKey),
@@ -148,21 +164,26 @@ func (ec *embeddingConfig) resolve() (embedhttp.Config, error) {
 		cfg.Timeout = time.Duration(ec.TimeoutSeconds) * time.Second
 	}
 
-	// Task prefixes: explicit config wins; nomic-family models default to
-	// the prefixes the embedded backend uses, so switching backends keeps
-	// the vector space consistent.
-	nomicFamily := containsFold(ec.Model, "nomic")
-	switch {
-	case ec.QueryPrefix != nil:
-		cfg.QueryPrefix = *ec.QueryPrefix
-	case nomicFamily:
-		cfg.QueryPrefix = "search_query: "
-	}
-	switch {
-	case ec.DocumentPrefix != nil:
-		cfg.DocumentPrefix = *ec.DocumentPrefix
-	case nomicFamily:
-		cfg.DocumentPrefix = "search_document: "
+	// Task prefixes apply to the OpenAI wire path only; Bedrock Cohere
+	// carries the query/document asymmetry in its input_type field, so
+	// prefixes there would double-encode it.
+	if provider == embedhttp.ProviderOpenAI {
+		// Explicit config wins; nomic-family models default to the prefixes
+		// the embedded backend uses, so switching backends keeps the vector
+		// space consistent.
+		nomicFamily := containsFold(ec.Model, "nomic")
+		switch {
+		case ec.QueryPrefix != nil:
+			cfg.QueryPrefix = *ec.QueryPrefix
+		case nomicFamily:
+			cfg.QueryPrefix = "search_query: "
+		}
+		switch {
+		case ec.DocumentPrefix != nil:
+			cfg.DocumentPrefix = *ec.DocumentPrefix
+		case nomicFamily:
+			cfg.DocumentPrefix = "search_document: "
+		}
 	}
 	return cfg, nil
 }

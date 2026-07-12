@@ -119,9 +119,12 @@ session discovery keep using the invoking worktree.
   `embedcache.go` is the content-hash-keyed embedding cache
   (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;
   a model switch invalidates by key construction
-- `embedhttp/`: OpenAI-compatible HTTP embedding client (vLLM/Ollama/TEI) —
-  batched, hard-timeboxed so the post-commit hook can never stall; selected
-  over the embedded nomic model via config
+- `embedhttp/`: HTTP embedding client — batched, hard-timeboxed so the
+  post-commit hook can never stall; selected over the embedded nomic model
+  via config. Two providers: `openai` (default; any OpenAI-compatible
+  `/embeddings` server — vLLM/Ollama/TEI) and `bedrock` (Amazon Bedrock
+  runtime, Cohere Embed models, bearer API key, no SigV4 — asymmetry via
+  Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
 - `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are

@@ -7,6 +7,13 @@ Systems (docs/research/03-benchmark.md §3):
   b4  neural-only (weights {bm25:0, lsa:0, nomic:1})
   b1  grep-rank over raw transcript JSONL (--transcripts DIR); the
       non-agentic DCI proxy: sessions ranked by rg term-hit counts.
+  b4x neural-only with a substituted embedding model (B4' in the paper)
+  b5x full hybrid with a substituted embedding model (B5' in the paper)
+      Both need --embedding-config FILE: the JSON for the config's
+      "embedding" section (endpoint/model/api_key_env; see config.go).
+      The swap is config-only but vectors live in the index, so each
+      direction costs one `rekal index` — the (model, content_hash) embed
+      cache makes the swap back re-embed nothing. Tests prediction P9.
 
 Weight ablations rewrite .rekal/config.json in place and ALWAYS restore the
 original (backup kept beside it until success). Query-time weights: no
@@ -180,6 +187,43 @@ def run_system(name: str, queries: list[dict], search, outdir: pathlib.Path) -> 
     print(f"[{name}] done: {len(rows)} queries", file=sys.stderr)
 
 
+class EmbeddingOverride:
+    """Temporarily set the embedding backend in .rekal/config.json and
+    reindex; always restore the config and reindex back. Distinct backup
+    suffix so it nests outside WeightOverride."""
+
+    def __init__(self, embedding: dict | None):
+        self.embedding = embedding
+        self.path = pathlib.Path(".rekal/config.json")
+        self.backup = self.path.with_suffix(".json.embedbak")
+
+    def _reindex(self) -> None:
+        print("[embedding] rekal index (regenerating vectors)...", file=sys.stderr)
+        subprocess.run(["rekal", "index"], check=True, timeout=7200)
+
+    def __enter__(self):
+        if self.embedding is None:
+            return self
+        original = {}
+        if self.path.exists():
+            shutil.copy2(self.path, self.backup)
+            original = json.loads(self.path.read_text() or "{}")
+        original["embedding"] = self.embedding
+        self.path.parent.mkdir(exist_ok=True)
+        self.path.write_text(json.dumps(original, indent=2))
+        self._reindex()
+        return self
+
+    def __exit__(self, *exc):
+        if self.embedding is None:
+            return
+        if self.backup.exists():
+            shutil.move(self.backup, self.path)
+        else:
+            self.path.unlink(missing_ok=True)
+        self._reindex()
+
+
 class WeightOverride:
     """Temporarily set recall weights in .rekal/config.json; always restore."""
 
@@ -214,6 +258,8 @@ def main() -> None:
     ap.add_argument("outdir", type=pathlib.Path)
     ap.add_argument("--transcripts", type=pathlib.Path, help="raw JSONL dir for B1 grep-rank")
     ap.add_argument("--systems", default="b5,b3,b4,b1")
+    ap.add_argument("--embedding-config", type=pathlib.Path,
+                    help='JSON for config\'s "embedding" section; enables b4x/b5x (P9)')
     args = ap.parse_args()
 
     queries = [json.loads(l) for l in (args.outdir / "queries.jsonl").read_text().splitlines()]
@@ -224,6 +270,7 @@ def main() -> None:
         "b3": {"bm25": 1.0, "lsa": 0.0, "nomic": 0.0},
         "b4": {"bm25": 0.0, "lsa": 0.0, "nomic": 1.0},
     }
+    emb_systems = [s for s in systems if s in ("b4x", "b5x")]
     for name in systems:
         if name in ablations:
             with WeightOverride(ablations[name]):
@@ -237,8 +284,21 @@ def main() -> None:
             run_system(
                 name, queries, lambda q: grep_rank(q, args.transcripts, sidmap), args.outdir
             )
+        elif name in emb_systems:
+            continue  # grouped below: one embedding swap covers both
         else:
             sys.exit(f"unknown system {name!r}")
+
+    if emb_systems:
+        if not args.embedding_config:
+            print("[b4x/b5x] skipped: pass --embedding-config FILE", file=sys.stderr)
+            return
+        embedding = json.loads(args.embedding_config.read_text())
+        with EmbeddingOverride(embedding):
+            for name in emb_systems:
+                weights = ablations["b4"] if name == "b4x" else None
+                with WeightOverride(weights):
+                    run_system(name, queries, rekal_search, args.outdir)
 
 
 if __name__ == "__main__":

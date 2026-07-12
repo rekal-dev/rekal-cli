@@ -2,7 +2,7 @@
 // (or: python3 -c "import typst; typst.compile('rekal-paper.typ', output='rekal-paper.pdf')")
 // Placeholder values are rendered as red ⟨…⟩ via #tbd — replaced when the
 // corpus run (docs/research/paper/DATA-RUN.md) completes. Results tables are
-// keyed to the pre-registered predictions P1–P8 (§6).
+// keyed to the pre-registered predictions P1–P9 (§6).
 
 #let tbd(body) = text(fill: rgb("#b91c1c"), style: "italic", [⟨#body⟩])
 
@@ -538,6 +538,21 @@ reframed.
   gap in it.
 + *P8 (label validity — annotation).* T1 label precision ≥ 0.9 on a
   50-pair human audit.
++ *P9 (embedding substitution).* #emph[Registered after the first rung-1
+  run motivated it, before any embedding measurement] — the one prediction
+  in this list with that provenance, stated so the reader can weigh it.
+  The motivating finding: the neural-only ablation (B4) was the weakest
+  signal and dev tuning pushed its layer weight down. The prediction:
+  substituting a stronger code-tuned embedding model for the embedded one
+  (a config-only swap to the OpenAI-compatible HTTP backend; the
+  content-hash-keyed cache makes the swap and the swap back one reindex
+  each) lifts neural-only (B4′ over B4) materially, but lifts the hybrid
+  (B5′ over B5) by little — on a single-repo corpus the question and its
+  answering session share vocabulary (identifiers, error strings, file
+  names), so the binding constraint is workload alignment, not embedding
+  quality. Either direction is a finding: a large hybrid lift changes the
+  shipped default model and weights; a null lift is direct evidence for
+  this paper's alignment-by-construction premise @anms2026.
 
 = Results
 
@@ -562,6 +577,23 @@ report and are keyed to \u{00A7}6's predictions.]
   Verdicts: P1 #tbd[holds / fails], P2 #tbd[holds / fails]. B2 has no
   per-query retrieval and is evaluated at rungs 2–3 only.],
 ) <tab-rung1>
+
+== Embedding substitution (P9)
+
+#figure(
+  table(
+    columns: (auto, auto, auto, auto),
+    align: (left, center, center, center),
+    table.header([*System*], [*Pooled MRR*], [*T1 MRR*], [*T2 MRR*]),
+    [B4 neural-only, embedded model], tbd[·], tbd[·], tbd[·],
+    [B4′ neural-only, substituted], tbd[·], tbd[·], tbd[·],
+    [B5 hybrid, embedded model], tbd[·], tbd[·], tbd[·],
+    [B5′ hybrid, substituted], tbd[·], tbd[·], tbd[·],
+  ),
+  caption: [Embedding-model substitution (test split, same weights within
+  each pairing; substituted model served over the HTTP backend, model id
+  in the run manifest). Verdict: P9 #tbd[holds / fails].],
+) <tab-embed>
 
 == Drill strategies (P3)
 

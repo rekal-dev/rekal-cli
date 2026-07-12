@@ -76,6 +76,30 @@ is valid only against the index state it ran on — after any reindex or
 re-tag (e.g. the summary re-tag), delete `tune-results.jsonl` and re-run
 before trusting a SHIP. Record weights, verdict, and CI in the manifest.
 
+## 3c. Optional: embedding-model substitution (fills `tab-embed`, P9)
+
+Requires a running OpenAI-compatible embedding endpoint (Ollama, vLLM,
+TEI) serving a stronger code-tuned model. Write its config to a file:
+
+```bash
+cat > $RUN/embed-sub.json <<'EOF'
+{"endpoint": "http://localhost:11434/v1/embeddings",
+ "model": "<substituted-model-id>"}
+EOF
+python3 $BENCH/run_rung1.py $RUN --systems b4x,b5x \
+  --embedding-config $RUN/embed-sub.json
+python3 $BENCH/score.py $RUN            # b4x/b5x tables appended
+```
+
+Notes:
+- The swap costs one `rekal index` each way (the harness restores config
+  and reindexes back automatically); budget the time on a large corpus.
+- Compare b4x against b4 and b5x against b5 from the SAME run (same index
+  state, same splits). Record the substituted model id in the manifest.
+- P9's registered prediction: B4′ improves materially, B5′ barely — if
+  the hybrid jumps instead, that's the finding, and the shipped default
+  model/weights change.
+
 ## 4. Rung 3 proxy — drill strategies (fills `tab-drill`)
 
 ```bash
@@ -153,7 +177,7 @@ is exactly what this step measures.
 
 ## 5. Write results into the paper
 
-The paper is organized around pre-registered predictions **P1–P8** (§6 of
+The paper is organized around pre-registered predictions **P1–P9** (§6 of
 the paper); every results table carries a `Verdict:` slot. Fill values AND
 verdicts — a verdict is `holds` / `fails` (P7 may also be `cache not
 built`). Never reframe a failed prediction; report it.
@@ -167,6 +191,7 @@ this run measured:
 | `tab-tasks` n column (T1–T3 only; T4/T5 stay tbd) | — | wc -l labels-*.jsonl / queries.jsonl |
 | §5 corpus card sentence | — | corpus-card.json |
 | `tab-rung1` rows + verdict | P1, P2 | rung1.md test split |
+| `tab-embed` rows + verdict (only if step 3c ran) | P9 | rung1.md b4/b4x/b5/b5x test split |
 | `tab-drill` rows + verdict | P3 | rung3.md pooled table (per-task split for the verdict) |
 | `tab-wiki` rows + verdict (only if step 4b ran) | P7 | ledger lineage query + page-vs-drill proxy |
 | `tab-wiki` cross-repo row (only if 4c ran) | P7 | origin counts + mode A/B coverage delta |

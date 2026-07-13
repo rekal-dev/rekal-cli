@@ -11,6 +11,102 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// writeCfgFile writes raw JSON to path, creating parent dirs.
+func writeCfgFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMergedConfig_GlobalWithLocalOverride(t *testing.T) {
+	// Sets env, so not parallel.
+	gitRoot := t.TempDir()
+	if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	globalHome := t.TempDir()
+	t.Setenv("REKAL_CONFIG_HOME", globalHome)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	globalPath := filepath.Join(globalHome, "config.json")
+
+	// Global sets the embedding backend and a tuned weight mix.
+	writeCfgFile(t, globalPath,
+		`{"embedding":{"endpoint":"http://global/v1","model":"gmodel"},`+
+			`"weights":{"bm25":0.5,"nomic":0.5},"local_import":{"all":true}}`)
+
+	// 1. global-only: no local file → inherit everything.
+	cfg, err := readMergedConfig(gitRoot)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if cfg.Embedding == nil || cfg.Embedding.Endpoint != "http://global/v1" {
+		t.Fatalf("global embedding not inherited: %+v", cfg.Embedding)
+	}
+	w, _ := cfg.Weights.resolve()
+	if w.BM25 != 0.5 || w.Nomic != 0.5 {
+		t.Fatalf("global weights not inherited: %+v", w)
+	}
+	// local_import is NOT inherited (guardrail).
+	if cfg.LocalImport.enabled() {
+		t.Fatalf("local_import must not inherit from global, got %+v", cfg.LocalImport)
+	}
+
+	// 2. local overrides one weight and the embedding, inherits the rest.
+	writeCfgFile(t, configPath(gitRoot),
+		`{"weights":{"bm25":0.9}}`)
+	cfg, err = readMergedConfig(gitRoot)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if cfg.Embedding == nil || cfg.Embedding.Endpoint != "http://global/v1" {
+		t.Fatalf("embedding should still inherit global: %+v", cfg.Embedding)
+	}
+	w, _ = cfg.Weights.resolve()
+	if w.BM25 != 0.9 { // local override
+		t.Fatalf("local bm25 override lost: %v", w.BM25)
+	}
+	if w.Nomic != 0.5 { // inherited from global
+		t.Fatalf("global nomic should be inherited: %v", w.Nomic)
+	}
+
+	// 3. local embedding replaces global embedding wholesale.
+	writeCfgFile(t, configPath(gitRoot),
+		`{"embedding":{"endpoint":"http://local/v1","model":"lmodel"}}`)
+	cfg, _ = readMergedConfig(gitRoot)
+	if cfg.Embedding.Endpoint != "http://local/v1" {
+		t.Fatalf("local embedding should win: %+v", cfg.Embedding)
+	}
+
+	// 4. write path (readConfig) is local-only — never carries global values.
+	local, err := readConfig(gitRoot)
+	if err != nil {
+		t.Fatalf("readConfig: %v", err)
+	}
+	if local.Weights != nil {
+		t.Fatalf("local-only read must not carry global weights: %+v", local.Weights)
+	}
+}
+
+func TestMergedConfig_NeitherIsDefaults(t *testing.T) {
+	gitRoot := t.TempDir()
+	t.Setenv("REKAL_CONFIG_HOME", t.TempDir()) // empty dir, no config.json
+	cfg, err := readMergedConfig(gitRoot)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	w, err := cfg.Weights.resolve()
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if w != search.DefaultWeights() {
+		t.Fatalf("neither global nor local → defaults, got %+v", w)
+	}
+}
+
 func TestReadConfig_MissingIsDefault(t *testing.T) {
 	t.Parallel()
 	gitRoot := t.TempDir()

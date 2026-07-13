@@ -49,7 +49,7 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 
 	// Recall tuning + embedding backend come from .rekal/config.json. A bad
 	// config falls back to defaults with a warning — recall must keep working.
-	cfg, err := readConfig(gitRoot)
+	cfg, err := readMergedConfig(gitRoot)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: config unreadable, using defaults: %v\n", err)
 		cfg = Config{}

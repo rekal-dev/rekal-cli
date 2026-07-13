@@ -64,6 +64,63 @@ func TestEmbedQuery_PrefixAndAuth(t *testing.T) {
 	}
 }
 
+// captureServer records the last decoded request and returns 3-dim vectors.
+func captureServer(t *testing.T, got *embedRequest) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req embedRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		*got = req
+		resp := embedResponse{}
+		for i := range req.Input {
+			resp.Data = append(resp.Data, struct {
+				Index     int       `json:"index"`
+				Embedding []float64 `json:"embedding"`
+			}{Index: i, Embedding: []float64{1, 2, 3}})
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+}
+
+func TestEmbedOpenAI_CohereInputType(t *testing.T) {
+	t.Parallel()
+	var got embedRequest
+	srv := captureServer(t, &got)
+	defer srv.Close()
+
+	c := New(Config{Endpoint: srv.URL + "/v1", Model: "@bedrock/cohere.embed-english-v3"})
+	if _, err := c.EmbedQuery("hi"); err != nil {
+		t.Fatalf("EmbedQuery: %v", err)
+	}
+	if got.InputType != "search_query" {
+		t.Fatalf("query input_type = %q, want search_query", got.InputType)
+	}
+	if _, err := c.EmbedSessions(map[string]string{"s": "doc"}); err != nil {
+		t.Fatalf("EmbedSessions: %v", err)
+	}
+	if got.InputType != "search_document" {
+		t.Fatalf("document input_type = %q, want search_document", got.InputType)
+	}
+}
+
+func TestEmbedOpenAI_NonCohereNoInputType(t *testing.T) {
+	t.Parallel()
+	var got embedRequest
+	srv := captureServer(t, &got)
+	defer srv.Close()
+
+	c := New(Config{Endpoint: srv.URL + "/v1", Model: "text-embedding-3-small"})
+	if _, err := c.EmbedQuery("hi"); err != nil {
+		t.Fatalf("EmbedQuery: %v", err)
+	}
+	if got.InputType != "" {
+		t.Fatalf("non-Cohere input_type = %q, want empty", got.InputType)
+	}
+}
+
 func TestEmbedSessions_BatchesRequests(t *testing.T) {
 	t.Parallel()
 	var requests atomic.Int64

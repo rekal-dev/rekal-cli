@@ -63,13 +63,20 @@ session discovery keep using the invoking worktree.
 - `index_cmd.go`: Rebuild index DB from data DB. Also carries the cross-repo
   local-import flags (`--include-all`/`--include`/`--no-local`), which set a
   persistent preference and rebuild
-- `config.go`: `.rekal/config.json` (gitignored, never committed) — Rekal's
-  durable local config. Holds the cross-repo `local_import` preference, the
-  recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost, summary
-  boost, subagent discount — applied at query time, no reindex), and the
-  `embedding` section
-  (OpenAI-compatible HTTP backend: endpoint/model/api_key with `$VAR`
-  expansion and `api_key_env`)
+- `config.go`: Two-tier config, both gitignored/local-only (never committed,
+  pushed, or synced) — local `.rekal/config.json` deep-merges over global
+  `~/.config/rekal/config.json` (path honors `$REKAL_CONFIG_HOME` then
+  `$XDG_CONFIG_HOME`), precedence local → global → built-in defaults. Merge is
+  per-key: `embedding` inherits wholesale, `weights` field-by-field,
+  `local_import` not inherited (per-repo). `readConfig` is local-only (the
+  write path — the `--include*` flags read-modify-write it, so global values
+  are never baked in); `readMergedConfig` is the consumption view (recall
+  weights, index embedding). Holds the cross-repo `local_import` preference,
+  the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
+  summary boost, subagent discount — applied at query time, no reindex), and
+  the `embedding` section (OpenAI-compatible HTTP backend: endpoint/model/
+  api_key with `$VAR` expansion and `api_key_env`; a Cohere Embed model under
+  the `openai` provider auto-sends `input_type`)
 - `local_import.go`: Cross-repo local session import — folds this machine's
   other Claude Code sessions (all repos + shell, from `~/.claude/projects/*`)
   into the index. **Index-only, never `data.db`**, so imported sessions are
@@ -122,9 +129,10 @@ session discovery keep using the invoking worktree.
 - `embedhttp/`: HTTP embedding client — batched, hard-timeboxed so the
   post-commit hook can never stall; selected over the embedded nomic model
   via config. Two providers: `openai` (default; any OpenAI-compatible
-  `/embeddings` server — vLLM/Ollama/TEI) and `bedrock` (Amazon Bedrock
-  runtime, Cohere Embed models, bearer API key, no SigV4 — asymmetry via
-  Cohere `input_type` not text prefixes)
+  `/embeddings` server — vLLM/Ollama/TEI, or a gateway; a Cohere Embed model
+  here auto-sends `input_type` so Cohere works over the plain `/embeddings`
+  shape) and `bedrock` (Amazon Bedrock runtime, Cohere Embed models, bearer
+  API key, no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
 - `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are

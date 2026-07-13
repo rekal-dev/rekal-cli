@@ -143,6 +143,10 @@ func (c *Client) EmbedSessions(sessions map[string]string) (map[string][]float64
 type embedRequest struct {
 	Model string   `json:"model"`
 	Input []string `json:"input"`
+	// InputType carries the Cohere query/document asymmetry when a Cohere
+	// Embed model is served over the OpenAI /embeddings shape (e.g. through a
+	// gateway). Omitted for non-Cohere models, which ignore it.
+	InputType string `json:"input_type,omitempty"`
 }
 
 type embedResponse struct {
@@ -160,12 +164,21 @@ func (c *Client) embed(inputs []string, query bool) ([][]float64, error) {
 	if c.cfg.Provider == ProviderBedrock {
 		return c.embedBedrock(inputs, query)
 	}
-	return c.embedOpenAI(inputs)
+	return c.embedOpenAI(inputs, query)
 }
 
-// embedOpenAI speaks OpenAI-compatible POST {endpoint}/embeddings.
-func (c *Client) embedOpenAI(inputs []string) ([][]float64, error) {
-	body, err := json.Marshal(embedRequest{Model: c.cfg.Model, Input: inputs})
+// embedOpenAI speaks OpenAI-compatible POST {endpoint}/embeddings. For Cohere
+// Embed models served over this shape (a gateway in front of Bedrock/Cohere),
+// it adds Cohere's required input_type; other models omit it.
+func (c *Client) embedOpenAI(inputs []string, query bool) ([][]float64, error) {
+	req := embedRequest{Model: c.cfg.Model, Input: inputs}
+	if strings.Contains(strings.ToLower(c.cfg.Model), "cohere") {
+		req.InputType = "search_document"
+		if query {
+			req.InputType = "search_query"
+		}
+	}
+	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}

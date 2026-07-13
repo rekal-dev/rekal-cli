@@ -297,7 +297,7 @@ func (n nomicSessionEmbedder) Close() { n.c.Close() }
 // Returns (nil, nil) when no backend is available (unsupported platform, no
 // config) — the semantic layer is simply skipped.
 func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
-	cfg, err := readConfig(gitRoot)
+	cfg, err := readMergedConfig(gitRoot)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}

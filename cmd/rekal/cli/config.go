@@ -225,10 +225,31 @@ func configPath(gitRoot string) string {
 	return filepath.Join(RekalDir(gitRoot), "config.json")
 }
 
-// readConfig loads the persisted config. A missing file is the default (zero
-// value), not an error.
-func readConfig(gitRoot string) (Config, error) {
-	data, err := os.ReadFile(configPath(gitRoot))
+// globalConfigPath returns the machine-wide config path (defaults every repo
+// inherits), or "" when no home is resolvable. Honors $REKAL_CONFIG_HOME (its
+// directory) and $XDG_CONFIG_HOME, else ~/.config/rekal/config.json. Like the
+// per-repo file, it is local-only — never committed, pushed, or synced.
+func globalConfigPath() string {
+	if p := os.Getenv("REKAL_CONFIG_HOME"); p != "" {
+		return filepath.Join(p, "config.json")
+	}
+	if p := os.Getenv("XDG_CONFIG_HOME"); p != "" {
+		return filepath.Join(p, "rekal", "config.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".config", "rekal", "config.json")
+}
+
+// readConfigFile loads one config file. A missing file (or empty path) is the
+// default (zero value), not an error.
+func readConfigFile(path string) (Config, error) {
+	if path == "" {
+		return Config{}, nil
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Config{}, nil
@@ -237,9 +258,86 @@ func readConfig(gitRoot string) (Config, error) {
 	}
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return c, nil
+}
+
+// readConfig loads the per-repo config only. This is the write-path view: the
+// flag handlers read-modify-write it, so it must never carry inherited global
+// values (that would bake them into the repo's file). Consumers that want the
+// effective settings use readMergedConfig.
+func readConfig(gitRoot string) (Config, error) {
+	return readConfigFile(configPath(gitRoot))
+}
+
+// readMergedConfig loads the machine-wide global config and the per-repo local
+// config and merges local over global (see mergeConfig). Used at the
+// consumption points — recall weights and the index embedding backend — so a
+// backend or tuned weights set once in ~/.config/rekal/config.json apply to
+// every repo, while a repo can still override per key.
+func readMergedConfig(gitRoot string) (Config, error) {
+	global, err := readConfigFile(globalConfigPath())
+	if err != nil {
+		return Config{}, err
+	}
+	local, err := readConfigFile(configPath(gitRoot))
+	if err != nil {
+		return Config{}, err
+	}
+	return mergeConfig(global, local), nil
+}
+
+// mergeConfig resolves the two-tier config: global defaults with per-repo
+// override, highest-to-lowest local -> global -> built-in defaults.
+//
+//   - embedding inherits wholesale — a repo either uses the global backend or
+//     replaces the whole block (endpoint/model/key move together).
+//   - weights merge field-by-field — a repo can override just bm25 and inherit
+//     the rest of the global tuned mix.
+//   - local_import is NOT inherited — cross-repo import intent stays per-repo,
+//     so a global setting can never silently fold every machine's repos into a
+//     project (guardrail against surprise).
+func mergeConfig(global, local Config) Config {
+	merged := Config{LocalImport: local.LocalImport}
+	merged.Embedding = global.Embedding
+	if local.Embedding != nil {
+		merged.Embedding = local.Embedding
+	}
+	merged.Weights = mergeWeights(global.Weights, local.Weights)
+	return merged
+}
+
+// mergeWeights deep-merges the tuning knobs field-by-field: a present local
+// field overrides, an absent one inherits global. A nil block on either side
+// yields the other unchanged.
+func mergeWeights(global, local *weightsConfig) *weightsConfig {
+	if local == nil {
+		return global
+	}
+	if global == nil {
+		return local
+	}
+	merged := *global
+	if local.BM25 != nil {
+		merged.BM25 = local.BM25
+	}
+	if local.LSA != nil {
+		merged.LSA = local.LSA
+	}
+	if local.Nomic != nil {
+		merged.Nomic = local.Nomic
+	}
+	if local.SteeringBoost != nil {
+		merged.SteeringBoost = local.SteeringBoost
+	}
+	if local.SummaryBoost != nil {
+		merged.SummaryBoost = local.SummaryBoost
+	}
+	if local.SubagentDownweight != nil {
+		merged.SubagentDownweight = local.SubagentDownweight
+	}
+	return &merged
 }
 
 // writeConfig persists the config to .rekal/config.json. An empty config

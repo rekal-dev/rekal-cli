@@ -142,9 +142,20 @@ rekal "JWT" -n 10
 
 ## Tuning (config.json)
 
-Recall reads `.rekal/config.json` (gitignored) at query time:
+Recall reads config at query time from two tiers, highest-to-lowest:
+**local `.rekal/config.json` → global `~/.config/rekal/config.json` →
+built-in defaults.** The global file (path honors `$REKAL_CONFIG_HOME` then
+`$XDG_CONFIG_HOME`, else `~/.config/rekal/`) supplies machine-wide defaults so
+a backend or tuned weights can be set once for every repo. The merge is
+per-key: **`embedding` inherits wholesale** (a repo either uses the global
+backend or replaces the whole block), **`weights` merge field-by-field** (a
+repo can override just `bm25` and inherit the rest), and **`local_import` is
+not inherited** — cross-repo import intent stays per-repo. Both files are
+gitignored/local-only and never pushed or synced; the write path (`rekal
+index --include-all/--include/--no-local`) only ever touches the local file,
+so global values are never baked into a repo.
 
 - **`weights`** — layer mix (`bm25`/`lsa`/`nomic`, normalized ratios; an explicit `0` disables a layer), `steering_boost`, `summary_boost`, `subagent_downweight`. Applied per query; changing them never requires a reindex. Invalid values fall back to defaults with a warning. When no semantic vectors are available the nomic share falls back to LSA and the pair is renormalized (2-way fallback).
-- **`embedding`** — when set, the recall query is embedded by the configured HTTP backend instead of the embedded nomic model. `provider` selects the wire protocol: `openai` (default) for any OpenAI-compatible `/embeddings` server (vLLM, Ollama, LM Studio, TEI), or `bedrock` for the Amazon Bedrock runtime (Cohere Embed models — `cohere.embed-english-v3`/`cohere.embed-multilingual-v3` — authenticated by a Bedrock API key as the bearer token, no SigV4). For `bedrock`, `endpoint` is the runtime host (`https://bedrock-runtime.<region>.amazonaws.com`) and the query/document asymmetry rides Cohere's `input_type` field, so the nomic text prefixes are not applied. The API key supports a real string (`api_key`), a `$VAR` reference inside `api_key`, or an explicit env var name (`api_key_env`, which wins when set and non-empty); absent key ⇒ no Authorization header. `endpoint` expands `$VAR` the same way. The vectors compared against are the ones the index was built with (keyed by model name), so a backend/model mismatch skips the semantic layer — falling back to 2-way scoring — rather than comparing incompatible vectors. Rebuild with `rekal index` after changing provider/model/endpoint.
+- **`embedding`** — when set, the recall query is embedded by the configured HTTP backend instead of the embedded nomic model. `provider` selects the wire protocol: `openai` (default) for any OpenAI-compatible `/embeddings` server (vLLM, Ollama, LM Studio, TEI, or a gateway), or `bedrock` for the Amazon Bedrock runtime (Cohere Embed models — `cohere.embed-english-v3`/`cohere.embed-multilingual-v3` — authenticated by a Bedrock API key as the bearer token, no SigV4). Under `openai`, a **Cohere Embed model** (model name contains `cohere`, e.g. served through a gateway in front of Bedrock) automatically gets Cohere's required `input_type` in the request body — `search_query` for the query, `search_document` for stored turns — so Cohere works over the plain `/embeddings` shape without text prefixes; other models omit it. For `bedrock`, `endpoint` is the runtime host (`https://bedrock-runtime.<region>.amazonaws.com`) and the same asymmetry rides `input_type` natively. The API key supports a real string (`api_key`), a `$VAR` reference inside `api_key`, or an explicit env var name (`api_key_env`, which wins when set and non-empty); absent key ⇒ no Authorization header. `endpoint` expands `$VAR` the same way. The vectors compared against are the ones the index was built with (keyed by model name), so a backend/model mismatch skips the semantic layer — falling back to 2-way scoring — rather than comparing incompatible vectors. Rebuild with `rekal index` after changing provider/model/endpoint.
 
 Failures anywhere in tuning/embedding degrade recall gracefully (fewer layers), never break it.

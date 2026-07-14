@@ -1,7 +1,14 @@
-# Paper: "The Commit Is the Label"
+# Paper: "Git-Bound Memory"
+
+The unified flagship paper — *Git-Bound Memory: Routing Developer
+Questions to Structure, Episode, and Synthesis under a Token Budget*. It
+supersedes v1 ("The Commit Is the Label", available in git history),
+whose guarantee arguments it compresses into §3 and whose retrievability
+numbers it absorbs into the seed-stage study (§5). The structure follows
+`../07-paper-restructure.md` (ladder body, coverage-at-cost ending).
 
 - `rekal-paper.typ` — Typst source (canonical)
-- `refs.bib` — bibliography (BibTeX; the 18-paper source set + LoCoMo)
+- `refs.bib` — bibliography (BibTeX; the literature-map source set + SPM)
 - `rekal-paper.pdf` — compiled output, checked in for convenience
 
 ## Build
@@ -14,17 +21,23 @@ python3 -c "import typst; typst.compile('rekal-paper.typ', output='rekal-paper.p
 
 ## Data provenance
 
-All empirical values come from the 2026-07-12 corpus run on a real
-1,433-session store; its aggregate manifest is committed under `../runs/`
-per `DATA-RUN.md` §6 (see `../../../scripts/bench/README.md` for the
-harness). The paper reports the rung-1 retrievability result and the bounded
-drill-cost figure; the source carries no placeholders.
+Empirical values come from two sources. (1) The 2026-07-12 single-corpus
+rung-1 run (Corpus A raw-grep floor, hybrid/BM25 composition, drill cost);
+its aggregate manifest is committed under `../runs/` per `DATA-RUN.md` §6.
+(2) The consolidated multi-corpus run record (8-corpus retrieval matrix,
+B1′ parsed-grep floors, mechanism sweeps, SPM facet results, and the
+mode/sufficiency tables with their ablations) — held on the operator's
+machine; corpora appear in the paper anonymized by workload class only
+(Corpus A/B + six small), per the anonymization rule in
+`../07-paper-restructure.md`. Before submission, the consolidated record's
+aggregate tables should be committed under `../runs/` in the same
+anonymized form, and every paper number proofread against it — several
+table cells were transcribed from the source record and must be verified.
 
 ## Extending the result
 
-The natural next rungs — judged answer quality against the gold turn, the
-scale sweep against an agentic-grep baseline, and the embedding-substitution
-test — reuse the same public harness and the already-mined query set. When a
-run produces those numbers, add the corresponding table and cite the run
-directory; the paper's structure (§7 Results, §9 Future Work) is written to
-accommodate them without disturbing the retrievability result.
+Specified but not yet run (§12 of the paper): synthesis on the mined T4
+multi-hop gold, a second judge model with agreement, the wild-question
+kind-distribution (which upgrades §8.3 to a single expected-cost figure),
+and gate recalibration after the facet term enters the score mix. All
+reuse the same public harness at zero further labeling cost.

@@ -1,7 +1,13 @@
 // Rekal paper — compile with: typst compile rekal-paper.typ
 // (or: python3 -c "import typst; typst.compile('rekal-paper.typ', output='rekal-paper.pdf')")
-// All empirical values are from the 2026-07-12 corpus run; its aggregate
-// manifest is committed under docs/research/runs/ per DATA-RUN.md §6.
+// This is the unified flagship paper (git-bound memory + routing). It
+// supersedes v1 ("The Commit Is the Label", in git history), whose long-form
+// guarantee arguments it compresses into §3. Empirical values are from the
+// consolidated multi-corpus run record (retrieval matrix + mechanism sweeps +
+// sufficiency runs); the committed aggregate manifest for the single-corpus
+// rung lives under docs/research/runs/. Corpora are anonymized by workload
+// class; no session content, corpus identity, or private path leaves the
+// operator's machine.
 
 #set page(paper: "us-letter", margin: (x: 54pt, y: 60pt), columns: 2)
 #set columns(gutter: 20pt)
@@ -20,8 +26,8 @@
 // ---------- Title block (spans both columns) ----------
 #place(top, scope: "parent", float: true, clearance: 18pt)[
   #align(center)[
-    #text(size: 17pt, weight: "bold")[
-      The Commit Is the Label: Four Problems in Agent Memory\ That Version Control Already Answers
+    #text(size: 17pt, weight: "bold", hyphenate: false)[
+      Git-Bound Memory: Routing Developer Questions\ to Structure, Episode, and Synthesis under a Token Budget
     ]
     #v(6pt)
     #text(size: 10.5pt)[Frank Guo#super[1]]
@@ -32,192 +38,283 @@
 
 // ---------- Abstract ----------
 #block(inset: (x: 2pt))[
-  *Abstract.* Memory systems for AI coding agents are rebuilding, in
-  software, guarantees that version control already provides. An agent's
-  memory is context assembly under a token budget — for each question, the
-  few thousand recorded tokens that change the answer — and the literature
-  assembles it with machinery: tiered stores, memory graphs, and compiled
-  wikis, guarded by model-judged admission and evaluated on hand-annotated
-  benchmarks. The machinery imports four problems it then cannot
-  discharge: *annotation* (no ground truth without human labels),
-  *staleness* (compiled structure must be maintained), *self-confirmation*
-  (a judge that can admit its own mistakes), and *contamination* (one
-  shared pool, one open write path). In the software-engineering setting,
-  each is answered by a git primitive every team already runs: the commit
-  labels which sessions produced which verified change; rebuild and diff
-  make derived structure disposable and its drift reviewable; the merge
-  externally verifies what enters shared memory; and code review is the
-  sole, audited channel across scope boundaries. These are answers *by
-  construction* — properties of how the system is built, checkable by
-  reading it. This paper puts the first to an empirical test: we build
-  *Rekal*, a local-first, single-binary memory engine, and derive
-  *RekalBench*, a self-labeling benchmark for repo-grounded intent recall
-  whose ground truth is mined — not annotated — from the corpus's own
-  commit–session links. The other three we substantiate as design
-  guarantees, not measured outcomes, and say so. On a real working corpus of 1,433 sessions
-  and 66k turns, retrieval over the parsed, scrubbed ledger is *37$times$*
-  more effective than term-frequency scanning of the raw transcripts (0.187
-  vs 0.005 pooled MRR, 57$times$ on nDCG\@10): parsing the history into
-  attributed turns is what makes it searchable at all. Against a strong
-  lexical index over the same turns the hybrid's added gain is smaller and,
-  as predicted, concentrated on paraphrased provenance queries, where the
-  producing session is returned in the top five 54% of the time. A bounded
-  drill then assembles the answer in *\~1,500 tokens* — three orders of
-  magnitude below the recorded history — at \~0.5s median latency. The
-  prediction was fixed before the held-out split was scored; the benchmark
-  harness is public, fully local, and runnable by anyone on their own
-  history at zero annotation cost.
+  *Abstract.* Memory for AI coding agents is usually posed as a retrieval
+  problem — rank the one past session that answers a query — and built as
+  machinery: tiered stores, memory graphs, compiled wikis, model-judged
+  admission. We argue for a different position on both axes. First, memory
+  should be *git-bound*: the boundary of the memory system is the boundary
+  of the repository and its version control, and inside that binding the
+  hard guarantees — ground truth (the commit labels which sessions produced
+  which verified change), freshness (derived structure is disposable and
+  rebuilt), verification (the merge gates what is shared), containment
+  (review is the only egress) — are inherited from git rather than rebuilt
+  in software. Second, ranking is the wrong headline objective. We close
+  the seed-supply problem honestly: across eight real corpora, hybrid
+  retrieval over the parsed, scrubbed ledger dominates grep floors on every
+  corpus (raw-transcript grep by 37$times$; the stronger parsed-turn grep
+  floor by 6–11$times$ on the two statistically valid corpora), and a
+  disciplined mechanism study rejects five imported ranking mechanisms and
+  keeps two — per-corpus weight tuning, and a structured *facet* term
+  ported from SPM whose held-out marginal is significant on both valid
+  corpora. But the graveyard teaches the real lesson: every pure re-ranking
+  mechanism failed, and the one retrieval gain came from an orthogonal
+  evidence layer. Applied above retrieval, that lesson is the paper's
+  system: real developer questions split into breadth, pointed, and
+  rationale kinds; single-shot episodic recall answers 0.07–0.20 of them
+  (answer-sufficiency, blind judge); a *router* dispatches each kind to the
+  mode that can answer it — a git-anchored structural map for breadth,
+  confidence-gated episodic recall for pointed lookups (ungated injection
+  *poisons* a good map, 0.63→0.29; the gate suppresses 11/12 bad
+  injections), and *decision synthesis* over a decision-scoped gather for
+  rationale (0.83 overall on a two-week-old production corpus,
+  reconstructing why-arcs single-shot retrieval fragments). Routed, the
+  system holds the best per-kind floor at 382–980 tokens per question —
+  three orders of magnitude under the recorded history. Ground truth is
+  mined, not annotated: the corpus labels itself via commit–session links,
+  so every result is replicable by any user on their own history at zero
+  annotation cost. The binding constraint that remains is capture, and we
+  say so.
 ]
 #v(4pt)
 
-= Introduction
+= The question an agent actually asks
 
 Code has a ledger; intent does not. Version control records every line a
 team ships, but the reasoning that produced those lines — explored designs,
 rejected alternatives, the correction a reviewer shouted mid-session — lives
-in AI-assistant transcripts that expire with the terminal window. The cost
-compounds as agents do more of the work: an agent that cannot remember what
-its own team already tried will confidently re-propose it.
+in AI-assistant transcripts that expire with the terminal window. An agent
+that cannot remember what its own team already tried will confidently
+re-propose it.
 
 Start from what memory *is* for an agent. The context window is the scarce
 resource, so memory is not a store — it is *context assembly under a token
-budget*: for each question, deliver the few thousand tokens that change the
-answer, out of millions of recorded ones. That framing fixes the
-requirements. Recall must be *bounded* — a budget-shaped set the agent can
-drill, not an unbounded scan @rise2026. What it returns must be *fresh* —
-reflecting the repository as of the last commit, not a compaction of last
-month. Every memory must be *lineaged* — dereferenceable to the source
-turn and the commit it produced, because an unattributable memory cannot
-be trusted or audited. Anything *shared* must be verified by something
-other than the model's own judgment. And the whole system must be *cheaply
-evaluable* — a memory whose quality cannot be measured without an
-annotation team will not be measured at all.
+budget*: for each question, deliver the few thousand recorded tokens that
+change the answer, out of millions @rise2026. The dominant framing then
+takes one more step that we refuse: it treats "each question" as one
+retrieval problem, embeds the corpus, ranks sessions, and scores success by
+Mean Reciprocal Rank against a single gold session.
 
-The research community meets these requirements with *machinery*: organize
-dialogue history into tiered stores @adamem2026, associative graphs
-@mragent2026, or compiled wikis @llmwiki2026; guard the store with
-model-judged admission @edv2026; evaluate on hand-annotated conversational
-suites @locomo2024. Each piece of machinery then becomes its own research
-problem, and we name the four: *staleness* — the compiled structure must
-be maintained; *self-confirmation* — the judge can admit its own mistakes;
-*annotation* — the evaluation does not scale; *contamination* — the shared
-pool becomes an attack surface @memsecurity2026. A recent systematic
-evaluation
-from the data-management perspective — twelve memory systems, five
-workloads, eleven datasets — reaches the fitting verdict: *no single
-architecture dominates; effectiveness depends on aligning memory structure
-with the workload* @anms2026.
+Watch what developers actually ask, and the framing breaks into three
+kinds:
 
-This paper takes that verdict literally. For coding agents, the workload
-already has a structure — the repository — and *the four open problems the
-machinery addresses are already answered by infrastructure every software
-team runs* (@tab-thesis). We are precise about what "answered" means, and
-it differs across the four. Annotation is answered *and demonstrated*: the
-commit–session link is a free label, and this paper builds a working
-retrieval benchmark on it. The other three — staleness, self-confirmation,
-contamination — are answered *by construction*: they are properties of how
-Rekal is built (a disposable index, a merge-gated export path, a
-review-only egress), verifiable by reading the design, but we do not here
-measure their downstream benefit and do not claim to. The contribution is
-thus a memory system built *into* git, the self-labeling benchmark that
-construction makes possible, and a first retrieval result on it — not a
-claim to have empirically closed four problems at once.
+- *Breadth* ("how is the data-processing pipeline architected
+  end-to-end?"). The answer is spread across many sessions and the code
+  tree; no single episode contains it. Episodic recall floors here by
+  construction.
+- *Pointed* ("which session implemented the validation layer, and how?").
+  The case retrieval is built for — a specific episode answers.
+- *Rationale* ("why was the batch execution engine chosen instead of the
+  managed inference service?"). The answer is a *decision that evolved*
+  across sessions and was never written down in one place. Single-shot
+  retrieval returns one fragment of an arc.
 
-#figure(
-  scope: "parent",
-  placement: top,
-  table(
-    columns: (0.8fr, 1fr, 1.3fr),
-    align: (left, left, left),
-    table.header([*Open problem*], [*The literature's machinery*], [*The git-native answer (Rekal mechanism)*]),
-    [*Annotation.* Where does supervision come from?],
-    [Human annotation of dialogue corpora @locomo2024; LLM judges grading themselves],
-    [*The commit.* A post-commit hook links sessions to the change they produced — free, objective, abundant (\u{00A7}4.1); RekalBench mines its gold from these links (\u{00A7}5)],
-    [*Staleness.* How does derived memory stay current?],
-    [Consolidation daemons; compiled wikis and graphs whose maintenance is "future work" @llmwiki2026 @adamem2026],
-    [*Rebuild + diff.* Indexes are disposable and rebuilt (\u{00A7}4.2); materialized views regenerate deterministically, so drift arrives as a reviewable `git diff`],
-    [*Self-confirmation.* Who verifies what enters shared memory?],
-    [Self- or consensus-judged admission @edv2026],
-    [*The merge.* Only sessions whose commit landed on the default branch are shared; review + CI + merge are the external verifier (\u{00A7}4.3)],
-    [*Contamination.* How does private memory cross a boundary?],
-    [One machine-wide pool, implicitly readable and writable everywhere @automem2026 @adamem2026 — the documented contamination surface @memsecurity2026 @statecontam2026],
-    [*The review.* Cross-repo memory is index-only and structurally unpushable; its sole egress is an origin-labeled page on a PR (\u{00A7}4.4)],
-  ),
-  caption: [The thesis. Four problems the agent-memory literature treats as
-  open research, and the git primitive that answers each by construction.
-  \u{00A7}4 gives the mechanisms. Only the first — annotation — is put to an
-  empirical test in this paper (\u{00A7}5–7); the other three are argued as
-  design guarantees, not measured here.],
-) <tab-thesis>
+These kinds need different mechanisms, and a system that ships only the
+middle one fails most of the population. This paper builds and measures
+all three over one git-native ledger, with a router in front and a
+confidence gate on the episodic path.
 
-*Contributions.* (1) The design and implementation of Rekal, a local-first,
-git-native memory engine for coding agents (single binary; capture, storage,
-hybrid recall, and team sync with no server, API, or telemetry), with an
-agent-facing skill layer that operationalizes active, multi-step memory
-reconstruction @mragent2026. (2) *RekalBench*, a self-labeling benchmark
-methodology for repo-grounded intent recall, whose ground truth is mined
-from the corpus's own commit–session structure rather than annotated,
-together with a first instantiation on two task families. (3) A
-retrieval evaluation on a real working corpus, with single-signal ablations
-(free under query-time weighting) and a judge-free context-assembly measure,
-whose one prediction was fixed before the held-out split was scored; the
-judged-answer and corpus-scale rungs are specified for the same public
-harness but not run here, and we say so plainly rather than implying a
-completeness the study does not have.
+*Contributions.* (1) The *git-bound* position: a memory engine built into
+version control whose guarantees — annotation, staleness,
+self-confirmation, contamination — are inherited by construction (§3), and
+a self-labeling benchmark that construction makes possible (§6). (2) A
+*closed seed stage*: an eight-corpus retrieval study under a strict
+incumbent-versus-candidate discipline @rho2026 that establishes honest
+grep floors, rejects five imported ranking mechanisms with confidence
+intervals, validates two (per-corpus tuning; a facet term ported from SPM
+@spm2026), and derives testable rules for when each helps (§5). (3) The
+*routed three-mode architecture* — structural map, gated episodes,
+decision synthesis, shipped as one binary plus three agent skills — and an
+*answer-sufficiency* evaluation showing each mode wins a different
+question kind, ungated injection harms, and synthesis reconstructs
+decision rationale that no retrieval variant reaches (§7–8). (4) The
+token-economics reading: full-kind coverage at 382–980 tokens per routed
+question (§8.3).
 
-= A Worked Example
-
-Everything in this paper appears once, concretely, in the following
-five-minute story. (Illustrative; the exact JSON shapes are the shipped
-ones.)
+= A worked example
 
 On Monday, an engineer and an agent rework webhook delivery. Mid-session
 the engineer interrupts: *"don't retry on a fixed delay — it stampedes the
 downstream on recovery."* The agent switches to exponential backoff with
 jitter; the change merges. The post-commit hook captures the session —
-turns, tool calls, the interruption tagged with its own role
-(`human_steering`) — scrubs secrets, and appends it to the repo's ledger
-with a link to the commit SHA. Nobody wrote documentation.
+turns, tool calls, the interruption tagged `human_steering` — scrubs
+secrets, and appends it to the repo's ledger with a link to the commit
+SHA. Nobody writes documentation.
 
-On Friday, a different agent, different machine, same team, picks up a
-related task and asks:
+On Friday, three different questions arrive, and the router sends each to
+a different place. *"Should webhook retries use a fixed delay?"* is
+pointed: episodic recall returns the Monday session with the steering turn
+as the top snippet, confidence clears the gate, and a bounded drill reads
+a five-turn neighborhood — about 1,500 tokens. *"How does delivery work
+end-to-end?"* is breadth: the structural map — a subsystem diagram
+generated from the repository at its current SHA — answers from structure;
+no episode is fetched. *"Why exponential backoff instead of a delivery
+queue?"* is rationale: a decision-scoped gather collects the
+decision-relevant turns across sessions (the steering turn, the
+alternatives discussed before it, the constraint that forced the change)
+and one synthesis call reconstructs the arc, citing each claim's turn and
+commit. Same ledger, three mechanisms, each bounded to what the question
+warrants.
 
-```json
-$ rekal "should webhook retries use a fixed delay?"
-{ "results": [{
-    "session_id": "01JNQX8F2K9M",
-    "score": 0.87,
-    "snippet": "don't retry on a fixed delay - it
-       stampedes the downstream on recovery",
-    "snippet_turn_index": 41,
-    "snippet_role": "human_steering",
-    "summary_turn_index": 118,
-    "session": { "commit": "9c2f41a",
-      "files": ["delivery/retry.go", ...] }
-}]}
-```
+= Git-bound: the inherited guarantees
 
-Four properties of the answer carry the paper's argument. The top snippet
-is the *steering turn itself* — ranking boosts the moments a human
-redirected the agent, because that is where decisions actually get made.
-`snippet_role` says a human said this; machine text can never masquerade as
-intent. The result is a *pointer structure*, not a payload: `snippet_turn_
-index` locates the evidence, `summary_turn_index` points at a
-harness-written distillation of the whole session (10–17KB, already paid
-for during context compaction — never inlined), and the agent drills
-exactly as deep as the question warrants. And the `commit` field is the
-provenance anchor: the claim "we ruled this out" dereferences to a change
-that survived review and merge. The dead end was re-proposed on Friday and
-ruled out in one query — by a colleague's Monday, not by documentation.
+Prior memory systems — tiered stores @adamem2026, memory graphs
+@mragent2026, compiled wikis @llmwiki2026, guarded by model-judged
+admission @edv2026 and evaluated on annotated benchmarks @locomo2024 —
+import four problems they then cannot discharge. In the
+software-engineering setting each has an answer that is a git primitive
+every team already runs, *by construction*:
 
-The rest of the paper is this example generalized: \u{00A7}3 the engine
-that produced it, \u{00A7}4 the four guarantees behind its fields,
-\u{00A7}5 how a corpus of such sessions labels itself, \u{00A7}6–7 the
-measurements.
+1. *Annotation* — where does supervision come from without human labels?
+   → The *commit*: a post-commit hook links sessions to the verified
+   change they produced; ground truth is mined, not annotated (§6).
+2. *Staleness* — how does derived memory stay current? → *Rebuild and
+   diff*: the index is disposable and regenerated from the append-only
+   ledger; compiled structure (including §7's map) is a function of the
+   tree at a SHA, refreshed by diffing, its drift surfaced as a reviewable
+   `git diff`.
+3. *Self-confirmation* — who verifies what enters shared memory, if not
+   the model judging its own homework? → The *merge*: only checkpoints
+   whose commit landed on the default branch are exportable; review + CI
+   + merge are the external verifier.
+4. *Contamination* — how does memory cross a scope boundary? → *Code
+   review* is the sole audited egress; cross-repo memory is index-only
+   and structurally unpushable @memsecurity2026 @statecontam2026.
 
-= The Engine
+We take annotation as given by the self-labeling method below and focus
+the empirical work on the three-mode architecture and its routing. The
+long-form defense of the four guarantees is in the superseded substrate
+report (repository history); the design survives here as the platform the
+modes stand on.
 
-// ---------- Figure 1: architecture ----------
+= The ledger and the engine
+
+Rekal is one binary embedding its database engine, embedding models, and
+compression dictionary; git is the only wire. A post-commit hook parses
+the active assistant session(s) — adapters cover four agent CLIs —
+deduplicates turns, scrubs secrets and anonymizes paths *before any byte
+is stored* @statecontam2026, and appends to an append-only ledger
+(`data.db`, committed via a per-author orphan branch under the merged-only
+gate). A derived index (`index.db`) is rebuilt locally. The ledger records
+what was *said* — conversation turns with high-signal roles preserved
+(`human_steering` corrections, out-of-band compaction `summary`
+distillations) — and what was *touched*: tool names, file paths, command
+output, and the commit SHA. Crucially, it does not store diff content:
+code content is reconstructed from the commit SHA on demand, so intent
+lives in the ledger and content lives in git (thin on the wire; the
+division of labor §9 defends).
+
+Recall scores sessions by a weighted hybrid over the parsed turns — BM25
+full-text, latent-semantic, and neural cosine — with per-role boosts
+(steering, summary), a subagent down-weight, and an opt-in *facet* term
+(§5.3). All weights apply at query time; no reindex to change them. Ship
+defaults: layer mix 0.35/0.10/0.55, steering boost 1.3, summary boost
+1.15, subagent 0.7, max-norm, facet 0 (auto-tuning selects it where it
+helps).
+
+= The seed stage, closed
+
+This section reports the retrieval program to its end and states what it
+does and does not buy. Protocol throughout: self-labeled gold (§6), 10%
+dev / 90% held-out test, and the incumbent-versus-candidate discipline of
+@rho2026 — a candidate configuration ships only if it beats the incumbent
+on the held-out split under a paired bootstrap CI excluding zero.
+
+*Corpora.* Eight real working corpora spanning four workload classes,
+anonymized: *Corpus A* (documentation/knowledge; ≈1,400 captured
+sessions; prose-heavy, diverse tooling; retrieval n_test=212) and *Corpus
+B* (production data/ML pipeline build; n_test=456–521 by split) are the
+two with statistically clean splits; six smaller corpora (code,
+docs/architecture, notes, build-scripts, two mixed) are reported
+directionally and flagged where tuning would overfit.
+
+== The floors: parsing is most of the miracle
+
+On Corpus A, term-frequency grep over the *raw* transcript JSONL scores
+0.005 pooled MRR against 0.187 for the hybrid over the parsed ledger —
+37$times$, 57$times$ on nDCG\@10, non-overlapping bootstrap CIs. Raw
+transcripts are adversarial retrieval material (tool dumps, base64,
+duplicated sidechains); parsing the history into attributed turns is what
+makes it searchable at all. That result alone, however, is a floor
+against weak material — so we also report the stronger *parsed-turn grep*
+floor (term-frequency rank over the same turns the index sees) on all
+eight corpora. The hybrid dominates it everywhere: 0.021 → 0.225
+(≈11$times$) on Corpus A, 0.028 → 0.159 (≈6$times$) on Corpus B, and on
+every small corpus besides (floors 0.08–0.19 vs hybrids 0.21–0.58).
+Ranking still earns its place on parsed turns; grep does not close the
+gap once parsing is granted.
+
+== The mechanism graveyard, and two survivors
+
+#figure(
+  table(
+    columns: (auto, auto, 1fr),
+    align: (left, left, left),
+    table.header([*Mechanism*], [*Verdict*], [*Held-out evidence (paired CI)*]),
+    [RRF fusion], [rejected], [no significant lift on any valid corpus],
+    [Temporal decay], [rejected], [≈0 everywhere],
+    [Lexical dilution], [rejected], [≈0 or degradation],
+    [Z-score normalization], [rejected], [offline +0.048\* superseded by full engine: +0.016/+0.024, CIs cross 0 — engine already max-normalizes],
+    [Embedder substitution], [rejected], [alternative ≈ shipped embedder on hybrid, n.s. on all corpora],
+    [Per-corpus weight tuning], [*kept*], [B +0.032 [.016,.049]; small code corpus +0.134 [.025,.247]; A within noise],
+    [SPM facet term @spm2026], [*kept*], [marginal significant on *both* valid corpora: A +0.110 [.056,.173], B +0.053 [.012,.107]; tuner selects facet_boost=0.3 on both],
+  ),
+  caption: [The seed-stage mechanism study under the RHO discipline
+  @rho2026. Five imported mechanisms rejected with intervals; two kept.
+  Negative results are load-bearing: they close the stage.],
+) <tab-graveyard>
+
+Two findings organize @tab-graveyard. *Hybrid beats BM25 where paraphrase
+opens a surface-form gap and not elsewhere*: pooled on Corpus A the two
+sit within each other's CIs (0.187 vs 0.171), the separation is a
+provenance effect (T1 MRR 0.301 vs 0.248; R\@5 0.537 vs 0.425), and the
+only corpus where the hybrid wins outright is the noisy-commit prose
+corpus (+0.352 [.158,.549]) — on exact-vocabulary code corpora it ties.
+*The facet term is the one imported mechanism that survives end-to-end.*
+SPM @spm2026 derives structured facets (task, data schema, tool config,
+output constraints) for session-start context assembly; we port the idea
+to a retrieval term: a deterministic per-session facet document (distinct
+tool paths + command prefixes + steering text; no LLM, built at index
+time), BM25-searched as a fourth, orthogonal hybrid term. Root cause of
+the win: the answer to "what tools/config did session X use" lives in
+tool-call *metadata* that a session's conversational turns often never
+mention — turn-recall misses it in the top-50 while facet-search finds
+it. The lift is predictable: it is monotone in tool-path diversity
+(the high-diversity corpus gains +0.110; the uniform-pipeline corpus
++0.053), which yields a testable deployment rule — the term ships off by
+default and auto-tuning enables it (facet_boost 0.3) where the corpus's
+tool-diversity supports it.
+
+== What the graveyard teaches
+
+Every pure re-ranking mechanism failed; the single retrieval gain came
+from adding an *orthogonal evidence layer* for a *kind of question* the
+turn index structurally misses. Gains come from coverage of question
+kinds, not rank polish. The seed stage is hereby closed — retrieval is a
+solved-enough seed supplier with two validated levers and characterized
+limits — and the rest of the paper applies the same lesson above
+retrieval, where the layers are no longer index columns but memory
+*modes*.
+
+= Ground truth without annotation
+
+No benchmark exists for repo-grounded intent recall: conversational
+suites @locomo2024 evaluate chat personas; IR suites evaluate document
+QA. RekalBench's defining property follows from the git binding: *the
+corpus labels itself.* Every checkpoint records which sessions produced
+which commit; a SQL miner over ledger plus git topology emits gold pairs
+with no human in the loop — provenance (commit → producing session),
+decision recall (steering turns), dead ends (never-merged branches),
+multi-hop (file-co-occurrence session pairs). An LLM paraphrases each
+label's context into a natural question under a 4-gram Jaccard ≤0.30
+leakage ceiling. Supervision cost: zero. The retrieval study of §5 runs
+on these labels (415 pairs on Corpus A alone; T4 multi-hop supplies
+92–104 pairs each in the three high-co-occurrence corpora); label noise
+biases scores *down*, not up, so the numbers are conservative. Because
+labels are mined, the entire harness is public, fully local, and runnable
+by anyone on their own store.
+
+= Three modes and a router
+
 #let archbox(x, y, w, h, fill, body) = place(dx: x, dy: y, block(
   width: w, height: h, fill: fill, radius: 4pt, stroke: 0.6pt + luma(90),
   inset: 4pt, align(center + horizon, text(size: 7.6pt, body))))
@@ -235,312 +332,97 @@ measurements.
   text(size: 6.8pt, fill: luma(50), style: "italic", body))
 
 #figure(
-  block(width: 100%, height: 212pt, {
-    // agents row
-    archbox(0pt, 0pt, 52pt, 24pt, rgb("#eef2ff"))[Claude\ Code]
-    archbox(58pt, 0pt, 52pt, 24pt, rgb("#eef2ff"))[Codex]
-    archbox(116pt, 0pt, 52pt, 24pt, rgb("#eef2ff"))[Gemini]
-    archbox(174pt, 0pt, 52pt, 24pt, rgb("#eef2ff"))[OpenCode]
-    arrow(113pt, 24pt, 113pt, 50pt)
-    alabel(6pt, 32pt)[post-commit hook:\ parse · scrub · dedup]
-    // data.db
-    archbox(30pt, 50pt, 166pt, 32pt, rgb("#fff7ed"))[*`data.db`* — append-only ledger\ raw turns · tool calls · `checkpoints(sha)` · `checkpoint_sessions`]
-    // fork arrows
-    arrow(78pt, 82pt, 58pt, 108pt)
-    alabel(0pt, 88pt)[rebuild]
-    arrow(150pt, 82pt, 172pt, 108pt)
-    alabel(180pt, 86pt)[merged-\ only gate]
-    // index.db
-    archbox(0pt, 108pt, 120pt, 40pt, rgb("#ecfdf5"))[*`index.db`* — derived, rebuilt\ BM25 FTS · LSA · neural emb.\ co-occurrence · lineage]
-    // orphan branch
-    archbox(134pt, 108pt, 92pt, 40pt, rgb("#fdf2f8"))[orphan branch\ `rekal/<email>`\ zstd wire, merged only]
-    // recall
-    arrow(58pt, 148pt, 58pt, 174pt)
-    alabel(66pt, 155pt)[hybrid recall\ (query-time weights)]
-    archbox(0pt, 174pt, 120pt, 32pt, rgb("#eff6ff"))[*agent* — skills drive\ search → facets → zoom → drill]
-    // sync
-    arrow(180pt, 148pt, 180pt, 174pt)
-    alabel(134pt, 155pt)[git push\ / sync]
-    archbox(134pt, 174pt, 92pt, 32pt, rgb("#f5f5f4"))[teammates\ (their `data.db`)]
+  block(width: 100%, height: 190pt, {
+    archbox(62pt, 0pt, 104pt, 22pt, rgb("#eef2ff"))[*real question*]
+    arrow(113pt, 22pt, 113pt, 44pt)
+    archbox(78pt, 44pt, 72pt, 22pt, rgb("#fef9c3"))[*router*\ (kind)]
+    arrow(86pt, 66pt, 38pt, 92pt)
+    alabel(18pt, 70pt)[breadth]
+    arrow(113pt, 66pt, 113pt, 92pt)
+    alabel(120pt, 72pt)[pointed]
+    arrow(142pt, 66pt, 190pt, 92pt)
+    alabel(172pt, 70pt)[why]
+    archbox(0pt, 92pt, 74pt, 38pt, rgb("#dbeafe"))[*structural map*\ reads repo \@ SHA\ → mermaid]
+    archbox(78pt, 92pt, 72pt, 38pt, rgb("#fde68a"))[*episodic, gated*\ seeds → drill;\ gate or silence]
+    archbox(154pt, 92pt, 74pt, 38pt, rgb("#dcfce7"))[*decision synthesis*\ gather turns → arc]
+    arrow(37pt, 148pt, 37pt, 130pt)
+    arrow(113pt, 148pt, 113pt, 130pt)
+    arrow(190pt, 148pt, 190pt, 130pt)
+    archbox(0pt, 148pt, 110pt, 34pt, rgb("#fff7ed"))[*`data.db`* ledger — turns ·\ paths · SHA (no diff content)]
+    archbox(118pt, 148pt, 110pt, 34pt, rgb("#ecfdf5"))[*`index.db`* derived —\ BM25 · LSA · neural · facet]
   }),
   kind: image,
-  caption: [Rekal architecture. One source of truth (append-only `data.db`);
-  all derived structure disposable (`index.db`); sharing gated on merge
-  verification. No server, no API, no telemetry — git is the only wire.],
+  caption: [One git-native ledger supplies seeds and structure; a router
+  sends each question to one of three modes by kind. Code content is
+  reconstructed from the commit SHA on demand, so the ledger stays thin.
+  Episodes are confidence-gated before they join the map.],
 ) <fig-arch>
 
-Rekal is one binary embedding its database engine, embedding models, and
-compression dictionary. A post-commit hook parses the active assistant
-session(s) — adapters cover Claude Code, Codex, Gemini, and OpenCode —
-deduplicates turns, scrubs secrets and anonymizes paths *before any byte is
-stored* (the ordering shown to be the only safe one @statecontam2026), and
-appends to `data.db`. Nothing is summarized at write time: following the
-preservation result of @emem2025, the unit of storage is the raw turn with
-role, order, timestamp, and tool-call structure, and every recall result
-carries source-turn attribution. Write-time compression is lossy and
-unfixable; query-time distillation improves with every model generation.
+== Structural map (breadth)
 
-One class of distillation is nonetheless *harvested*: when the harness
-compacts a long session it writes an LLM summary of the conversation so far
-back into the transcript. Rekal captures these as turns with a dedicated
-role `summary` — already paid for, cumulative (the latest subsumes the
-rest), and never confused with human intent. Rekal generates no summaries
-of its own: a commit-time summary would be query-blind, written before any
-question exists, whereas the drill is query-aware and paid lazily.
+The map is a subsystem diagram *authored by an LLM that reads the
+repository* — its directory skeleton, its own README/architecture
+documents — not clustered from co-occurrence statistics (we tried; the
+statistical version grouped tool-call-id dumps and scratch files into
+meaningless clusters; comprehension filters what statistics cannot). The
+map is watermarked with the HEAD commit and regenerated on demand, so it
+is never a stale snapshot: it is a function of the tree at a SHA,
+refreshable by diffing only the clusters whose files changed — the
+staleness guarantee of §3 applied to compiled structure. It answers
+"what exists and how it connects," and nothing about "why."
 
-Recall scores sessions by a weighted hybrid of BM25, latent-semantic, and
-neural similarity; boosts `human_steering` turns (the example's Monday
-interruption) and, by a smaller factor, harvested summaries; down-weights
-subagent transcripts; and returns the pointer-structured JSON of \u{00A7}2.
-Weights live in local config and apply at *query time* — no reindex, which
-is also what makes the single-signal ablations of \u{00A7}7 free. In RISE's
-terms @rise2026, search constructs a *bounded interaction space* and the
-drill tools explore it; a layer of six shipped skills (base search,
-provenance, self-reflection, distillation, exhaustive census, wiki
-materialization) is the active-reconstruction policy @mragent2026 that
-sequences those primitives.
+== Episodic recall, confidence-gated (pointed)
 
-= Four Guarantees from Git
+For pointed questions the engine returns top-#emph[k] seed sessions and
+the agent drills into the cheapest dense anchor (a summary turn, else a
+turn window). The critical design point is that episodes must be
+*gated*: we calibrated a hit signal from the retriever's own per-layer
+scores — top-1 score and top-1–top-2 gap separate hits from misses
+(means 0.91 vs 0.87; gap 0.046 vs 0.017) — and inject episodes only when
+the signal clears the bar. Ungated, low-confidence episodes *poison* a
+good map (§8.2).
 
-The engine is ordinary; the guarantees are not. This section walks
-@tab-thesis row by row, confronting in each row the machinery it replaces.
+== Decision synthesis (rationale)
 
-== Annotation: the commit is the label
+For "why" questions the agent does not retrieve one session; it *gathers
+every decision-relevant turn* — a direct query over the ledger for the
+choice, its alternatives, and reasoning markers ("because", "instead
+of", "constraint", "rejected") — then *synthesizes the arc*: original
+design → alternatives rejected → the constraint that forced the change →
+final rationale, with every claim carrying its turn and commit pointer
+(the self-confirmation guarantee applied to generated text). Where the
+reasoning references code, the diff is pulled from the commit SHA at
+synthesis time. This is the mode single-shot retrieval cannot emulate,
+because the answer is *distributed* and was never a single record.
 
-Every checkpoint records which sessions produced which commit
-(`checkpoint_sessions`). This single join is the paper's namesake and its
-most consequential design choice: it connects a unit of *intent* (the
-session) to a verified unit of *code* (the commit) — automatically, at zero
-marginal cost, thousands of times per repository-year. Dialogue-memory
-research must manufacture this connection by human annotation @locomo2024
-or accept LLM judges grading their own homework; here the connection is a
-side effect of using version control. Everything downstream leans on it:
-provenance answers in recall (\u{00A7}2), the merged-only sharing gate
-(\u{00A7}4.3), and the entire benchmark (\u{00A7}5), whose five task
-families are all mined from this one link plus git topology.
+The three modes ship as agent skills (`rekal-map`, `rekal-hunt`,
+`rekal-why`) driving engine primitives; the router is the skill layer's
+dispatch on question kind. Rationale lives in turns; structure lives in
+the tree; the modes are *routed, not stacked*.
 
-== Staleness: rebuild and diff
+= Evaluation: answer-sufficiency, not rank
 
-`data.db` is the only source of truth and is append-only. `index.db` holds
-everything derived — full-text, embeddings, co-occurrence, lineage, facets
-— and is *disposable by construction*: any migration, corruption, or model
-upgrade is handled by deletion and rebuild (content-hash-keyed embedding
-caching keeps rebuilds incremental). This is the structural answer to the
-maintenance problem that compiled-memory systems name and defer
-@llmwiki2026 @adamem2026 @sag2026: *the freshness of a structure you can
-throw away is not a research problem.*
+We reject single-gold MRR as the headline. Our metric is
+*answer-sufficiency*: for a real question, assemble context under a mode,
+have a distinct blind judge rate whether the context is SUFFICIENT (1),
+PARTIAL (½), or INSUFFICIENT (0) to answer, and report the mean with
+bootstrap 95% CIs, plus average tokens per question. Ground truth for
+the corpora is self-labeled; questions are real developer questions
+tagged *broad / pointed / why* (n=15 per corpus; per-question judgments
+and generated maps are in the run directory). Corpus A is the
+documentation/knowledge corpus of §5; Corpus B is a *two-week-old*
+production data/ML pipeline subsystem (layered ingest → transform →
+model build) inside a ≈3,000-session repository — young, uniform
+tooling, and the harder test of memory that has barely accumulated.
 
-The same discipline extends to memory the team can browse. A wiki skill
-materializes topic pages (`docs/wiki/<topic>.md` plus a graph-mapped index)
-from file co-occurrence clusters and the sessions behind them, shipped as
-an ordinary pull request. Generation is *deterministic* — topics and edges
-sorted, thresholds fixed — so a re-run over unchanged history is an empty
-diff, and any non-empty diff *is* structural drift: an edge appearing in
-the topic graph is a correlation that did not exist last run; a removed
-edge is one that decayed; each transition is reviewed before admission.
-Mutating graph stores cannot show this drift to anyone; here `git log` over
-the index is a reviewed time series of the project's conceptual structure.
-The maintenance problem is not solved — it is *converted into code review*,
-a process teams already run. Because pages are a cache of memory, not the
-memory, whether that cache pays for itself is an empirical question this
-paper does not settle: the generation cost is recoverable from the ledger's
-own lineage records and the payoff is measurable against recall+drill, but
-we report the mechanism here and leave the economics to the harness.
+== Each mode wins a different kind
 
-== Self-confirmation: the merge is the gate
-
-`rekal push` exports to a per-author git orphan branch only those
-checkpoints whose commit is reachable from the default branch (with
-patch-equivalence detection for squash merges); everything else waits,
-releasing automatically if its branch later lands. The shared tier
-therefore admits only experience that survived review, CI, and merge — an
-*external* verification gate, in contrast to the self- or consensus-judged
-admission proposed to escape the self-confirmation trap @edv2026: when the
-same model family executes, summarizes, and admits its own memories,
-wrong-but-self-consistent trajectories are stored as successes and
-amplified on reuse. The merge gate has a second, subtler yield: unmerged
-and abandoned branches remain in the local ledger as labeled *negative*
-knowledge — the map of dead ends — and \u{00A7}5's task T3 tests exactly
-whether a system can warn "we tried this; it didn't land."
-
-== Contamination: review as the egress channel
-
-Rekal's memory has three scopes with asymmetric permeability. The *repo
-ledger* is truth. The *machine-wide index* optionally folds in the
-operator's other repos' sessions (explicit opt-in) — index-only,
-origin-labeled, and structurally unpushable: an imported session has no
-checkpoint in this repo's ledger, so no code path can export it. The *team
-wire* admits merged work only. Knowledge crosses a scope boundary
-exclusively through a human-visible artifact: sessions reach the team when
-their commit merges, and cross-repo experience becomes committed text
-through exactly one channel — a wiki page generated in an explicit
-cross-repo mode that labels every foreign citation with its origin, shipped
-as a PR whose body declares what is crossing. Machine-wide stores in the
-literature make the opposite choice @automem2026 @adamem2026: one pool,
-implicitly readable and writable everywhere — precisely the open write path
-the security analyses identify as the contamination and exfiltration
-surface @memsecurity2026 @provtrace2026 @statecontam2026, and controlled
-experiments show sanitization only works *before* summarization, which is
-why Rekal scrubs before insertion and stores raw. Governance concerns for
-enterprise memory @governedmem2026 map onto git's existing controls. The
-rule compresses to: *wide reads locally, narrow writes globally — egress is
-always a diff someone approved.*
-
-= RekalBench
-
-No benchmark exists for repo-grounded intent recall: conversational-memory
-suites (LoCoMo @locomo2024, LongMemEval, PERSONAMEM) evaluate chat-persona
-recall, and IR suites (BEIR, BRIGHT) evaluate document QA. RekalBench's
-defining property follows from \u{00A7}4.1: *the corpus labels itself.*
-
-Watch one label being born. The Monday session of \u{00A7}2 checkpointed
-against commit `9c2f41a`. The miner (plain SQL over the ledger, plus git)
-emits, with no human in the loop:
-
-```json
-{ "task": "t1",
-  "gold": ["01JNQX8F2K9M"],
-  "commit": "9c2f41a",
-  "source": { "subject": "webhooks: switch retries
-     to exponential backoff",
-     "files": ["delivery/retry.go", ...] } }
-```
-
-An LLM paraphrases the source material into a natural developer question
-("how did we end up handling webhook retry timing?"), a 4-gram Jaccard
-ceiling (≤ 0.30, one aggressive-paraphrase retry, else the label is
-dropped and logged) breaks lexical leakage between query and target, and
-the pair joins the query set. The gold is objective — that session
-verifiably produced that commit — and the supervision cost is zero. The
-same construction yields all five task families (@tab-tasks); the steering
-turn of \u{00A7}2 is likewise a T2 gold, and the never-merged branches of
-\u{00A7}4.3 are T3 gold *because git says so*.
-
-// ---------- Figure 2: bench pipeline ----------
-#figure(
-  block(width: 100%, height: 174pt, {
-    archbox(0pt, 0pt, 108pt, 30pt, rgb("#fff7ed"))[git history\ commits · branches · merges]
-    archbox(120pt, 0pt, 106pt, 30pt, rgb("#fff7ed"))[session ledger\ turns · steering · files · lineage]
-    arrow(54pt, 30pt, 90pt, 56pt)
-    arrow(173pt, 30pt, 137pt, 56pt)
-    archbox(58pt, 56pt, 112pt, 26pt, rgb("#ecfdf5"))[SQL label miner\ T1–T5 gold pairs]
-    arrow(113pt, 82pt, 113pt, 106pt)
-    alabel(122pt, 88pt)[LLM paraphrase +\ n-gram leakage filter]
-    archbox(58pt, 106pt, 112pt, 24pt, rgb("#eff6ff"))[query set (JSONL)\ dev 10% / test 90%]
-    arrow(113pt, 130pt, 113pt, 142pt)
-    archbox(14pt, 142pt, 200pt, 28pt, rgb("#f5f5f4"))[systems B1–B5 → MRR · Recall\@k ·\ nDCG\@10 · bounded drill-cost]
-  }),
-  kind: image,
-  caption: [RekalBench pipeline. Labels are mined from structure the tool
-  already records; paraphrase plus an n-gram overlap ceiling breaks lexical
-  leakage between query and target.],
-) <fig-bench>
-
-== Tasks
-
-#figure(
-  table(
-    columns: (auto, 1fr, 1fr, auto),
-    align: (left, left, left, left),
-    table.header([*Task*], [*Gold label source*], [*Query generation*], [*n*]),
-    [T1 Provenance], [commit → producing session(s), via the `checkpoint_` `sessions` links], [paraphrase of commit message + changed paths (not indexed content)], [152],
-    [T2 Decision recall], [`human_steering` turns], [paraphrase of surrounding context; steering turn held out of prompt; 4-gram Jaccard ≤ 0.3], [263],
-    [T3 Dead-end awareness], [sessions on never-merged branches], ["have we tried X?" from the branch's cumulative intent], [0#super[†]],
-    [T4 Multi-hop synthesis], [session pairs linked by file co-occurrence / lineage], [generator-validated two-session questions], [—],
-    [T5 Decision drift], [later session reversing an earlier decision on the same files (hand-confirmed sample)], ["what is our current approach to X?"], [—],
-  ),
-  caption: [RekalBench task families, all mined from recorded structure. This
-  study evaluates T1 and T2 — the families this corpus labels at scale
-  (415 pairs). T3–T5 are defined by the same construction and evaluated
-  wherever a corpus supplies their structure: #super[†]this corpus is
-  effectively single-branch (four branches, all merged), so it yields no
-  dead-end labels; T4/T5 (the latter motivated by the belief-revision
-  result of @beliefshift2026 — memory must surface the *current* decision)
-  await a repo with the requisite topology and run on the same public
-  harness.],
-) <tab-tasks>
-
-*Label noise.* A commit's linked sessions can include incidental chatter;
-because the label is the objective commit–session link rather than a
-subjective judgment, this noise lowers measured scores (a hit on chatter
-misses the gold turn) rather than inflating them, so the retrieval numbers
-are conservative. To keep the query independent of the target, T1 queries
-are paraphrased from the commit message and changed paths — content the
-index never sees — under a 4-gram Jaccard ceiling that drops leaky pairs.
-*Splits.* 10% dev (tuning allowed) / 90% test (35/380 after the leakage
-filter), one-shot — the incumbent-versus-candidate discipline of @rho2026.
-
-== Corpus and systems
-
-One operator's real working store, folded per-repo (labels require the
-repo's own checkpoint ledger) plus machine-wide for scale sweeps. The
-primary repo holds 1,433 sessions, 66,323 turns, and 88,144 tool calls,
-with 1,219 steering turns and 432 harvested compaction summaries across
-152 commits carrying linked sessions (1,060 commit–session links), spanning
-2026-03-22 to 2026-07-10; the machine-wide fold adds 3,618 imported sessions
-from 18 other projects for the scale sweeps. No session content leaves the
-machine; the paper reports aggregates only.
-
-#figure(
-  table(
-    columns: (auto, 1fr),
-    align: (left, left),
-    table.header([*ID*], [*System*]),
-    [B1], [Grep-rank over raw transcript JSONL — the non-agentic direct-corpus-interaction proxy @dci2026: sessions ranked by term-frequency hits, no parsing or indexing],
-    [B3], [BM25-only (Rekal weights `{1,0,0}`) — query-time ablation, no reindex],
-    [B4], [Neural-only (weights `{0,0,1}`) — ablation],
-    [B5], [Rekal full hybrid + steering boost + summary boost + subagent down-weight],
-  ),
-  caption: [Systems under test. B1 is the honest lexical baseline for
-  retrieval: it is what "just grep the transcripts" scores when the
-  transcripts are raw. The agentic form of direct corpus interaction — a
-  model driving `rg`/`jq` over a turn budget @dci2026 @grepseek2026 — is a
-  judged-rung comparison the same public harness supports. B3/B4 are
-  free query-time ablations of B5.],
-) <tab-systems>
-
-*Metrics.* Retrievability is scored by MRR, Recall\@{1, 5, 10}, and
-nDCG\@10 with 1,000-resample bootstrap CIs, on the held-out test split.
-Beyond retrieval, the same self-labeled query set drives a bounded
-context-assembly measure — the tokens a drill ingests to cover the gold
-turn's distinctive content, with no LLM in the loop — reported in
-\u{00A7}7. Judged answer quality (distinct generate/answer/judge models
-against the gold turn) and a corpus-scale sweep are the natural extensions
-the public harness enables at zero further labeling cost.
-
-= Prediction and Protocol
-
-The four guarantees of @tab-thesis divide by *how they are verified*.
-Self-confirmation and contamination are answered *by construction*: the
-merge gate and the egress restriction are code paths, checkable by reading
-them — an imported session has no checkpoint, so no export path exists, and
-no experiment can add to that assurance. Annotation is answered by the
-benchmark's very existence: the corpus labels itself (\u{00A7}5), so the
-supervision cost that dialogue-memory work must pay is simply not incurred.
-What remains genuinely open — the one thing a reader should demand
-evidence for — is *retrievability*: does memory built on these guarantees
-actually surface the right prior session better than the alternative of not
-building it at all? A system whose recall loses to grep needs no philosophy.
-
-We fixed one prediction, and a mechanistic expectation about *where* it
-would hold, before scoring the held-out test split (the source commit
-predates the results in the project's own history):
-
-#block(inset: (left: 6pt))[
-*Prediction (retrievability).* On the held-out test split, Rekal's hybrid
-recall (B5) beats term-frequency grep over the raw transcripts (B1) on
-pooled MRR and nDCG\@10 with non-overlapping bootstrap intervals.
-
-*Expectation (signal composition).* The semantic layer earns its keep
-specifically on paraphrased provenance queries (T1), where the question
-shares little surface form with its target; on decision recall (T2), where
-a human's steering words tend to recur, lexical matching already suffices.
-]
-
-The protocol follows the incumbent-versus-candidate discipline of @rho2026:
-weights may be tuned on the 10% dev split; the 90% test split is scored once.
-
-= Results
+@tab-suff is the study's main table. We stress up front that with 15
+questions per corpus, a single judge, and wide bootstrap intervals, the
+overall point estimates are *not* statistically separable — most CIs
+overlap. We therefore read the results as directional patterns across
+question kinds, not as a ranking of modes; the routing signal is in the
+per-kind columns, not the overall.
 
 #figure(
   scope: "parent",
@@ -548,161 +430,175 @@ weights may be tuned on the 10% dev split; the 90% test split is scored once.
   table(
     columns: (auto, auto, auto, auto, auto, auto),
     align: (left, center, center, center, center, center),
-    table.header([*System*], [*Pooled MRR* (95% CI)], [*nDCG\@10*], [*T1 MRR*], [*T1 R\@5*], [*T2 MRR*]),
-    [B1 grep-rank (raw)], [0.005 [.001,.011]], [0.004], [0.014], [0.015], [0.000],
-    [B4 neural-only], [0.057 [.040,.078]], [0.059], [0.130], [0.194], [0.018],
-    [B3 BM25-only], [0.171 [.145,.202]], [0.219], [0.248], [0.425], [0.130],
-    [B5 Rekal hybrid], [*0.187 [.158,.217]*], [*0.227*], [*0.301*], [*0.537*], [*0.124*],
+    table.header([*Mode*], [*Overall* (95% CI)], [*Broad*], [*Pointed*], [*Why*], [*Avg tok*]),
+    table.cell(colspan: 6, align: left)[*Corpus A — documentation/knowledge (≈1,400 sessions)*],
+    [structural map], [0.33 (.13–.53)], [0.50], [0.17], [0.33], [201],
+    [episodic single-shot], [0.20 (.00–.40)], [0.33], [0.17], [0.00], [914],
+    [routed (map + gated episodes)], [0.43 (.20–.67)], [0.83], [0.50], [0.17], [382],
+    [decision synthesis], [0.47 (.20–.67)], [0.50], [0.50], [0.33], [2762],
+    table.cell(colspan: 6, align: left)[*Corpus B — production data/ML pipeline subsystem (≈2 weeks old)*],
+    [structural map], [0.53 (.30–.77)], [0.50], [0.33], [1.00], [969],
+    [episodic single-shot], [0.07 (.00–.27)], [0.00], [0.00], [0.33], [648],
+    [routed (map + gated episodes)], [0.60 (.37–.80)], [0.67], [0.42], [0.83], [980],
+    [decision synthesis], [*0.83 (.67–.97)*], [0.92], [0.92], [0.50], [3135],
   ),
-  caption: [Retrieval quality on the held-out test split (n=380; pooled MRR
-  with bootstrap 95% CIs, other columns point estimates). The registered
-  prediction holds — hybrid recall beats raw-transcript grep with
-  non-overlapping intervals — but that comparison only establishes a floor:
-  grep-rank over raw JSONL is near-zero because the transcripts are
-  adversarial material, so the informative contrast is against the strong
-  lexical index over the *same parsed turns* (B3). There the pooled gap is
-  small and its CIs overlap (0.187 vs 0.171); the hybrid's advantage is not
-  uniform but *located* — it is a provenance effect (T1 MRR 0.301 vs 0.248,
-  R\@5 0.537 vs 0.425) and vanishes on decision recall, where lexical is if
-  anything ahead (T2 0.124 vs 0.130). The semantic layer earns its place
-  exactly where paraphrase opens a surface-form gap, and not elsewhere.],
-) <tab-rung1>
+  caption: [Answer-sufficiency by mode on both corpora (n=15 real
+  questions each, tagged broad/pointed/why; blind judge; bootstrap 95%
+  CI on the overall). With this sample size the overall point estimates
+  carry wide intervals and most pooled contrasts are *not* statistically
+  separable — read the results as directional patterns across question
+  kinds, not a ranking of modes. The routing signal is in the per-kind
+  columns: episodic-alone floors on breadth and near-floors overall on
+  the uniform young corpus (0.07); the map answers breadth but not why;
+  synthesis dominates the corpus whose decisions are recent. Routing is
+  no worse than the best single mode on every kind and strictly better
+  on breadth, at 382–980 tokens.],
+) <tab-suff>
 
-*Reading the table.* The headline is a 37-fold gap. Retrieval over the
-parsed, scrubbed ledger scores 0.187 pooled MRR against 0.005 for
-term-frequency grep over the raw transcripts — 57$times$ on nDCG\@10 — with
-non-overlapping bootstrap intervals. The lesson is structural, and it is the
-paper's central empirical claim: *raw transcripts are not memory.* They are
-adversarial retrieval material — tool dumps, base64 blobs, duplicated
-sidechains — and scanning them recovers almost nothing; parsing the same
-history into attributed turns is what makes it searchable at all. (A skilled
-agent driving grep would beat term-frequency ranking; that agentic
-comparison is a judged rung we leave to the harness, and it does not touch
-the structural point.)
+== Gating and the rationale ablation
 
-That gap is the load-bearing result; the composition of the hybrid is the
-refinement. Against a strong lexical index over the *same* parsed turns, the
-neural layer's added gain is smaller and precisely located: pooled, B5 and
-B3 sit within each other's confidence intervals, and the separation is real
-only on paraphrased provenance queries (T1 MRR 0.301 vs 0.248, R\@5 0.537 vs
-0.425), exactly where the registered expectation put it. On a single-repo
-corpus, question and session share vocabulary, so lexical carries most of
-the signal and the neural layer earns its place where a paraphrase widens
-the surface-form gap — and nowhere else. For the provenance questions the
-tool exists to answer, the producing session lands in the top five 54% of
-the time, at \~0.5s median latency.
+#figure(
+  table(
+    columns: (1fr, auto, 1fr),
+    align: (left, center, left),
+    table.header([*Arm*], [*Result*], [*Note*]),
+    table.cell(colspan: 3, align: left)[*Episode gating, isolated (Corpus B, n=12)*],
+    [episodic single-shot], [0.00], [near-floor; uniform pipeline],
+    [structural map], [0.63], [reads the real layered architecture],
+    [map + episodes, *ungated*], [0.29], [low-confidence episodes *poison* the map],
+    [map + episodes, *gated*], [0.50], [gate suppresses 11/12 bad injections],
+    table.cell(colspan: 3, align: left)[*The execution-engine rationale question (sufficient?)*],
+    [structural map], [partial], [structure, not rationale],
+    [the source code itself], [no], [uses the engine; no why],
+    [episodic single-shot (top-3)], [no], [returns one fragment],
+    [synthesis, under-gathered (4 terms)], [no], [too few turns gathered],
+    [synthesis, adequate gather (30 turns)], [*yes*], [blind judge; 2.1k tok],
+  ),
+  caption: [Corpus B ablations. Top: gating isolated on a separate
+  question set — ungated episodes degrade a good map and the
+  confidence gate recovers most of the loss (recovering 0.29→0.50 of
+  the 0.63 map baseline; only 1 of 12 retrievals cleared the gate, so
+  gating here mostly means silence). Bottom: the mode ablation on one
+  evolved architectural decision — only a decision-scoped gather plus
+  synthesis answers it.],
+) <tab-ablate>
 
-And retrieval is only the first token saving. Once recall reaches the gold
-session, a five-turn window around the matched turn assembles the
-answer-bearing context — 69% of the gold turn's distinctive content words —
-in about *1,500 tokens*. That is the token-budget thesis realized: out of a
-corpus of 66,000 turns, the agent reads roughly fifteen hundred tokens to
-answer — three orders of magnitude below the recorded history, and well
-under loading even the single matched session in full. The bounded
-interaction space @rise2026 is what makes it possible: recall narrows to a
-handful of sessions, the drill reads only the neighborhood that matters.
+Three lessons. *Episodes must be gated, or they degrade the map*: naive
+context-stuffing — the integration everyone builds first — is measurably
+harmful, and knowing when to stay silent is part of the system. *Decision
+synthesis is the most distinctive mode*, and its quality is bounded by
+the *gather*, not the synthesizer: a weak four-term gather starved the
+same model into INSUFFICIENT; an adequate gather (30 decision-relevant
+turns, ≈2.1k tokens, one synthesis call) reconstructed the full arc for
+a design that began under one constraint set and drifted to "good
+enough." The lesson is precise: *the rationale was in memory all along;
+single-shot retrieval fragments it and a poor gather starves it, but a
+decision-scoped gather plus synthesis assembles it.* And *the young
+corpus is the strong case for memory*: two weeks of history already
+answer 0.83 of real questions under synthesis — memory pays off long
+before it is big.
 
-= Positioning
+== The economics
 
-The design confrontations live inline in \u{00A7}4; what remains is where
-Rekal sits in the field's own coordinate systems.
+The stages stack into a coverage-at-cost account. Grep over raw
+transcripts answers nothing. Retrieval over the parsed ledger supplies
+seeds for everything and answers pointed questions at a ≈1,500-token
+drill. The map adds breadth at amortized cost (SHA-watermarked
+regeneration). Synthesis adds rationale at 2–3k tokens. Routed, the
+system holds the best per-kind floor at *382–980 tokens per question* —
+against a recorded history of tens of thousands of turns, three orders
+of magnitude of context saved per question, and cost follows the
+question kind rather than the corpus size. (With the question-kind
+distribution of real usage mined from the ledger's own query log, this
+becomes a single expected-cost figure; that instrumentation exists and
+the run is future work.)
 
-On the four-module anatomy of the data-management evaluation @anms2026 —
-representation & storage, extraction, retrieval & routing, maintenance —
-Rekal classifies as a multi-paradigm hybrid on the first three:
-heterogeneous multi-engine storage (relational + full-text + vector in one
-embedded database), *deterministic* extraction (parsing and harvesting;
-uniquely among the taxonomy's systems, no LLM sits anywhere in the write
-path — the property the contamination analyses require), and multi-stage
-hybrid retrieval with agentic routing via the skill layer. On the fourth
-module it exits the taxonomy's design space entirely: that survey's
-maintenance column enumerates LLM-driven semantic consolidation,
-capacity-driven eviction, and timestamp multi-versioning — each a paid,
-lossy, or complexity-bearing liability — whereas Rekal's maintenance is
-*rebuild, diff, and review*: nothing is consolidated (append-only), nothing
-is evicted (raw is cheap), and versioning is git itself. The same
-evaluation's no-free-lunch finding — effectiveness depends on aligning
-memory structure with the workload — is this paper's premise taken to its
-limit: the coding workload's structure is the repository, and Rekal aligns
-by construction rather than by tuning. On the *compression axis* —
-aggressive consolidation @adamem2026 versus preservation with attribution
-@emem2025 — Rekal takes EMem's side at the storage layer (raw turns,
-attributed snippets) and harvests, rather than generates, distillation. On
-the *retrieval axis* — one-shot lookup versus active reconstruction
-@mragent2026 — it takes MRAgent's side at the interaction layer: the skill
-playbooks drive iterative search–facet–zoom–drill loops over engine
-primitives, and LLM-Wiki's page-traversal result @llmwiki2026 is
-recovered, without the compilation liability, as the reviewed wiki of
-\u{00A7}4.2. Architecturally the storage is aligned with SAG's query-time
-joins over flat indexes @sag2026. Against retrieval-free direct corpus
-interaction @dci2026 @grepseek2026 the position matches RISE @rise2026: a
-bounded interaction space beats an unbounded scan as the corpus grows, and
-our result is the sharp form of that argument at the retrieval layer —
-term-frequency scanning of raw transcripts is not competitive with recall
-over parsed memory even on one developer's history; mapping the full
-accuracy-versus-scale crossover against an *agentic* grep baseline is the
-natural next rung, on the same public harness. Self-improvement from traces
-@rho2026 @automem2026 @lrat2026 is the flywheel this corpus natively enables
-(\u{00A7}9); LoCoMo-style persona memory @locomo2024 is out of scope by
-design.
+= The real bottleneck is capture, not ranking
 
-= Limitations and Future Work
+Every failure in §8 that was not a routing error was a *capture gap*:
+the answer had never been verbalized in the ledger. This reframes the
+research target. The ledger deliberately keeps only what was said plus
+what was touched (git SHA; no diff content) — thin to stay on the wire —
+and synthesis pulls code from the commit on demand. Our finding is that
+the division of labor is correct but incomplete on one side: intent
+lives in the ledger and content lives in git, so the remaining loss is
+reasoning that agents never say out loud. Keeping capture thin is
+therefore not a limitation to walk back — it preserves the git-bound
+answers to staleness and contamination that a fatter, content-bearing
+ledger would compromise — but capture completeness (verbalization rate,
+measured per corpus) is the binding constraint on everything above it,
+and the next unit of improvement per token spent lies there, not in
+ranking.
 
-Retrievability is a proxy: a session that ranks first is a session the agent
-*can* reach, not proof that the answer it then reads is correct. The bounded
-result is honest about its scope — it measures whether the right memory is
-findable and how few tokens a drill needs to cover it, not end-to-end task
-success. The natural next rung is judged answer quality against the gold
-turn, with distinct generate/answer/judge models; the query set and the
-gold labels already exist, so it adds a judge, not a labeling effort.
+= Related work
 
-A single-operator corpus is a case study until replicated. The mitigation is
-structural rather than promissory: because the labels are mined, not
-annotated, the entire benchmark is public, fully local, and runnable by any
-Rekal user on their own store at zero marginal cost — replication does not
-wait on us. The same openness covers the task families this corpus cannot
-exercise (dead-ends need unmerged branches; drift needs a reversal history)
-and the scale sweep against an agentic-grep baseline.
+Memory-graph and tiered-store systems @mragent2026 @adamem2026
+@automem2026 and self-evolving retrieval over compiled wikis @llmwiki2026
+target long-horizon recall but assume annotation, maintain compiled
+structure in software, and admit via model judgment — the four §3
+problems. The data-management evaluation @anms2026 reaches the verdict
+this paper takes literally: effectiveness depends on aligning memory
+structure with the workload; the coding workload's structure is the
+repository, and Rekal aligns by construction. On the compression axis we
+side with preservation-with-attribution @emem2025 (raw turns, harvested
+summaries) over write-time consolidation @adamem2026; on the retrieval
+axis with active reconstruction @mragent2026 (the skills drive
+search–facet–zoom–drill loops); the storage is flat indexes joined at
+query time @sag2026. Against retrieval-free direct corpus interaction
+@dci2026 @grepseek2026, our floors sharpen RISE's argument @rise2026 at
+the retrieval layer. SPM @spm2026 contributes the structured-facet
+thesis our seed stage validates in a different role (retrieval term, not
+context assembly). The retrospective-optimization discipline @rho2026
+governs every shipped mechanism. Our departure is threefold: (i) git as
+the source of ground truth, freshness, and the sharing gate rather than
+rebuilding them; (ii) single-gold MRR replaced, as the headline, by
+routed answer-sufficiency; (iii) decision synthesis over the episodic
+trail identified as a distinct memory mode, not a retrieval variant.
 
-Finally, the neural layer is the weakest signal here (B4, @tab-rung1). That
-is consistent with the paper's thesis — a single repo's question and its
-answering session share vocabulary — but it also invites a direct test:
-substituting a stronger code-tuned embedding model, served over the HTTP
-backend (OpenAI-compatible or Amazon Bedrock), reindexing, and swapping back
-for free via the content-hash cache. A material lift to the *hybrid* would
-raise the shipped default; a null lift would be further evidence that
-alignment, not embedding quality, is the binding constraint @anms2026.
+= Limitations
 
-= The Flywheel, and What This Buys
+The sufficiency evidence is small: n=12–15 questions per corpus, one
+blind judge, one execution model; we report CIs and treat magnitudes as
+directional, and the honest summary of @tab-suff is per-kind patterns,
+not separable pooled rankings. Answer-sufficiency is a proxy for task
+help, not task completion. The map is only as good as the repository's
+own structure and documentation; synthesis reconstructs rationale only
+to the extent it was verbalized (§9); the judge saw no trail — model
+and question sets are modest and the harness supports scaling both. The
+seed-stage study is one operator's corpora; because labels are mined,
+replication is free for any user on their own history. Specified but not
+run here: synthesis on the mined T4 multi-hop gold (92–104 pairs per
+high-co-occurrence corpus), a second judge model with agreement, the
+wild-question kind-distribution (and with it the expected-cost figure),
+and gate recalibration after the facet term enters the score mix.
 
-The corpus contains its own improvement signal: which recalled sessions an
-agent drills into after a search is an implicit relevance label @lrat2026,
-enabling private per-corpus weight tuning accepted only on head-to-head
-wins over the incumbent configuration @rho2026; trajectory review can
-revise the skill layer itself @automem2026; and the wiki's generation runs
-are themselves ledgered sessions, so even the distillation loop is
-self-accounting. None of this requires new machinery — it is the same
-ledger, read again.
+= Conclusion
 
-Memory for coding agents does not need another compiled structure to
-maintain or another self-judged store to poison itself. It needs a ledger
-that already has ground truth. Git supplies the label (the commit), the
-freshness mechanism (rebuild and diff), the verifier (the merge), and the
-egress channel (the review); Rekal supplies the capture, the disposable
-indexes, the bounded recall, and the playbooks. Three of those four answers
-we make by construction and leave for a reader to verify in the design; the
-fourth — the label — we put to work, and it yields a benchmark that labels
-itself and a retrieval result whose one firm lesson is that parsed,
-provenance-linked memory is findable where raw transcripts are not, with a
-semantic layer that earns its place on paraphrased questions. Because the
-labels are mined, not annotated, every part of that is falsifiable by
-anyone, locally, on their own history.
+Agent memory is not one retrieval problem but three modes — structure,
+episode, and synthesis — over a ledger whose hard guarantees come from
+version control. Ranking is a solved-enough seed-supply step: we closed
+it with honest floors, a mechanism graveyard, two validated levers, and
+rules for when each helps; the value above it is in routing each
+question to the mode that can answer it, gating episodes on confidence
+so they help rather than harm, and reconstructing evolved decisions by
+synthesis rather than retrieval. The binding constraint is capture. One
+tool, three modes, git-bound — and the strongest result is the one the
+field has not been measuring: memory can reconstruct *why* a system
+became what it is.
 
 #v(4pt)
-*Reproducibility.* Engine, skills, benchmark spec, extraction SQL, runbook
-(`DATA-RUN.md`), and this paper's source:
+*Reproducibility.* Every value traces to a committed run record
+(per-mode sufficiency judgments, blind-judged synthesis runs, generated
+maps, gating ablation; retrieval matrix, mechanism sweeps, facet
+screens). Corpora are anonymized (A: a documentation repository; B: a
+production data/ML pipeline subsystem); no session content or corpus
+identity leaves the operator's machine — published artifacts are
+aggregates, prompts, and code. The three modes ship as skills
+(`rekal-map`, `rekal-hunt`, `rekal-why`); the judge is a single
+automated model and the questions are the authors' own corpora — the
+study is a within-system characterization, not a competition. Engine,
+skills, benchmark spec, extraction SQL, and this paper's source:
 #link("https://github.com/rekal-dev/rekal-cli")[github.com/rekal-dev/rekal-cli]
-(`docs/research/`). All benchmark data remains on the operator's machine;
-published artifacts are aggregates, prompts, and code.
+(`docs/research/`).
 
 #bibliography("refs.bib", style: "ieee", title: "References")

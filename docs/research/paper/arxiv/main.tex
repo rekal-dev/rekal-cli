@@ -31,16 +31,17 @@
 
 \begin{document}
 \twocolumn[
+\vspace*{-22pt}
 \begin{center}
-{\LARGE\bfseries Why Git Is the Memory Solution\\[3pt] for the Agentic Development Lifecycle\par}
-\vspace{7pt}
+{\LARGE\bfseries\setlength{\baselineskip}{22pt} Why Git Is the Memory Solution\\ for the Agentic Development Lifecycle\par}
+\vspace{8pt}
 {\normalsize\itshape Git-bound, routed memory for coding agents: structure, episode, and synthesis under a token budget\par}
-\vspace{11pt}
+\vspace{12pt}
 {\normalsize Frank Guo\par}
 \vspace{2pt}
 {\small Rekal --- \href{https://rekal.dev}{rekal.dev} \,\textperiodcentered\, \href{mailto:guocongmit@gmail.com}{guocongmit@gmail.com} \,\textperiodcentered\, \href{https://github.com/rekal-dev/rekal-cli}{github.com/rekal-dev/rekal-cli}\par}
 \end{center}
-\vspace{9pt}
+\vspace{6pt}
 \begin{center}
 \begin{minipage}{0.92\textwidth}
 \small\noindent\textbf{Abstract.}
@@ -302,17 +303,17 @@ Evaluated by bolting it onto a fixed configuration, a mechanism can appear corpu
 
 \begin{table}[H]
 \centering\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}p{0.40\linewidth}p{0.27\linewidth}p{0.24\linewidth}@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lcc@{}}
 \toprule
-\textbf{Facet term, by operating point} & \textbf{Corpus A} & \textbf{Corpus B}\\
+\textbf{Facet term} & \textbf{Corpus A} & \textbf{Corpus B}\\
 \midrule
-screen: facet-doc BM25 vs turn recall (structural queries) & +0.184 [.05,.32] \emph{sig} & +0.016 n.s.\\
-end-to-end, \emph{bolted onto} the default mix (fb=0.6) & 0.179$\to$0.294, +0.116 [.04,.20] \emph{sig} & $-$0.019 n.s.\\
-\emph{joint re-tune} (fb tuned with the mix; fb=0.3 selected on both) & marginal +0.110 [.056,.173] \emph{sig} & marginal +0.053 [.012,.107] \emph{sig}\\
+screen: facet vs turns & +0.184 [.05,.32]* & +0.016 n.s.\\
+end-to-end (fb 0.6) & +0.116 [.04,.20]* & $-$0.019 n.s.\\
+joint re-tune (fb 0.3) & +0.110 [.06,.17]* & +0.053 [.01,.11]*\\
 \bottomrule
 \end{tabular}
-\caption{The facet term at two operating points (held-out, paired bootstrap CIs). Naively bolted on, it looks corpus-conditional; jointly re-tuned --- one never ships an untuned knob --- the marginal is significant on both corpora. The naive null was an artifact of an untuned operating point, not an absent effect. On Corpus A the marginal takes the best held-out hybrid to $\approx$0.31 pooled MRR.}
+\caption{The facet term at two operating points (held-out, paired bootstrap CIs; * = significant). The screen runs facet-document BM25 against turn recall on structural queries; the end-to-end row bolts the term onto the untuned default mix (lifting Corpus A 0.179$\to$0.294); the joint re-tune reports the facet marginal with the mix tuned around it. Naively bolted on, the term looks corpus-conditional; jointly re-tuned --- one never ships an untuned knob --- the marginal is significant on both corpora: the naive null was an artifact of an untuned operating point, not an absent effect. On Corpus A the marginal takes the best held-out hybrid to $\approx$0.31 pooled MRR.}
 \label{tab:facet}
 \end{table}
 

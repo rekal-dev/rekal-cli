@@ -50,13 +50,13 @@
   freshness, verification, containment — are inherited from git rather
   than rebuilt in software. And it should be *routed*: we solve two
   problems separately, then combine them. Problem one, *seed supply*, we
-  close as a retrieval study on eight real corpora: hybrid retrieval over
-  the parsed, scrubbed ledger beats raw-transcript grep 37$times$ and the
-  honest parsed-turn grep floor 6–11$times$; a disciplined mechanism
-  study rejects five imported ranking mechanisms and keeps two, and the
-  best held-out configuration — tuned hybrid plus a structured *facet*
-  term ported from SPM — reaches *≈0.31 pooled MRR* on the primary
-  corpus, ≈15$times$ the honest floor. Problem two, *answer assembly*, is
+  close as a retrieval study on eight real corpora: a disciplined
+  mechanism study rejects five imported ranking mechanisms and keeps
+  two, and the best held-out configuration — tuned hybrid plus a
+  structured *facet* term ported from SPM — reaches *≈0.31 pooled MRR*
+  on the primary corpus: *≈60$times$* the raw-transcript grep floor and
+  *≈15$times$* the honest parsed-turn grep floor (already 37$times$ and
+  6–11$times$ at shipped defaults). Problem two, *answer assembly*, is
   where ranking stops helping: single-shot retrieval answers only
   0.07–0.20 of real developer questions (answer-sufficiency, blind
   judge). A *router* dispatches each question kind to the mode that can
@@ -246,16 +246,19 @@ directionally and flagged where tuning would overfit.
 == The floors: parsing is most of the miracle
 
 On Corpus A, term-frequency grep over the *raw* transcript JSONL scores
-0.005 pooled MRR against 0.187 for the hybrid over the parsed ledger —
-37$times$, 57$times$ on nDCG\@10, non-overlapping bootstrap CIs. Raw
-transcripts are adversarial retrieval material (tool dumps, base64,
-duplicated sidechains); parsing the history into attributed turns is what
-makes it searchable at all. That result alone, however, is a floor
-against weak material — so we also report the stronger *parsed-turn grep*
-floor (term-frequency rank over the same turns the index sees) on all
-eight corpora. The hybrid dominates it everywhere: 0.021 → 0.225
-(≈11$times$) on Corpus A, 0.028 → 0.159 (≈6$times$) on Corpus B, and on
-every small corpus besides (floors 0.08–0.19 vs hybrids 0.21–0.58).
+0.005 pooled MRR. Even at shipped defaults the hybrid over the parsed
+ledger beats it 37$times$ (0.187; 57$times$ on nDCG\@10, non-overlapping
+bootstrap CIs); under the *best* held-out configuration (§5.2, ≈0.31 —
+derived from the tuned baseline plus the facet marginal) the gap is
+*≈60$times$*. Raw transcripts are adversarial retrieval material (tool
+dumps, base64, duplicated sidechains); parsing the history into
+attributed turns is what makes it searchable at all. That result alone,
+however, is a floor against weak material — so we also report the
+stronger *parsed-turn grep* floor (term-frequency rank over the same
+turns the index sees) on all eight corpora. The hybrid dominates it
+everywhere: 0.021 → 0.225 (≈11$times$; *≈15$times$* at the best
+configuration) on Corpus A, 0.028 → 0.159 (≈6$times$) on Corpus B, and
+on every small corpus besides (floors 0.08–0.19 vs hybrids 0.21–0.58).
 Ranking still earns its place on parsed turns; grep does not close the
 gap once parsing is granted.
 
@@ -566,7 +569,8 @@ with cost following the *question*, not the corpus.
     [*routed: map + gated episodes*], [*all kinds at the per-kind floor*], [*0.43 / 0.60*], [*382 / 980*],
   ),
   caption: [Coverage at cost — the two problems combined. Seed supply
-  makes the ledger findable (grep floors → ≈0.31 MRR best config);
+  makes the ledger findable (grep floors → ≈0.31 best config: ≈60$times$
+  raw, ≈15$times$ the honest floor);
   answer assembly converts findable into answered, kind by kind; routing
   buys the per-kind floor at 382–980 tokens against a recorded history
   of tens of thousands of turns. Synthesis buys the hardest kind at

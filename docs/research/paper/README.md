@@ -36,7 +36,9 @@ anonymized form, and every paper number proofread against it — several
 table cells were transcribed from the source record and must be verified.
 Derived cells needing exact values from the record: the best-config row
 of the seed-stage table (≈0.31 Corpus A, ≈0.24 Corpus B = tuned baseline
-+ facet marginal). Seed-stage detail tables (facet operating points,
++ facet marginal) and the best-config floor ratios (≈60× raw / ≈15×
+honest floor, computed from those cells). After the frozen-snapshot
+re-run, all floor ratios should be recomputed from one matrix. Seed-stage detail tables (facet operating points,
 embedding options) live in Appendix A; the coverage-at-cost waterfall
 (Table 4) is the paper's summary artifact.
 

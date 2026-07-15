@@ -1,7 +1,8 @@
-# Paper: "Git-Bound Memory"
+# Paper: "Why Git Is the Memory Solution for the Agentic Development Lifecycle"
 
-The unified flagship paper — *Git-Bound Memory: Routing Developer
-Questions to Structure, Episode, and Synthesis under a Token Budget*. It
+The unified flagship paper — *Why Git Is the Memory Solution for the
+Agentic Development Lifecycle* (subtitle: git-bound, routed memory for
+coding agents), coining the ADLC term. It
 supersedes v1 ("The Commit Is the Label", available in git history),
 whose guarantee arguments it compresses into §3 and whose retrievability
 numbers it absorbs into the seed-stage study (§5). The structure follows

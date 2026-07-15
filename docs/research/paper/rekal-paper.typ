@@ -27,8 +27,10 @@
 #place(top, scope: "parent", float: true, clearance: 18pt)[
   #align(center)[
     #text(size: 17pt, weight: "bold", hyphenate: false)[
-      Git-Bound Memory for Coding Agents:\ A Routed System for Software Engineering Workloads
+      Why Git Is the Memory Solution\ for the Agentic Development Lifecycle
     ]
+    #v(4pt)
+    #text(size: 11pt)[Git-bound, routed memory for coding agents: structure, episode, and synthesis under a token budget]
     #v(6pt)
     #text(size: 10.5pt)[Frank Guo#super[1]]
     #v(2pt)
@@ -38,10 +40,12 @@
 
 // ---------- Abstract ----------
 #block(inset: (x: 2pt))[
-  *Abstract.* Memory for AI coding agents is usually posed as one
-  retrieval problem and built as machinery — tiered stores, memory
-  graphs, compiled wikis, model-judged admission. We take a different
-  position on both axes. Memory should be *git-bound*: built into the
+  *Abstract.* In the agentic development lifecycle (ADLC) — where coding
+  agents produce a growing share of a team's code, and the reasoning
+  behind each change is produced in agent sessions that expire with the
+  terminal window — memory is usually posed as one retrieval problem and
+  built as machinery: tiered stores, memory graphs, compiled wikis,
+  model-judged admission. We take a different position on both axes. Memory should be *git-bound*: built into the
   repository's version control, so its hard guarantees — ground truth,
   freshness, verification, containment — are inherited from git rather
   than rebuilt in software. And it should be *routed*: we solve two
@@ -79,6 +83,16 @@ rejected alternatives, the correction a reviewer shouted mid-session — lives
 in AI-assistant transcripts that expire with the terminal window. An agent
 that cannot remember what its own team already tried will confidently
 re-propose it.
+
+We call this setting the *agentic development lifecycle* (ADLC): git
+still runs the code's lifecycle, but a growing share of the intent
+behind each change is produced in agent sessions git never sees. The
+title's claim is the paper's thesis, argued and then measured: the
+memory solution for the ADLC is git itself — *bound*, not bolted on.
+Bound, because the lifecycle's own primitives supply what memory
+machinery cannot (ground truth, freshness, verification, containment;
+§3). And routed, because once the ledger exists, answering from it is
+not one retrieval problem (§7).
 
 Start from what memory *is* for an agent. The context window is the scarce
 resource, so memory is not a store — it is *context assembly under a token
@@ -638,7 +652,8 @@ episodes on confidence so they help rather than harm, and
 reconstructing evolved decisions by synthesis rather than retrieval.
 The binding constraint is capture. One tool, three modes, git-bound —
 and the strongest result is the one the field has not been measuring:
-memory can reconstruct *why* a system became what it is.
+memory can reconstruct *why* a system became what it is. Git already
+runs the ADLC's code; bound and routed, it runs its memory too.
 
 #v(4pt)
 *Reproducibility.* Every value traces to a committed run record

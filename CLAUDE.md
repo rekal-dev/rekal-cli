@@ -162,8 +162,9 @@ session discovery keep using the invoking worktree.
   (`06-eval-strategy.md`), the working-backwards flagship-paper restructure —
   git-bound memory, tool + skill + router, answer-sufficiency per token
   (`07-paper-restructure.md`), and `paper/` (Typst source + PDF of the unified
-  flagship "Git-Bound Memory"; supersedes v1 "The Commit Is the Label" in git
-  history; single-corpus values from `runs/2026-07-12/manifest.json`, multi-corpus
+  flagship "Why Git Is the Memory Solution for the Agentic Development
+  Lifecycle"; supersedes v1 "The Commit Is the Label" in git history;
+  single-corpus values from `runs/2026-07-12/manifest.json`, multi-corpus
   and sufficiency values from the operator-held consolidated run record,
   anonymized by workload class). The
   runnable harness lives in `scripts/bench/` (corpus card, T1–T3 + T4

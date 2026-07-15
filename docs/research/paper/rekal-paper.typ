@@ -663,7 +663,7 @@ runs the ADLC's code; bound and routed, it runs its memory too.
 *Reproducibility.* Every value traces to a committed run record
 (per-mode sufficiency judgments, blind-judged synthesis runs, generated
 maps, gating ablation; retrieval matrix, mechanism sweeps, facet
-screens). Corpora are anonymized (A: a documentation repository; B: a
+screens) — anonymized aggregates under `docs/research/runs/`. Corpora are anonymized (A: a documentation repository; B: a
 production data/ML pipeline subsystem); no session content or corpus
 identity leaves the operator's machine — published artifacts are
 aggregates, prompts, and code. The three modes ship as skills

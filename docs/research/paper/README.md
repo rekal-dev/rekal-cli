@@ -27,13 +27,13 @@ rung-1 run (Corpus A raw-grep floor, hybrid/BM25 composition, drill cost);
 its aggregate manifest is committed under `../runs/` per `DATA-RUN.md` §6.
 (2) The consolidated multi-corpus run record (8-corpus retrieval matrix,
 B1′ parsed-grep floors, mechanism sweeps, SPM facet results, and the
-mode/sufficiency tables with their ablations) — held on the operator's
-machine; corpora appear in the paper anonymized by workload class only
-(Corpus A/B + six small), per the anonymization rule in
-`../07-paper-restructure.md`. Before submission, the consolidated record's
-aggregate tables should be committed under `../runs/` in the same
-anonymized form, and every paper number proofread against it — several
-table cells were transcribed from the source record and must be verified.
+mode/sufficiency tables with their ablations) — anonymized aggregates
+committed at `../runs/2026-07-14-consolidated/manifest.json` with status
+`TRANSCRIBED_PENDING_VERIFICATION`: values were transcribed from the
+operator-held source record, and every cell must be proofread against
+that record before submission (then flip the status field). Corpora
+appear everywhere anonymized by workload class only (Corpus A/B + six
+small), per the anonymization rule in `../07-paper-restructure.md`.
 Derived cells needing exact values from the record: the best-config row
 of the seed-stage table (≈0.31 Corpus A, ≈0.24 Corpus B = tuned baseline
 + facet marginal) and the best-config floor ratios (≈60× raw / ≈15×

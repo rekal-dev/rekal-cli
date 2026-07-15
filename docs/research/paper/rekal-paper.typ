@@ -254,7 +254,7 @@ gap once parsing is granted.
     [Temporal decay], [rejected], [≈0 everywhere],
     [Lexical dilution], [rejected], [≈0 or degradation],
     [Z-score normalization], [rejected], [offline +0.048\* superseded by full engine: +0.016/+0.024, CIs cross 0 — engine already max-normalizes],
-    [Embedder substitution], [rejected], [alternative ≈ shipped embedder on hybrid, n.s. on all corpora],
+    [Embedder substitution], [rejected], [hosted embedder moves neural-only, not the hybrid; n.s. on both valid corpora (@tab-embed)],
     [Per-corpus weight tuning], [*kept*], [B +0.032 [.016,.049]; small code corpus +0.134 [.025,.247]; A within noise],
     [SPM facet term @spm2026], [*kept*], [marginal significant on *both* valid corpora: A +0.110 [.056,.173], B +0.053 [.012,.107]; tuner selects facet_boost=0.3 on both],
   ),
@@ -283,6 +283,52 @@ it. The lift is predictable: it is monotone in tool-path diversity
 +0.053), which yields a testable deployment rule — the term ships off by
 default and auto-tuning enables it (facet_boost 0.3) where the corpus's
 tool-diversity supports it.
+
+== Is the embedded model the bottleneck? No.
+
+The neural layer is the weakest signal in absolute terms (@tab-embed:
+neural-only 0.045–0.093 against BM25's 0.148–0.200) — consistent with
+the thesis that a single repo's question and its answering session share
+vocabulary. The natural objection is that the *embedded* model is simply
+too small, so we ran the substitution: a strong hosted general-purpose
+embedder over the engine's HTTP backend, under a protocol that gives the
+alternative its best shot — same held-out split and candidate pool;
+asymmetric query/document input types sent natively; the content-hash
+embedding cache rebuilt per model; and *four* configurations per
+embedder (neural-only and hybrid, each at default and dev-tuned
+weights), scored by paired per-query bootstrap.
+
+#figure(
+  table(
+    columns: (1fr, auto, auto),
+    align: (left, center, center),
+    table.header([*Configuration (pooled MRR)*], [*Corpus A*], [*Corpus B*]),
+    [BM25-only], [0.200], [0.148],
+    [neural-only — embedded (local)], [0.080], [0.045],
+    [neural-only — hosted], [0.093], [0.055],
+    [hybrid — embedded, default mix], [0.225], [0.159],
+    [hybrid — embedded, dev-tuned mix], [0.211], [*0.182*],
+    [hybrid — hosted, default mix], [0.217], [0.140],
+    [hybrid — hosted, dev-tuned mix], [*0.229*], [0.170],
+  ),
+  caption: [Embedding options on the held-out split. The hosted embedder
+  (a large general-purpose API model) lifts the *neural-only* ablation
+  slightly on both corpora, but the *hybrid* — the shipped system — is
+  flat on A and worse on B (hosted-default 0.140 falls below BM25-only;
+  hosted-tuned trails local-tuned); all hybrid deltas are n.s. under
+  paired per-query bootstrap. The other layers absorb what the embedder
+  adds. Scope: one strong general-purpose alternative was tested; a
+  code-tuned embedder is the open falsifier and runs through the same
+  gate for free (content-hash cache; query-time weights).],
+) <tab-embed>
+
+The reading is architectural, not incidental: *alignment, not embedding
+quality, is the binding constraint* @anms2026 — and its product
+consequence is that the local-first default (embedding model inside the
+binary, no API, no account) costs approximately nothing in recall. A
+material hybrid lift from a code-tuned embedder would raise the shipped
+default through the same incumbent-versus-candidate gate; a null result
+would close this question entirely.
 
 == What the graveyard teaches
 

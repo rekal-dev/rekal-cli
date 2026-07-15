@@ -14,6 +14,10 @@ numbers it absorbs into the seed-stage study (§5). The structure follows
 - `arxiv/` — the arXiv LaTeX version (`main.tex` + `main.bbl`; pdflatex-only,
   TikZ figure, zero-warning build). Content mirrors the Typst source — see
   `arxiv/README.md` for build/upload and the pre-submission gate
+- `web/` — drop-in site assets for serving the paper at `rekal.dev/paper`:
+  an SEO-rich landing page (Scholar `citation_*` tags, OpenGraph, Twitter
+  card, JSON-LD, crawlable abstract) that inlines the PDF, plus per-host
+  routing snippets. See `web/README.md` to port it into the site repo
 
 ## Build
 

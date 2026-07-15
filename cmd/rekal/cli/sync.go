@@ -178,6 +178,16 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		}
 	}
 
+	// Facet documents + facet FTS index (guarded — skipped when no session
+	// has facet material). Covers synced teammate sessions too: the facet
+	// doc is derived from the index's own tables.
+	if err := db.PopulateFacetText(indexDB); err != nil {
+		return err
+	}
+	if err := db.CreateFacetFTSIndex(indexDB); err != nil {
+		return err
+	}
+
 	// 5d: LSA pass.
 	embeddingDim := 0
 	if sessionCount >= 2 {

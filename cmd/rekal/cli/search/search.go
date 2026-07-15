@@ -51,6 +51,9 @@ type Layers struct {
 	BM25  float64 `json:"bm25"`
 	LSA   float64 `json:"lsa"`
 	Nomic float64 `json:"nomic"`
+	// Facet is the facet layer's normalized score (weights.facet_boost > 0,
+	// the shipped default; 0 when disabled or no facet index exists).
+	Facet float64 `json:"facet"`
 }
 
 // Related is a query-time join to sessions that touched the same files —
@@ -162,7 +165,17 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	// Step 3: Nomic deep semantic search (non-fatal).
 	nomicScores, _ := nomicSearch(indexDB, filters.Query, gitRoot, qe)
 
-	// Step 4: Group by session, pick best turn per session.
+	// Step 4: Facet layer — BM25 over per-session facet documents (tool
+	// paths + command prefixes + steering text). Config-gated: at an
+	// explicit FacetBoost of 0 the search never runs and ranking is
+	// byte-identical to the pre-facet engine; without a facet FTS index
+	// (older index.db, no facet material) the layer fails soft to nil.
+	var facetScores map[string]float64
+	if w.FacetBoost > 0 {
+		facetScores = facetSearch(indexDB, filters.Query)
+	}
+
+	// Step 5: Group by session, pick best turn per session.
 	sessions := make(map[string]*sessionHit)
 
 	for _, hit := range bm25Hits {
@@ -234,6 +247,24 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		}
 	}
 
+	// Add facet scores (empty map unless the layer is enabled).
+	for sid, score := range facetScores {
+		sh, ok := sessions[sid]
+		if !ok {
+			sh = &sessionHit{}
+			sessions[sid] = sh
+		}
+		sh.facetScore = score
+	}
+
+	// Normalize facet scores to [0,1].
+	var maxFacet float64
+	for _, sh := range sessions {
+		if sh.facetScore > maxFacet {
+			maxFacet = sh.facetScore
+		}
+	}
+
 	// Look up parent_session_id for every candidate session, once, so the
 	// subagent down-weight and conversation grouping below don't re-query
 	// per-session. Sessions without the concept (or without a parent) map
@@ -265,6 +296,10 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		if useNomic && maxNomic > 0 {
 			nomicNorm = sh.nomicScore / maxNomic
 		}
+		facetNorm := 0.0
+		if maxFacet > 0 {
+			facetNorm = sh.facetScore / maxFacet
+		}
 
 		var hybrid float64
 		if useNomic {
@@ -272,6 +307,11 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		} else {
 			hybrid = bm25W2*bm25Norm + lsaW2*lsaNorm
 		}
+		// Facet layer: additive fourth term, applied before the subagent
+		// discount (hybrid += facet_boost * facetNorm). facetNorm is 0 for
+		// every session when the layer is disabled or has no index, so this
+		// is a no-op in those cases.
+		hybrid += w.FacetBoost * facetNorm
 		// Subagent/workflow transcripts (non-null parent) are discounted
 		// relative to trunk turns of equal relevance.
 		if parentIDs[sid] != "" {
@@ -279,7 +319,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		}
 		sc := scored{sessionID: sid, score: hybrid, hit: sh}
 		if filters.Explain {
-			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm)}
+			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm), Facet: round2(facetNorm)}
 		}
 		scoredResults = append(scoredResults, sc)
 	}
@@ -468,6 +508,42 @@ func bm25Search(indexDB *sql.DB, query string) ([]bm25Hit, error) {
 		hits = append(hits, h)
 	}
 	return hits, rows.Err()
+}
+
+// facetSearch scores sessions by BM25 over their facet document
+// (session_facets.facet_text — distinct tool paths + command prefixes +
+// steering text; db.PopulateFacetText). Only called when the layer is
+// enabled (weights.facet_boost > 0). Non-fatal by construction: when the
+// facet FTS index does not exist (older index.db, or a corpus with no
+// facet material — db.CreateFacetFTSIndex is guarded), the query errors
+// and the layer is skipped.
+func facetSearch(indexDB *sql.DB, query string) map[string]float64 {
+	rows, err := indexDB.Query(`
+		SELECT sf.session_id,
+		       fts_main_session_facets.match_bm25(sf.session_id, $1) AS score
+		FROM session_facets sf
+		WHERE score IS NOT NULL
+		ORDER BY score DESC
+		LIMIT 200
+	`, query)
+	if err != nil {
+		return nil // facet FTS index absent — layer off
+	}
+	defer rows.Close() //nolint:errcheck
+
+	scores := make(map[string]float64)
+	for rows.Next() {
+		var sid string
+		var score float64
+		if err := rows.Scan(&sid, &score); err != nil {
+			return nil
+		}
+		scores[sid] = score
+	}
+	if rows.Err() != nil {
+		return nil
+	}
+	return scores
 }
 
 func lsaSearch(indexDB *sql.DB, query string) (map[string]float64, error) {
@@ -1012,6 +1088,7 @@ type sessionHit struct {
 	bm25Max    float64
 	lsaScore   float64
 	nomicScore float64
+	facetScore float64
 }
 
 func sortScored(s []scored) {

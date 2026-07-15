@@ -345,6 +345,38 @@ func TestWeightsConfig_Resolve(t *testing.T) {
 	if _, err := (&weightsConfig{BM25: fp(0), LSA: fp(0), Nomic: fp(0)}).resolve(); err == nil {
 		t.Fatal("all-zero layers must be rejected")
 	}
+
+	// facet_boost: absent keeps the shipped default (0.3); explicit values
+	// apply; zero is valid (the layer's off switch); negative rejected.
+	w, err = (&weightsConfig{BM25: fp(0.5)}).resolve()
+	if err != nil || w.FacetBoost != search.DefaultWeights().FacetBoost {
+		t.Fatalf("absent facet_boost should keep the default, got %+v, %v", w, err)
+	}
+	w, err = (&weightsConfig{FacetBoost: fp(0.5)}).resolve()
+	if err != nil || w.FacetBoost != 0.5 {
+		t.Fatalf("facet_boost resolve = %+v, %v", w, err)
+	}
+	w, err = (&weightsConfig{FacetBoost: fp(0)}).resolve()
+	if err != nil || w.FacetBoost != 0 {
+		t.Fatalf("facet_boost=0 must disable the layer, got %+v, %v", w, err)
+	}
+	if _, err := (&weightsConfig{FacetBoost: fp(-0.1)}).resolve(); err == nil {
+		t.Fatal("negative facet_boost must be rejected")
+	}
+}
+
+// TestMergeWeights_FacetBoost covers the two-tier merge for the facet knob:
+// local overrides global, absent local inherits global.
+func TestMergeWeights_FacetBoost(t *testing.T) {
+	t.Parallel()
+
+	global := &weightsConfig{FacetBoost: fp(0.3)}
+	if got := mergeWeights(global, &weightsConfig{}); got.FacetBoost == nil || *got.FacetBoost != 0.3 {
+		t.Fatalf("absent local facet_boost should inherit global, got %+v", got.FacetBoost)
+	}
+	if got := mergeWeights(global, &weightsConfig{FacetBoost: fp(0)}); got.FacetBoost == nil || *got.FacetBoost != 0 {
+		t.Fatalf("local facet_boost=0 should override global, got %+v", got.FacetBoost)
+	}
 }
 
 func TestEmbeddingConfig_Resolve(t *testing.T) {

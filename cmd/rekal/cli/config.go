@@ -55,6 +55,10 @@ type weightsConfig struct {
 	SteeringBoost      *float64 `json:"steering_boost,omitempty"`
 	SummaryBoost       *float64 `json:"summary_boost,omitempty"`
 	SubagentDownweight *float64 `json:"subagent_downweight,omitempty"`
+	// FacetBoost scales the facet ranking layer (BM25 over per-session tool
+	// paths + command prefixes + steering text, added as a fourth term).
+	// Default 0.3 (held-out tuned); 0 disables the layer entirely.
+	FacetBoost *float64 `json:"facet_boost,omitempty"`
 }
 
 // resolve merges the config over the defaults and validates. Layer weights
@@ -91,6 +95,9 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 		return w, err
 	}
 	if err := set(&w.SubagentDownweight, wc.SubagentDownweight, "subagent_downweight", false); err != nil {
+		return w, err
+	}
+	if err := set(&w.FacetBoost, wc.FacetBoost, "facet_boost", true); err != nil {
 		return w, err
 	}
 	if w.BM25+w.LSA+w.Nomic <= 0 {
@@ -336,6 +343,9 @@ func mergeWeights(global, local *weightsConfig) *weightsConfig {
 	}
 	if local.SubagentDownweight != nil {
 		merged.SubagentDownweight = local.SubagentDownweight
+	}
+	if local.FacetBoost != nil {
+		merged.FacetBoost = local.FacetBoost
 	}
 	return &merged
 }

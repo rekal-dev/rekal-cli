@@ -264,7 +264,12 @@ CREATE TABLE IF NOT EXISTS files_index (
 
 ## `session_facets`
 
-Aggregated session metadata for fast filtering and display.
+Aggregated session metadata for fast filtering and display, plus the
+session's facet document (`facet_text`: distinct tool paths + command
+prefixes + steering text, capped — deterministic, no LLM). The facet
+ranking layer BM25-searches `facet_text` via a guarded FTS index
+(built only when at least one session has facet material; scaled by
+`weights.facet_boost`, default 0.3).
 
 ```sql
 CREATE TABLE IF NOT EXISTS session_facets (
@@ -278,7 +283,8 @@ CREATE TABLE IF NOT EXISTS session_facets (
     tool_call_count INTEGER,
     file_count      INTEGER,
     checkpoint_id   VARCHAR,
-    git_sha         VARCHAR
+    git_sha         VARCHAR,
+    facet_text      VARCHAR
 );
 ```
 

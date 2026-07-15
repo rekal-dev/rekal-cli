@@ -1,91 +1,220 @@
 ---
 name: rekal
 description: |
-  Use this skill when working in a repo with Rekal initialized (.rekal/ exists).
-  Rekal gives you memory of prior AI sessions — who changed what, why, and when.
-  Start with `rekal "keyword"` to search, then drill into sessions with
-  `rekal query --session <id>`. Run `rekal <command> --help` for full details.
+  Use this skill when working in a repo with Rekal initialized (.rekal/
+  exists). Rekal is memory of prior AI sessions — who changed what, why, and
+  when. Decide WHERE the answer lives before you spend a token: a question
+  about a coding project is answered by one of three substrates — the TREE
+  (current code, via grep/read), the LEDGER (recorded session intent, via
+  rekal), or the MAP (comprehended structure, the bridge). This skill is the
+  triage and the workflows: classify the question, dispatch to the one
+  substrate that can answer it, and stay silent where memory is not the
+  right tool. Route, do not stack.
 ---
 
-# Rekal — Session Memory
+# Rekal — which substrate answers this?
 
-Rekal captures AI coding sessions (conversation turns, tool calls, file changes) and stores them in a local DuckDB database. Use it to understand prior context before modifying code.
+Git holds two different things, and most wasted effort comes from asking the
+wrong one. Before recalling, reading, or grepping, decide which substrate
+the question belongs to.
 
-Search understands what you mean, not just what you type — powered by an embedded deep semantic model (nomic-embed-text) that runs entirely on your machine. No external APIs, no setup.
+| Substrate | Holds | Tense | Primitive | Answers |
+|---|---|---|---|---|
+| **Tree** (code @ HEAD) | current state | present | `grep` / read / AST | "what does X do / where is it / what's the value now" |
+| **Ledger** (sessions) | recorded intent | past | `rekal` recall + modes | "why is it like this / what was tried / what was rejected" |
+| **Map** (structure) | comprehended shape | — | MAP workflow | "how is the whole thing built / what connects to what" |
 
-## Binary
+The map is derived from the tree but serves memory: it is the tree's shape,
+cached and git-watermarked, so breadth questions don't re-grep the world.
+
+**The rule:** grep the tree for present-tense facts. Recall the ledger for
+past-tense intent. The map tells you which — and stay silent when it's
+neither.
 
 If `rekal` is not on PATH, run `export PATH="$HOME/.local/bin:$PATH"` first.
-The presence of this skill file means the binary is installed.
 
-## When to Use
+## Triage — classify the question, then dispatch
 
-- Before modifying a file — check what prior sessions touched it
-- When you need context about why code looks the way it does
-- When the user asks about prior session history
-- When working on files that were recently changed by AI agents
+1. **Is it about what the code IS right now?** ("what does this function
+   do", "where is X defined", "what's the current config") → **Tree.** Use
+   grep / read / your code tools. Do NOT use rekal — the ledger does not
+   store current code content; it would be slower and risk a stale answer.
+   This is the most common misroute. Answer from the source.
+2. **Is it about the SHAPE of the system?** ("how is the pipeline
+   architected end-to-end", "what subsystems exist", "how do they connect")
+   → **MAP workflow.** No single file or session holds this; structure
+   does. The map also orients steps 1 and 3 (where to grep, which sessions
+   to recall).
+3. **Is it about WHY / how it evolved / a past decision?** ("why was X
+   chosen over Y", "what did we reject", "who decided") → **Ledger.** Not
+   in the code — the reasoning expired with the session.
+   - pointed ("which session did X, and the detail") → **HUNT workflow**
+     (seed recall + drill, confidence-gated).
+   - rationale / evolved decision ("why X instead of Y") → **WHY workflow**
+     (gather every decision-relevant turn, synthesize the arc; single-shot
+     recall only returns one fragment).
+4. **Hybrid — need the actual code behind a past decision?** Rekal owns the
+   pointer, git owns the content: recall gives the commit SHA it recorded,
+   then `git show <sha>` reconstructs the diff on demand. That is "grep on
+   content, scoped by memory" — it keeps the ledger thin.
 
-## Workflow
+### The gate — when to stay silent
 
-### 0. Wiki shortcut — one existence check
+Answering from the wrong substrate is worse than not answering. Two
+silences matter:
 
-If `docs/wiki/index.md` exists, a materialized topic map of this memory is
-already committed (see **rekal-wiki**): for broad "what do we know about X"
-questions, read the topic page first — it may answer in one file read. Check
-its watermark; anything newer, and any pointed or verification question,
-goes through recall below. The wiki is a cache of memory, not the memory.
+- **Don't inject memory into a tree question.** If step 1 fits, read the
+  code. A recalled session about how X *used* to work can mislead on how it
+  works now.
+- **Don't inject low-confidence episodes.** When HUNT recall is weak (no
+  clear top hit, flat score gap — see the gate below), the episode stays
+  OUT of context. Ungated low-confidence episodes measurably degrade a good
+  answer. Silence beats noise.
 
-### 1. Search — find relevant sessions
+## Workflow MAP — breadth, answered from structure
 
-```bash
-rekal "JWT expiry"                      # keyword search (BM25 + LSA + Nomic hybrid)
-rekal --file src/auth/ "token refresh"  # filter by file path (regex)
-rekal --actor agent "migration"         # filter by actor type
-rekal --author alice@co.com "billing"   # filter by author
-rekal -n 5 "error handling"            # limit results
-rekal --explain "error handling"       # + per-layer scores and related sessions (zoom edges)
+The map lives at `.rekal/map.md` (derived, local — `.rekal/` is gitignored;
+the committed browse surface is rekal-wiki, not this file). Its reader is
+an agent: optimize for density, greppable anchors, and clean diffs — that
+means **structured markdown sections, not a mermaid diagram** (a diagram is
+human decoration here; text sections carry more per token, every line can
+name a real path to grep next, and section-scoped rewrites keep the
+watermark refresh cheap).
+
+### Freshness protocol
+
+Line 1 is the watermark: `<!-- rekal-map <branch> <HEAD-sha> -->`.
+
+- **Fresh** (watermark SHA == `git rev-parse HEAD`): answer from the map.
+- **Stale** (any other SHA — including after a branch switch; the map is a
+  function of the tree at a SHA, not of the branch): run
+  `git diff --name-only <watermark-sha> HEAD`, map the changed files to
+  subsystem sections, rewrite only those sections and any flow that touches
+  them, update the watermark. If the diff exceeds ~50 files or subsystem
+  boundaries moved, rebuild in full.
+- **Missing:** build it (below).
+
+### Build procedure — prescriptive
+
+1. **Inventory the skeleton** (no file contents yet): top two directory
+   levels, the manifests (`go.mod` / `package.json` / `pyproject.toml`),
+   build and CI files. This bounds what exists.
+2. **Read the repo's own claims**: README, `docs/`, architecture notes,
+   CLAUDE.md. Treat them as claims to verify against the tree, not truth.
+3. **Cut subsystems by responsibility, not by directory.** Aim for 5–12;
+   more means you're listing folders, fewer means you're hand-waving. Every
+   system has: entry points, core domain, storage, transport/IO, external
+   surfaces — find where this repo puts each.
+4. **Comprehend each subsystem**: open its 1–3 load-bearing files (the
+   entry point, the central type) and read enough to state *what it is
+   for* and *what breaks if it's deleted*. If you cannot answer the second,
+   you haven't comprehended it — read more. Never paste file contents into
+   the map.
+5. **Trace the load-bearing edges**: which subsystems import/call which,
+   and what crosses the edge (data, events, files). List only edges that
+   carry the system's main flows.
+6. **Optionally add memory hooks**: `rekal --explain "<subsystem>"` — if
+   one or two sessions clearly own a hot area, note their ids as drill
+   pointers.
+7. **Emit in the exact template below.** Deterministic order (subsystems
+   by primary path), ≤12 lines per subsystem, ≤150 lines total.
+
+### Template
+
+```markdown
+<!-- rekal-map <branch> <HEAD-sha> -->
+# Map — <repo name>
+
+## System in one paragraph
+<what it is, for whom, the one main flow>
+
+## Subsystems
+### <name> — `<primary path>`
+- purpose: <behavior, not a file list>
+- key files: `<a>`, `<b>`
+- depends on: <subsystem> (<what crosses the edge>)
+- invariant: <constraint worth knowing before editing>   [optional]
+
+## Flows
+- <flow name>: <subsystem> → <subsystem> → <subsystem> (<what moves>)
+
+## Pointers   [optional]
+- <topic>: session <id> (<why it's the authority>)
 ```
 
-Output is scored JSON. Each result includes:
-- `session_id` — use with `rekal query --session <id>` to drill down
-- `snippet` — the matching text from the best-matching turn
-- `snippet_turn_index` — the turn index of the snippet (use as `--offset` for drill-down)
-- `snippet_role` — the snippet's turn role: `human`, `human_steering` (a human correcting the agent mid-task — high intent), `assistant`, or `summary` (a harness-written distillation of the whole session — dense but machine text; drill into the raw turns beneath it for specifics)
-- `summary_turn_index` — present when the session has a compaction summary: the turn index of the latest one. The cheapest overview of a long session is one drill away: `rekal query --session <id> --role summary`
-- `score`, `actor`, `author`, `branch`, `files` — metadata for filtering
-- `children` — subagent/workflow transcripts grouped under this result's trunk conversation (when any matched)
-- `origin` — present only on cross-repo hits (see below): `repo:/path` or `shell:/path`, the working directory the session came from. The hit is from *another project on this machine* — weigh its relevance to this repo accordingly. Absent means the session belongs to this repo or a teammate.
+**Quality bar:** every subsystem names real, greppable paths; purpose is
+stated as behavior; every edge says what crosses it; anyone reading only
+the map can decide where to grep and which sessions to recall next.
 
-### 2. Drill down — progressive context loading
+## Workflow HUNT — pointed, gated episodic recall
 
-Always start small to minimize token cost, then load more only when needed.
+1. **Search:**
 
 ```bash
-# Step 1: Use snippet_turn_index from search results to fetch a small window
-# around the most relevant turn (e.g. if snippet_turn_index was 12)
-rekal query --session 01JNQX... --offset 10 --limit 5
-
-# Step 2: If you need broader context, fetch human turns to understand intent
-rekal query --session 01JNQX... --role human
-
-# Cheap overview of a long session: its compaction summaries (if any) — a
-# harness-written distillation of files touched, decisions, errors and fixes
-rekal query --session 01JNQX... --role summary
-
-# Step 3: Only fetch full output when you actually need tool calls and files
-rekal query --session 01JNQX... --full
+rekal "JWT expiry"                      # hybrid search (BM25+LSA+semantic+facet)
+rekal --file src/auth/ "token refresh"  # scope by file path (regex)
+rekal --commit <sha>                     # sessions that produced a commit
+rekal -n 5 --explain "error handling"   # + per-layer scores and related sessions
 ```
 
-Output includes `total_turns`, `offset`, `limit`, and `has_more` for navigation.
+2. **Gate.** From the result JSON take the top score and the gap to the
+   second. Confident: top score ≥ 0.9, or gap ≥ 0.04. Below both → treat as
+   a miss: say memory has no confident episode (and consider re-routing — a
+   "pointed" question that misses is often a why or breadth question in
+   disguise). Do not pad the answer with near-misses.
 
-Do NOT load all turns or use `--full` by default. Use `snippet_turn_index` from
-search results to jump directly to the relevant part of the conversation.
+3. **Drill, cheapest first** — never `--full` by default:
 
-### 3. Widen memory — cross-repo recall
+```bash
+rekal query --session <id> --role summary          # compaction summary — cheapest dense overview
+rekal query --session <id> --offset <snippet_turn_index - 2> --limit 5   # window around the match
+rekal query --session <id> --role human            # intent
+rekal query --session <id> --role human_steering   # mid-task corrections — highest signal
+rekal query --session <id> --full                  # last resort
+```
 
-By default recall covers this repo (plus synced teammate sessions). If the
-answer likely lives in the developer's *other* work on this machine, the
-developer can widen recall to every local Claude Code session:
+Result fields that matter: `session_id`, `score`, `snippet`,
+`snippet_turn_index` (jump target), `snippet_role` (`human_steering` = a
+human correcting the agent — high intent; `summary` = harness distillation
+— dense but machine text), `summary_turn_index` (present when a compaction
+summary exists), `children` (grouped subagent/workflow transcripts),
+`origin` (present only on cross-repo hits — prior art from *another*
+project, not this repo's conventions).
+
+## Workflow WHY — rationale, reconstructed by synthesis
+
+The rationale for an evolved decision is distributed across sessions.
+Gather the decision trail, then synthesize. **The gather bounds the
+quality** — an under-gathered synthesis starves; gather generously before
+concluding anything.
+
+1. **Seed:** search 2–3 phrasings of the decision and its alternatives.
+   Note candidate sessions and their commits.
+2. **Gather the decision trail** — steering turns and reasoning-marked
+   turns across *all* sessions, not the top hit:
+
+```bash
+rekal query --index "SELECT session_id, turn_index, role, substr(content,1,300) FROM turns_ft \
+  WHERE (role = 'human_steering' OR content LIKE '%because%' OR content LIKE '%instead of%' \
+         OR content LIKE '%constraint%' OR content LIKE '%rejected%' OR content LIKE '%decided%') \
+  AND (content LIKE '%<topic-term-1>%' OR content LIKE '%<topic-term-2>%') \
+  ORDER BY session_id, turn_index"
+```
+
+   Aim for the full trail (often ~30 turns). Fewer than ~10 → widen the
+   topic terms before concluding.
+3. **Pull code on demand:** `git show <commit-sha>` for any claim that
+   references code (the `commit` field on results) — intent lives in the
+   ledger, content lives in git.
+4. **Synthesize the arc**, every claim carrying pointers: original design →
+   alternatives rejected → the constraint that forced the change → final
+   rationale, each step cited as `(session <id> turn <n>, commit <sha>)`.
+   The chain is the deliverable, not the transcripts.
+5. **If the trail is genuinely absent**, say so plainly — the answer was
+   never verbalized in the ledger (a capture gap); inventing a rationale is
+   worse than reporting the gap.
+
+## Widen memory — cross-repo recall
 
 ```bash
 rekal index --include-all           # all repos + shell sessions on this machine
@@ -93,20 +222,22 @@ rekal index --include /path/to/repo # just that repo's sessions
 rekal index --no-local              # back to this repo only
 ```
 
-The setting persists across `index`/`sync` rebuilds. Imported sessions are
-index-only — recallable here, structurally impossible to push to the team —
-and carry the `origin` label in results. Suggest `--include-all` to the user
-when a search comes up empty but the problem smells like something they've
-solved elsewhere; don't run it unprompted, it's their history to widen.
+Imported sessions are index-only — recallable here, structurally impossible
+to push to the team — and carry the `origin` label. Suggest `--include-all`
+when a search misses but the problem smells solved elsewhere; don't run it
+unprompted, it's the developer's history to widen.
 
-### 4. Raw SQL — for edge cases
+## Raw SQL — the escape hatch
 
 ```bash
 rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
 rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC"
 ```
 
-Run `rekal query --help` for the full data DB and index DB schemas.
+`rekal query --help` documents both DB schemas. `files_touched` includes
+git-native change types (M/A/D/R) plus `T` for files Written/Edited during
+the session; `tool_calls.path` is the most complete "what files did this
+session interact with" source.
 
 ## Filters (root command)
 
@@ -117,51 +248,37 @@ Run `rekal query --help` for the full data DB and index DB schemas.
 | `--author <email>` | Filter by author email |
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20, 0 = no limit) |
-| `--explain` | Adds `layers` (normalized bm25/lsa/nomic scores) and `related` (sessions sharing touched files — zoom edges) to each result |
+| `--explain` | Adds `layers` (normalized bm25/lsa/nomic/facet scores) and `related` (sessions sharing touched files — zoom edges) |
 
 ## Companion skills
 
-This is the base skill — search and drill. Four focused skills build on it;
-reach for them when the task matches:
+Deep-dive skills build on this router; reach for them when the task *is*
+the deep dive:
 
-- **rekal-provenance** — "how/why was this change made?" Anchor on a file or
-  commit, walk back to the session that produced it, emit the why-chain. Use
-  when reading unfamiliar code, onboarding, or reviewing a large codebase.
-- **rekal-reflect** — before or after a task, mine your own prior sessions
-  (especially `human_steering` turns) for recurring corrections and distill
-  them into explicit rules. Use to stop repeating mistakes across sessions.
-- **rekal-distill** — navigate memory as four libraries (context / decision /
-  rules / boundary) and "zoom" around a topic or session. Use when you need a
-  structured survey of what is known, undecided, preferred, and abandoned.
-- **rekal-wiki** — materialize memory into committed `docs/wiki/<topic>.md`
-  pages: topics from file co-occurrence, summaries from the sessions behind
-  them (never from noisy commit messages), shipped as a PR so review admits
-  the knowledge. Use to bootstrap or refresh a browsable knowledge base.
-- **rekal-census** — read and summarise the *whole* corpus (or a bounded slice)
-  exhaustively, not just the top matches. Use for "summarise everything",
-  onboarding digests, or retrospectives — it scans on raw SQL for coverage,
-  not relevance.
+- **rekal-provenance** — artifact → commit → session → intent why-chain
+- **rekal-reflect** — mine your own steering turns into explicit rules
+- **rekal-distill** — survey memory as four libraries (context / decision / rules / boundary)
+- **rekal-census** — exhaustive full-corpus scan (coverage, not relevance)
+- **rekal-wiki** — materialize committed `docs/wiki/` topic pages via PR
 
-## Self-Service
+## Why this boundary
 
-Run `rekal <command> --help` for detailed help on any command, including
-the full DB schemas (`rekal query --help`).
+You don't recall a memory to learn what a function does — you read it. You
+recall memory to learn *why it's shaped that way*. Rekal is the intent
+layer, not a grep replacement; it earns its place by owning the one thing
+the tree cannot hold — the reasoning that expired with the terminal window.
+The tree stays the state layer, grep stays its primitive, and the router
+keeps the line clean.
 
 ## Guidelines
 
-- Search before modifying files that have prior session history
-- Start with `rekal "keyword"` — only drop to raw SQL when the search workflow doesn't cover your need
-- Use `snippet_turn_index` to jump to the relevant part of a session — don't load everything
-- Human turns contain the intent; assistant turns contain the reasoning
-- Cross-repo hits (`origin` set) are how a similar problem was solved *elsewhere* — treat them as prior art, not as this repo's conventions
-- `actor_type` distinguishes human-initiated sessions from automated agent sessions
-- Join `turns` with `tool_calls` via `session_id` to get context around file changes
-
-## Data Model Notes
-
-- `files_touched` (shown in `--full` output) comes from git diff AND session tool_calls — it includes files that were committed as well as files Written/Edited during the session. Change type `T` (touched) marks entries derived from tool_calls rather than git-native types (M/A/D/R).
-- `tool_calls` in `--full` output includes a `path` field (absolute) for file-targeting tools — this is the most complete source for "what files did this session interact with."
-- If `files_touched` seems incomplete for a session, query tool_calls directly:
-  ```bash
-  rekal query "SELECT DISTINCT path FROM tool_calls WHERE session_id = '<id>' AND path IS NOT NULL AND length(path) > 0"
-  ```
+- Triage first; one question, one substrate — routed, not stacked
+- Gate episodes: below the confidence bar, silence beats noise
+- Breadth answers come from the map, why answers from synthesis — don't
+  force either through top-k retrieval
+- Start small when drilling (`summary` role, snippet window); `--full` is a
+  last resort
+- Human turns carry intent; `human_steering` carries the moments decisions
+  actually got made
+- Cross-repo hits (`origin` set) are prior art, not this repo's conventions
+- Report pointers (session, turn, commit) with every claim from memory

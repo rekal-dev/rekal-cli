@@ -22,6 +22,7 @@ Removes:
   post-commit hook   Only if it contains the rekal marker
   pre-push hook      Only if it contains the rekal marker
   agent skills       .claude/skills/rekal*/ installed by 'rekal init'
+  CLAUDE.md line     Only the marker-tagged sentence injected by 'rekal init'
 
 Run 'rekal init' to reinitialize after cleaning.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -53,7 +54,33 @@ func runClean(gitRoot string) error {
 	removeHook(filepath.Join(gitRoot, ".git", "hooks", "post-commit"))
 	removeHook(filepath.Join(gitRoot, ".git", "hooks", "pre-push"))
 	removeSkill(gitRoot)
+	removeClaudeMDLine(gitRoot)
 	return nil
+}
+
+// removeClaudeMDLine deletes the marker-tagged sentence init injected into
+// CLAUDE.md. If nothing but whitespace remains the file is removed entirely
+// (it was ours); a file with the user's own content keeps everything else.
+func removeClaudeMDLine(gitRoot string) {
+	path := filepath.Join(gitRoot, "CLAUDE.md")
+	data, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(data), rekalClaudeMDMarker) {
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if strings.Contains(line, rekalClaudeMDMarker) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	out := strings.Join(kept, "\n")
+	if strings.TrimSpace(out) == "" {
+		_ = os.Remove(path)
+		return
+	}
+	_ = os.WriteFile(path, []byte(strings.TrimRight(out, "\n")+"\n"), 0o644)
 }
 
 // removeSkill deletes every rekal-managed skill directory installed by init,

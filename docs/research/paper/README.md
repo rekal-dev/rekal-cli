@@ -14,6 +14,10 @@ numbers it absorbs into the seed-stage study (§5). The structure follows
 - `arxiv/` — the arXiv LaTeX version (`main.tex` + `main.bbl`; pdflatex-only,
   TikZ figure, zero-warning build). Content mirrors the Typst source — see
   `arxiv/README.md` for build/upload and the pre-submission gate
+- `rekal-arxiv-submission.zip` — the ready-to-upload arXiv archive: `main.tex`
+  (top-level), `main.bbl`, `refs.bib`, flat at the root (no folder prefix, so
+  arXiv finds the top-level file). Regenerate with
+  `cd arxiv && zip -j ../rekal-arxiv-submission.zip main.tex main.bbl refs.bib`
 - `web/` — drop-in site assets for serving the paper at `rekal.dev/paper`:
   an SEO-rich landing page (Scholar `citation_*` tags, OpenGraph, Twitter
   card, JSON-LD, crawlable abstract) that inlines the PDF, plus per-host

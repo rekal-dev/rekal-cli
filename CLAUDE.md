@@ -58,7 +58,9 @@ session discovery keep using the invoking worktree.
 - `checkpoint.go`: Capture session after commit
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
-- `init.go`: Bootstrap Rekal in a git repo
+- `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
+  skill suite, and one marker-tagged CLAUDE.md sentence (the whole DX:
+  init, done; `clean` removes the line, refresh replaces it in place)
 - `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB. Also carries the cross-repo
   local-import flags (`--include-all`/`--include`/`--no-local`), which set a
@@ -73,7 +75,8 @@ session discovery keep using the invoking worktree.
   are never baked in); `readMergedConfig` is the consumption view (recall
   weights, index embedding). Holds the cross-repo `local_import` preference,
   the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
-  summary boost, subagent discount — applied at query time, no reindex), and
+  summary boost, subagent discount, facet boost — applied at query time, no
+  reindex), and
   the `embedding` section (OpenAI-compatible HTTP backend: endpoint/model/
   api_key with `$VAR` expansion and `api_key_env`; a Cohere Embed model under
   the `openai` provider auto-sends `input_type`)
@@ -102,8 +105,11 @@ session discovery keep using the invoking worktree.
   `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
   `BranchTip` for the merged-only export gate, `MainWorktreeRoot` for the
   worktree-shared store) shared by the command and transport layers
-- `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring with
-  configurable weights (`weights.go`; query-time only), signal weighting
+- `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring plus
+  the additive facet layer (BM25 over per-session tool paths + command
+  prefixes + steering text; `weights.facet_boost`, default 0.3, `0` =
+  byte-identical pre-facet ranking; fails soft without a facet FTS index),
+  with configurable weights (`weights.go`; query-time only), signal weighting
   (steering-turn boost, compaction-summary boost, subagent down-weight),
   conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, the LSA
@@ -122,8 +128,11 @@ session discovery keep using the invoking worktree.
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) in a session payload before any DB insert (runs in `checkpoint` and cross-repo import after parse). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter`.
-- `db/`: DuckDB backend — open, close, schema, insert helpers, index population.
-  `embedcache.go` is the content-hash-keyed embedding cache
+- `db/`: DuckDB backend — open, close, schema, insert helpers, index
+  population (incl. `PopulateFacetText` — per-session facet documents from
+  the index's own tables, full + incremental — and the guarded
+  `CreateFacetFTSIndex`, built by `index`/`sync` only when facet material
+  exists). `embedcache.go` is the content-hash-keyed embedding cache
   (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;
   a model switch invalidates by key construction
 - `embedhttp/`: HTTP embedding client — batched, hard-timeboxed so the
@@ -138,7 +147,15 @@ session discovery keep using the invoking worktree.
 - `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are
   embedded via `//go:embed all:skills`; `skill.All()` returns them (`rekal`
   first). `init` installs each to `.claude/skills/<name>/SKILL.md`, `clean`
-  removes them. The suite: `rekal` (base search/drill), `rekal-provenance`
+  removes them. The suite: `rekal` (the router — first decide the substrate:
+  tree (grep, present tense) vs ledger (rekal, past tense) vs map (structure);
+  then triage ledger questions as broad/pointed/why and run the matching
+  internal workflow: MAP builds the SHA-watermarked condensed map at
+  `.rekal/map.md` — structured markdown with greppable path anchors, not a
+  diagram — refreshed by diffing the watermark against HEAD; HUNT is gated
+  episodic recall — inject only above a confidence bar on top score/gap; WHY
+  is decision synthesis over a gathered steering/reasoning trail with
+  turn+commit pointers), `rekal-provenance`
   (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
   `human_steering` turns into rules), `rekal-distill` (four-library knowledge
   map + topic/session zoom), `rekal-census` (exhaustive full-corpus
@@ -164,8 +181,8 @@ session discovery keep using the invoking worktree.
   (`07-paper-restructure.md`), and `paper/` (Typst source + PDF of the unified
   flagship "Why Git Is the Memory Solution for the Agentic Development
   Lifecycle"; supersedes v1 "The Commit Is the Label" in git history;
-  single-corpus values from `runs/2026-07-12/manifest.json`, multi-corpus
-  and sufficiency values from `runs/2026-07-14-consolidated/manifest.json` —
+  single-corpus values from `runs/single-corpus/manifest.json`, multi-corpus
+  and sufficiency values from `runs/consolidated/manifest.json` —
   anonymized by workload class, status TRANSCRIBED_PENDING_VERIFICATION
   against the operator-held source record). The
   runnable harness lives in `scripts/bench/` (corpus card, T1–T3 + T4

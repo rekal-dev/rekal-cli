@@ -9,7 +9,7 @@ help**, measured both observationally (free, at scale) and interventionally
 (A/B, small N).
 
 It supersedes, it does not append: when this run lands, its manifest replaces
-`runs/2026-07-12/` as the canonical numbers and the paper cites one snapshot.
+`runs/single-corpus/` as the canonical numbers and the paper cites one snapshot.
 Never mix a T2 number from the old run with a T4 from the new one.
 
 ## 1. Corpus: every repo on the machine, at scale
@@ -164,7 +164,7 @@ cross-repo evidence stays local unless it crosses the reviewed wiki egress.
 
 ## 6. What lands in the paper
 
-One harmonised manifest supersedes `runs/2026-07-12/`. The retrieval tables
+One harmonised manifest supersedes `runs/single-corpus/`. The retrieval tables
 gain per-repo variance and T4. The paper gains:
 
 - an **effectiveness section** — 4a usage/steering-delta headline numbers, 4b

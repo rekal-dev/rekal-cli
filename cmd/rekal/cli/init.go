@@ -18,6 +18,14 @@ import (
 
 const rekalHookMarker = "# managed by rekal"
 
+// rekalClaudeMDMarker tags the single line init injects into the repo's
+// CLAUDE.md so refreshes replace it and clean removes it — no residue.
+const rekalClaudeMDMarker = "<!-- managed by rekal -->"
+
+// rekalClaudeMDLine is the one sentence of dev experience most users need:
+// the skill carries the full routing policy; this line just makes it load.
+const rekalClaudeMDLine = "Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code facts, recall the ledger (`rekal`) for past-tense intent, the map for structure. " + rekalClaudeMDMarker
+
 func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -30,6 +38,7 @@ Creates:
   pre-push hook      Runs 'rekal push' before each push
   orphan branch      rekal/<email> for wire format storage
   agent skill        .claude/skills/rekal/SKILL.md for Claude Code
+  CLAUDE.md line     One marker-tagged sentence pointing agents at the skill
 
 If the remote already has data on your rekal branch, it is fetched and
 imported into the local data DB automatically.
@@ -123,6 +132,12 @@ binary to pick up new or changed skills.`,
 			// Install Claude Code skill.
 			if err := installSkill(gitRoot); err != nil {
 				return fmt.Errorf("install skill: %w", err)
+			}
+
+			// One sentence into CLAUDE.md so the skill actually gets used —
+			// the whole dev-experience surface for most users: init, done.
+			if err := ensureClaudeMDLine(gitRoot); err != nil {
+				return fmt.Errorf("update CLAUDE.md: %w", err)
 			}
 
 			// Gitignore .claude/ or just .claude/skills/ depending on whether
@@ -255,10 +270,45 @@ func refreshManaged(gitRoot string, errOut io.Writer) error {
 	if err := installSkill(gitRoot); err != nil {
 		return fmt.Errorf("refresh skills: %w", err)
 	}
+	if err := ensureClaudeMDLine(gitRoot); err != nil {
+		return fmt.Errorf("update CLAUDE.md: %w", err)
+	}
 	if err := ensureClaudeGitignore(gitRoot); err != nil {
 		return fmt.Errorf("update .gitignore for .claude: %w", err)
 	}
 	return nil
+}
+
+// ensureClaudeMDLine injects (or refreshes) the one rekal sentence in the
+// repo's CLAUDE.md. A line carrying the marker is replaced in place, so
+// upgrades update the wording; otherwise the sentence is appended (creating
+// the file when missing). The user's own content is never touched.
+func ensureClaudeMDLine(gitRoot string) error {
+	path := filepath.Join(gitRoot, "CLAUDE.md")
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	content := string(data)
+	if strings.Contains(content, rekalClaudeMDMarker) {
+		lines := strings.Split(content, "\n")
+		for i, line := range lines {
+			if strings.Contains(line, rekalClaudeMDMarker) {
+				lines[i] = rekalClaudeMDLine
+			}
+		}
+		return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+	}
+
+	if content != "" && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	if content != "" {
+		content += "\n"
+	}
+	content += rekalClaudeMDLine + "\n"
+	return os.WriteFile(path, []byte(content), 0o644)
 }
 
 // installSkill writes the Rekal skill suite to .claude/skills/<name>/SKILL.md.

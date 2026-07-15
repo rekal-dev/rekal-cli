@@ -29,6 +29,19 @@ type Weights struct {
 	// SubagentDownweight multiplies the hybrid score of sessions that are not
 	// the trunk of their conversation (non-null parent_session_id).
 	SubagentDownweight float64
+
+	// FacetBoost scales the facet layer: BM25 over each session's facet
+	// document (distinct tool paths + command prefixes + steering text; see
+	// db.PopulateFacetText), added as a max-normalized fourth term —
+	// hybrid += FacetBoost * facetNorm — before the subagent discount. It
+	// answers structural questions ("what tools/config did session X use")
+	// whose evidence lives in tool-call metadata the conversational turns
+	// never mention. Ships 0.3 — the value held-out tuning selected on both
+	// valid corpora (docs/research/paper); corpora with no facet material
+	// pay nothing (the facet FTS index is guarded and the layer fails
+	// soft). Set 0 to disable: the facet search never runs and ranking is
+	// byte-identical to the pre-facet engine.
+	FacetBoost float64
 }
 
 // DefaultWeights returns the tuned defaults.
@@ -40,6 +53,7 @@ func DefaultWeights() Weights {
 		SteeringBoost:      1.3,
 		SummaryBoost:       1.15,
 		SubagentDownweight: 0.7,
+		FacetBoost:         0.3, // held-out tuned; set weights.facet_boost 0 to disable
 	}
 }
 

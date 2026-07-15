@@ -45,8 +45,27 @@ func loadEmbeddedFTS(d *sql.DB) error {
 		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 			return fmt.Errorf("create fts cache dir: %w", err)
 		}
-		if err := os.WriteFile(extPath, data, 0o644); err != nil {
+		// Write to a unique temp file and rename into place: two rekal
+		// processes can race the first extraction (post-commit hook and a
+		// recall, or parallel tests), and a direct WriteFile leaves the
+		// loser LOADing a half-written extension. Rename is atomic and both
+		// writers carry identical bytes, so last-writer-wins is safe.
+		tmp, err := os.CreateTemp(cacheDir, "fts-*.duckdb_extension.tmp")
+		if err != nil {
+			return fmt.Errorf("create fts temp file: %w", err)
+		}
+		if _, err := tmp.Write(data); err != nil {
+			tmp.Close()           //nolint:errcheck
+			os.Remove(tmp.Name()) //nolint:errcheck
 			return fmt.Errorf("write fts extension: %w", err)
+		}
+		if err := tmp.Close(); err != nil {
+			os.Remove(tmp.Name()) //nolint:errcheck
+			return fmt.Errorf("close fts temp file: %w", err)
+		}
+		if err := os.Rename(tmp.Name(), extPath); err != nil {
+			os.Remove(tmp.Name()) //nolint:errcheck
+			return fmt.Errorf("install fts extension: %w", err)
 		}
 	}
 
@@ -241,6 +260,12 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		return fmt.Errorf("populate file_cooccurrence: %w", err)
 	}
 
+	// Facet documents for the optional facet ranking layer — derived from
+	// the index tables populated above.
+	if err := PopulateFacetText(d); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -249,6 +274,76 @@ func CreateFTSIndex(d *sql.DB) error {
 	_, err := d.Exec(`PRAGMA create_fts_index('turns_ft', 'id', 'content', stemmer='english', stopwords='english', overwrite=1)`)
 	if err != nil {
 		return fmt.Errorf("create fts index: %w", err)
+	}
+	return nil
+}
+
+// PopulateFacetText builds each session's facet document — distinct tool
+// paths + command prefixes + steering-turn text, concatenated and capped —
+// into session_facets.facet_text. It reads the index DB's own tables
+// (tool_calls_index, turns_ft), so it covers native, synced, and cross-repo
+// imported sessions uniformly; call it after those tables are populated.
+// With no sessionIDs it rebuilds every row; with sessionIDs it updates only
+// those (the incremental path). Deterministic, no LLM — the facet layer's
+// evidence is tool-call metadata, not generated text.
+func PopulateFacetText(d *sql.DB, sessionIDs ...string) error {
+	// Cap keeps facet docs bounded: enough for thousands of distinct paths'
+	// worth of signal, small enough that the FTS index stays cheap.
+	const facetTextCap = 4000
+
+	query := fmt.Sprintf(`
+		UPDATE session_facets SET facet_text = substr(concat_ws(' ',
+			(SELECT string_agg(DISTINCT tc.path, ' ')
+			 FROM tool_calls_index tc
+			 WHERE tc.session_id = session_facets.session_id
+			   AND tc.path IS NOT NULL AND tc.path <> ''),
+			(SELECT string_agg(DISTINCT tc.cmd_prefix, ' ')
+			 FROM tool_calls_index tc
+			 WHERE tc.session_id = session_facets.session_id
+			   AND tc.cmd_prefix IS NOT NULL AND tc.cmd_prefix <> ''),
+			(SELECT string_agg(t.content, ' ' ORDER BY t.turn_index)
+			 FROM turns_ft t
+			 WHERE t.session_id = session_facets.session_id
+			   AND t.role = 'human_steering')
+		), 1, %d)`, facetTextCap)
+
+	var args []interface{}
+	if len(sessionIDs) > 0 {
+		inClause, inArgs := sqlPlaceholders(sessionIDs)
+		query += " WHERE session_id IN (" + inClause + ")"
+		args = inArgs
+	}
+	if _, err := d.Exec(query, args...); err != nil {
+		return fmt.Errorf("populate facet_text: %w", err)
+	}
+	return nil
+}
+
+// sqlPlaceholders builds a "$1,$2,...,$N" list and matching args for an
+// IN (...) clause, assuming $1 is the statement's first bound parameter.
+func sqlPlaceholders(vals []string) (string, []interface{}) {
+	placeholders := make([]string, len(vals))
+	args := make([]interface{}, len(vals))
+	for i, v := range vals {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = v
+	}
+	return strings.Join(placeholders, ","), args
+}
+
+// CreateFacetFTSIndex creates the DuckDB FTS index over the per-session
+// facet documents (session_facets.facet_text). Guarded: when no session has
+// facet material the index is not built at all, and the facet layer's query
+// in search fails soft — so corpora without tool metadata pay nothing.
+func CreateFacetFTSIndex(d *sql.DB) error {
+	var count int
+	err := d.QueryRow(`SELECT count(*) FROM session_facets
+		WHERE facet_text IS NOT NULL AND facet_text <> ''`).Scan(&count)
+	if err != nil || count == 0 {
+		return nil //nolint:nilerr // guarded build: no facet docs, no index
+	}
+	if _, err := d.Exec(`PRAGMA create_fts_index('session_facets', 'session_id', 'facet_text', stemmer='english', stopwords='english', overwrite=1)`); err != nil {
+		return fmt.Errorf("create facet fts index: %w", err)
 	}
 	return nil
 }
@@ -432,6 +527,15 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		WHERE ft.checkpoint_id = $1
 	`, checkpointID); err != nil {
 		return fmt.Errorf("incremental files_index: %w", err)
+	}
+
+	// Facet documents for the new sessions. Like turns_ft, new rows become
+	// searchable by the facet layer via the FTS index maintained at full
+	// rebuild time (CreateFacetFTSIndex in index/sync).
+	if len(sessionIDs) > 0 {
+		if err := PopulateFacetText(d, sessionIDs...); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -210,6 +210,16 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 		}
 	}
 
+	// Facet documents cover cross-repo imports too (they read the index's
+	// own tables), so refresh them after the import above, then build the
+	// facet FTS index — guarded: skipped when no session has facet material.
+	if err := db.PopulateFacetText(indexDB); err != nil {
+		return err
+	}
+	if err := db.CreateFacetFTSIndex(indexDB); err != nil {
+		return err
+	}
+
 	// LSA pass.
 	embeddingDim := 0
 	if sessionCount >= 2 {

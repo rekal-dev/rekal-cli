@@ -1,0 +1,118 @@
+{
+  "run_window": ["2026-07-12", "2026-07-14"],
+  "status": "TRANSCRIBED_PENDING_VERIFICATION",
+  "note": "Anonymized aggregate record of the consolidated multi-corpus retrieval + mechanism + answer-sufficiency runs cited by docs/research/paper/rekal-paper.typ. Values were transcribed from the operator-held consolidated run record; every cell must be proofread against that record before submission (see paper/README.md). Corpora are identified by workload class only. No session content, corpus identity, or private path appears here.",
+  "corpora": {
+    "A": {
+      "workload": "documentation/knowledge base",
+      "scale": "~4,000 markdown documents; ~1,433 captured sessions",
+      "profile": "prose-heavy, diverse tooling (tool-path diversity 0.065; ~5,753 distinct paths); high commit-noise",
+      "retrieval_n_test": 212,
+      "split_valid": true
+    },
+    "B": {
+      "workload": "production software system (layered data/ML pipeline: ingest -> transform -> model build)",
+      "scale": "~50k lines of code; ~2,975-session repository scope; young recorded history",
+      "profile": "uniform tooling (tool-path diversity 0.028; ~2,750 distinct paths)",
+      "retrieval_n_test": "456-521 by split",
+      "split_valid": true
+    },
+    "small_corpora": {
+      "count": 6,
+      "workloads": ["code", "docs/architecture", "notes", "build-scripts", "mixed", "mixed"],
+      "note": "small n; tuning would overfit (OVFT-flagged); reported directionally only"
+    }
+  },
+  "retrieval_matrix_pooled_mrr_heldout": {
+    "columns": ["corpus_A", "corpus_B"],
+    "grep_raw_transcript_jsonl": [0.005, null],
+    "grep_parsed_turns_B1prime": [0.021, 0.028],
+    "bm25_only": [0.2, 0.148],
+    "neural_only_embedded": [0.08, 0.045],
+    "neural_only_hosted": [0.093, 0.055],
+    "hybrid_embedded_default": [0.225, 0.159],
+    "hybrid_embedded_tuned": [0.211, 0.182],
+    "hybrid_hosted_default": [0.217, 0.14],
+    "hybrid_hosted_tuned": [0.229, 0.17],
+    "best_config_tuned_plus_facet_DERIVED": [0.31, 0.24],
+    "derived_note": "best-config cells = tuned baseline + facet marginal; replace with exact cells from the operator record",
+    "small_corpora_b1prime_floors": "0.08-0.19 vs hybrids 0.21-0.58 (directional, OVFT)"
+  },
+  "single_corpus_rung1_2026_07_12": {
+    "pointer": "../2026-07-12/manifest.json",
+    "headline": "B5 hybrid default 0.187 pooled MRR vs B1 raw grep 0.005 (~37x; nDCG@10 57x), non-overlapping bootstrap CIs; drill ~1,500 tokens at 69% gold-term coverage"
+  },
+  "mechanism_sweep_rho_disciplined": {
+    "protocol": "10% dev / 90% held-out test; paired per-query bootstrap CI on the MRR difference excluding 0; candidate ships only if it beats the incumbent",
+    "rejected": {
+      "rrf_fusion": "no significant lift on any valid corpus",
+      "temporal_decay": "~0 everywhere",
+      "lexical_dilution": "~0 or degradation",
+      "z_normalization": "offline +0.048* superseded by full engine: +0.016 [-0.0017,0.0335] / +0.024 [-0.0143,0.0632], n.s.",
+      "embedder_substitution": "hosted general-purpose embedder moves neural-only, not the hybrid; n.s. on both valid corpora"
+    },
+    "kept": {
+      "per_corpus_weight_tuning": "B +0.032 [0.016,0.049] sig; small code corpus +0.134 [0.025,0.247] (small n); A within noise; hybrid>bm25 outright only on docs/architecture corpus +0.352 [0.158,0.549]",
+      "spm_facet_term": "see facet section"
+    }
+  },
+  "facet_term_spm_port": {
+    "source": "SPM (arXiv 2607.09493) facet idea ported to a retrieval term; retrieval MRR only, explicitly not a task-completion reproduction",
+    "implementation": "deterministic per-session facet doc (distinct tool paths + command prefixes + steering text; no LLM; index-time); BM25 over facet_text as additive max-normalized 4th term; config-gated (facet_boost=0 default => byte-identical to baseline)",
+    "screen_structural_queries": {"A": "+0.184 [0.050,0.317] sig", "B": "+0.016 n.s."},
+    "end_to_end_bolted_fb0.6_untuned_mix": {"A": "0.179 -> 0.294, +0.116 [0.039,0.204] sig", "B": "-0.019 n.s. (artifact of untuned knob)"},
+    "joint_retune": {
+      "selected": "facet_boost=0.3 on both valid corpora",
+      "best_config_A": "mix 0.35/0.10/0.55, steer 1.3, fb 0.3",
+      "best_config_B": "mix 0.4/0.3/0.3, steer 1.3, fb 0.3",
+      "marginal_A": "+0.110 [0.056,0.173] sig",
+      "marginal_B": "+0.053 [0.012,0.107] sig"
+    },
+    "rule": "marginal monotone in tool-path diversity (0.065 -> +0.110 vs 0.028 -> +0.053); ships off by default, auto-tuning enables where diversity supports it"
+  },
+  "answer_sufficiency": {
+    "protocol": "n=15 real questions per corpus tagged broad/pointed/why; blind distinct judge; SUFFICIENT=1/PARTIAL=0.5/INSUFFICIENT=0; bootstrap 95% CI on overall; avg tokens per question",
+    "columns": ["overall", "ci95", "broad", "pointed", "why", "avg_tokens"],
+    "corpus_A": {
+      "structural_map": [0.33, "[0.13,0.53]", 0.5, 0.17, 0.33, 201],
+      "episodic_single_shot": [0.2, "[0.00,0.40]", 0.33, 0.17, 0.0, 914],
+      "routed_map_plus_gated": [0.43, "[0.20,0.67]", 0.83, 0.5, 0.17, 382],
+      "decision_synthesis": [0.47, "[0.20,0.67]", 0.5, 0.5, 0.33, 2762]
+    },
+    "corpus_B": {
+      "structural_map": [0.53, "[0.30,0.77]", 0.5, 0.33, 1.0, 969],
+      "episodic_single_shot": [0.07, "[0.00,0.27]", 0.0, 0.0, 0.33, 648],
+      "routed_map_plus_gated": [0.6, "[0.37,0.80]", 0.67, 0.42, 0.83, 980],
+      "decision_synthesis": [0.83, "[0.67,0.97]", 0.92, 0.92, 0.5, 3135]
+    },
+    "transcription_note": "per-kind cells transcribed from the draft's Table 1 photos; proofread required, especially routed-A per-kind and map-B why"
+  },
+  "ablations_corpus_B": {
+    "episode_gating_isolated_n12": {
+      "episodic_single_shot": 0.0,
+      "structural_map": 0.63,
+      "map_plus_episodes_ungated": 0.29,
+      "map_plus_episodes_gated": 0.5,
+      "gate_effect": "suppresses 11/12 bad injections; only 1/12 retrievals cleared the gate"
+    },
+    "gate_signal": "top-1 score means 0.91 hit vs 0.87 miss; top1-top2 gap 0.046 vs 0.017",
+    "rationale_question": {
+      "structural_map": "partial (structure, not rationale)",
+      "source_code": "no",
+      "episodic_top3": "no (one fragment)",
+      "synthesis_under_gathered_4_terms": "no (too few turns)",
+      "synthesis_adequate_gather_30_turns": "yes (blind judge; ~2.1k tokens, one synthesis call)"
+    }
+  },
+  "derived_headline_ratios": {
+    "best_config_vs_raw_grep": "~60x (0.31/0.005) — DERIVED, recompute from exact cells",
+    "best_config_vs_honest_floor": "~15x (0.31/0.021) — DERIVED, recompute from exact cells"
+  },
+  "not_run_specified": [
+    "synthesis on mined T4 multi-hop gold (92-104 pairs in each of three high-co-occurrence corpora)",
+    "second judge model + agreement",
+    "wild-question kind distribution (upgrades waterfall to one expected-cost figure)",
+    "gate recalibration after the facet term enters the score mix",
+    "frozen-snapshot re-run unifying all ratios in one matrix"
+  ]
+}

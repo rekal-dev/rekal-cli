@@ -159,8 +159,15 @@ session discovery keep using the invoking worktree.
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent
   recall), local-corpus data plan, literature-derived product roadmap,
   the multi-repo-at-scale + Rekal-usage/effectiveness eval strategy
-  (`06-eval-strategy.md`), and `paper/` (Typst source + PDF of "The Commit Is
-  the Label"; empirical values from `runs/2026-07-12/manifest.json`). The
+  (`06-eval-strategy.md`), the working-backwards flagship-paper restructure —
+  git-bound memory, tool + skill + router, answer-sufficiency per token
+  (`07-paper-restructure.md`), and `paper/` (Typst source + PDF of the unified
+  flagship "Why Git Is the Memory Solution for the Agentic Development
+  Lifecycle"; supersedes v1 "The Commit Is the Label" in git history;
+  single-corpus values from `runs/2026-07-12/manifest.json`, multi-corpus
+  and sufficiency values from `runs/2026-07-14-consolidated/manifest.json` —
+  anonymized by workload class, status TRANSCRIBED_PENDING_VERIFICATION
+  against the operator-held source record). The
   runnable harness lives in `scripts/bench/` (corpus card, T1–T3 + T4
   multi-hop label mining, T5 candidate miner, query generation with leakage
   filter + multi-hop validation, system runner incl. weight ablations +

@@ -1,0 +1,99 @@
+\begin{thebibliography}{16}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Zhuang et~al.(2026)]{rise2026}
+Shengyao Zhuang et~al.
+\newblock Towards retrieving interaction spaces for agentic search, 2026.
+\newblock URL \url{https://arxiv.org/abs/2606.06880}.
+
+\bibitem[Pan et~al.(2026)]{rho2026}
+Wenbo Pan et~al.
+\newblock Evolving agents in the dark: Retrospective harness optimization via
+  self-preference, 2026.
+\newblock URL \url{https://arxiv.org/abs/2606.05922}.
+
+\bibitem[{Apple Machine Learning Research}(2026)]{spm2026}
+{Apple Machine Learning Research}.
+\newblock Shared selective persistent memory, 2026.
+\newblock URL \url{https://arxiv.org/abs/2607.09493}.
+
+\bibitem[Yan et~al.(2026)Yan, Ni, Zheng, et~al.]{adamem2026}
+Shannan Yan, Jingchen Ni, Leqi Zheng, et~al.
+\newblock Adamem: Adaptive user-centric memory for long-horizon dialogue
+  agents, 2026.
+\newblock URL \url{https://arxiv.org/abs/2603.16496}.
+
+\bibitem[Ji et~al.(2026)Ji, Li, and Hooi]{mragent2026}
+Shuo Ji, Yibo Li, and Bryan Hooi.
+\newblock Memory is reconstructed, not retrieved: Graph memory for llm agents,
+  2026.
+\newblock URL \url{https://arxiv.org/abs/2606.06036}.
+
+\bibitem[Ming et~al.(2026)Ming, Li, Wu, Que, et~al.]{llmwiki2026}
+Haoliang Ming, Feifei Li, Xiaoqing Wu, Wenhui Que, et~al.
+\newblock Retrieval as reasoning: Self-evolving agent-native retrieval via
+  llm-wiki, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.25480}.
+
+\bibitem[Zhu et~al.(2026)Zhu, Qi, Wang, et~al.]{edv2026}
+Shiding Zhu, Yudi Qi, Yajie Wang, et~al.
+\newblock Escaping the self-confirmation trap: An execute-distill-verify
+  paradigm for agentic experience learning, 2026.
+\newblock URL \url{https://arxiv.org/abs/2606.24428}.
+
+\bibitem[Maharana et~al.(2024)]{locomo2024}
+Adyasha Maharana et~al.
+\newblock Evaluating very long-term conversational memory of llm agents, 2024.
+\newblock URL \url{https://arxiv.org/abs/2402.17753}.
+
+\bibitem[{Survey authors}(2026)]{memsecurity2026}
+{Survey authors}.
+\newblock A survey on long-term memory security in llm agents: Attacks,
+  defenses, and governance across the memory lifecycle, 2026.
+\newblock URL \url{https://arxiv.org/abs/2604.16548}.
+
+\bibitem[{State-contamination authors}(2026)]{statecontam2026}
+{State-contamination authors}.
+\newblock State contamination in memory-augmented llm agents, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.16746}.
+
+\bibitem[Zhou et~al.(2026)]{anms2026}
+Wei Zhou et~al.
+\newblock Are we ready for an agent-native memory system?, 2026.
+\newblock URL \url{https://arxiv.org/abs/2606.24775}.
+
+\bibitem[Wu et~al.(2026{\natexlab{a}})Wu, Zhu, Zhang, Wang, and
+  Yeung-Levy]{automem2026}
+Shengguang Wu, Hao Zhu, Yuhui Zhang, Xiaohan Wang, and Serena Yeung-Levy.
+\newblock Automem: Automated learning of memory as a cognitive skill,
+  2026{\natexlab{a}}.
+\newblock URL \url{https://arxiv.org/abs/2607.01224}.
+
+\bibitem[Zhou and Han(2025)]{emem2025}
+Sizhe Zhou and Jiawei Han.
+\newblock A simple yet strong baseline for long-term conversational memory of
+  llm agents, 2025.
+\newblock URL \url{https://arxiv.org/abs/2511.17208}.
+
+\bibitem[Wu et~al.(2026{\natexlab{b}})Wu, Li, Liang, et~al.]{sag2026}
+Yuchao Wu, Junqin Li, XingCheng Liang, et~al.
+\newblock Sag: Sql-retrieval augmented generation with query-time dynamic
+  hyperedges, 2026{\natexlab{b}}.
+\newblock URL \url{https://arxiv.org/abs/2606.15971}.
+
+\bibitem[Li et~al.(2026)Li, Zhang, et~al.]{dci2026}
+Zhuofeng Li, Haoxiang Zhang, et~al.
+\newblock Beyond semantic similarity: Rethinking retrieval for agentic search
+  via direct corpus interaction, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.05242}.
+
+\bibitem[{GrepSeek authors}(2026)]{grepseek2026}
+{GrepSeek authors}.
+\newblock Training search agents for direct corpus interaction, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.29307}.
+
+\end{thebibliography}

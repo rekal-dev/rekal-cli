@@ -11,6 +11,9 @@ numbers it absorbs into the seed-stage study (§5). The structure follows
 - `rekal-paper.typ` — Typst source (canonical)
 - `refs.bib` — bibliography (BibTeX; the literature-map source set + SPM)
 - `rekal-paper.pdf` — compiled output, checked in for convenience
+- `arxiv/` — the arXiv LaTeX version (`main.tex` + `main.bbl`; pdflatex-only,
+  TikZ figure, zero-warning build). Content mirrors the Typst source — see
+  `arxiv/README.md` for build/upload and the pre-submission gate
 
 ## Build
 

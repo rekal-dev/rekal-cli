@@ -33,6 +33,11 @@ machine; corpora appear in the paper anonymized by workload class only
 aggregate tables should be committed under `../runs/` in the same
 anonymized form, and every paper number proofread against it — several
 table cells were transcribed from the source record and must be verified.
+Derived cells needing exact values from the record: the best-config row
+of the seed-stage table (≈0.31 Corpus A, ≈0.24 Corpus B = tuned baseline
++ facet marginal). Seed-stage detail tables (facet operating points,
+embedding options) live in Appendix A; the coverage-at-cost waterfall
+(Table 4) is the paper's summary artifact.
 
 ## Extending the result
 

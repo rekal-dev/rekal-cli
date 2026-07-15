@@ -27,7 +27,7 @@
 #place(top, scope: "parent", float: true, clearance: 18pt)[
   #align(center)[
     #text(size: 17pt, weight: "bold", hyphenate: false)[
-      Git-Bound Memory:\ A Routed Memory System for Software Engineering Workloads
+      Git-Bound Memory for Coding Agents:\ A Routed System for Software Engineering Workloads
     ]
     #v(6pt)
     #text(size: 10.5pt)[Frank Guo#super[1]]
@@ -38,42 +38,36 @@
 
 // ---------- Abstract ----------
 #block(inset: (x: 2pt))[
-  *Abstract.* Memory for AI coding agents is usually posed as a retrieval
-  problem — rank the one past session that answers a query — and built as
-  machinery: tiered stores, memory graphs, compiled wikis, model-judged
-  admission. We argue for a different position on both axes. First, memory
-  should be *git-bound*: the boundary of the memory system is the boundary
-  of the repository and its version control, and inside that binding the
-  hard guarantees — ground truth (the commit labels which sessions produced
-  which verified change), freshness (derived structure is disposable and
-  rebuilt), verification (the merge gates what is shared), containment
-  (review is the only egress) — are inherited from git rather than rebuilt
-  in software. Second, ranking is the wrong headline objective. We close
-  the seed-supply problem honestly: across eight real corpora, hybrid
-  retrieval over the parsed, scrubbed ledger dominates grep floors on every
-  corpus (raw-transcript grep by 37$times$; the stronger parsed-turn grep
-  floor by 6–11$times$ on the two statistically valid corpora), and a
-  disciplined mechanism study rejects five imported ranking mechanisms and
-  keeps two — per-corpus weight tuning, and a structured *facet* term
-  ported from SPM whose held-out marginal is significant on both valid
-  corpora. But the graveyard teaches the real lesson: every pure re-ranking
-  mechanism failed, and the one retrieval gain came from an orthogonal
-  evidence layer. Applied above retrieval, that lesson is the paper's
-  system: real developer questions split into breadth, pointed, and
-  rationale kinds; single-shot episodic recall answers 0.07–0.20 of them
-  (answer-sufficiency, blind judge); a *router* dispatches each kind to the
-  mode that can answer it — a git-anchored structural map for breadth,
-  confidence-gated episodic recall for pointed lookups (ungated injection
-  *poisons* a good map, 0.63→0.29; the gate suppresses 11/12 bad
-  injections), and *decision synthesis* over a decision-scoped gather for
-  rationale (0.83 overall on a young ≈50k-LOC production system,
-  reconstructing why-arcs single-shot retrieval fragments). Routed, the
-  system holds the best per-kind floor at 382–980 tokens per question —
-  three orders of magnitude under the recorded history. Ground truth is
-  mined, not annotated: the corpus labels itself via commit–session links,
-  so every result is replicable by any user on their own history at zero
-  annotation cost. The binding constraint that remains is capture, and we
-  say so.
+  *Abstract.* Memory for AI coding agents is usually posed as one
+  retrieval problem and built as machinery — tiered stores, memory
+  graphs, compiled wikis, model-judged admission. We take a different
+  position on both axes. Memory should be *git-bound*: built into the
+  repository's version control, so its hard guarantees — ground truth,
+  freshness, verification, containment — are inherited from git rather
+  than rebuilt in software. And it should be *routed*: we solve two
+  problems separately, then combine them. Problem one, *seed supply*, we
+  close as a retrieval study on eight real corpora: hybrid retrieval over
+  the parsed, scrubbed ledger beats raw-transcript grep 37$times$ and the
+  honest parsed-turn grep floor 6–11$times$; a disciplined mechanism
+  study rejects five imported ranking mechanisms and keeps two, and the
+  best held-out configuration — tuned hybrid plus a structured *facet*
+  term ported from SPM — reaches *≈0.31 pooled MRR* on the primary
+  corpus, ≈15$times$ the honest floor. Problem two, *answer assembly*, is
+  where ranking stops helping: single-shot retrieval answers only
+  0.07–0.20 of real developer questions (answer-sufficiency, blind
+  judge). A *router* dispatches each question kind to the mode that can
+  answer it: a git-anchored structural map for breadth; confidence-gated
+  episodes for pointed lookups — the gate suppresses 11/12 harmful
+  injections that would otherwise degrade a good map 0.63→0.29; and
+  *decision synthesis* for rationale, reconstructing why-arcs that
+  single-shot retrieval fragments (0.83 overall on a young ≈50k-LOC
+  production system). Combined, the routed system holds the best per-kind
+  answer floor at *382–980 tokens per question* — three orders of
+  magnitude under the recorded history, with cost following the question
+  rather than the corpus. Ground truth is mined from commit–session
+  links, not annotated, so every result is replicable by any user on
+  their own history at zero cost. The remaining constraint is capture,
+  and we say so.
 ]
 #v(4pt)
 
@@ -218,7 +212,7 @@ defaults: layer mix 0.35/0.10/0.55, steering boost 1.3, summary boost
 1.15, subagent 0.7, max-norm, facet 0 (auto-tuning selects it where it
 helps).
 
-= The seed stage, closed
+= Problem one: seed supply, closed
 
 This section reports the retrieval program to its end and states what it
 does and does not buy. Protocol throughout: self-labeled gold (§6), 10%
@@ -251,125 +245,63 @@ every small corpus besides (floors 0.08–0.19 vs hybrids 0.21–0.58).
 Ranking still earns its place on parsed turns; grep does not close the
 gap once parsing is granted.
 
-== The mechanism graveyard, and two survivors
+== The mechanism study, and the best configuration
 
 #figure(
   table(
-    columns: (auto, auto, 1fr),
-    align: (left, left, left),
-    table.header([*Mechanism*], [*Verdict*], [*Held-out evidence (paired CI)*]),
-    [RRF fusion], [rejected], [no significant lift on any valid corpus],
-    [Temporal decay], [rejected], [≈0 everywhere],
-    [Lexical dilution], [rejected], [≈0 or degradation],
-    [Z-score normalization], [rejected], [offline +0.048\* superseded by full engine: +0.016/+0.024, CIs cross 0 — engine already max-normalizes],
-    [Embedder substitution], [rejected], [hosted embedder moves neural-only, not the hybrid; n.s. on both valid corpora (@tab-embed)],
-    [Per-corpus weight tuning], [*kept*], [B +0.032 [.016,.049]; small code corpus +0.134 [.025,.247]; A within noise],
-    [SPM facet term @spm2026], [*kept*], [marginal significant on *both* valid corpora: A +0.110 [.056,.173], B +0.053 [.012,.107]; tuner selects facet_boost=0.3 on both],
+    columns: (1.9fr, 0.5fr, 0.5fr),
+    align: (left, center, center),
+    table.header([*Seed stage (pooled MRR, held-out)*], [*Corpus A*], [*Corpus B*]),
+    [grep, raw transcript JSONL (floor)], [0.005], [—],
+    [grep, parsed turns (honest floor)], [0.021], [0.028],
+    [BM25-only], [0.200], [0.148],
+    [hybrid, shipped default], [0.225], [0.159],
+    [*best held-out config: tuned hybrid + facet*], [*≈0.31*], [*≈0.24*],
+    table.cell(colspan: 3, align: left)[*Mechanism sweep (paired bootstrap CI; detail in Appendix A)*],
+    [rejected: RRF · temporal decay · lexical dilution · z-norm · embedder swap], table.cell(colspan: 2)[all n.s. or degradation],
+    [kept: per-corpus weight tuning], table.cell(colspan: 2)[B +0.032\ [.016,.049]],
+    [kept: SPM facet term @spm2026 (fb=0.3 on both)], table.cell(colspan: 2)[A +0.110\*\ B +0.053\*],
   ),
-  caption: [The seed-stage mechanism study under the RHO discipline
-  @rho2026. Five imported mechanisms rejected with intervals; two kept.
+  caption: [Problem one closed: floors, the mechanism study under the RHO
+  discipline @rho2026, and the best held-out configuration — ≈15$times$
+  the honest grep floor on Corpus A. Five imported mechanisms rejected
+  with intervals; two kept. Best-config cells are derived from the tuned
+  baseline plus the facet marginal (exact cells in the run record).
   Negative results are load-bearing: they close the stage.],
-) <tab-graveyard>
+) <tab-seed>
 
-Two findings organize @tab-graveyard. *Hybrid beats BM25 where paraphrase
+Three findings organize @tab-seed. *Hybrid beats BM25 where paraphrase
 opens a surface-form gap and not elsewhere*: pooled on Corpus A the two
-sit within each other's CIs (0.187 vs 0.171), the separation is a
-provenance effect (T1 MRR 0.301 vs 0.248; R\@5 0.537 vs 0.425), and the
-only corpus where the hybrid wins outright is the noisy-commit prose
-corpus (+0.352 [.158,.549]) — on exact-vocabulary code corpora it ties.
+sit within each other's CIs (0.187 vs 0.171 on the primary label run),
+the separation is a provenance effect (T1 MRR 0.301 vs 0.248; R\@5 0.537
+vs 0.425), and the only corpus where the hybrid wins outright is the
+noisy-commit prose corpus (+0.352 [.158,.549]) — on exact-vocabulary
+code corpora it ties.
+
 *The facet term is the one imported mechanism that survives end-to-end.*
 SPM @spm2026 derives structured facets (task, data schema, tool config,
 output constraints) for session-start context assembly; we port the idea
 to a retrieval term: a deterministic per-session facet document (distinct
 tool paths + command prefixes + steering text; no LLM, built at index
 time), BM25-searched as a fourth, orthogonal hybrid term — additive and
-config-gated, so at the default facet_boost=0 the term never runs and
-the engine is byte-identical to the baseline. We test *that port*
-(retrieval MRR), explicitly not a reproduction of SPM's task-completion
-result, which would need a curated gold set. Root cause of
-the win: the answer to "what tools/config did session X use" lives in
-tool-call *metadata* that a session's conversational turns often never
-mention — turn-recall misses it in the top-50 while facet-search finds
-it.
+config-gated, so at the default facet_boost=0 the engine is
+byte-identical to the baseline. Root cause of the win: the answer to
+"what tools/config did session X use" lives in tool-call *metadata* that
+a session's conversational turns often never mention. Bolted naively
+onto the untuned default mix the term looks corpus-conditional
+(significant on A, null on B); the joint re-tune — one never ships an
+untuned knob — shows the marginal is significant on *both* corpora, with
+magnitude monotone in tool-path diversity (@tab-facet, Appendix A).
 
-#figure(
-  table(
-    columns: (1.15fr, auto, auto),
-    align: (left, center, center),
-    table.header([*Facet term, by operating point*], [*Corpus A*], [*Corpus B*]),
-    [screen: facet-doc BM25 vs turn recall (structural queries)], [+0.184 [.05,.32] *sig*], [+0.016 n.s.],
-    [end-to-end, *bolted onto* the default mix (fb=0.6)], [0.179→0.294\ +0.116 [.04,.20] *sig*], [−0.019 n.s.],
-    [*joint re-tune* (fb tuned with the mix; fb=0.3 selected on both)], [marginal +0.110\ [.056,.173] *sig*], [marginal +0.053\ [.012,.107] *sig*],
-  ),
-  caption: [The facet term at two operating points (held-out, paired
-  bootstrap CIs). Bolted naively onto the untuned default mix, the term
-  looks corpus-conditional — significant on the diverse-tooling corpus,
-  null on the uniform pipeline. The joint re-tune is the correct
-  comparison under the incumbent-versus-candidate discipline — one never
-  ships an untuned knob — and there the marginal is significant on
-  *both* corpora: the naive null was an artifact of an untuned operating
-  point, not an absent effect. On Corpus A the marginal takes the best
-  held-out hybrid to ≈0.31 pooled MRR.],
-) <tab-facet>
+*The embedded model is not the bottleneck.* Substituting a strong hosted
+general-purpose embedder, under a protocol that gives it every advantage,
+moves the neural-only ablation slightly and the shipped hybrid not at all
+(n.s. on both corpora; @tab-embed, Appendix A): *alignment, not embedding
+quality, is the binding constraint* @anms2026, and the local-first
+default — embedding model inside the binary, no API — costs approximately
+nothing in recall.
 
-@tab-facet carries a methods lesson beyond the mechanism itself: a
-memory mechanism evaluated by bolting it onto a fixed configuration can
-appear corpus-conditional when it is merely mis-tuned; only the joint
-re-tune separates "does not work here" from "was not given its operating
-point." What remains genuinely corpus-conditional is the *magnitude*:
-the marginal is monotone in tool-path diversity (the high-diversity
-corpus gains +0.110; the uniform-pipeline corpus +0.053, from ≈2.3×
-less path diversity per call), which yields a testable deployment rule —
-the term ships off by default and auto-tuning enables it (facet_boost
-0.3) where the corpus's tool-diversity supports it.
-
-== Is the embedded model the bottleneck? No.
-
-The neural layer is the weakest signal in absolute terms (@tab-embed:
-neural-only 0.045–0.093 against BM25's 0.148–0.200) — consistent with
-the thesis that a single repo's question and its answering session share
-vocabulary. The natural objection is that the *embedded* model is simply
-too small, so we ran the substitution: a strong hosted general-purpose
-embedder over the engine's HTTP backend, under a protocol that gives the
-alternative its best shot — same held-out split and candidate pool;
-asymmetric query/document input types sent natively; the content-hash
-embedding cache rebuilt per model; and *four* configurations per
-embedder (neural-only and hybrid, each at default and dev-tuned
-weights), scored by paired per-query bootstrap.
-
-#figure(
-  table(
-    columns: (1fr, auto, auto),
-    align: (left, center, center),
-    table.header([*Configuration (pooled MRR)*], [*Corpus A*], [*Corpus B*]),
-    [BM25-only], [0.200], [0.148],
-    [neural-only — embedded (local)], [0.080], [0.045],
-    [neural-only — hosted], [0.093], [0.055],
-    [hybrid — embedded, default mix], [0.225], [0.159],
-    [hybrid — embedded, dev-tuned mix], [0.211], [*0.182*],
-    [hybrid — hosted, default mix], [0.217], [0.140],
-    [hybrid — hosted, dev-tuned mix], [*0.229*], [0.170],
-  ),
-  caption: [Embedding options on the held-out split. The hosted embedder
-  (a large general-purpose API model) lifts the *neural-only* ablation
-  slightly on both corpora, but the *hybrid* — the shipped system — is
-  flat on A and worse on B (hosted-default 0.140 falls below BM25-only;
-  hosted-tuned trails local-tuned); all hybrid deltas are n.s. under
-  paired per-query bootstrap. The other layers absorb what the embedder
-  adds. Scope: one strong general-purpose alternative was tested; a
-  code-tuned embedder is the open falsifier and runs through the same
-  gate for free (content-hash cache; query-time weights).],
-) <tab-embed>
-
-The reading is architectural, not incidental: *alignment, not embedding
-quality, is the binding constraint* @anms2026 — and its product
-consequence is that the local-first default (embedding model inside the
-binary, no API, no account) costs approximately nothing in recall. A
-material hybrid lift from a code-tuned embedder would raise the shipped
-default through the same incumbent-versus-candidate gate; a null result
-would close this question entirely.
-
-== What the graveyard teaches
+== What the mechanism study teaches
 
 Every pure re-ranking mechanism failed; the single retrieval gain came
 from adding an *orthogonal evidence layer* for a *kind of question* the
@@ -398,7 +330,7 @@ biases scores *down*, not up, so the numbers are conservative. Because
 labels are mined, the entire harness is public, fully local, and runnable
 by anyone on their own store.
 
-= Three modes and a router
+= Problem two: answer assembly — three modes and a router
 
 #let archbox(x, y, w, h, fill, body) = place(dx: x, dy: y, block(
   width: w, height: h, fill: fill, radius: 4pt, stroke: 0.6pt + luma(90),
@@ -598,20 +530,38 @@ corpus is the strong case for memory*: a barely-accumulated history
 already answers 0.83 of real questions under synthesis — memory pays
 off long before it is big.
 
-== The economics
+== The economics: coverage at cost
 
-The stages stack into a coverage-at-cost account. Grep over raw
-transcripts answers nothing. Retrieval over the parsed ledger supplies
-seeds for everything and answers pointed questions at a ≈1,500-token
-drill. The map adds breadth at amortized cost (SHA-watermarked
-regeneration). Synthesis adds rationale at 2–3k tokens. Routed, the
-system holds the best per-kind floor at *382–980 tokens per question* —
-against a recorded history of tens of thousands of turns, three orders
-of magnitude of context saved per question, and cost follows the
-question kind rather than the corpus size. (With the question-kind
-distribution of real usage mined from the ledger's own query log, this
-becomes a single expected-cost figure; that instrumentation exists and
-the run is future work.)
+@tab-waterfall is the paper in one table: each stage added covers a
+question kind the previous stages missed, and the combined routed system
+answers at a cost three orders of magnitude under the recorded history —
+with cost following the *question*, not the corpus.
+
+#figure(
+  scope: "parent",
+  placement: top,
+  table(
+    columns: (auto, 1fr, auto, auto),
+    align: (left, left, center, center),
+    table.header([*Stage added*], [*What it adds*], [*Sufficiency (A / B)*], [*Tokens/question*]),
+    [grep, raw transcript JSONL], [nothing — the floor (0.005 MRR)], [≈0], [unbounded scan],
+    [grep, parsed turns], [weak seeds (0.021/0.028 MRR)], [—], [unbounded scan],
+    [best seed config: tuned hybrid + facet (≈0.31 MRR)], [pointed answers; seeds for every mode], [0.20 / 0.07 (single-shot)], [≈0.9k; ≈1.5k with drill],
+    [\+ structural map], [breadth], [0.33 / 0.53], [201 / 969, amortized regen],
+    [\+ decision synthesis], [rationale, multi-hop], [0.47 / *0.83*], [≈2.8–3.1k],
+    [*routed: map + gated episodes*], [*all kinds at the per-kind floor*], [*0.43 / 0.60*], [*382 / 980*],
+  ),
+  caption: [Coverage at cost — the two problems combined. Seed supply
+  makes the ledger findable (grep floors → ≈0.31 MRR best config);
+  answer assembly converts findable into answered, kind by kind; routing
+  buys the per-kind floor at 382–980 tokens against a recorded history
+  of tens of thousands of turns. Synthesis buys the hardest kind at
+  ≈3$times$ the routed price — cost follows the question. With the
+  question-kind distribution of real usage (mined from the ledger's own
+  query log; instrumented, future run) the last row becomes one
+  expected-cost figure: E[tokens] = $sum_"kind" p("kind") dot
+  "cost"("mode")$.],
+) <tab-waterfall>
 
 = The real bottleneck is capture, not ranking
 
@@ -682,7 +632,7 @@ floors, a mechanism graveyard, two validated levers, and rules for when
 each helps; answer assembly, closed with three modes behind a
 skill-router — and then *combined*, where the combination outperforms
 every single-mechanism alternative on coverage of the question kinds at
-a fraction of the strongest mode's token cost. The value above ranking
+a fraction of the strongest mode's token cost (@tab-waterfall). The value above ranking
 is in routing each question to the mode that can answer it, gating
 episodes on confidence so they help rather than harm, and
 reconstructing evolved decisions by synthesis rather than retrieval.
@@ -704,5 +654,65 @@ study is a within-system characterization, not a competition. Engine,
 skills, benchmark spec, extraction SQL, and this paper's source:
 #link("https://github.com/rekal-dev/rekal-cli")[github.com/rekal-dev/rekal-cli]
 (`docs/research/`).
+
+#heading(numbering: none)[Appendix A: seed-stage detail]
+
+*The facet term at two operating points.* Evaluated by bolting it onto a
+fixed configuration, a mechanism can appear corpus-conditional when it
+is merely mis-tuned; only the joint re-tune separates "does not work
+here" from "was not given its operating point." What remains genuinely
+corpus-conditional is the *magnitude*: the marginal is monotone in
+tool-path diversity (the high-diversity corpus gains +0.110; the
+uniform-pipeline corpus +0.053, at ≈2.3$times$ less path diversity per
+call) — a testable deployment rule. The term ships off by default;
+auto-tuning enables it (facet_boost 0.3) where tool-diversity supports
+it. We test the retrieval port only, explicitly not a reproduction of
+SPM's task-completion result, which would need a curated gold set.
+
+#figure(
+  table(
+    columns: (1.15fr, auto, auto),
+    align: (left, center, center),
+    table.header([*Facet term, by operating point*], [*Corpus A*], [*Corpus B*]),
+    [screen: facet-doc BM25 vs turn recall (structural queries)], [+0.184 [.05,.32] *sig*], [+0.016 n.s.],
+    [end-to-end, *bolted onto* the default mix (fb=0.6)], [0.179→0.294\ +0.116 [.04,.20] *sig*], [−0.019 n.s.],
+    [*joint re-tune* (fb tuned with the mix; fb=0.3 selected on both)], [marginal +0.110\ [.056,.173] *sig*], [marginal +0.053\ [.012,.107] *sig*],
+  ),
+  caption: [The facet term at two operating points (held-out, paired
+  bootstrap CIs). Naively bolted on, it looks corpus-conditional; jointly
+  re-tuned — one never ships an untuned knob — the marginal is
+  significant on both corpora. The naive null was an artifact of an
+  untuned operating point, not an absent effect.],
+) <tab-facet>
+
+*Embedding options.* The substitution protocol gives the alternative its
+best shot: same held-out split and candidate pool; asymmetric
+query/document input types sent natively; the content-hash embedding
+cache rebuilt per model; four configurations per embedder (neural-only
+and hybrid, each at default and dev-tuned weights); paired per-query
+bootstrap.
+
+#figure(
+  table(
+    columns: (1fr, auto, auto),
+    align: (left, center, center),
+    table.header([*Configuration (pooled MRR)*], [*Corpus A*], [*Corpus B*]),
+    [BM25-only], [0.200], [0.148],
+    [neural-only — embedded (local)], [0.080], [0.045],
+    [neural-only — hosted], [0.093], [0.055],
+    [hybrid — embedded, default mix], [0.225], [0.159],
+    [hybrid — embedded, dev-tuned mix], [0.211], [*0.182*],
+    [hybrid — hosted, default mix], [0.217], [0.140],
+    [hybrid — hosted, dev-tuned mix], [*0.229*], [0.170],
+  ),
+  caption: [Embedding options on the held-out split. The hosted embedder
+  (a large general-purpose API model) lifts the *neural-only* ablation
+  slightly on both corpora, but the *hybrid* — the shipped system — is
+  flat on A and worse on B (hosted-default 0.140 falls below BM25-only);
+  all hybrid deltas n.s. under paired per-query bootstrap. Scope: one
+  strong general-purpose alternative tested; a code-tuned embedder is
+  the open falsifier and runs through the same gate for free
+  (content-hash cache; query-time weights).],
+) <tab-embed>
 
 #bibliography("refs.bib", style: "ieee", title: "References")

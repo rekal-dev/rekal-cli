@@ -87,6 +87,18 @@ Rekal is built on beliefs. Those beliefs guide every decision. When a choice con
 
 The full version: [SOUL.md](SOUL.md).
 
+## The research
+
+The design is argued and measured in our paper — *"Why Git Is the Memory
+Solution for the Agentic Development Lifecycle"*
+([docs/research/paper/](docs/research/paper/)): memory bound to git inherits
+its hard guarantees instead of rebuilding them; retrieval is closed as a
+seed-supply problem (honest grep floors, a mechanism study, the facet term);
+and a gated router answers each question kind — structure, episode, or
+rationale — at a few hundred tokens per question. The benchmark labels
+itself from your own commit–session links, so every result is replicable on
+your own history at zero annotation cost ([docs/research/](docs/research/)).
+
 ## Install and uninstall
 
 Install:
@@ -121,8 +133,12 @@ rekal init
 - `.rekal/` directory containing `data.db` (shared truth) and `index.db` (local search index)
 - A `post-commit` and `pre-push` git hook (marked `# managed by rekal`)
 - The Claude Code skill suite under `.claude/skills/` (see [Agent skills](#agent-skills))
+- One marker-tagged sentence in `CLAUDE.md` pointing agents at the skill (created if missing; your own content is never touched)
 - An orphan branch `rekal/<your-email>` for transport
 - Appends `.rekal/` to your `.gitignore`
+
+That one sentence is the whole developer experience for most users: init,
+then commit and push as normal — your agent routes its own memory from there.
 
 Running `rekal init` again in an already-initialized repo does **not** rebuild
 your store. It refreshes the version-managed skills and hooks and leaves your
@@ -143,6 +159,8 @@ rekal clean
 - Removes the installed skill suite (`.claude/skills/rekal*/`), pruning
   `.claude/skills/` and `.claude/` only if they are left empty — your own
   `.claude` content is never touched
+- Removes the marker-tagged `CLAUDE.md` sentence (deleting the file only if
+  nothing else remains)
 
 No residue. If you want to start over, run `clean` then `init`.
 
@@ -208,7 +226,7 @@ Day-to-day: commit and push as normal. Everything else is automatic.
 
 | Agent does | Rekal does |
 |------------|------------|
-| `rekal "auth middleware"` | Runs hybrid search (BM25 + LSA + Nomic), returns scored JSON with `snippet_turn_index` pointing to the best-matching turn |
+| `rekal "auth middleware"` | Runs hybrid search (BM25 + LSA + Nomic + a facet layer over tool metadata), returns scored JSON with `snippet_turn_index` pointing to the best-matching turn |
 | `rekal query --session <id> --offset N --limit 5` | Returns a small window of turns around the relevant part of the conversation, with `has_more` for pagination |
 | `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
 | `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |
@@ -240,7 +258,7 @@ recipe over the same commands — the agent loads only the one the task needs.
 
 | Skill | Use it when | What it does |
 |-------|-------------|--------------|
-| **rekal** | any recall | Base search + progressive drill. The entry point every other skill builds on. |
+| **rekal** | any question about the project | The router. Decides which substrate answers — the **tree** (current code: grep/read), the **ledger** (past intent: recall), or the **map** (structure) — then runs the matching workflow: **MAP** (a SHA-watermarked condensed map of the repo at `.rekal/map.md`, refreshed by diff), **HUNT** (recall gated on confidence — low-confidence episodes stay out of context), or **WHY** (gather the decision trail across sessions and synthesize the arc, every claim carrying session/turn/commit pointers). Route, don't stack. |
 | **rekal-provenance** | reading unfamiliar code, onboarding, reviewing a diff | Walks *artifact → commit → session → intent*: anchor on a file or commit, find the session that produced it, emit the why-chain git alone can't give you. |
 | **rekal-reflect** | before or after a task | Mines your own prior sessions — especially the `human_steering` corrections — for recurring mistakes and distills them into explicit rules, so a correction happens once, not every session. |
 | **rekal-distill** | scoping a problem space | Reads memory as four libraries — **context** (what's known), **decision** (what's open), **rules** (what's preferred), **boundary** (what's been abandoned) — and "zooms" around a topic by file co-occurrence and session lineage. |
@@ -319,7 +337,8 @@ Rekal is zero-config by default. When you do want to tune it, there is exactly o
     "lsa": 0.10,
     "nomic": 0.55,
     "steering_boost": 1.3,
-    "subagent_downweight": 0.7
+    "subagent_downweight": 0.7,
+    "facet_boost": 0.3
   },
   "embedding": {
     "endpoint": "$EMBED_ENDPOINT",
@@ -330,7 +349,7 @@ Rekal is zero-config by default. When you do want to tune it, there is exactly o
 }
 ```
 
-- **`weights`** tunes recall ranking (layer mix, steering-turn boost, subagent discount). Applied at query time — changing them takes effect on the next search, no reindex, any corpus size.
+- **`weights`** tunes recall ranking (layer mix, steering-turn boost, subagent discount, and `facet_boost` — the facet layer over each session's tool paths/commands/steering text, on by default at 0.3; set 0 to disable). Applied at query time — changing them takes effect on the next search, no reindex, any corpus size.
 - **`embedding`** switches deep semantic embeddings from the embedded nomic model to any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI). Requests are batched and hard-timeboxed so a slow server can never stall a commit (embedding is always non-fatal). Pointed at localhost, your data still never leaves the machine; pointed at a cloud API, session text leaves — your call, made explicitly.
 
 ### API key: three ways, pick one

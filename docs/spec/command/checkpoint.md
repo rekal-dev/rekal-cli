@@ -29,7 +29,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 9. **Incremental index update** — If index.db exists, incrementally add new sessions to the index:
    - Insert turns into `turns_ft` (auto-indexed by DuckDB FTS).
    - Insert tool calls into `tool_calls_index`.
-   - Insert session facets into `session_facets`.
+   - Insert session facets into `session_facets`, then build their `facet_text` documents (incremental `PopulateFacetText` — the facet FTS index itself is only rebuilt by full `index`/`sync`, mirroring how turns FTS is handled).
    - Insert file entries into `files_index`.
    - Generate nomic-embed-text embeddings for new **trunk** sessions only (on supported platforms) — subagent/workflow transcripts are still FTS-indexed immediately, but their embeddings are deferred to the next full `rekal index`/`rekal sync` rebuild, so checkpoint time doesn't scale with subagent fan-out (see [agent-metadata.md](../../agent-metadata.md)).
    - LSA embeddings are skipped (require full corpus rebuild via `rekal index`).

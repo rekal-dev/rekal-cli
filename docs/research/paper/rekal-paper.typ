@@ -27,7 +27,7 @@
 #place(top, scope: "parent", float: true, clearance: 18pt)[
   #align(center)[
     #text(size: 17pt, weight: "bold", hyphenate: false)[
-      Git-Bound Memory: Routing Developer Questions\ to Structure, Episode, and Synthesis under a Token Budget
+      Git-Bound Memory:\ A Routed Memory System for Software Engineering Workloads
     ]
     #v(6pt)
     #text(size: 10.5pt)[Frank Guo#super[1]]
@@ -66,7 +66,7 @@
   confidence-gated episodic recall for pointed lookups (ungated injection
   *poisons* a good map, 0.63→0.29; the gate suppresses 11/12 bad
   injections), and *decision synthesis* over a decision-scoped gather for
-  rationale (0.83 overall on a two-week-old production corpus,
+  rationale (0.83 overall on a young ≈50k-LOC production system,
   reconstructing why-arcs single-shot retrieval fragments). Routed, the
   system holds the best per-kind floor at 382–980 tokens per question —
   three orders of magnitude under the recorded history. Ground truth is
@@ -109,9 +109,16 @@ kinds:
   retrieval returns one fragment of an arc.
 
 These kinds need different mechanisms, and a system that ships only the
-middle one fails most of the population. This paper builds and measures
-all three over one git-native ledger, with a router in front and a
-confidence gate on the episodic path.
+middle one fails most of the population. The paper therefore solves *two
+problems, separately, then combines them*. Problem one is *seed supply*:
+can the right prior sessions be found at all? We close it as a retrieval
+study — honest floors, a disciplined mechanism sweep, two validated
+levers (§5). Problem two is *answer assembly*: given seeds, can the
+question actually be answered within a budget? We close it with three
+modes and a router (§7–8). The combination — one engine, one skill-layer
+router — outperforms every single-mechanism alternative on coverage of
+the question kinds, at a fraction of the token cost of the strongest
+single mode.
 
 *Contributions.* (1) The *git-bound* position: a memory engine built into
 version control whose guarantees — annotation, staleness,
@@ -220,9 +227,10 @@ dev / 90% held-out test, and the incumbent-versus-candidate discipline of
 on the held-out split under a paired bootstrap CI excluding zero.
 
 *Corpora.* Eight real working corpora spanning four workload classes,
-anonymized: *Corpus A* (documentation/knowledge; ≈1,400 captured
-sessions; prose-heavy, diverse tooling; retrieval n_test=212) and *Corpus
-B* (production data/ML pipeline build; n_test=456–521 by split) are the
+anonymized: *Corpus A* (a documentation/knowledge base of ≈4,000
+markdown documents; ≈1,400 captured sessions; prose-heavy, diverse
+tooling; retrieval n_test=212) and *Corpus B* (a production software
+system of ≈50k lines of code; n_test=456–521 by split) are the
 two with statistically clean splits; six smaller corpora (code,
 docs/architecture, notes, build-scripts, two mixed) are reported
 directionally and flagged where tuning would overfit.
@@ -274,15 +282,46 @@ SPM @spm2026 derives structured facets (task, data schema, tool config,
 output constraints) for session-start context assembly; we port the idea
 to a retrieval term: a deterministic per-session facet document (distinct
 tool paths + command prefixes + steering text; no LLM, built at index
-time), BM25-searched as a fourth, orthogonal hybrid term. Root cause of
+time), BM25-searched as a fourth, orthogonal hybrid term — additive and
+config-gated, so at the default facet_boost=0 the term never runs and
+the engine is byte-identical to the baseline. We test *that port*
+(retrieval MRR), explicitly not a reproduction of SPM's task-completion
+result, which would need a curated gold set. Root cause of
 the win: the answer to "what tools/config did session X use" lives in
 tool-call *metadata* that a session's conversational turns often never
 mention — turn-recall misses it in the top-50 while facet-search finds
-it. The lift is predictable: it is monotone in tool-path diversity
-(the high-diversity corpus gains +0.110; the uniform-pipeline corpus
-+0.053), which yields a testable deployment rule — the term ships off by
-default and auto-tuning enables it (facet_boost 0.3) where the corpus's
-tool-diversity supports it.
+it.
+
+#figure(
+  table(
+    columns: (1.15fr, auto, auto),
+    align: (left, center, center),
+    table.header([*Facet term, by operating point*], [*Corpus A*], [*Corpus B*]),
+    [screen: facet-doc BM25 vs turn recall (structural queries)], [+0.184 [.05,.32] *sig*], [+0.016 n.s.],
+    [end-to-end, *bolted onto* the default mix (fb=0.6)], [0.179→0.294\ +0.116 [.04,.20] *sig*], [−0.019 n.s.],
+    [*joint re-tune* (fb tuned with the mix; fb=0.3 selected on both)], [marginal +0.110\ [.056,.173] *sig*], [marginal +0.053\ [.012,.107] *sig*],
+  ),
+  caption: [The facet term at two operating points (held-out, paired
+  bootstrap CIs). Bolted naively onto the untuned default mix, the term
+  looks corpus-conditional — significant on the diverse-tooling corpus,
+  null on the uniform pipeline. The joint re-tune is the correct
+  comparison under the incumbent-versus-candidate discipline — one never
+  ships an untuned knob — and there the marginal is significant on
+  *both* corpora: the naive null was an artifact of an untuned operating
+  point, not an absent effect. On Corpus A the marginal takes the best
+  held-out hybrid to ≈0.31 pooled MRR.],
+) <tab-facet>
+
+@tab-facet carries a methods lesson beyond the mechanism itself: a
+memory mechanism evaluated by bolting it onto a fixed configuration can
+appear corpus-conditional when it is merely mis-tuned; only the joint
+re-tune separates "does not work here" from "was not given its operating
+point." What remains genuinely corpus-conditional is the *magnitude*:
+the marginal is monotone in tool-path diversity (the high-diversity
+corpus gains +0.110; the uniform-pipeline corpus +0.053, from ≈2.3×
+less path diversity per call), which yields a testable deployment rule —
+the term ships off by default and auto-tuning enables it (facet_boost
+0.3) where the corpus's tool-diversity supports it.
 
 == Is the embedded model the bottleneck? No.
 
@@ -441,10 +480,24 @@ reasoning references code, the diff is pulled from the commit SHA at
 synthesis time. This is the mode single-shot retrieval cannot emulate,
 because the answer is *distributed* and was never a single record.
 
+== The router is a skill: gated triage over workflows
+
 The three modes ship as agent skills (`rekal-map`, `rekal-hunt`,
-`rekal-why`) driving engine primitives; the router is the skill layer's
-dispatch on question kind. Rationale lives in turns; structure lives in
-the tree; the modes are *routed, not stacked*.
+`rekal-why`) — written workflow playbooks driving engine primitives —
+and the router is itself the skill layer: a *triage* step classifies
+the question's kind from its shape ("how does X work end-to-end" →
+breadth; "which session did X" → pointed; "why X instead of Y" →
+rationale), a *gate* decides whether episodic evidence enters at all
+(the confidence signal of §7.2 — below the bar, the mode stays silent
+rather than injecting noise), and each mode is then a *workflow*: map →
+regenerate-on-diff and answer from structure; hunt → seeds, gate,
+drill the cheapest dense anchor; why → gather decision turns, pull
+diffs by SHA, synthesize with pointers. Nothing in this pipeline is a
+trained component: triage rules, gate thresholds, and workflows are
+inspectable text, versioned in git like everything else, so improving
+the routing policy is editing a file under review — the same
+maintenance story as the rest of the system. Rationale lives in turns;
+structure lives in the tree; the modes are *routed, not stacked*.
 
 = Evaluation: answer-sufficiency, not rank
 
@@ -456,10 +509,11 @@ bootstrap 95% CIs, plus average tokens per question. Ground truth for
 the corpora is self-labeled; questions are real developer questions
 tagged *broad / pointed / why* (n=15 per corpus; per-question judgments
 and generated maps are in the run directory). Corpus A is the
-documentation/knowledge corpus of §5; Corpus B is a *two-week-old*
-production data/ML pipeline subsystem (layered ingest → transform →
-model build) inside a ≈3,000-session repository — young, uniform
-tooling, and the harder test of memory that has barely accumulated.
+documentation/knowledge corpus of §5 (≈4,000 markdown documents);
+Corpus B is a production software system of ≈50k lines of code — a
+layered data/ML pipeline (ingest → transform → model build) inside a
+≈3,000-session repository — with uniform tooling and a *young* recorded
+history: the harder test, memory that has barely accumulated.
 
 == Each mode wins a different kind
 
@@ -477,12 +531,12 @@ per-kind columns, not the overall.
     columns: (auto, auto, auto, auto, auto, auto),
     align: (left, center, center, center, center, center),
     table.header([*Mode*], [*Overall* (95% CI)], [*Broad*], [*Pointed*], [*Why*], [*Avg tok*]),
-    table.cell(colspan: 6, align: left)[*Corpus A — documentation/knowledge (≈1,400 sessions)*],
+    table.cell(colspan: 6, align: left)[*Corpus A — documentation/knowledge (≈4,000 markdown docs, ≈1,400 sessions)*],
     [structural map], [0.33 (.13–.53)], [0.50], [0.17], [0.33], [201],
     [episodic single-shot], [0.20 (.00–.40)], [0.33], [0.17], [0.00], [914],
     [routed (map + gated episodes)], [0.43 (.20–.67)], [0.83], [0.50], [0.17], [382],
     [decision synthesis], [0.47 (.20–.67)], [0.50], [0.50], [0.33], [2762],
-    table.cell(colspan: 6, align: left)[*Corpus B — production data/ML pipeline subsystem (≈2 weeks old)*],
+    table.cell(colspan: 6, align: left)[*Corpus B — production software system (≈50k LOC, young history)*],
     [structural map], [0.53 (.30–.77)], [0.50], [0.33], [1.00], [969],
     [episodic single-shot], [0.07 (.00–.27)], [0.00], [0.00], [0.33], [648],
     [routed (map + gated episodes)], [0.60 (.37–.80)], [0.67], [0.42], [0.83], [980],
@@ -540,9 +594,9 @@ a design that began under one constraint set and drifted to "good
 enough." The lesson is precise: *the rationale was in memory all along;
 single-shot retrieval fragments it and a poor gather starves it, but a
 decision-scoped gather plus synthesis assembles it.* And *the young
-corpus is the strong case for memory*: two weeks of history already
-answer 0.83 of real questions under synthesis — memory pays off long
-before it is big.
+corpus is the strong case for memory*: a barely-accumulated history
+already answers 0.83 of real questions under synthesis — memory pays
+off long before it is big.
 
 == The economics
 
@@ -622,15 +676,19 @@ and gate recalibration after the facet term enters the score mix.
 
 Agent memory is not one retrieval problem but three modes — structure,
 episode, and synthesis — over a ledger whose hard guarantees come from
-version control. Ranking is a solved-enough seed-supply step: we closed
-it with honest floors, a mechanism graveyard, two validated levers, and
-rules for when each helps; the value above it is in routing each
-question to the mode that can answer it, gating episodes on confidence
-so they help rather than harm, and reconstructing evolved decisions by
-synthesis rather than retrieval. The binding constraint is capture. One
-tool, three modes, git-bound — and the strongest result is the one the
-field has not been measuring: memory can reconstruct *why* a system
-became what it is.
+version control. The paper's shape is deliberate: two problems solved
+*separately* — seed supply, closed as a retrieval study with honest
+floors, a mechanism graveyard, two validated levers, and rules for when
+each helps; answer assembly, closed with three modes behind a
+skill-router — and then *combined*, where the combination outperforms
+every single-mechanism alternative on coverage of the question kinds at
+a fraction of the strongest mode's token cost. The value above ranking
+is in routing each question to the mode that can answer it, gating
+episodes on confidence so they help rather than harm, and
+reconstructing evolved decisions by synthesis rather than retrieval.
+The binding constraint is capture. One tool, three modes, git-bound —
+and the strongest result is the one the field has not been measuring:
+memory can reconstruct *why* a system became what it is.
 
 #v(4pt)
 *Reproducibility.* Every value traces to a committed run record

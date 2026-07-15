@@ -202,9 +202,10 @@ numbers (one frozen snapshot) but stands as the long-form reference.
 - **Rises:** confidence gate in recall output (engine; recalibrate after
   facets); decision-scoped gather primitive + synthesis skill with
   mandatory evidence pointers; structural map as SHA-watermarked
-  regenerable artifact; router in the skill layer first; facet auto-tune
-  path (ships off, tuner selects fb=0.3 where tool-diversity supports it);
-  capture-gap measurement (verbalization rate).
+  regenerable artifact; router in the skill layer first (SHIPPED: one
+  `rekal` skill with internal gated routing — MAP/HUNT/WHY); facet layer
+  (SHIPPED: default facet_boost=0.3, guarded index, explicit 0 =
+  byte-identical baseline); capture-gap measurement (verbalization rate).
 - **Falls:** further ranking-mechanism work — the graveyard says the
   seed stage is closed; MRR becomes the regression diagnostic.
 - **Unchanged:** the git binding (§5) — already built, already the moat.

@@ -1,6 +1,5 @@
 {
-  "run_date": "2026-07-12",
-  "note": "Aggregate manifest for the RekalBench rung-1 run cited in docs/research/paper/rekal-paper.typ. Aggregates only: no session content, no commit messages, no paths outside this repo. Regenerate with scripts/bench (see DATA-RUN.md).",
+  "note": "Aggregate manifest for the RekalBench rung-1 single-corpus run cited in docs/research/paper/rekal-paper.typ. Aggregates only: no session content, no commit messages, no paths outside this repo. Regenerate with scripts/bench (see DATA-RUN.md).",
   "scope": "rung-1 retrievability + judge-free drill-cost proxy; judged rungs, scale sweep, and the wiki gate are future work",
   "corpus_card": {
     "sessions": 1433,
@@ -11,12 +10,30 @@
     "commits_with_linked_sessions": 152,
     "commit_session_links": 1060,
     "distinct_branches": 4,
-    "date_range": ["2026-03-22", "2026-07-10"],
-    "roles": {"assistant": 52287, "human": 12817, "human_steering": 1219, "summary": 432},
-    "machine_wide_fold": {"imported_sessions": 3618, "imported_projects": 18}
+    "roles": {
+      "assistant": 52287,
+      "human": 12817,
+      "human_steering": 1219,
+      "summary": 432
+    },
+    "machine_wide_fold": {
+      "imported_sessions": 3618,
+      "imported_projects": 18
+    }
   },
-  "labels": {"t1_provenance": 152, "t2_decision": 263, "t3_deadend": 0, "t4": null, "t5": null},
-  "queries": {"total": 415, "split_dev": 35, "split_test": 380, "leakage_filter": "4-gram Jaccard <= 0.30, one aggressive-paraphrase retry"},
+  "labels": {
+    "t1_provenance": 152,
+    "t2_decision": 263,
+    "t3_deadend": 0,
+    "t4": null,
+    "t5": null
+  },
+  "queries": {
+    "total": 415,
+    "split_dev": 35,
+    "split_test": 380,
+    "leakage_filter": "4-gram Jaccard <= 0.30, one aggressive-paraphrase retry"
+  },
   "systems": {
     "b1": "grep-rank over raw transcript JSONL (non-agentic DCI proxy); transcript-UUID->ULID sidmap join",
     "b3": "BM25-only (weights {bm25:1,lsa:0,nomic:0})",
@@ -24,20 +41,81 @@
     "b5": "Rekal full hybrid (default weights + steering/summary boost + subagent down-weight)"
   },
   "rung1_test_split": {
-    "n": {"all": 380, "t1": 134, "t2": 246},
-    "median_latency_s": {"b1": 1.01, "b3": 0.50, "b4": 0.51, "b5": 0.50},
-    "pooled_mrr": {"b1": [0.005, 0.001, 0.011], "b4": [0.057, 0.040, 0.078], "b3": [0.171, 0.145, 0.202], "b5": [0.187, 0.158, 0.217]},
-    "pooled_ndcg10": {"b1": 0.004, "b4": 0.059, "b3": 0.219, "b5": 0.227},
-    "t1_mrr": {"b1": 0.014, "b4": 0.130, "b3": 0.248, "b5": 0.301},
-    "t1_recall5": {"b1": 0.015, "b4": 0.194, "b3": 0.425, "b5": 0.537},
-    "t2_mrr": {"b1": 0.000, "b4": 0.018, "b3": 0.130, "b5": 0.124},
+    "n": {
+      "all": 380,
+      "t1": 134,
+      "t2": 246
+    },
+    "median_latency_s": {
+      "b1": 1.01,
+      "b3": 0.5,
+      "b4": 0.51,
+      "b5": 0.5
+    },
+    "pooled_mrr": {
+      "b1": [
+        0.005,
+        0.001,
+        0.011
+      ],
+      "b4": [
+        0.057,
+        0.04,
+        0.078
+      ],
+      "b3": [
+        0.171,
+        0.145,
+        0.202
+      ],
+      "b5": [
+        0.187,
+        0.158,
+        0.217
+      ]
+    },
+    "pooled_ndcg10": {
+      "b1": 0.004,
+      "b4": 0.059,
+      "b3": 0.219,
+      "b5": 0.227
+    },
+    "t1_mrr": {
+      "b1": 0.014,
+      "b4": 0.13,
+      "b3": 0.248,
+      "b5": 0.301
+    },
+    "t1_recall5": {
+      "b1": 0.015,
+      "b4": 0.194,
+      "b3": 0.425,
+      "b5": 0.537
+    },
+    "t2_mrr": {
+      "b1": 0.0,
+      "b4": 0.018,
+      "b3": 0.13,
+      "b5": 0.124
+    },
     "ci_note": "pooled_mrr values are [mean, ci_lo, ci_hi] from 1000-resample bootstrap over queries; other metrics are point estimates"
   },
   "drill_proxy_t1_paired": {
     "n_paired": 33,
-    "window": {"tokens": 2200, "coverage": 0.687, "coverage_per_1k": 0.312},
-    "summary_first": {"tokens": 2744, "coverage": 0.684, "coverage_per_1k": 0.249},
-    "window_t1_all": {"tokens": 1520, "coverage": 0.693},
+    "window": {
+      "tokens": 2200,
+      "coverage": 0.687,
+      "coverage_per_1k": 0.312
+    },
+    "summary_first": {
+      "tokens": 2744,
+      "coverage": 0.684,
+      "coverage_per_1k": 0.249
+    },
+    "window_t1_all": {
+      "tokens": 1520,
+      "coverage": 0.693
+    },
     "note": "context-assembly cost + gold-term coverage, not answer quality; used only for the ~1,500-token / 69%-coverage figure in the paper"
   },
   "findings": {
@@ -48,6 +126,13 @@
     "single_corpus": "one operator, one primary repo; case study until replicated (the harness is public and runs on any Rekal store)",
     "b1_is_non_agentic": "grep-rank is a term-frequency ranker, not an agent driving rg; the agentic-DCI comparison is a judged-rung, not run here",
     "t3_empty": "single-branch corpus yields no dead-end labels",
-    "not_run": ["judged rungs (2-4)", "scale sweep", "freshness curves", "wiki L3 gate", "embedding substitution", "50-pair label-precision audit"]
+    "not_run": [
+      "judged rungs (2-4)",
+      "scale sweep",
+      "freshness curves",
+      "wiki L3 gate",
+      "embedding substitution",
+      "50-pair label-precision audit"
+    ]
   }
 }

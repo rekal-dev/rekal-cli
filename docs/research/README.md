@@ -4,58 +4,72 @@
 agents — with data, not adjectives — and adjust the product where the
 literature shows a better design.
 
-This folder works backwards from that goal. Read in order:
+**Current state:** the program converged on one flagship paper — *"Why Git
+Is the Memory Solution for the Agentic Development Lifecycle"*
+(`paper/rekal-paper.typ`) — whose structure is derived in
+`07-paper-restructure.md` (git-bound memory; two problems solved separately
+— seed supply, answer assembly — then combined by a gated router; measured
+by answer-sufficiency per token). The docs below are the working-backwards
+chain that produced it; where a doc and the paper disagree, the paper wins.
 
 | Doc | Question it answers |
 |---|---|
 | [01-positioning.md](01-positioning.md) | What exactly are we claiming, and what evidence would prove it? (the evidence ladder) |
-| [02-literature-map.md](02-literature-map.md) | What do the 17 papers say, and is each one support, threat, or something to steal? |
-| [03-benchmark.md](03-benchmark.md) | RekalBench — tasks, metrics, baselines, protocol. What we run to get the numbers. |
-| [04-data-plan.md](04-data-plan.md) | How to get the data — building the benchmark corpus from the massive local session store, with exact SQL. |
-| [05-roadmap.md](05-roadmap.md) | Product adjustments derived from the literature ("make the best memory tool"). |
-| [00-sources.md](00-sources.md) | The verified source list (all 17 papers, arXiv links). |
+| [02-literature-map.md](02-literature-map.md) | What do the papers say, and is each one support, threat, or something to steal? |
+| [03-benchmark.md](03-benchmark.md) | RekalBench — tasks, metrics, baselines, protocol. |
+| [04-data-plan.md](04-data-plan.md) | How to build the benchmark corpus from the local session store, with exact SQL. |
+| [05-roadmap.md](05-roadmap.md) | Product adjustments derived from the literature. |
+| [06-eval-strategy.md](06-eval-strategy.md) | Multi-repo-at-scale evaluation + the Rekal-usage/effectiveness pillar; the one-snapshot rule. |
+| [07-paper-restructure.md](07-paper-restructure.md) | The flagship paper's working-backwards structure, evidence-gap table, and landing order (facets → gate recalibration → frozen snapshot). |
+| [00-sources.md](00-sources.md) | The verified source list (arXiv links). |
+| [RUN.md](RUN.md) | The full multi-repo run sequence and the paper's data pack. |
+| [runs/](runs/) | Committed aggregate run records: `single-corpus/` (rung 1) and `consolidated/` (multi-corpus matrix, mechanism sweeps, facet, sufficiency — status TRANSCRIBED_PENDING_VERIFICATION). |
+| [paper/](paper/) | The flagship paper (Typst source + PDF) and its provenance README. |
 
-## The working-backwards chain in one paragraph
+## The chain in one paragraph
 
-The end state is a public claim — *"an agent with Rekal answers 'why is this
-code like this / what did we already try' correctly, at a fraction of the
-tokens, with zero maintenance"* — backed by a reproducible benchmark. To make
-that claim we need four rungs of evidence (retrievability → answer quality →
-token efficiency → agent-in-the-loop A/B), each defined in `01`. To produce
-those numbers we need a benchmark whose ground truth is **self-labeled** —
-Rekal's own `checkpoint_sessions` table links every commit to the sessions
-that produced it, which is free, abundant, objective supervision (`03`). To
-build that benchmark we need a corpus — the operator's local store (hundreds
-of sessions, tens of thousands of turns across repos) folded in via
-`rekal index --include-all`, extracted with the SQL in `04`. And the same
-literature that frames the evaluation also tells us where to improve the
-product, which is `05`.
+The claim is the paper's title, argued then measured: git already runs the
+ADLC's code, and — bound, not bolted on — it runs its memory too. Ground
+truth is self-labeled (`checkpoint_sessions` links every commit to its
+producing sessions), which makes the retrieval program free to run and
+replicate. That program is now *closed*: honest grep floors, a mechanism
+graveyard with two RHO-disciplined survivors (per-corpus tuning; the SPM
+facet term — shipped default `facet_boost=0.3`), and the lesson that gains
+come from orthogonal evidence layers, not rank polish. Above retrieval the
+same lesson becomes the system: real questions split into broad / pointed /
+why; a gated router (shipped as the single `rekal` skill: MAP / HUNT / WHY
+workflows) answers each kind at 382–980 tokens per question, and decision
+synthesis reconstructs the "why" arcs single-shot retrieval fragments. The
+binding constraint that remains is capture.
 
 ## The three findings that shape everything here
 
 1. **Freshness of derived structure is the field's #1 unsolved problem**
    (deferred by LLM-Wiki, AdaMem, MRAgent, SAG alike). Rekal solves it
-   *structurally*: `data.db` is an append-only source of truth; `index.db` is
-   disposable and rebuilt, never migrated. Derived structure that can be
-   thrown away cannot go stale. This is the positioning centerpiece.
-2. **Unbounded grep does not scale** (RISE: at 1M docs, direct-corpus-
-   interaction accuracy falls to 60% with wall-clock failures at ~$1.10/query;
-   a bounded BM25-constructed workspace holds 78% at $0.28). Rekal is exactly
-   a bounded-interaction-space constructor for intent history: hybrid search
-   bounds, `rekal query` drills. This answers the strongest objection
-   ("agents can already grep the transcripts").
+   *structurally*: `data.db` is an append-only source of truth; `index.db`
+   is disposable and rebuilt; the structural map is a SHA-watermarked
+   function of the tree, refreshed by diff. Derived structure that can be
+   thrown away cannot go stale.
+2. **Findable is not answered.** Single-shot episodic recall answers
+   0.07–0.20 of real developer questions (answer-sufficiency, blind judge);
+   ungated episode injection *degrades* a good structural answer
+   (0.63→0.29), and the confidence gate recovers most of the loss. Routing
+   by question kind — map for breadth, gated episodes for pointed,
+   synthesis for why — is where the value above ranking lives.
 3. **Memory reuse without external verification poisons itself** (EDV's
    self-confirmation trap). Rekal's merged-only export gate is an *external*
-   verification signal no dialogue-memory system has: team memory admits only
-   experience whose code actually landed on main.
+   verification signal no dialogue-memory system has, and synthesis output
+   carries turn+commit pointers for the same reason.
 
 ## Status
 
-- [x] Literature read (8 core deep, 9 supporting at abstract depth; all links
-      verified via live search July 2026)
-- [x] Positioning + evidence ladder defined
-- [x] Benchmark spec (RekalBench v0)
-- [x] Data-extraction plan keyed to the operator's local store
-- [ ] Run corpus extraction on the operator's machine (`04-data-plan.md` §2)
-- [ ] Run RekalBench v0 rungs 1–2, publish corpus card + numbers
-- [ ] Rung 3 (token efficiency) and rung 4 (agent A/B)
+- [x] Literature read; positioning + evidence ladder defined
+- [x] RekalBench spec + label miners (T1–T5); self-labeling proven
+- [x] Rung 1 run (single corpus) — committed manifest
+- [x] Multi-corpus retrieval matrix + mechanism sweeps + facet port (consolidated record; anonymized aggregates committed)
+- [x] Mode/sufficiency runs (n=12–15, two corpora) — directional
+- [x] Engine aligned to the paper: facet layer shipped (default 0.3); router shipped as the single `rekal` skill (MAP/HUNT/WHY, gated)
+- [ ] Verify the transcribed consolidated record against the operator copy (flip its status field)
+- [ ] Gate recalibration on the facet-enabled engine → freeze the snapshot all paper numbers cite
+- [ ] Sufficiency at scale: n ≫ 15, second judge + agreement, T4 mined gold for synthesis
+- [ ] Wild-query kind distribution → the expected-cost figure (waterfall's last row)

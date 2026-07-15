@@ -160,7 +160,7 @@ a different place. *"Should webhook retries use a fixed delay?"* is
 pointed: episodic recall returns the Monday session with the steering turn
 as the top snippet, confidence clears the gate, and a bounded drill reads
 a five-turn neighborhood — about 1,500 tokens. *"How does delivery work
-end-to-end?"* is breadth: the structural map — a subsystem diagram
+end-to-end?"* is breadth: the structural map — a condensed subsystem map
 generated from the repository at its current SHA — answers from structure;
 no episode is fetched. *"Why exponential backoff instead of a delivery
 queue?"* is rationale: a decision-scoped gather collects the
@@ -223,8 +223,9 @@ full-text, latent-semantic, and neural cosine — with per-role boosts
 (steering, summary), a subagent down-weight, and an opt-in *facet* term
 (§5.3). All weights apply at query time; no reindex to change them. Ship
 defaults: layer mix 0.35/0.10/0.55, steering boost 1.3, summary boost
-1.15, subagent 0.7, max-norm, facet 0 (auto-tuning selects it where it
-helps).
+1.15, subagent 0.7, max-norm, facet 0.3 (the held-out tuned value; the
+layer fails soft on corpora without facet material, and an explicit 0
+restores the byte-identical pre-facet engine).
 
 = Problem one: seed supply, closed
 
@@ -376,7 +377,7 @@ by anyone on their own store.
     alabel(120pt, 72pt)[pointed]
     arrow(142pt, 66pt, 190pt, 92pt)
     alabel(172pt, 70pt)[why]
-    archbox(0pt, 92pt, 74pt, 38pt, rgb("#dbeafe"))[*structural map*\ reads repo \@ SHA\ → mermaid]
+    archbox(0pt, 92pt, 74pt, 38pt, rgb("#dbeafe"))[*structural map*\ reads repo \@ SHA\ → anchored text]
     archbox(78pt, 92pt, 72pt, 38pt, rgb("#fde68a"))[*episodic, gated*\ seeds → drill;\ gate or silence]
     archbox(154pt, 92pt, 74pt, 38pt, rgb("#dcfce7"))[*decision synthesis*\ gather turns → arc]
     arrow(37pt, 148pt, 37pt, 130pt)
@@ -394,14 +395,19 @@ by anyone on their own store.
 
 == Structural map (breadth)
 
-The map is a subsystem diagram *authored by an LLM that reads the
-repository* — its directory skeleton, its own README/architecture
-documents — not clustered from co-occurrence statistics (we tried; the
-statistical version grouped tool-call-id dumps and scratch files into
-meaningless clusters; comprehension filters what statistics cannot). The
-map is watermarked with the HEAD commit and regenerated on demand, so it
-is never a stale snapshot: it is a function of the tree at a SHA,
-refreshable by diffing only the clusters whose files changed — the
+The map is a condensed subsystem description *authored by an LLM that
+reads the repository* — its directory skeleton, its own
+README/architecture documents — not clustered from co-occurrence
+statistics (we tried; the statistical version grouped tool-call-id dumps
+and scratch files into meaningless clusters; comprehension filters what
+statistics cannot). Its reader is an agent, so its format is structured
+text with greppable path anchors rather than a diagram: subsystems cut
+by responsibility with purpose stated as behavior, load-bearing edges
+labeled with what crosses them, and the main flows — dense per token,
+and section-scoped so refreshes rewrite only what changed. The map is
+watermarked with the HEAD commit and regenerated on demand, so it is
+never a stale snapshot: it is a function of the tree at a SHA,
+refreshable by diffing only the sections whose files changed — the
 staleness guarantee of §3 applied to compiled structure. It answers
 "what exists and how it connects," and nothing about "why."
 
@@ -431,9 +437,17 @@ because the answer is *distributed* and was never a single record.
 
 == The router is a skill: gated triage over workflows
 
-The three modes ship as agent skills (`rekal-map`, `rekal-hunt`,
-`rekal-why`) — written workflow playbooks driving engine primitives —
-and the router is itself the skill layer: a *triage* step classifies
+The router and its three modes ship as *one* agent skill — written
+workflow playbooks, internally routed, driving engine primitives — so the
+agent loads a single policy. Its first decision is not which memory mode
+but *which substrate*: present-tense code facts belong to the tree (grep
+and read at HEAD) and are deliberately not answered from memory — a
+recalled episode about how X *used* to work can mislead about how it
+works now; past-tense intent belongs to the ledger; structure belongs to
+the map, which bridges the two (derived from the tree, serving memory).
+Grep the tree for present tense, recall the ledger for past tense — and
+stay silent when it is neither. Within the ledger, a *triage* step then
+classifies
 the question's kind from its shape ("how does X work end-to-end" →
 breadth; "which session did X" → pointed; "why X instead of Y" →
 rationale), a *gate* decides whether episodic evidence enters at all
@@ -666,8 +680,8 @@ maps, gating ablation; retrieval matrix, mechanism sweeps, facet
 screens) — anonymized aggregates under `docs/research/runs/`. Corpora are anonymized (A: a documentation repository; B: a
 production data/ML pipeline subsystem); no session content or corpus
 identity leaves the operator's machine — published artifacts are
-aggregates, prompts, and code. The three modes ship as skills
-(`rekal-map`, `rekal-hunt`, `rekal-why`); the judge is a single
+aggregates, prompts, and code. The router and its three mode workflows
+ship as one agent skill (`rekal`); the judge is a single
 automated model and the questions are the authors' own corpora — the
 study is a within-system characterization, not a competition. Engine,
 skills, benchmark spec, extraction SQL, and this paper's source:
@@ -683,9 +697,10 @@ here" from "was not given its operating point." What remains genuinely
 corpus-conditional is the *magnitude*: the marginal is monotone in
 tool-path diversity (the high-diversity corpus gains +0.110; the
 uniform-pipeline corpus +0.053, at ≈2.3$times$ less path diversity per
-call) — a testable deployment rule. The term ships off by default;
-auto-tuning enables it (facet_boost 0.3) where tool-diversity supports
-it. We test the retrieval port only, explicitly not a reproduction of
+call) — a testable deployment rule. The term ships enabled at the tuned
+facet_boost of 0.3; corpora without facet material pay nothing (the
+facet index is guarded), and an explicit 0 restores the byte-identical
+pre-facet engine. We test the retrieval port only, explicitly not a reproduction of
 SPM's task-completion result, which would need a curated gold set.
 
 #figure(

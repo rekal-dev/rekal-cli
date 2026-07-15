@@ -2,7 +2,7 @@
 
 **Hand this whole file to an agent running on the operator's machine** (the
 one with real Rekal history across several repos). It produces one harmonised
-data pack that supersedes `runs/2026-07-12/` and fills every table in the
+data pack that supersedes `runs/single-corpus/` and fills every table in the
 paper. Rationale lives in `06-eval-strategy.md`; this is the executable
 version. Aggregates only leave the machine — no session content, no commit
 messages, no foreign paths.
@@ -148,5 +148,5 @@ summary.
 | `manifest.json` | reproducibility | one canonical run record |
 
 When these exist, send them over and I harmonise the paper to this single run
-(retrieval + T4 + wild + usage + cross-repo + judged), retire `2026-07-12`,
+(retrieval + T4 + wild + usage + cross-repo + judged), retire `single-corpus`,
 and finish the site.

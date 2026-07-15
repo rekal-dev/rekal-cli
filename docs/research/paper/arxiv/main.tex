@@ -18,23 +18,29 @@
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
+\usepackage{float}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[breaklinks,colorlinks,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+\usepackage[font=small]{caption}
 
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\x}{$\times$}
 \setlength{\bibsep}{2pt}
-
-\title{\textbf{Why Git Is the Memory Solution\\for the Agentic Development Lifecycle}\\[4pt]
-\large Git-bound, routed memory for coding agents: structure, episode, and synthesis under a token budget}
-\author{Frank Guo\\[2pt]
-\normalsize Rekal --- \href{https://rekal.dev}{rekal.dev} \,\textperiodcentered\, \href{mailto:guocongmit@gmail.com}{guocongmit@gmail.com} \,\textperiodcentered\, \href{https://github.com/rekal-dev/rekal-cli}{github.com/rekal-dev/rekal-cli}}
-\date{}
+\renewcommand{\bibfont}{\small}
 
 \begin{document}
 \twocolumn[
-\maketitle
-\vspace{-2.2em}
+\begin{center}
+{\LARGE\bfseries Why Git Is the Memory Solution\\[3pt] for the Agentic Development Lifecycle\par}
+\vspace{7pt}
+{\normalsize\itshape Git-bound, routed memory for coding agents: structure, episode, and synthesis under a token budget\par}
+\vspace{11pt}
+{\normalsize Frank Guo\par}
+\vspace{2pt}
+{\small Rekal --- \href{https://rekal.dev}{rekal.dev} \,\textperiodcentered\, \href{mailto:guocongmit@gmail.com}{guocongmit@gmail.com} \,\textperiodcentered\, \href{https://github.com/rekal-dev/rekal-cli}{github.com/rekal-dev/rekal-cli}\par}
+\end{center}
+\vspace{9pt}
 \begin{center}
 \begin{minipage}{0.92\textwidth}
 \small\noindent\textbf{Abstract.}
@@ -287,9 +293,6 @@ Agent memory is not one retrieval problem but three modes --- structure, episode
 \paragraph{Reproducibility.}
 Every value traces to a committed run record (per-mode sufficiency judgments, blind-judged synthesis runs, generated maps, gating ablation; retrieval matrix, mechanism sweeps, facet screens) --- anonymized aggregates under \code{docs/research/runs/}. Corpora are anonymized (A: a documentation repository; B: a production data/ML pipeline subsystem); no session content or corpus identity leaves the operator's machine --- published artifacts are aggregates, prompts, and code. The router and its three mode workflows ship as one agent skill (\code{rekal}); the judge is a single automated model and the questions are the authors' own corpora --- the study is a within-system characterization, not a competition. Engine, skills, benchmark spec, extraction SQL, and this paper's source: \href{https://github.com/rekal-dev/rekal-cli}{github.com/rekal-dev/rekal-cli} (\code{docs/research/}).
 
-\bibliographystyle{unsrtnat}
-\bibliography{refs}
-
 \appendix
 
 \section{Seed-stage detail}\label{app:seed}
@@ -297,7 +300,7 @@ Every value traces to a committed run record (per-mode sufficiency judgments, bl
 \paragraph{The facet term at two operating points.}
 Evaluated by bolting it onto a fixed configuration, a mechanism can appear corpus-conditional when it is merely mis-tuned; only the joint re-tune separates ``does not work here'' from ``was not given its operating point.'' What remains genuinely corpus-conditional is the \emph{magnitude}: the marginal is monotone in tool-path diversity (the high-diversity corpus gains +0.110; the uniform-pipeline corpus +0.053, at $\approx$2.3\x{} less path diversity per call) --- a testable deployment rule. The term ships enabled at the tuned \code{facet\_boost} of 0.3; corpora without facet material pay nothing (the facet index is guarded), and an explicit 0 restores the byte-identical pre-facet engine. We test the retrieval port only, explicitly not a reproduction of SPM's task-completion result, which would need a curated gold set.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering\footnotesize
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}p{0.40\linewidth}p{0.27\linewidth}p{0.24\linewidth}@{}}
@@ -316,7 +319,7 @@ end-to-end, \emph{bolted onto} the default mix (fb=0.6) & 0.179$\to$0.294, +0.11
 \paragraph{Embedding options.}
 The substitution protocol gives the alternative its best shot: same held-out split and candidate pool; asymmetric query/document input types sent natively; the content-hash embedding cache rebuilt per model; four configurations per embedder (neural-only and hybrid, each at default and dev-tuned weights); paired per-query bootstrap.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering\footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lcc@{}}
@@ -335,5 +338,8 @@ hybrid --- hosted, dev-tuned mix & \textbf{0.229} & 0.170\\
 \caption{Embedding options on the held-out split. The hosted embedder (a large general-purpose API model) lifts the \emph{neural-only} ablation slightly on both corpora, but the \emph{hybrid} --- the shipped system --- is flat on A and worse on B (hosted-default 0.140 falls below BM25-only); all hybrid deltas n.s.\ under paired per-query bootstrap. Scope: one strong general-purpose alternative tested; a code-tuned embedder is the open falsifier and runs through the same gate for free (content-hash cache; query-time weights).}
 \label{tab:embed}
 \end{table}
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
 
 \end{document}

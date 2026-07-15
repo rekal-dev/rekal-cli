@@ -106,9 +106,10 @@ On Corpus A, term-frequency grep over the \emph{raw} transcript JSONL scores 0.0
 
 \begin{table}[t]
 \centering\small
-\begin{tabular}{@{}p{0.52\linewidth}cc@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{0.58\linewidth}cc@{}}
 \toprule
-\textbf{Seed stage (pooled MRR, held-out)} & \textbf{A} & \textbf{B}\\
+\textbf{Seed stage} & \textbf{A} & \textbf{B}\\
 \midrule
 grep, raw transcript JSONL (floor) & 0.005 & ---\\
 grep, parsed turns (honest floor) & 0.021 & 0.028\\
@@ -118,12 +119,12 @@ hybrid, shipped default & 0.225 & 0.159\\
 \midrule
 \multicolumn{3}{@{}l@{}}{\emph{Mechanism sweep (paired bootstrap CI; detail in App.~\ref{app:seed})}}\\
 \midrule
-rejected: RRF, temporal decay, lexical dilution, z-norm, embedder swap & \multicolumn{2}{c}{all n.s.\ or degr.}\\
-kept: per-corpus weight tuning & \multicolumn{2}{c}{B +0.032 [.016,.049]}\\
-kept: SPM facet term \citep{spm2026} (fb=0.3 on both) & \multicolumn{2}{c}{A +0.110*, B +0.053*}\\
+rejected: RRF / temporal / dilution / z-norm / embedder swap & \multicolumn{2}{r@{}}{n.s.\ or degr.}\\
+kept: per-corpus weight tuning & \multicolumn{2}{r@{}}{B +0.032*}\\
+kept: SPM facet term \citep{spm2026}, fb 0.3 & \multicolumn{2}{r@{}}{A +0.110*, B +0.053*}\\
 \bottomrule
 \end{tabular}
-\caption{Problem one closed: floors, the mechanism study under the RHO discipline \citep{rho2026}, and the best held-out configuration --- $\approx$15\x{} the honest grep floor on Corpus A. Five imported mechanisms rejected with intervals; two kept. Best-config cells are derived from the tuned baseline plus the facet marginal (exact cells in the run record). Negative results are load-bearing: they close the stage.}
+\caption{Problem one closed (pooled MRR, held-out test): floors, the mechanism study under the RHO discipline \citep{rho2026}, and the best held-out configuration --- $\approx$15\x{} the honest grep floor on Corpus A. Five imported mechanisms rejected with paired bootstrap intervals (tuning: B +0.032 [.016,.049]; facet marginals: A +0.110 [.056,.173], B +0.053 [.012,.107]); two kept. Best-config cells are derived from the tuned baseline plus the facet marginal (exact cells in the run record). Negative results are load-bearing: they close the stage.}
 \label{tab:seed}
 \end{table}
 
@@ -147,24 +148,24 @@ No benchmark exists for repo-grounded intent recall: conversational suites \cite
 \centering
 \begin{tikzpicture}[
   font=\scriptsize,
-  box/.style={draw=black!60, rounded corners=2pt, align=center, inner sep=3pt, minimum height=18pt},
-  arr/.style={-{Stealth[length=5pt]}, black!60}
+  box/.style={draw=black!60, rounded corners=2pt, align=center, inner sep=2.5pt},
+  arr/.style={-{Stealth[length=4.5pt]}, black!55, semithick}
 ]
-\node[box, fill=blue!5, minimum width=100pt] (q) {\textbf{real question}};
-\node[box, fill=yellow!15, below=14pt of q, minimum width=60pt] (r) {\textbf{router} (kind)};
-\node[box, fill=blue!10, below left=16pt and -8pt of r, text width=62pt] (map) {\textbf{structural map}\\ reads repo @ SHA\\ $\to$ anchored text};
-\node[box, fill=orange!15, below=16pt of r, text width=58pt] (ep) {\textbf{episodic, gated}\\ seeds $\to$ drill;\\ gate or silence};
-\node[box, fill=green!10, below right=16pt and -8pt of r, text width=64pt] (syn) {\textbf{decision synthesis}\\ gather turns $\to$ arc};
-\node[box, fill=orange!5, below=52pt of r, xshift=-52pt, text width=80pt] (data) {\code{data.db} ledger --- turns \textperiodcentered{} paths \textperiodcentered{} SHA (no diff content)};
-\node[box, fill=green!5, below=52pt of r, xshift=52pt, text width=80pt] (idx) {\code{index.db} derived --- BM25 \textperiodcentered{} LSA \textperiodcentered{} neural \textperiodcentered{} facet};
+\node[box, fill=blue!5, minimum width=88pt]  (q)   at (0, 0)      {\textbf{real question}};
+\node[box, fill=yellow!15]                   (r)   at (0, -0.85)  {\textbf{router} (kind)};
+\node[box, fill=blue!10,   text width=68pt]  (map) at (-2.93, -2.2) {\textbf{structural map}\\ reads repo @ SHA\\ $\to$ \mbox{anchored text}};
+\node[box, fill=orange!15, text width=50pt]  (ep)  at (0, -2.2)     {\textbf{episodic, gated}\\ seeds $\to$ drill;\\ gate or silence};
+\node[box, fill=green!10,  text width=68pt]  (syn) at (2.93, -2.2)  {\textbf{decision synthesis}\\ gather turns $\to$ arc};
+\node[box, fill=orange!5,  text width=86pt]  (data) at (-1.75, -4.0) {\code{data.db} ledger\\ turns \textperiodcentered{} paths \textperiodcentered{} SHA\\ (no diff content)};
+\node[box, fill=green!5,   text width=86pt]  (idx)  at (1.75, -4.0)  {\code{index.db} derived\\ BM25 \textperiodcentered{} LSA\\ neural \textperiodcentered{} facet};
 \draw[arr] (q) -- (r);
-\draw[arr] (r) -- node[left, xshift=-1pt]{\tiny breadth} (map);
-\draw[arr] (r) -- node[right]{\tiny pointed} (ep);
-\draw[arr] (r) -- node[right, xshift=2pt]{\tiny why} (syn);
-\draw[arr] (data.north) -- (map.south);
-\draw[arr] (data.north east) -- (ep.south west);
-\draw[arr] (idx.north west) -- (ep.south east);
-\draw[arr] (idx.north) -- (syn.south);
+\draw[arr] (r.south west) -- node[above left, inner sep=1pt]{\tiny breadth} (map.north);
+\draw[arr] (r.south) -- node[right, inner sep=1.5pt]{\tiny pointed} (ep.north);
+\draw[arr] (r.south east) -- node[above right, inner sep=1pt]{\tiny why} (syn.north);
+\draw[arr] (data.north -| map.south) -- (map.south);
+\draw[arr] (data.70) -- (ep.south west);
+\draw[arr] (idx.110) -- (ep.south east);
+\draw[arr] (idx.north -| syn.south) -- (syn.south);
 \end{tikzpicture}
 \caption{One git-native ledger supplies seeds and structure; a router sends each question to one of three modes by kind. Code content is reconstructed from the commit SHA on demand, so the ledger stays thin. Episodes are confidence-gated before they join the map.}
 \label{fig:arch}

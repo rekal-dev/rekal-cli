@@ -27,6 +27,7 @@ Captures local work, pushes it, fetches remote branches, and rebuilds the search
    - **Cross-repo local import (if enabled)** — When the `local_import` preference in `.rekal/config.json` is set (via `rekal index --include-all` / `--include`), fold this machine's other Claude Code sessions into `turns_ft` / `session_facets`, labeled with `origin`. Index only — never written to `data.db`, so they can never be pushed. Deduped by content hash against `data.db`. Sync honors the last-set preference; it does not change it.
    - For each remote branch: decode wire format (`rekal.body` + `dict.bin`), insert into `turns_ft`, `session_facets`, `files_index` — **skip tool calls** for remote data
    - Create FTS index (BM25)
+   - Build facet documents (`session_facets.facet_text`, covering synced teammate sessions too) and the guarded facet FTS index — skipped when no session has facet material
    - LSA embedding pass
    - Nomic deep semantic embedding pass (non-fatal, skipped on unsupported platforms)
    - Write index state

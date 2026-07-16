@@ -365,6 +365,10 @@ func updateIndexIncremental(gitRoot string, sessionIDs, embeddableSessionIDs []s
 		fmt.Fprintf(w, "rekal: warning: knowledge refresh skipped: %v\n", err)
 	} else if err := refreshKnowledge(nil, indexDB, gitRoot); err != nil {
 		fmt.Fprintf(w, "rekal: warning: knowledge refresh failed: %v\n", err)
+	} else if err := embedKnowledgeChunks(nil, indexDB, gitRoot, knowledgeEmbedBudget); err != nil {
+		// Budgeted: a giant prose import converges over the next few
+		// commits; un-embedded chunks stay keyword-findable meanwhile.
+		fmt.Fprintf(w, "rekal: warning: knowledge embeddings skipped: %v\n", err)
 	}
 
 	// Nomic embeddings for trunk sessions only (non-fatal).

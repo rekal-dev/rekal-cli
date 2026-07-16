@@ -6,14 +6,28 @@ HEAD returned alongside session hits, as pointers, cross-linked through the
 sessions that touched them. Derived entirely in `index.db` — zero bytes on
 the wire, no new commands, no new config.
 
-v1 ships the keyword-fresh layer (steps 1–5 of the sketch): chunker
+v1 shipped the keyword-fresh layer (steps 1–5 of the sketch): chunker
 (`cmd/rekal/cli/knowledge/`), `knowledge_chunks` + guarded FTS in `index.db`
 (`db/knowledge.go`), blob-SHA incremental refresh at recall and full build at
 `rekal index` (`cli/knowledge_index.go`), the `knowledge` output block with
 provenance edges (`search/knowledge.go`), and the router-skill knowledge
-stratum. Chunk embeddings through the embedcache (step 2's semantic half) and
-the RekalBench knowledge task set (step 6) are the follow-up — the layer
-fails soft to keyword-only exactly as designed.
+stratum.
+
+v1.1 ships the semantic half: chunk vectors in `knowledge_embeddings`
+(content-hash + model keyed), built through the same `.rekal/embed-cache.db`
+the session layer uses — a moved section or reverted edit re-fills from
+cache, never from the model. Vectors are built where session vectors are
+built: `rekal index`/`sync` embed everything missing; the post-commit hook
+embeds up to 256 chunks per pass (a giant prose import converges over the
+next few commits, keyword-findable meanwhile); recall never embeds — its
+latency stays pure read. At query time the knowledge score blends normalized
+BM25 with cosine similarity using the session ranking's keyword/semantic
+split (`weights.layers2`), the query vector shared from the session semantic
+pass so one recall embeds its query once; semantic-only chunks (no keyword
+overlap) join the candidate pool. Every rung fails soft: no vectors, model
+mismatch, or an old index.db degrades to keyword-only, byte-identical to v1.
+Orphaned vectors are pruned when their content leaves every chunk. The
+RekalBench knowledge task set (step 6) remains the follow-up.
 
 ## Problem
 

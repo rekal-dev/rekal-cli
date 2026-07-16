@@ -4,20 +4,25 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"sort"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
 )
 
 // knowledge.go is the query side of the knowledge layer
-// (docs/design/knowledge-layer.md): BM25 over heading-anchored chunks of the
-// repo's tracked prose files, aggregated to file-level hits — chunks are
-// scored, files are returned, mirroring how turns are scored and sessions
-// returned. Hits are pointers (path + anchor + line range + snippet), never
-// file content: the index finds, the agent's Read tool serves live from HEAD.
+// (docs/design/knowledge-layer.md): hybrid BM25 + deep-semantic scoring over
+// heading-anchored chunks of the repo's tracked prose files, aggregated to
+// file-level hits — chunks are scored, files are returned, mirroring how
+// turns are scored and sessions returned. Hits are pointers (path + anchor +
+// line range + snippet), never file content: the index finds, the agent's
+// Read tool serves live from HEAD.
 //
-// The layer is additive and fails soft: no knowledge FTS index (a corpus
-// with no prose files, or an index.db predating the layer) means an absent
-// knowledge block, and the sessions ranking is untouched either way.
+// The layer is additive and fails soft at every rung: no knowledge FTS index
+// means an absent block; no chunk vectors (or no query vector) means
+// keyword-only scoring — the two-speed contract. The sessions ranking is
+// untouched either way.
 
 const (
 	// knowledgeLimit caps returned file hits — thin output, agent drills.
@@ -31,6 +36,9 @@ const (
 	// matching in several sections is more likely *the* document than
 	// several files matching once.
 	knowledgeCoverageBonus = 0.1
+	// knowledgeSemanticCandidates caps how many semantic-only chunks (no
+	// BM25 hit) join the candidate pool per query.
+	knowledgeSemanticCandidates = 50
 )
 
 // KnowledgeAnchor is a runner-up section pointer within a knowledge hit.
@@ -57,22 +65,105 @@ type KnowledgeHit struct {
 	Score    float64  `json:"score"`
 }
 
-// knowledgeChunkHit is one matching chunk before file-level aggregation.
+// knowledgeChunkHit is one candidate chunk before file-level aggregation.
 type knowledgeChunkHit struct {
 	path      string
 	anchor    string
 	startLine int
 	endLine   int
 	content   string
-	score     float64
+	hash      string
+	bm25      float64
+	semantic  float64
+	score     float64 // combined, filled by knowledgeSearch
 }
 
-// knowledgeSearch runs the knowledge layer for a recall query. Never fails
-// recall: any error (most commonly a missing knowledge FTS index) returns an
-// absent layer.
-func knowledgeSearch(indexDB *sql.DB, query, gitRoot string) []KnowledgeHit {
+// knowledgeSearch runs the knowledge layer for a recall query. queryVec and
+// model come from the session semantic pass when it ran (one query embed per
+// recall, shared); when the session layer skipped but an HTTP query embedder
+// exists, the query is embedded lazily — and only if chunk vectors for that
+// model are actually stored. Never fails recall: any error returns an absent
+// or keyword-only layer.
+func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) []KnowledgeHit {
+	hits := knowledgeBM25(indexDB, query)
+	semScores := knowledgeSemantic(indexDB, query, qe, queryVec, model)
+
+	if len(semScores) == 0 {
+		if len(hits) == 0 {
+			return nil
+		}
+		// Keyword-only: score is normalized BM25, the v1 behavior.
+		var maxBM float64
+		for _, h := range hits {
+			if h.bm25 > maxBM {
+				maxBM = h.bm25
+			}
+		}
+		if maxBM <= 0 {
+			return nil
+		}
+		for i := range hits {
+			hits[i].score = hits[i].bm25 / maxBM
+		}
+		return aggregateKnowledge(indexDB, hits, query, gitRoot)
+	}
+
+	// Hybrid: attach semantic scores to BM25 hits, pull in semantic-only
+	// chunks, blend with the keyword/semantic split the session ranking
+	// uses for its own 2-way fallback (LSA share folds into semantic).
+	seen := make(map[string]bool, len(hits))
+	for i := range hits {
+		hits[i].semantic = semScores[hits[i].hash]
+		seen[hits[i].hash] = true
+	}
+	extra := make([]string, 0, knowledgeSemanticCandidates)
+	for hash := range semScores {
+		if !seen[hash] {
+			extra = append(extra, hash)
+		}
+	}
+	sort.Slice(extra, func(i, j int) bool { return semScores[extra[i]] > semScores[extra[j]] })
+	if len(extra) > knowledgeSemanticCandidates {
+		extra = extra[:knowledgeSemanticCandidates]
+	}
+	for _, h := range loadChunksByHash(indexDB, extra) {
+		h.semantic = semScores[h.hash]
+		hits = append(hits, h)
+	}
+	if len(hits) == 0 {
+		return nil
+	}
+
+	var maxBM, maxSem float64
+	for _, h := range hits {
+		if h.bm25 > maxBM {
+			maxBM = h.bm25
+		}
+		if h.semantic > maxSem {
+			maxSem = h.semantic
+		}
+	}
+	bmW, semW := w.layers2()
+	for i := range hits {
+		bmNorm, semNorm := 0.0, 0.0
+		if maxBM > 0 {
+			bmNorm = hits[i].bm25 / maxBM
+		}
+		if maxSem > 0 {
+			semNorm = hits[i].semantic / maxSem
+		}
+		hits[i].score = bmW*bmNorm + semW*semNorm
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+	return aggregateKnowledge(indexDB, hits, query, gitRoot)
+}
+
+// knowledgeBM25 returns chunk hits from the knowledge FTS index, best first.
+// nil (layer off) when the index is absent — a corpus with no prose files,
+// or an index.db predating the layer.
+func knowledgeBM25(indexDB *sql.DB, query string) []knowledgeChunkHit {
 	rows, err := indexDB.Query(`
-		SELECT kc.path, kc.anchor, kc.start_line, kc.end_line, kc.content,
+		SELECT kc.path, kc.anchor, kc.start_line, kc.end_line, kc.content, kc.content_hash,
 		       fts_main_knowledge_chunks.match_bm25(kc.id, $1) AS score
 		FROM knowledge_chunks kc
 		WHERE score IS NOT NULL
@@ -80,7 +171,7 @@ func knowledgeSearch(indexDB *sql.DB, query, gitRoot string) []KnowledgeHit {
 		LIMIT 100
 	`, query)
 	if err != nil {
-		return nil // knowledge FTS index absent — layer off
+		return nil
 	}
 	defer rows.Close() //nolint:errcheck
 
@@ -88,34 +179,88 @@ func knowledgeSearch(indexDB *sql.DB, query, gitRoot string) []KnowledgeHit {
 	for rows.Next() {
 		var h knowledgeChunkHit
 		var anchor sql.NullString
-		if err := rows.Scan(&h.path, &anchor, &h.startLine, &h.endLine, &h.content, &h.score); err != nil {
+		if err := rows.Scan(&h.path, &anchor, &h.startLine, &h.endLine, &h.content, &h.hash, &h.bm25); err != nil {
 			return nil
 		}
 		h.anchor = nullStr(anchor)
 		hits = append(hits, h)
 	}
-	if rows.Err() != nil || len(hits) == 0 {
+	if rows.Err() != nil {
 		return nil
 	}
-
-	return aggregateKnowledge(indexDB, hits, query, gitRoot)
+	return hits
 }
 
-// aggregateKnowledge folds chunk hits (sorted by score descending) into
-// file-level hits: best chunk drives the score and supplies snippet+anchor,
-// runners-up become Also pointers, extra matching sections earn a coverage
-// bonus.
-func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoot string) []KnowledgeHit {
-	maxScore := hits[0].score
-	for _, h := range hits {
-		if h.score > maxScore {
-			maxScore = h.score
-		}
-	}
-	if maxScore <= 0 {
+// knowledgeSemantic returns content_hash → cosine similarity against the
+// query vector, or nil when the semantic rung is unavailable: no stored
+// chunk vectors for the model, no query vector and no way to embed one, or
+// an index.db without the embeddings table. Failing soft here degrades the
+// layer to keyword-only, never breaks it.
+func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec []float64, model string) map[string]float64 {
+	if model == "" {
 		return nil
 	}
+	embeddings, err := db.QueryKnowledgeEmbeddings(indexDB, model)
+	if err != nil || len(embeddings) == 0 {
+		return nil
+	}
+	if queryVec == nil {
+		// The session pass didn't embed (e.g. a knowledge repo with no
+		// session vectors yet). Embed lazily through the configured HTTP
+		// backend; the embedded-nomic path stays keyword-only rather than
+		// paying a second CGO model load.
+		if qe == nil {
+			return nil
+		}
+		if queryVec, err = qe.EmbedQuery(query); err != nil || queryVec == nil {
+			return nil
+		}
+	}
+	scores := make(map[string]float64, len(embeddings))
+	for hash, emb := range embeddings {
+		if sim := lsa.CosineSimilarity(queryVec, emb); sim > 0 {
+			scores[hash] = sim
+		}
+	}
+	return scores
+}
 
+// loadChunksByHash fetches chunk metadata for semantic-only candidates.
+// Best-effort: a failed load just means those candidates drop out.
+func loadChunksByHash(indexDB *sql.DB, hashes []string) []knowledgeChunkHit {
+	if len(hashes) == 0 {
+		return nil
+	}
+	inClause, args := sqlInClause(hashes)
+	rows, err := indexDB.Query(`
+		SELECT path, anchor, start_line, end_line, content, content_hash
+		FROM knowledge_chunks WHERE content_hash IN (`+inClause+`)`, args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var hits []knowledgeChunkHit
+	for rows.Next() {
+		var h knowledgeChunkHit
+		var anchor sql.NullString
+		if err := rows.Scan(&h.path, &anchor, &h.startLine, &h.endLine, &h.content, &h.hash); err != nil {
+			return nil
+		}
+		h.anchor = nullStr(anchor)
+		hits = append(hits, h)
+	}
+	if rows.Err() != nil {
+		return nil
+	}
+	return hits
+}
+
+// aggregateKnowledge folds chunk candidates (sorted by combined score
+// descending) into file-level hits: best chunk drives the score and supplies
+// snippet+anchor, runners-up become Also pointers, extra matching sections
+// earn a coverage bonus.
+func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoot string) []KnowledgeHit {
 	type fileAgg struct {
 		best   knowledgeChunkHit
 		others []knowledgeChunkHit
@@ -132,23 +277,15 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 		f.others = append(f.others, h)
 	}
 
-	out := make([]KnowledgeHit, 0, knowledgeLimit)
 	scoreOf := func(f *fileAgg) float64 {
-		norm := f.best.score / maxScore
 		bonus := 1 + knowledgeCoverageBonus*math.Min(float64(len(f.others)), 2)
-		return math.Min(norm*bonus, 1.0)
+		return math.Min(f.best.score*bonus, 1.0)
 	}
-	// Order paths by aggregated score (input order is best-chunk order, but
-	// the coverage bonus can reorder ties and near-ties).
-	sortByScore := func(paths []string) {
-		for i := 1; i < len(paths); i++ {
-			for j := i; j > 0 && scoreOf(files[paths[j]]) > scoreOf(files[paths[j-1]]); j-- {
-				paths[j], paths[j-1] = paths[j-1], paths[j]
-			}
-		}
-	}
-	sortByScore(order)
+	sort.SliceStable(order, func(i, j int) bool {
+		return scoreOf(files[order[i]]) > scoreOf(files[order[j]])
+	})
 
+	out := make([]KnowledgeHit, 0, knowledgeLimit)
 	for _, path := range order {
 		if len(out) >= knowledgeLimit {
 			break

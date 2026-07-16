@@ -193,6 +193,8 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	// prose file at HEAD is chunked). Non-fatal.
 	if err := refreshKnowledge(w, indexDB, gitRoot); err != nil {
 		fmt.Fprintf(w, "rekal: warning: knowledge layer skipped: %v\n", err)
+	} else if err := embedKnowledgeChunks(w, indexDB, gitRoot, 0); err != nil {
+		fmt.Fprintf(w, "rekal: warning: knowledge embeddings skipped: %v\n", err)
 	}
 
 	// 5d: LSA pass.

@@ -101,7 +101,7 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 		t.Skipf("FTS extension unavailable: %v", err)
 	}
 
-	if hits := knowledgeSearch(indexDB, "anything", t.TempDir()); hits != nil {
+	if hits := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
 		t.Fatalf("knowledgeSearch without an index should be nil, got %+v", hits)
 	}
 
@@ -112,7 +112,82 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 	if err := db.CreateKnowledgeFTSIndex(indexDB); err != nil {
 		t.Fatalf("guarded create should be a no-op, got %v", err)
 	}
-	if hits := knowledgeSearch(indexDB, "anything", t.TempDir()); hits != nil {
+	if hits := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
 		t.Fatalf("knowledgeSearch with an empty table should be nil, got %+v", hits)
+	}
+}
+
+// TestKnowledgeSemanticLayer covers the semantic rung: a chunk whose text
+// never mentions the query term surfaces via vector similarity, BM25 and
+// semantic scores blend with the session ranking's keyword/semantic split,
+// and a missing vector store degrades to keyword-only rather than failing.
+func TestKnowledgeSemanticLayer(t *testing.T) {
+	t.Parallel()
+	indexDB := openTempIndexDB(t)
+	if err := db.LoadFTSExtension(indexDB); err != nil {
+		t.Skipf("FTS extension unavailable: %v", err)
+	}
+	if err := db.EnsureKnowledgeSchema(indexDB); err != nil {
+		t.Fatalf("ensure knowledge schema: %v", err)
+	}
+
+	// auth.md matches "token" by keyword; sessions.md never says "token"
+	// but its vector is aligned with the query vector.
+	if err := db.InsertKnowledgeChunks(indexDB, []db.KnowledgeChunkRow{
+		{
+			ID: "docs/auth.md#1", Path: "docs/auth.md",
+			Anchor: "# Auth", Breadcrumb: "Auth",
+			StartLine: 1, EndLine: 3,
+			Content:     "Auth\n\nThe token rotates on every use.",
+			ContentHash: "hash-auth", BlobSHA: "b1",
+		},
+		{
+			ID: "docs/sessions.md#1", Path: "docs/sessions.md",
+			Anchor: "# Sessions", Breadcrumb: "Sessions",
+			StartLine: 1, EndLine: 3,
+			Content:     "Sessions\n\nCredentials expire after an hour of inactivity.",
+			ContentHash: "hash-sessions", BlobSHA: "b2",
+		},
+	}); err != nil {
+		t.Fatalf("insert chunks: %v", err)
+	}
+	if err := db.CreateKnowledgeFTSIndex(indexDB); err != nil {
+		t.Fatalf("create knowledge fts index: %v", err)
+	}
+	if err := db.StoreKnowledgeEmbeddings(indexDB, map[string][]float64{
+		"hash-auth":     {0, 1, 0},
+		"hash-sessions": {1, 0, 0},
+	}, "test-model"); err != nil {
+		t.Fatalf("store knowledge embeddings: %v", err)
+	}
+
+	// Query vector aligned with sessions.md: the semantic-only chunk must
+	// appear despite zero keyword overlap.
+	queryVec := []float64{1, 0, 0}
+	hits := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "test-model")
+	if len(hits) != 2 {
+		t.Fatalf("want 2 hits (keyword + semantic-only), got %+v", hits)
+	}
+	paths := map[string]bool{}
+	for _, h := range hits {
+		paths[h.Path] = true
+	}
+	if !paths["docs/sessions.md"] {
+		t.Fatalf("semantic-only chunk missing from hits: %+v", hits)
+	}
+	// With the default 0.35/0.65 keyword/semantic split, the perfectly
+	// aligned semantic-only doc outranks the keyword-only doc.
+	if hits[0].Path != "docs/sessions.md" {
+		t.Fatalf("semantic-aligned doc should rank first, got %+v", hits)
+	}
+
+	// Unknown model → no vectors → keyword-only, and the semantic-only doc
+	// disappears (byte-identical v1 behavior).
+	kw := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "other-model")
+	if len(kw) != 1 || kw[0].Path != "docs/auth.md" {
+		t.Fatalf("keyword-only fallback should return just auth.md, got %+v", kw)
+	}
+	if kw[0].Score != 1 {
+		t.Fatalf("keyword-only score should be normalized BM25 (1.0), got %v", kw[0].Score)
 	}
 }

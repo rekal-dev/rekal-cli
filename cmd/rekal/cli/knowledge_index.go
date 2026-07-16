@@ -9,6 +9,7 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/knowledge"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 )
 
 // refreshKnowledge brings the index's knowledge layer (chunked prose files —
@@ -115,6 +116,112 @@ func refreshKnowledge(w io.Writer, indexDB *sql.DB, gitRoot string) error {
 		fmt.Fprintf(w, "knowledge layer: %d file(s) re-chunked, %d chunk(s)\n", len(rechunk), len(rows))
 	}
 	return nil
+}
+
+// knowledgeEmbedBudget caps how many chunks one budgeted embedding pass (the
+// post-commit hook) will embed. A giant prose import converges over the next
+// few commits instead of stalling one of them; every un-embedded chunk stays
+// findable by keyword meanwhile (the two-speed contract). Full passes
+// (`rekal index`/`sync`) are unbudgeted.
+const knowledgeEmbedBudget = 256
+
+// embedKnowledgeChunks builds semantic vectors for knowledge chunks that
+// don't have one yet, through the same content-hash-keyed embedding cache the
+// session layer uses (.rekal/embed-cache.db). budget 0 = embed everything
+// missing; budget N = at most N chunks this pass (the missing-vectors join
+// drives convergence across passes). Callers treat this as non-fatal — the
+// knowledge layer degrades to keyword-only, exactly like the session layer's
+// semantic pass.
+//
+// Not called at recall time: recall latency stays pure read. Vectors are
+// built where session vectors are built — `rekal index`/`sync` (full) and the
+// post-commit hook (budgeted).
+func embedKnowledgeChunks(w io.Writer, indexDB *sql.DB, gitRoot string, budget int) error {
+	model := intendedEmbedModel(gitRoot)
+	if model == "" {
+		return nil // no semantic backend on this platform/config — keyword-only
+	}
+	if err := db.EnsureKnowledgeSchema(indexDB); err != nil {
+		return err
+	}
+	// Drop vectors for content that no longer exists in any chunk (deleted
+	// or rewritten sections). The embedcache still holds them, so a reverted
+	// edit re-fills from cache, not from the model.
+	if err := db.PruneKnowledgeEmbeddings(indexDB); err != nil {
+		return err
+	}
+	missing, err := db.QueryKnowledgeChunksMissingEmbeddings(indexDB, model, budget)
+	if err != nil || len(missing) == 0 {
+		return err
+	}
+
+	vectors := make(map[string][]float64, len(missing))
+	hashes := make([]string, 0, len(missing))
+	for h := range missing {
+		hashes = append(hashes, h)
+	}
+	cacheDB, cacheErr := db.OpenEmbedCache(gitRoot)
+	if cacheErr == nil {
+		defer cacheDB.Close() //nolint:errcheck
+		if got, gerr := db.CacheGetEmbeddings(cacheDB, model, hashes); gerr == nil {
+			for h, v := range got {
+				vectors[h] = v
+				delete(missing, h)
+			}
+		}
+	}
+
+	embedded := 0
+	if len(missing) > 0 {
+		emb, err := semanticEmbedder(gitRoot)
+		if err != nil || emb == nil {
+			// Backend unavailable — still store whatever the cache supplied.
+			if serr := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); serr != nil {
+				return serr
+			}
+			return err
+		}
+		defer emb.Close()
+		fresh, err := emb.EmbedSessions(missing) // keys are content hashes
+		if err != nil {
+			if serr := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); serr != nil {
+				return serr
+			}
+			return err
+		}
+		for h, v := range fresh {
+			vectors[h] = v
+		}
+		embedded = len(fresh)
+		if cacheErr == nil {
+			_ = db.CachePutEmbeddings(cacheDB, model, fresh) // best-effort
+		}
+	}
+
+	if err := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); err != nil {
+		return err
+	}
+	if w != nil && len(vectors) > 0 {
+		fmt.Fprintf(w, "knowledge embeddings: %d stored (%d cached, %d embedded)\n",
+			len(vectors), len(vectors)-embedded, embedded)
+	}
+	return nil
+}
+
+// intendedEmbedModel names the semantic model this repo's config would embed
+// with, without instantiating a backend — the embedded nomic client load is
+// far too heavy for the cheap "is anything missing?" gate.
+func intendedEmbedModel(gitRoot string) string {
+	cfg, err := readMergedConfig(gitRoot)
+	if err == nil && cfg.Embedding != nil {
+		if ec, eerr := cfg.Embedding.resolve(); eerr == nil {
+			return ec.Model
+		}
+	}
+	if nomic.Supported() {
+		return nomic.ModelName
+	}
+	return ""
 }
 
 // proseBlobs filters the tracked-files listing at HEAD down to knowledge

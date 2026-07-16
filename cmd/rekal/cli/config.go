@@ -137,6 +137,10 @@ func (c *scoringLineageConfig) openLineage(stderr io.Writer) (search.Lineage, io
 type weightsConfig struct {
 	BM25               *float64 `json:"bm25,omitempty"`
 	LSA                *float64 `json:"lsa,omitempty"`
+	// Backwards-compat note: the historical key was "nomic". We now accept
+	// and prefer "semantic". If both are present, "semantic" wins.
+	Semantic          *float64 `json:"semantic,omitempty"`
+	// Deprecated: kept for transitional reads; ignored when "semantic" is set.
 	Nomic              *float64 `json:"nomic,omitempty"`
 	SteeringBoost      *float64 `json:"steering_boost,omitempty"`
 	SummaryBoost       *float64 `json:"summary_boost,omitempty"`
@@ -171,8 +175,17 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 	if err := set(&w.LSA, wc.LSA, "lsa", true); err != nil {
 		return w, err
 	}
-	if err := set(&w.Nomic, wc.Nomic, "nomic", true); err != nil {
+	// Prefer semantic; fall back to nomic when only the deprecated key is set.
+	if err := set(&w.Semantic, wc.Semantic, "semantic", true); err != nil {
 		return w, err
+	}
+	if wc.Semantic == nil {
+		if err := set(&w.Semantic, wc.Nomic, "nomic (deprecated; use semantic)", true); err != nil {
+			return w, err
+		}
+	}
+	if w.Semantic == 0 && wc.Semantic == nil && wc.Nomic == nil {
+		// nothing explicitly set; keep default from DefaultWeights
 	}
 	if err := set(&w.SteeringBoost, wc.SteeringBoost, "steering_boost", false); err != nil {
 		return w, err
@@ -186,8 +199,8 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 	if err := set(&w.FacetBoost, wc.FacetBoost, "facet_boost", true); err != nil {
 		return w, err
 	}
-	if w.BM25+w.LSA+w.Nomic <= 0 {
-		return w, errors.New("weights: at least one of bm25/lsa/nomic must be > 0")
+	if w.BM25+w.LSA+w.Semantic <= 0 {
+		return w, errors.New("weights: at least one of bm25/lsa/semantic must be > 0")
 	}
 	return w, nil
 }
@@ -423,8 +436,11 @@ func mergeWeights(global, local *weightsConfig) *weightsConfig {
 	if local.LSA != nil {
 		merged.LSA = local.LSA
 	}
-	if local.Nomic != nil {
-		merged.Nomic = local.Nomic
+	// Merge semantic, honoring local override. Fallback to nomic for BC.
+	if local.Semantic != nil {
+		merged.Semantic = local.Semantic
+	} else if local.Nomic != nil {
+		merged.Semantic = local.Nomic
 	}
 	if local.SteeringBoost != nil {
 		merged.SteeringBoost = local.SteeringBoost

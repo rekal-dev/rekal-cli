@@ -78,7 +78,10 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 				t.Fatalf("query mismatch: %+v", q)
 			}
 			if _, ok := q["use_nomic"]; ok {
-				t.Fatal("use_nomic belongs on result, not query")
+				t.Fatal("use_nomic was removed; use result.semantic")
+			}
+			if q["embedder_backend"] == nil || q["embedder_model"] == nil {
+				t.Fatalf("query missing embedder_backend/model: %+v", q)
 			}
 			weights, _ := q["weights"].(map[string]any)
 			if weights["facet_boost"] != 0.3 {
@@ -110,7 +113,7 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 				Returned  []LineageReturned `json:"returned"`
 				Counts    map[string]int    `json:"counts"`
 				TimingsMS map[string]int64  `json:"timings_ms"`
-				UseNomic  bool              `json:"use_nomic"`
+				Semantic  LineageSemantic   `json:"semantic"`
 				Tokens    *LineageTokens    `json:"tokens"`
 			}
 			if err := json.Unmarshal([]byte(line), &r); err != nil {
@@ -129,8 +132,8 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 				t.Fatalf("tokens.payload_bytes = %+v, want 1234", r.Tokens)
 			}
 			// Corpus has no matching semantic vectors — neural layer idle.
-			if r.UseNomic {
-				t.Fatal("use_nomic = true, want false (no semantic vectors)")
+			if r.Semantic.Used {
+				t.Fatalf("semantic.used = true, want false: %+v", r.Semantic)
 			}
 		default:
 			t.Fatalf("unexpected event %q", head.Event)
@@ -144,10 +147,10 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 	}
 }
 
-// TestLineage_UseNomicOnResultWhenNeuralRuns is the footgun fix: use_nomic
-// must reflect whether nomicSearch produced scores, and it must appear on
-// the result event (after search), never on the query event (before).
-func TestLineage_UseNomicOnResultWhenNeuralRuns(t *testing.T) {
+// TestLineage_SemanticBackendAndModelWhenNeuralRuns replaces the old
+// use_nomic bool: result.semantic must name the real backend + model when
+// the deep vector layer scores (HTTP Cohere is not "nomic").
+func TestLineage_SemanticBackendAndModelWhenNeuralRuns(t *testing.T) {
 	t.Parallel()
 	indexDB := seedLineageCorpus(t)
 	const model = "test-match-model"
@@ -166,14 +169,19 @@ func TestLineage_UseNomicOnResultWhenNeuralRuns(t *testing.T) {
 	}
 	lin.FlushResult(0)
 
-	var sawQueryUseNomic, sawResultUseNomic bool
-	var resultUseNomic bool
+	var sawQueryUseNomic bool
+	var sem LineageSemantic
+	var sawResultSemantic bool
 	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
 		var head struct {
 			Event string `json:"event"`
+			V     int    `json:"v"`
 		}
 		if err := json.Unmarshal([]byte(line), &head); err != nil {
 			t.Fatalf("ndjson: %v", err)
+		}
+		if head.V != LineageSchemaVersion {
+			t.Fatalf("schema v=%d, want %d", head.V, LineageSchemaVersion)
 		}
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
@@ -184,23 +192,34 @@ func TestLineage_UseNomicOnResultWhenNeuralRuns(t *testing.T) {
 			if _, ok := raw["use_nomic"]; ok {
 				sawQueryUseNomic = true
 			}
-		case "result":
-			v, ok := raw["use_nomic"]
-			if !ok {
-				t.Fatalf("result missing use_nomic: %s", line)
+			if raw["embedder_backend"] != EmbedderBackendHTTP {
+				t.Fatalf("query embedder_backend=%v, want %s", raw["embedder_backend"], EmbedderBackendHTTP)
 			}
-			sawResultUseNomic = true
-			resultUseNomic, _ = v.(bool)
+			if raw["embedder_model"] != model {
+				t.Fatalf("query embedder_model=%v, want %s", raw["embedder_model"], model)
+			}
+		case "result":
+			if _, ok := raw["use_nomic"]; ok {
+				t.Fatal("use_nomic must not appear on result; use semantic")
+			}
+			var r struct {
+				Semantic LineageSemantic `json:"semantic"`
+			}
+			if err := json.Unmarshal([]byte(line), &r); err != nil {
+				t.Fatalf("result: %v", err)
+			}
+			sem = r.Semantic
+			sawResultSemantic = true
 		}
 	}
 	if sawQueryUseNomic {
 		t.Fatal("use_nomic must not appear on query event")
 	}
-	if !sawResultUseNomic {
-		t.Fatalf("result missing use_nomic; log=%s", buf.String())
+	if !sawResultSemantic {
+		t.Fatalf("result missing semantic; log=%s", buf.String())
 	}
-	if !resultUseNomic {
-		t.Fatal("use_nomic = false on result, want true when neural scores exist")
+	if !sem.Used || sem.Backend != EmbedderBackendHTTP || sem.Model != model {
+		t.Fatalf("semantic = %+v, want used=true backend=%s model=%s", sem, EmbedderBackendHTTP, model)
 	}
 }
 
@@ -212,6 +231,7 @@ type matchingEmbedder struct {
 }
 
 func (m matchingEmbedder) ModelName() string                    { return m.model }
+func (m matchingEmbedder) Backend() string                      { return EmbedderBackendHTTP }
 func (m matchingEmbedder) EmbedQuery(string) ([]float64, error) { return m.vec, nil }
 func (m matchingEmbedder) Close()                               {}
 

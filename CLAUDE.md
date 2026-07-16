@@ -125,7 +125,10 @@ session discovery keep using the invoking worktree.
   related-session joins over `files_index`; default output unchanged
   without the flag), and optional scoring-lineage NDJSON (`lineage.go` —
   global `scoring_lineage` config only; default off; per-layer raw/norm/
-  contrib + stage `timings_ms`; observe-only, ranking unchanged)
+  contrib + stage `timings_ms`; `result.semantic{used,backend,model}` names
+  the real embedder — `http`|`embedded` + model id — distinct from the
+  historical layer key `nomic` in weights/timings/skipped; observe-only,
+  ranking unchanged)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the

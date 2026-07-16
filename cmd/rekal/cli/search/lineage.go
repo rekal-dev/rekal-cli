@@ -10,7 +10,10 @@ import (
 
 // LineageSchemaVersion is the NDJSON envelope "v" field. Bump when event
 // shapes change in a breaking way.
-const LineageSchemaVersion = 1
+//
+// v2: result.semantic{used,backend,model} replaces result.use_nomic; query
+// gains embedder_backend. Config weight key "nomic" is unchanged.
+const LineageSchemaVersion = 2
 
 // Lineage records observe-only scoring lineage and stage timings for a
 // recall query. Nil means disabled — ranking stays byte-identical to a run
@@ -139,15 +142,16 @@ func (l *NDJSONLineage) emit(event string, body any) {
 // --- Event body shapes (merged under the envelope) ---
 
 // LineageQuery is the start-of-run snapshot: what was asked and how ranking
-// is configured. Timings, returned rows, and whether the neural layer
-// actually contributed (use_nomic) live on LineageResult — useNomic is only
-// known after nomicSearch runs.
+// is configured. Whether the deep semantic layer actually contributed
+// (and which backend/model scored) lives on LineageResult.Semantic —
+// that is only known after nomicSearch runs.
 type LineageQuery struct {
 	Query             string             `json:"query"`
 	Mode              string             `json:"mode"`
 	Filters           map[string]string  `json:"filters"`
 	Weights           LineageWeights     `json:"weights"`
 	WeightsNormalized LineageNormWeights `json:"weights_normalized"`
+	EmbedderBackend   string             `json:"embedder_backend,omitempty"` // "http" | "embedded"
 	EmbedderModel     string             `json:"embedder_model,omitempty"`
 }
 
@@ -204,14 +208,24 @@ type LineageSubagent struct {
 }
 
 // LineageResult is the end-of-run event: final returned set, pool counts,
-// stage timings, whether the neural layer contributed, and token/byte cost.
+// stage timings, deep-semantic layer outcome, and token/byte cost.
 type LineageResult struct {
 	Returned  []LineageReturned `json:"returned"`
 	Counts    map[string]int    `json:"counts"`
 	TimingsMS map[string]int64  `json:"timings_ms"`
-	UseNomic  bool              `json:"use_nomic"`
+	Semantic  LineageSemantic   `json:"semantic"`
 	Tokens    *LineageTokens    `json:"tokens,omitempty"`
 	Skipped   map[string]string `json:"skipped,omitempty"`
+}
+
+// LineageSemantic records whether the deep vector layer contributed and
+// which backend/model produced the query embedding. "nomic" in weights /
+// timings / skipped is the historical layer key — Semantic.Model is the
+// real embedder identity (nomic-v1.5, Cohere, …).
+type LineageSemantic struct {
+	Used    bool   `json:"used"`
+	Backend string `json:"backend,omitempty"` // "http" | "embedded"
+	Model   string `json:"model,omitempty"`
 }
 
 // LineageReturned is one top-level row after conversation grouping.

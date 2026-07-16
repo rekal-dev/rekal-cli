@@ -12,7 +12,7 @@ type Weights struct {
 	// so only their ratio matters.
 	BM25  float64 // keyword precision
 	LSA   float64 // corpus-specific co-occurrence
-	Nomic float64 // deep semantic understanding
+	Semantic float64 // deep semantic understanding (historical layer key "nomic")
 
 	// SteeringBoost multiplies BM25 scores of human_steering turns — text a
 	// human typed while the agent was already working is the highest-intent
@@ -49,7 +49,7 @@ func DefaultWeights() Weights {
 	return Weights{
 		BM25:               0.35,
 		LSA:                0.10,
-		Nomic:              0.55,
+		Semantic:           0.55,
 		SteeringBoost:      1.3,
 		SummaryBoost:       1.15,
 		SubagentDownweight: 0.7,
@@ -69,12 +69,12 @@ func (w Weights) orDefaults() Weights {
 // layers3 returns the three layer weights normalized to sum to 1, for the
 // full hybrid (semantic vectors available).
 func (w Weights) layers3() (bm25, lsa, nomic float64) {
-	sum := w.BM25 + w.LSA + w.Nomic
+	sum := w.BM25 + w.LSA + w.Semantic
 	if sum <= 0 {
 		d := DefaultWeights()
 		return d.layers3()
 	}
-	return w.BM25 / sum, w.LSA / sum, w.Nomic / sum
+	return w.BM25 / sum, w.LSA / sum, w.Semantic / sum
 }
 
 // layers2 returns the BM25/LSA weights for the fallback when no semantic

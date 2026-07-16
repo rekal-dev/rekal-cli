@@ -37,7 +37,7 @@ func TestMergedConfig_GlobalWithLocalOverride(t *testing.T) {
 	// Global sets the embedding backend and a tuned weight mix.
 	writeCfgFile(t, globalPath,
 		`{"embedding":{"endpoint":"http://global/v1","model":"gmodel"},`+
-			`"weights":{"bm25":0.5,"nomic":0.5},"local_import":{"all":true}}`)
+			`"weights":{"bm25":0.5,"semantic":0.5},"local_import":{"all":true}}`)
 
 	// 1. global-only: no local file → inherit everything.
 	cfg, err := readMergedConfig(gitRoot)
@@ -48,7 +48,7 @@ func TestMergedConfig_GlobalWithLocalOverride(t *testing.T) {
 		t.Fatalf("global embedding not inherited: %+v", cfg.Embedding)
 	}
 	w, _ := cfg.Weights.resolve()
-	if w.BM25 != 0.5 || w.Nomic != 0.5 {
+	if w.BM25 != 0.5 || w.Semantic != 0.5 {
 		t.Fatalf("global weights not inherited: %+v", w)
 	}
 	// local_import is NOT inherited (guardrail).
@@ -70,8 +70,8 @@ func TestMergedConfig_GlobalWithLocalOverride(t *testing.T) {
 	if w.BM25 != 0.9 { // local override
 		t.Fatalf("local bm25 override lost: %v", w.BM25)
 	}
-	if w.Nomic != 0.5 { // inherited from global
-		t.Fatalf("global nomic should be inherited: %v", w.Nomic)
+	if w.Semantic != 0.5 { // inherited from global
+		t.Fatalf("global semantic should be inherited: %v", w.Semantic)
 	}
 
 	// 3. local embedding replaces global embedding wholesale.
@@ -408,7 +408,7 @@ func TestWeightsConfig_Resolve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("partial resolve: %v", err)
 	}
-	if w.BM25 != 0.5 || w.Nomic != search.DefaultWeights().Nomic {
+	if w.BM25 != 0.5 || w.Semantic != search.DefaultWeights().Semantic {
 		t.Fatalf("partial resolve = %+v", w)
 	}
 
@@ -438,7 +438,7 @@ func TestWeightsConfig_Resolve(t *testing.T) {
 	if err != nil || w.SummaryBoost != search.DefaultWeights().SummaryBoost {
 		t.Fatalf("absent summary_boost should keep default, got %+v", w)
 	}
-	if _, err := (&weightsConfig{BM25: fp(0), LSA: fp(0), Nomic: fp(0)}).resolve(); err == nil {
+	if _, err := (&weightsConfig{BM25: fp(0), LSA: fp(0), Semantic: fp(0)}).resolve(); err == nil {
 		t.Fatal("all-zero layers must be rejected")
 	}
 

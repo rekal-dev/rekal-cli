@@ -179,19 +179,32 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		totalStart = time.Now()
 		// Start event — join later candidate/result lines on run_id.
 		embedModel := ""
+		embedBackend := EmbedderBackendEmbedded
 		if qe != nil {
 			embedModel = qe.ModelName()
+			embedBackend = qe.Backend()
+		} else {
+			embedModel = nomic.ModelName
 		}
 		wb, wl, wn := w.layers3()
 		lin.EmitQuery(LineageQuery{
 			Query:   filters.Query,
 			Mode:    "hybrid",
 			Filters: map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
-			Weights: LineageWeights(w),
+			Weights: LineageWeights{
+				BM25:               w.BM25,
+				LSA:                w.LSA,
+				Nomic:              w.Semantic, // lineage keeps historical field name
+				SteeringBoost:      w.SteeringBoost,
+				SummaryBoost:       w.SummaryBoost,
+				SubagentDownweight: w.SubagentDownweight,
+				FacetBoost:         w.FacetBoost,
+			},
 			WeightsNormalized: LineageNormWeights{
 				BM25: wb, LSA: wl, Nomic: wn,
 			},
-			EmbedderModel: embedModel,
+			EmbedderBackend: embedBackend,
+			EmbedderModel:   embedModel,
 		})
 	}
 
@@ -215,13 +228,15 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		}
 	}
 
-	// Step 3: Nomic deep semantic search (non-fatal).
+	// Step 3: Deep semantic search (layer key still "nomic"; backend/model
+	// are recorded on lineage separately).
 	tNomic := startStage()
-	nomicScores, embedMS, embedChars, nomicErr := nomicSearch(indexDB, filters.Query, gitRoot, qe)
+	sem, nomicErr := nomicSearch(indexDB, filters.Query, gitRoot, qe)
+	nomicScores := sem.Scores
 	stage("nomic", tNomic)
 	if on {
-		timings["embed_query"] = embedMS
-		embedQueryChars = embedChars
+		timings["embed_query"] = sem.EmbedMS
+		embedQueryChars = sem.EmbedChars
 		if nomicErr != nil {
 			skipped["nomic"] = nomicErr.Error()
 		}
@@ -471,8 +486,12 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		lin.StageResult(LineageResult{
 			Returned:  returned,
 			TimingsMS: timings,
-			UseNomic:  useNomic,
-			Tokens:    tokens,
+			Semantic: LineageSemantic{
+				Used:    useNomic,
+				Backend: sem.Backend,
+				Model:   sem.Model,
+			},
+			Tokens: tokens,
 			Counts: map[string]int{
 				"bm25_hits":      len(bm25Hits),
 				"lsa_sessions":   len(lsaScores),
@@ -796,14 +815,34 @@ func lsaSearch(indexDB *sql.DB, query string) (map[string]float64, error) {
 	return scores, nil
 }
 
+// Embedder backend labels for lineage and diagnostics. Distinct from the
+// historical hybrid weight key "nomic", which names the layer not the model.
+const (
+	EmbedderBackendHTTP     = "http"
+	EmbedderBackendEmbedded = "embedded"
+)
+
 // QueryEmbedder embeds recall queries into the same vector space the index's
 // session embeddings were generated in. Implemented by the embedded nomic
 // client and the HTTP backend (cli wires the right one from config).
 type QueryEmbedder interface {
 	// ModelName keys the stored vectors this embedder is compatible with.
 	ModelName() string
+	// Backend is EmbedderBackendHTTP or EmbedderBackendEmbedded.
+	Backend() string
 	EmbedQuery(text string) ([]float64, error)
 	Close()
+}
+
+// semanticSearchResult is the deep-vector layer outcome. The function is
+// still named nomicSearch for the historical layer; Model/Backend name the
+// real embedder (embedded nomic-v1.5 or an HTTP model).
+type semanticSearchResult struct {
+	Scores     map[string]float64
+	EmbedMS    int64
+	EmbedChars int
+	Model      string
+	Backend    string
 }
 
 // nomicSearch computes deep semantic similarity against the index's stored
@@ -818,44 +857,52 @@ type QueryEmbedder interface {
 // no semantic vectors at all); an HTTP-indexed corpus without a matching
 // query embedder returns a clear mismatch error instead of pretending the
 // layer is empty.
-func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder) (scores map[string]float64, embedMS int64, embedChars int, err error) {
+func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder) (semanticSearchResult, error) {
+	var out semanticSearchResult
 	if qe == nil {
+		out.Backend = EmbedderBackendEmbedded
+		out.Model = nomic.ModelName
 		if !nomic.Supported() {
-			return nil, 0, 0, semanticSkipReason(indexDB, "")
+			return out, semanticSkipReason(indexDB, "")
 		}
 		client, cerr := nomic.NewClient(gitRoot)
 		if cerr != nil {
-			return nil, 0, 0, cerr
+			return out, cerr
 		}
 		qe = nomicQueryEmbedder{client}
+	} else {
+		out.Backend = qe.Backend()
+		out.Model = qe.ModelName()
 	}
 	defer qe.Close()
 
 	queryModel := qe.ModelName()
+	out.Model = queryModel
+	out.Backend = qe.Backend()
 	embeddings, err := db.QueryEmbeddings(indexDB, queryModel)
 	if err != nil {
-		return nil, 0, 0, err
+		return out, err
 	}
 	if len(embeddings) == 0 {
-		return nil, 0, 0, semanticSkipReason(indexDB, queryModel)
+		return out, semanticSkipReason(indexDB, queryModel)
 	}
 
-	embedChars = len(query)
+	out.EmbedChars = len(query)
 	tEmbed := time.Now()
 	queryVec, err := qe.EmbedQuery(query)
-	embedMS = time.Since(tEmbed).Milliseconds()
+	out.EmbedMS = time.Since(tEmbed).Milliseconds()
 	if err != nil {
-		return nil, embedMS, embedChars, err
+		return out, err
 	}
 
-	scores = make(map[string]float64)
+	out.Scores = make(map[string]float64)
 	for sid, emb := range embeddings {
 		sim := lsa.CosineSimilarity(queryVec, emb)
 		if sim > 0 {
-			scores[sid] = sim
+			out.Scores[sid] = sim
 		}
 	}
-	return scores, embedMS, embedChars, nil
+	return out, nil
 }
 
 // semanticSkipReason explains why the deep semantic layer produced no scores.
@@ -880,6 +927,7 @@ func semanticSkipReason(indexDB *sql.DB, queryModel string) error {
 type nomicQueryEmbedder struct{ c *nomic.Client }
 
 func (n nomicQueryEmbedder) ModelName() string                         { return nomic.ModelName }
+func (n nomicQueryEmbedder) Backend() string                           { return EmbedderBackendEmbedded }
 func (n nomicQueryEmbedder) EmbedQuery(text string) ([]float64, error) { return n.c.EmbedQuery(text) }
 func (n nomicQueryEmbedder) Close()                                    { n.c.Close() }
 

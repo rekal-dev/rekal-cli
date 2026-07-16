@@ -91,6 +91,52 @@ func TestMergedConfig_GlobalWithLocalOverride(t *testing.T) {
 	}
 }
 
+func TestMergedConfig_ScoringLineageGlobalOnly(t *testing.T) {
+	// Sets env, so not parallel.
+	gitRoot := t.TempDir()
+	if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	globalHome := t.TempDir()
+	t.Setenv("REKAL_CONFIG_HOME", globalHome)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	writeCfgFile(t, filepath.Join(globalHome, "config.json"),
+		`{"scoring_lineage":{"enabled":true,"path":"lineage.jsonl","max_candidates":10}}`)
+	// Local tries to disable / override — must be ignored.
+	writeCfgFile(t, configPath(gitRoot),
+		`{"scoring_lineage":{"enabled":false,"max_candidates":99}}`)
+
+	cfg, err := readMergedConfig(gitRoot)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if cfg.ScoringLineage == nil || !cfg.ScoringLineage.Enabled {
+		t.Fatalf("scoring_lineage must come from global: %+v", cfg.ScoringLineage)
+	}
+	if cfg.ScoringLineage.MaxCandidates != 10 {
+		t.Fatalf("local max_candidates must not override global, got %d", cfg.ScoringLineage.MaxCandidates)
+	}
+	if cfg.ScoringLineage.Path != "lineage.jsonl" {
+		t.Fatalf("path = %q, want lineage.jsonl", cfg.ScoringLineage.Path)
+	}
+
+	// writeConfig must never persist scoring_lineage into the repo file.
+	if err := writeConfig(gitRoot, Config{
+		LocalImport:    localPref{All: true},
+		ScoringLineage: &scoringLineageConfig{Enabled: true},
+	}); err != nil {
+		t.Fatalf("writeConfig: %v", err)
+	}
+	local, err := readConfig(gitRoot)
+	if err != nil {
+		t.Fatalf("readConfig: %v", err)
+	}
+	if local.ScoringLineage != nil {
+		t.Fatalf("writeConfig must strip scoring_lineage, got %+v", local.ScoringLineage)
+	}
+}
+
 func TestMergedConfig_NeitherIsDefaults(t *testing.T) {
 	gitRoot := t.TempDir()
 	t.Setenv("REKAL_CONFIG_HOME", t.TempDir()) // empty dir, no config.json

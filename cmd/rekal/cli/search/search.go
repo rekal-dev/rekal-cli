@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
@@ -42,6 +43,12 @@ type Filters struct {
 	// standard output stays thin; benchmarking and skill-driven zooming
 	// turn it on.
 	Explain bool
+
+	// Lineage, when non-nil, records observe-only scoring lineage and stage
+	// timings (NDJSON). Set from the global-only scoring_lineage config —
+	// never a CLI flag. Nil (the default) means zero cost: no timers, no
+	// events, ranking identical to a lineage-off run.
+	Lineage Lineage
 }
 
 // Layers exposes each retrieval signal's normalized [0,1] score for a
@@ -149,21 +156,55 @@ type bm25Hit struct {
 }
 
 func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w Weights, qe QueryEmbedder) ([]Result, error) {
+	lin := filters.Lineage
+	on := lineageOn(lin)
+	var timings map[string]int64
+	var skipped map[string]string
+	var totalStart time.Time
+	startStage := func() time.Time {
+		if !on {
+			return time.Time{}
+		}
+		return time.Now()
+	}
+	stage := func(name string, start time.Time) {
+		if on {
+			timings[name] = time.Since(start).Milliseconds()
+		}
+	}
+	if on {
+		timings = make(map[string]int64, 8)
+		skipped = make(map[string]string)
+		totalStart = time.Now()
+	}
+
 	// Step 1: BM25 search.
+	tBM25 := startStage()
 	bm25Hits, err := bm25Search(indexDB, filters.Query)
+	stage("bm25", tBM25)
 	if err != nil {
 		return nil, fmt.Errorf("bm25 search: %w", err)
 	}
 
 	// Step 2: LSA search.
+	tLSA := startStage()
 	lsaScores, err := lsaSearch(indexDB, filters.Query)
+	stage("lsa", tLSA)
 	if err != nil {
 		// LSA failure is non-fatal — fall back to BM25 only.
 		lsaScores = nil
+		if on {
+			skipped["lsa"] = err.Error()
+		}
 	}
 
 	// Step 3: Nomic deep semantic search (non-fatal).
-	nomicScores, _ := nomicSearch(indexDB, filters.Query, gitRoot, qe)
+	tNomic := startStage()
+	nomicScores, nomicErr := nomicSearch(indexDB, filters.Query, gitRoot, qe)
+	stage("nomic", tNomic)
+	if nomicErr != nil && on {
+		skipped["nomic"] = nomicErr.Error()
+	}
 
 	// Step 4: Facet layer — BM25 over per-session facet documents (tool
 	// paths + command prefixes + steering text). Config-gated: at an
@@ -171,11 +212,19 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	// byte-identical to the pre-facet engine; without a facet FTS index
 	// (older index.db, no facet material) the layer fails soft to nil.
 	var facetScores map[string]float64
+	tFacet := startStage()
 	if w.FacetBoost > 0 {
 		facetScores = facetSearch(indexDB, filters.Query)
+		if on && facetScores == nil {
+			skipped["facet"] = "no facet FTS index or empty"
+		}
+	} else if on {
+		skipped["facet"] = "facet_boost=0"
 	}
+	stage("facet", tFacet)
 
 	// Step 5: Group by session, pick best turn per session.
+	tCombine := startStage()
 	sessions := make(map[string]*sessionHit)
 
 	for _, hit := range bm25Hits {
@@ -190,14 +239,19 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		// too, but below steering: machine text never outranks human intent
 		// at equal relevance.
 		weighted := hit.score
+		boost := ""
 		switch hit.role {
 		case "human_steering":
 			weighted *= w.SteeringBoost
+			boost = "steering"
 		case "summary":
 			weighted *= w.SummaryBoost
+			boost = "summary"
 		}
 		if weighted > sh.bm25Max {
 			sh.bm25Max = weighted
+			sh.bm25Raw = hit.score
+			sh.bm25Boost = boost
 			sh.bestHit = hit
 		}
 	}
@@ -302,30 +356,58 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		}
 
 		var hybrid float64
+		var bm25C, lsaC, nomicC float64
 		if useNomic {
-			hybrid = bm25W3*bm25Norm + lsaW3*lsaNorm + nomicW3*nomicNorm
+			bm25C, lsaC, nomicC = bm25W3*bm25Norm, lsaW3*lsaNorm, nomicW3*nomicNorm
+			hybrid = bm25C + lsaC + nomicC
 		} else {
-			hybrid = bm25W2*bm25Norm + lsaW2*lsaNorm
+			bm25C, lsaC = bm25W2*bm25Norm, lsaW2*lsaNorm
+			hybrid = bm25C + lsaC
 		}
 		// Facet layer: additive fourth term, applied before the subagent
 		// discount (hybrid += facet_boost * facetNorm). facetNorm is 0 for
 		// every session when the layer is disabled or has no index, so this
 		// is a no-op in those cases.
-		hybrid += w.FacetBoost * facetNorm
+		facetC := w.FacetBoost * facetNorm
+		hybrid += facetC
+		hybridPreSub := hybrid
 		// Subagent/workflow transcripts (non-null parent) are discounted
 		// relative to trunk turns of equal relevance.
-		if parentIDs[sid] != "" {
+		parent := ""
+		if parentIDs != nil {
+			parent = parentIDs[sid]
+		}
+		if parent != "" {
 			hybrid *= w.SubagentDownweight
 		}
 		sc := scored{sessionID: sid, score: hybrid, hit: sh}
 		if filters.Explain {
 			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm), Facet: round2(facetNorm)}
 		}
+		if on {
+			sc.lineage = &candidateLineage{
+				bm25Norm:     bm25Norm,
+				lsaNorm:      lsaNorm,
+				nomicNorm:    nomicNorm,
+				facetNorm:    facetNorm,
+				bm25C:        bm25C,
+				lsaC:         lsaC,
+				nomicC:       nomicC,
+				facetC:       facetC,
+				hybridPreSub: hybridPreSub,
+				parent:       parent,
+			}
+		}
 		scoredResults = append(scoredResults, sc)
 	}
 
 	// Sort by score descending.
 	sortScored(scoredResults)
+	stage("combine", tCombine)
+
+	if on {
+		emitCandidateLineage(lin, scoredResults, w, useNomic)
+	}
 
 	// Build more raw candidates than the requested limit: grouping folds
 	// several of them into one conversation result, so the pre-group pool
@@ -334,15 +416,123 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	candidatePool := (limit + 1) * (conversationChildBudget + 1)
 
 	// Apply filters and build candidate results.
+	tBuild := startStage()
 	results, err := buildResults(indexDB, scoredResults, filters, candidatePool)
+	stage("build", tBuild)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fold subagent/workflow hits under their trunk conversation — one
 	// result per conversation, capped to `limit`.
-	return groupByConversation(indexDB, results, parentIDs, limit), nil
+	tGroup := startStage()
+	grouped := groupByConversation(indexDB, results, parentIDs, limit)
+	stage("group", tGroup)
+
+	if on {
+		timings["total"] = time.Since(totalStart).Milliseconds()
+		norm := LineageNormWeights{}
+		if useNomic {
+			norm.BM25, norm.LSA, norm.Nomic = bm25W3, lsaW3, nomicW3
+		} else {
+			norm.BM25, norm.LSA = bm25W2, lsaW2
+		}
+		embedModel := ""
+		if qe != nil {
+			embedModel = qe.ModelName()
+		} else if useNomic {
+			embedModel = nomic.ModelName
+		}
+		var skipOut map[string]string
+		if len(skipped) > 0 {
+			skipOut = skipped
+		}
+		lin.Emit(LineageQuery{
+			Type:              "query",
+			TS:                time.Now().UTC(),
+			Query:             filters.Query,
+			Mode:              "hybrid",
+			Filters:           map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
+			Weights:           LineageWeights(w),
+			WeightsNormalized: norm,
+			UseNomic:          useNomic,
+			EmbedderModel:     embedModel,
+			TimingsMS:         timings,
+			Counts: map[string]int{
+				"bm25_hits":      len(bm25Hits),
+				"lsa_sessions":   len(lsaScores),
+				"nomic_sessions": len(nomicScores),
+				"facet_hits":     len(facetScores),
+				"candidates":     len(scoredResults),
+				"after_filter":   len(results),
+				"returned":       len(grouped),
+			},
+			Skipped: skipOut,
+		})
+	}
+
+	return grouped, nil
 }
+
+// candidateLineage is the per-session math snapshot retained only when
+// lineage logging is on — kept off the hot path when Lineage is nil.
+type candidateLineage struct {
+	bm25Norm, lsaNorm, nomicNorm, facetNorm float64
+	bm25C, lsaC, nomicC, facetC             float64
+	hybridPreSub                            float64
+	parent                                  string
+}
+
+func emitCandidateLineage(lin Lineage, scoredResults []scored, w Weights, useNomic bool) {
+	n := lin.MaxCandidates()
+	if n <= 0 {
+		n = 50
+	}
+	if n > len(scoredResults) {
+		n = len(scoredResults)
+	}
+	for i := 0; i < n; i++ {
+		sc := scoredResults[i]
+		cl := sc.lineage
+		if cl == nil || sc.hit == nil {
+			continue
+		}
+		sh := sc.hit
+		ev := LineageCandidate{
+			Type:         "candidate",
+			SessionID:    sc.sessionID,
+			RankPreGroup: i + 1,
+			BM25:         LineageLayer{Raw: round4(sh.bm25Raw), Norm: round4(cl.bm25Norm)},
+			LSA:          LineageLayer{Raw: round4(sh.lsaScore), Norm: round4(cl.lsaNorm)},
+			Nomic:        LineageLayer{Raw: round4(sh.nomicScore), Norm: round4(cl.nomicNorm)},
+			Facet:        LineageLayer{Raw: round4(sh.facetScore), Norm: round4(cl.facetNorm)},
+			Contrib: map[string]float64{
+				"bm25":  round4(cl.bm25C),
+				"lsa":   round4(cl.lsaC),
+				"facet": round4(cl.facetC),
+			},
+			HybridPreSub: round4(cl.hybridPreSub),
+			Score:        round4(sc.score),
+		}
+		if useNomic {
+			ev.Contrib["nomic"] = round4(cl.nomicC)
+		}
+		if sh.bestHit.sessionID != "" || sh.bm25Max > 0 {
+			ev.BestTurn = &LineageBestTurn{
+				Index: sh.bestHit.turnIndex,
+				Role:  sh.bestHit.role,
+				Boost: sh.bm25Boost,
+			}
+		}
+		if cl.parent != "" {
+			ev.Subagent = &LineageSubagent{Parent: cl.parent, Multiplier: w.SubagentDownweight}
+		}
+		lin.Emit(ev)
+	}
+}
+
+// round4 keeps lineage numbers readable without changing ranking math.
+func round4(f float64) float64 { return math.Round(f*10000) / 10000 }
 
 func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error) {
 	// Build WHERE clause from filters.
@@ -1077,7 +1267,8 @@ type scored struct {
 	sessionID string
 	score     float64
 	hit       *sessionHit
-	layers    *Layers // populated only under Filters.Explain
+	layers    *Layers           // populated only under Filters.Explain
+	lineage   *candidateLineage // populated only when Filters.Lineage is set
 }
 
 // round2 rounds to two decimals for stable, thin JSON output.
@@ -1085,7 +1276,9 @@ func round2(f float64) float64 { return math.Round(f*100) / 100 }
 
 type sessionHit struct {
 	bestHit    bm25Hit
-	bm25Max    float64
+	bm25Max    float64 // boosted BM25 of the winning turn
+	bm25Raw    float64 // pre-boost BM25 of the winning turn (lineage)
+	bm25Boost  string  // "steering" | "summary" | "" (lineage)
 	lsaScore   float64
 	nomicScore float64
 	facetScore float64

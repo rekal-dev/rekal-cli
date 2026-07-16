@@ -160,3 +160,43 @@ so global values are never baked into a repo.
 - **`embedding`** — when set, the recall query is embedded by the configured HTTP backend instead of the embedded nomic model. `provider` selects the wire protocol: `openai` (default) for any OpenAI-compatible `/embeddings` server (vLLM, Ollama, LM Studio, TEI, or a gateway), or `bedrock` for the Amazon Bedrock runtime (Cohere Embed models — `cohere.embed-english-v3`/`cohere.embed-multilingual-v3` — authenticated by a Bedrock API key as the bearer token, no SigV4). Under `openai`, a **Cohere Embed model** (model name contains `cohere`, e.g. served through a gateway in front of Bedrock) automatically gets Cohere's required `input_type` in the request body — `search_query` for the query, `search_document` for stored turns — so Cohere works over the plain `/embeddings` shape without text prefixes; other models omit it. For `bedrock`, `endpoint` is the runtime host (`https://bedrock-runtime.<region>.amazonaws.com`) and the same asymmetry rides `input_type` natively. The API key supports a real string (`api_key`), a `$VAR` reference inside `api_key`, or an explicit env var name (`api_key_env`, which wins when set and non-empty); absent key ⇒ no Authorization header. `endpoint` expands `$VAR` the same way. The vectors compared against are the ones the index was built with (keyed by model name), so a backend/model mismatch skips the semantic layer — falling back to 2-way scoring — rather than comparing incompatible vectors. Rebuild with `rekal index` after changing provider/model/endpoint.
 
 Failures anywhere in tuning/embedding degrade recall gracefully (fewer layers), never break it.
+
+### Scoring lineage (global-only diagnostics)
+
+Observe-only NDJSON logging of each retrieval layer's contribution and
+stage timings. **Off by default** — when disabled, no timers run and
+ranking is byte-identical to a lineage-free build. **Global-only**: set it
+in `~/.config/rekal/config.json` (honors `$REKAL_CONFIG_HOME` /
+`$XDG_CONFIG_HOME`). A value in `.rekal/config.json` is ignored, and the
+write path never persists it into a repo file — diagnostics stay a
+machine-local developer switch.
+
+```json
+{
+  "scoring_lineage": {
+    "enabled": true,
+    "path": "scoring-lineage.jsonl",
+    "max_candidates": 50
+  }
+}
+```
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `enabled` | `false` | Master switch |
+| `path` | empty → **stderr** | Append NDJSON here. Relative paths resolve under the global config dir; absolute paths are used as-is. Local file only — never a network sink. |
+| `max_candidates` | `50` | Cap per-session `candidate` events (top of the pre-group ranked pool) |
+
+Each hybrid recall emits:
+
+- **`candidate`** events — per session: raw + normalized scores for
+  bm25 / lsa / nomic / facet, weighted contributions, role boost on the
+  winning turn, subagent discount, final hybrid score (the in→out lineage
+  of every ranking signal).
+- one **`query`** event — weight snapshot, `timings_ms` per stage
+  (`bm25`, `lsa`, `nomic`, `facet`, `combine`, `build`, `group`, `total`),
+  hit/candidate counts, and skip reasons when a layer soft-failed.
+
+Stdout JSON is unchanged (agents keep parsing it). Lineage is a separate
+stream from `--explain` (which adds thin `layers`/`related` fields on
+results); they can run together.

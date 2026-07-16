@@ -68,6 +68,17 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		}
 	}
 
+	// Scoring lineage is global-only and off by default. Failures opening the
+	// sink warn and continue — diagnostics must never break recall.
+	if lin, closer, lerr := cfg.ScoringLineage.openLineage(cmd.ErrOrStderr()); lerr != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: scoring_lineage: %v — lineage disabled\n", lerr)
+	} else {
+		if closer != nil {
+			defer closer.Close() //nolint:errcheck
+		}
+		filters.Lineage = lin
+	}
+
 	out, err := search.Run(indexDB, filters, gitRoot, weights, qe)
 	if err != nil {
 		return err

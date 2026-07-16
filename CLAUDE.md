@@ -70,10 +70,14 @@ session discovery keep using the invoking worktree.
   `~/.config/rekal/config.json` (path honors `$REKAL_CONFIG_HOME` then
   `$XDG_CONFIG_HOME`), precedence local → global → built-in defaults. Merge is
   per-key: `embedding` inherits wholesale, `weights` field-by-field,
-  `local_import` not inherited (per-repo). `readConfig` is local-only (the
+  `local_import` not inherited (per-repo), `scoring_lineage` **global-only**
+  (machine diagnostic switch; ignored from local, never written to the repo
+  file; default off — observe-only NDJSON of recall score lineage + stage
+  timings to stderr or a local path). `readConfig` is local-only (the
   write path — the `--include*` flags read-modify-write it, so global values
   are never baked in); `readMergedConfig` is the consumption view (recall
-  weights, index embedding). Holds the cross-repo `local_import` preference,
+  weights, index embedding, scoring lineage). Holds the cross-repo
+  `local_import` preference,
   the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
   summary boost, subagent discount, facet boost — applied at query time, no
   reindex), and
@@ -115,10 +119,12 @@ session discovery keep using the invoking worktree.
   (see `docs/agent-metadata.md`), snippet extraction, the LSA
   query-projection cache (`projection.go`), the per-result
   `summary_turn_index` pointer (latest compaction-summary turn — pointer,
-  never the 10-17KB payload; drill with `--role summary`), and the
+  never the 10-17KB payload; drill with `--role summary`), the
   `--explain` enrichments (per-layer normalized scores + query-time
   related-session joins over `files_index`; default output unchanged
-  without the flag)
+  without the flag), and optional scoring-lineage NDJSON (`lineage.go` —
+  global `scoring_lineage` config only; default off; per-layer raw/norm/
+  contrib + stage `timings_ms`; observe-only, ranking unchanged)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the

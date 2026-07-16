@@ -139,14 +139,15 @@ func (l *NDJSONLineage) emit(event string, body any) {
 // --- Event body shapes (merged under the envelope) ---
 
 // LineageQuery is the start-of-run snapshot: what was asked and how ranking
-// is configured. Timings and returned rows live on LineageResult.
+// is configured. Timings, returned rows, and whether the neural layer
+// actually contributed (use_nomic) live on LineageResult — useNomic is only
+// known after nomicSearch runs.
 type LineageQuery struct {
 	Query             string             `json:"query"`
 	Mode              string             `json:"mode"`
 	Filters           map[string]string  `json:"filters"`
 	Weights           LineageWeights     `json:"weights"`
 	WeightsNormalized LineageNormWeights `json:"weights_normalized"`
-	UseNomic          bool               `json:"use_nomic"`
 	EmbedderModel     string             `json:"embedder_model,omitempty"`
 }
 
@@ -203,11 +204,12 @@ type LineageSubagent struct {
 }
 
 // LineageResult is the end-of-run event: final returned set, pool counts,
-// stage timings, and token/byte cost accounting.
+// stage timings, whether the neural layer contributed, and token/byte cost.
 type LineageResult struct {
 	Returned  []LineageReturned `json:"returned"`
 	Counts    map[string]int    `json:"counts"`
 	TimingsMS map[string]int64  `json:"timings_ms"`
+	UseNomic  bool              `json:"use_nomic"`
 	Tokens    *LineageTokens    `json:"tokens,omitempty"`
 	Skipped   map[string]string `json:"skipped,omitempty"`
 }

@@ -70,19 +70,19 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 		switch head.Event {
 		case "query":
 			sawQuery = true
-			var q struct {
-				Query   string         `json:"query"`
-				Mode    string         `json:"mode"`
-				Weights LineageWeights `json:"weights"`
-			}
+			var q map[string]any
 			if err := json.Unmarshal([]byte(line), &q); err != nil {
 				t.Fatalf("query: %v", err)
 			}
-			if q.Mode != "hybrid" || q.Query != "auth" {
+			if q["mode"] != "hybrid" || q["query"] != "auth" {
 				t.Fatalf("query mismatch: %+v", q)
 			}
-			if q.Weights.FacetBoost != 0.3 {
-				t.Fatalf("weights snapshot lost facet_boost: %+v", q.Weights)
+			if _, ok := q["use_nomic"]; ok {
+				t.Fatal("use_nomic belongs on result, not query")
+			}
+			weights, _ := q["weights"].(map[string]any)
+			if weights["facet_boost"] != 0.3 {
+				t.Fatalf("weights snapshot lost facet_boost: %+v", weights)
 			}
 		case "candidate":
 			sawCandidate = true
@@ -110,6 +110,7 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 				Returned  []LineageReturned `json:"returned"`
 				Counts    map[string]int    `json:"counts"`
 				TimingsMS map[string]int64  `json:"timings_ms"`
+				UseNomic  bool              `json:"use_nomic"`
 				Tokens    *LineageTokens    `json:"tokens"`
 			}
 			if err := json.Unmarshal([]byte(line), &r); err != nil {
@@ -127,6 +128,10 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 			if r.Tokens == nil || r.Tokens.PayloadBytes != 1234 {
 				t.Fatalf("tokens.payload_bytes = %+v, want 1234", r.Tokens)
 			}
+			// Corpus has no matching semantic vectors — neural layer idle.
+			if r.UseNomic {
+				t.Fatal("use_nomic = true, want false (no semantic vectors)")
+			}
 		default:
 			t.Fatalf("unexpected event %q", head.Event)
 		}
@@ -138,6 +143,77 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 		t.Fatalf("RunID()=%q logged=%q", lin.RunID(), runID)
 	}
 }
+
+// TestLineage_UseNomicOnResultWhenNeuralRuns is the footgun fix: use_nomic
+// must reflect whether nomicSearch produced scores, and it must appear on
+// the result event (after search), never on the query event (before).
+func TestLineage_UseNomicOnResultWhenNeuralRuns(t *testing.T) {
+	t.Parallel()
+	indexDB := seedLineageCorpus(t)
+	const model = "test-match-model"
+	vec := []float64{0.6, 0.8, 0.0}
+	if err := db.StoreEmbeddings(indexDB, map[string][]float64{
+		"s-auth": vec,
+	}, model); err != nil {
+		t.Fatalf("StoreEmbeddings: %v", err)
+	}
+
+	var buf bytes.Buffer
+	lin := NewNDJSONLineage(&buf, 5)
+	_, err := Run(indexDB, Filters{Query: "auth", Lineage: lin}, t.TempDir(), DefaultWeights(), matchingEmbedder{model: model, vec: vec})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	lin.FlushResult(0)
+
+	var sawQueryUseNomic, sawResultUseNomic bool
+	var resultUseNomic bool
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var head struct {
+			Event string `json:"event"`
+		}
+		if err := json.Unmarshal([]byte(line), &head); err != nil {
+			t.Fatalf("ndjson: %v", err)
+		}
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			t.Fatalf("raw: %v", err)
+		}
+		switch head.Event {
+		case "query":
+			if _, ok := raw["use_nomic"]; ok {
+				sawQueryUseNomic = true
+			}
+		case "result":
+			v, ok := raw["use_nomic"]
+			if !ok {
+				t.Fatalf("result missing use_nomic: %s", line)
+			}
+			sawResultUseNomic = true
+			resultUseNomic, _ = v.(bool)
+		}
+	}
+	if sawQueryUseNomic {
+		t.Fatal("use_nomic must not appear on query event")
+	}
+	if !sawResultUseNomic {
+		t.Fatalf("result missing use_nomic; log=%s", buf.String())
+	}
+	if !resultUseNomic {
+		t.Fatal("use_nomic = false on result, want true when neural scores exist")
+	}
+}
+
+// matchingEmbedder returns a fixed vector under a model name that matches
+// stored session_embeddings — enough for nomicSearch to produce scores.
+type matchingEmbedder struct {
+	model string
+	vec   []float64
+}
+
+func (m matchingEmbedder) ModelName() string                    { return m.model }
+func (m matchingEmbedder) EmbedQuery(string) ([]float64, error) { return m.vec, nil }
+func (m matchingEmbedder) Close()                               {}
 
 // TestLineage_RankingIdenticalOnVsOff is the observe-only contract: enabling
 // lineage must not change scores or result order.

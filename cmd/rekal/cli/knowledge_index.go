@@ -67,9 +67,21 @@ func refreshKnowledge(w io.Writer, indexDB *sql.DB, gitRoot string) error {
 		return err
 	}
 
+	// One `git cat-file --batch` for every blob to (re)chunk — a full build
+	// on a docs-heavy repo would otherwise spawn one `git show` per file.
+	shas := make([]string, 0, len(rechunk))
+	seen := make(map[string]bool, len(rechunk))
+	for _, path := range rechunk {
+		if sha := current[path]; !seen[sha] {
+			seen[sha] = true
+			shas = append(shas, sha)
+		}
+	}
+	blobs := gitx.BlobContents(gitRoot, shas)
+
 	var rows []db.KnowledgeChunkRow
 	for _, path := range rechunk {
-		data := gitx.ShowFile(gitRoot, "HEAD", path)
+		data := blobs[current[path]]
 		if data == nil {
 			continue
 		}

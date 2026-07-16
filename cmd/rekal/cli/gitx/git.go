@@ -5,8 +5,10 @@
 package gitx
 
 import (
+	"bytes"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -121,6 +123,51 @@ func TrackedBlobs(gitRoot, ref string) map[string]string {
 			continue
 		}
 		result[entry[tab+1:]] = meta[2]
+	}
+	return result
+}
+
+// BlobContents returns blob SHA → content for the given SHAs through one
+// `git cat-file --batch` process — the bulk read for the knowledge layer's
+// full build, where per-file `git show` would cost one process spawn per
+// prose file (an Obsidian-vault-sized repo has thousands). Missing SHAs are
+// simply absent from the result; nil on process error.
+func BlobContents(gitRoot string, shas []string) map[string][]byte {
+	if len(shas) == 0 {
+		return map[string][]byte{}
+	}
+	cmd := exec.Command("git", "-C", gitRoot, "cat-file", "--batch")
+	cmd.Stdin = strings.NewReader(strings.Join(shas, "\n") + "\n")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string][]byte, len(shas))
+	rest := out
+	for len(rest) > 0 {
+		nl := bytes.IndexByte(rest, '\n')
+		if nl < 0 {
+			break
+		}
+		header := string(rest[:nl])
+		rest = rest[nl+1:]
+		// Header: "<sha> <type> <size>" or "<sha> missing".
+		fields := strings.Fields(header)
+		if len(fields) < 3 {
+			continue // "missing" (or malformed) — no payload follows
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || size > len(rest) {
+			break
+		}
+		if fields[1] == "blob" {
+			result[fields[0]] = rest[:size]
+		}
+		rest = rest[size:]
+		if len(rest) > 0 && rest[0] == '\n' {
+			rest = rest[1:]
+		}
 	}
 	return result
 }

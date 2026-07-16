@@ -88,18 +88,37 @@ func DeleteKnowledgeChunks(d *sql.DB, paths []string) error {
 	return nil
 }
 
-// InsertKnowledgeChunks bulk-inserts chunk rows.
+// InsertKnowledgeChunks bulk-inserts chunk rows in one transaction — a full
+// build on a docs-heavy repo inserts tens of thousands of chunks, and
+// per-statement autocommit would dominate the first-index/first-hook cost.
 func InsertKnowledgeChunks(d *sql.DB, chunks []KnowledgeChunkRow) error {
+	if len(chunks) == 0 {
+		return nil
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		return fmt.Errorf("begin knowledge insert: %w", err)
+	}
+	stmt, err := tx.Prepare(`
+		INSERT INTO knowledge_chunks
+			(id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`)
+	if err != nil {
+		tx.Rollback() //nolint:errcheck
+		return fmt.Errorf("prepare knowledge insert: %w", err)
+	}
+	defer stmt.Close() //nolint:errcheck
 	for _, c := range chunks {
-		if _, err := d.Exec(`
-			INSERT INTO knowledge_chunks
-				(id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		if _, err := stmt.Exec(
 			c.ID, c.Path, c.Anchor, c.Breadcrumb, c.StartLine, c.EndLine,
 			c.Content, c.ContentHash, c.BlobSHA,
 		); err != nil {
+			tx.Rollback() //nolint:errcheck
 			return fmt.Errorf("insert knowledge chunk %s: %w", c.ID, err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit knowledge insert: %w", err)
 	}
 	return nil
 }

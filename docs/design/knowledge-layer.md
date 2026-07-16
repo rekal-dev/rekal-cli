@@ -232,6 +232,27 @@ HUNT's confidence gate extends naturally: a strong file hit at HEAD is
 construction. MINE gains a knowledge dimension in its `scope × signal ×
 role` decomposition.
 
+## Onboarding cost (measured)
+
+Synthetic 2,000-file markdown vault (~7,000 chunks), linux/amd64 container:
+
+- **First recall after init** (cold: full session index + full knowledge
+  build + FTS): ~6.3s, one-time — the existing "index not built,
+  rebuilding..." moment, slightly longer.
+- **Steady-state recall** (watermark hit): ~0.25s.
+- **Post-commit hook, one doc changed** (incremental blob-diff refresh):
+  ~0.1s — imperceptible; the hook stays quiet.
+- **Post-commit hook with no sessions to capture** exits before the index
+  update entirely, so a giant initial import commit costs the hook ~0.2s;
+  the full build lands on the first recall instead.
+
+The two mechanisms that keep these numbers flat as corpora grow: one
+`git cat-file --batch` process for all blobs (never per-file `git show`),
+and chunk inserts wrapped in a single transaction (never per-row
+autocommit). A hook that does carry sessions *and* a huge prose delta pays
+the full build once (~seconds); if that ever bites in practice, the refresh
+can adopt `embedhttp`'s hard-timebox pattern and defer to recall.
+
 ## Init and hooks: no surface change
 
 `init` is untouched — store, hooks, orphan branch, skills, one CLAUDE.md

@@ -354,6 +354,19 @@ func updateIndexIncremental(gitRoot string, sessionIDs, embeddableSessionIDs []s
 		return fmt.Errorf("populate index: %w", err)
 	}
 
+	// Knowledge layer: the commit that fired this hook may have touched prose
+	// files — refresh chunks for changed blobs now so the layer is fresh even
+	// for consumers that don't go through recall's own refresh (raw
+	// `rekal query --index`). Watermark-gated and blob-diffed: cost is
+	// proportional to the commit's prose delta, usually zero or a few files.
+	// Best-effort — the hook must never fail a commit, and recall re-runs the
+	// same refresh if this one is skipped.
+	if err := db.LoadFTSExtension(indexDB); err != nil {
+		fmt.Fprintf(w, "rekal: warning: knowledge refresh skipped: %v\n", err)
+	} else if err := refreshKnowledge(nil, indexDB, gitRoot); err != nil {
+		fmt.Fprintf(w, "rekal: warning: knowledge refresh failed: %v\n", err)
+	}
+
 	// Nomic embeddings for trunk sessions only (non-fatal).
 	if len(embeddableSessionIDs) == 0 {
 		return nil

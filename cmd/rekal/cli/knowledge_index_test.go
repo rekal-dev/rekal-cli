@@ -89,6 +89,16 @@ func TestRefreshKnowledge(t *testing.T) {
 		t.Fatalf("docs/deploy.md chunks = %d, want 1", n)
 	}
 
+	// Paths with spaces/UTF-8 must index too — ls-tree is parsed with -z, so
+	// git's C-quoting can never hide a file from the change detector.
+	commitFile(t, dir, "docs/über notes.md", "# Über\n\nNotes with a spaced, non-ASCII path.\n")
+	if err := refreshKnowledge(nil, indexDB, dir); err != nil {
+		t.Fatalf("refreshKnowledge (special path): %v", err)
+	}
+	if n := countChunks("docs/über notes.md"); n != 1 {
+		t.Fatalf("special-char path chunks = %d, want 1", n)
+	}
+
 	// Delete: rows drop with the file.
 	runGit(t, dir, "rm", "docs/deploy.md")
 	runGit(t, dir, "commit", "-m", "remove deploy doc")

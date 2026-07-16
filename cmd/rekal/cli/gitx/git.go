@@ -102,22 +102,25 @@ func ShowFile(gitRoot, ref, path string) []byte {
 // the blob SHAs it indexed to find files needing a re-chunk. Returns nil on
 // error (e.g. a repo with no commits).
 func TrackedBlobs(gitRoot, ref string) map[string]string {
-	out, err := exec.Command("git", "-C", gitRoot, "ls-tree", "-r", ref).Output()
+	// -z: NUL-separated entries with raw (unquoted) paths — without it git
+	// C-quotes paths containing spaces/UTF-8, and a quoted path would never
+	// match the blob store, leaving those files permanently unindexed.
+	out, err := exec.Command("git", "-C", gitRoot, "ls-tree", "-r", "-z", ref).Output()
 	if err != nil {
 		return nil
 	}
 	result := make(map[string]string)
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, entry := range strings.Split(string(out), "\x00") {
 		// Format: "<mode> blob <sha>\t<path>"
-		tab := strings.IndexByte(line, '\t')
+		tab := strings.IndexByte(entry, '\t')
 		if tab < 0 {
 			continue
 		}
-		meta := strings.Fields(line[:tab])
+		meta := strings.Fields(entry[:tab])
 		if len(meta) != 3 || meta[1] != "blob" {
 			continue
 		}
-		result[line[tab+1:]] = meta[2]
+		result[entry[tab+1:]] = meta[2]
 	}
 	return result
 }

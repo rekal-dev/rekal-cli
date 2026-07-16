@@ -33,7 +33,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
    - Insert file entries into `files_index`.
    - Generate nomic-embed-text embeddings for new **trunk** sessions only (on supported platforms) — subagent/workflow transcripts are still FTS-indexed immediately, but their embeddings are deferred to the next full `rekal index`/`rekal sync` rebuild, so checkpoint time doesn't scale with subagent fan-out (see [agent-metadata.md](../../agent-metadata.md)).
    - LSA embeddings are skipped (require full corpus rebuild via `rekal index`).
-   - Refresh the knowledge layer for the commit that fired the hook — watermark-gated, re-chunking only prose files whose git blob SHAs changed (usually zero or a few). Best-effort: never fails the commit; recall re-runs the same refresh if skipped. See [knowledge-layer design](../../design/knowledge-layer.md).
+   - Refresh the knowledge layer for the commit that fired the hook — watermark-gated, re-chunking only prose files whose git blob SHAs changed (usually zero or a few) — then embed up to 256 chunks still missing vectors (budgeted: a giant prose import converges over the next few commits, keyword-findable meanwhile; the embed cache makes repeats free). Best-effort: never fails the commit; recall re-runs the same refresh if skipped. See [knowledge-layer design](../../design/knowledge-layer.md).
    - Non-fatal: if incremental update fails, a warning is printed and the index can be rebuilt later with `rekal index`.
 10. **Print summary** — `rekal: N session(s) captured` (silent if nothing new).
 

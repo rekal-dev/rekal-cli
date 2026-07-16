@@ -137,11 +137,14 @@ session discovery keep using the invoking worktree.
   contrib + stage `timings_ms`; `result.semantic{used,backend,model}` names
   the real embedder — `http`|`embedded` + model id — distinct from the
   historical layer key `nomic` in weights/timings/skipped; observe-only,
-  ranking unchanged), and the **knowledge layer** (`knowledge.go` — BM25 over
-  prose-file chunks at HEAD, chunks scored / files returned as pointers with
+  ranking unchanged), and the **knowledge layer** (`knowledge.go` — hybrid
+  BM25 + chunk-vector cosine over prose-file chunks at HEAD, blended with the
+  `layers2` keyword/semantic split, query vector shared from the session
+  semantic pass; chunks scored / files returned as pointers with
   anchor + lines + `sessions` provenance edge; separate additive `knowledge`
   block above `results`, never merged with session ranking; fails soft
-  without a knowledge FTS index — `docs/design/knowledge-layer.md`)
+  without a knowledge FTS index, and to keyword-only without chunk vectors —
+  `docs/design/knowledge-layer.md`)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the
@@ -155,9 +158,12 @@ session discovery keep using the invoking worktree.
   population (incl. `PopulateFacetText` — per-session facet documents from
   the index's own tables, full + incremental — and the guarded
   `CreateFacetFTSIndex`, built by `index`/`sync` only when facet material
-  exists). `knowledge.go` holds the knowledge layer's table
-  (`knowledge_chunks`, created on demand by `EnsureKnowledgeSchema` so old
-  index DBs upgrade in place) and the guarded `CreateKnowledgeFTSIndex`. `embedcache.go` is the content-hash-keyed embedding cache
+  exists). `knowledge.go` holds the knowledge layer's tables
+  (`knowledge_chunks` + `knowledge_embeddings`, created on demand by
+  `EnsureKnowledgeSchema` so old index DBs upgrade in place), the guarded
+  `CreateKnowledgeFTSIndex`, and the chunk-vector helpers (missing-vectors
+  join for budgeted convergence, content-hash-keyed store/query, orphan
+  pruning). `embedcache.go` is the content-hash-keyed embedding cache
   (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;
   a model switch invalidates by key construction
 - `embedhttp/`: HTTP embedding client — batched, hard-timeboxed so the

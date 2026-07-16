@@ -42,9 +42,16 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 
 ### Knowledge layer (query provided)
 
-Alongside the session search, the query runs BM25 over `knowledge_chunks` —
+Alongside the session search, the query scores `knowledge_chunks` —
 heading-anchored sections of the repo's tracked prose files (`.md`,
-`.markdown`, `.mdx`, `.txt`, `.text`, `.rst`, `.adoc`) at HEAD. Chunks are
+`.markdown`, `.mdx`, `.txt`, `.text`, `.rst`, `.adoc`) at HEAD — with hybrid
+BM25 + chunk-vector cosine similarity, blended by the same keyword/semantic
+split the session ranking uses for its 2-way fallback (`weights` `bm25` vs
+`lsa`+`nomic` shares; defaults 0.35/0.65). The query vector is shared from
+the session semantic pass, so one recall embeds its query once;
+semantic-only chunks (relevant but no keyword overlap) join the candidates.
+Without chunk vectors (no embedding backend, model mismatch, or an index.db
+predating them) the layer degrades to keyword-only BM25. Chunks are
 scored, **files are returned** (best chunk drives the score, anchor, and
 snippet; runner-up sections become `also` pointers; multiple matching
 sections earn a coverage bonus). Hits are **pointers, never file content** —

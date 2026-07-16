@@ -228,6 +228,8 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	// without the layer, so a chunking failure must not fail the rebuild.
 	if err := refreshKnowledge(w, indexDB, gitRoot); err != nil {
 		fmt.Fprintf(w, "warning: knowledge layer skipped: %v\n", err)
+	} else if err := embedKnowledgeChunks(w, indexDB, gitRoot, 0); err != nil {
+		fmt.Fprintf(w, "warning: knowledge embeddings skipped: %v\n", err)
 	}
 
 	// LSA pass.

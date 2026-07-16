@@ -161,7 +161,7 @@ type bm25Hit struct {
 	score     float64
 }
 
-func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w Weights, qe QueryEmbedder) ([]Result, error) {
+func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w Weights, qe QueryEmbedder) ([]Result, []KnowledgeHit, error) {
 	lin := filters.Lineage
 	on := lineageOn(lin)
 	var timings map[string]int64
@@ -219,7 +219,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	bm25Hits, err := bm25Search(indexDB, filters.Query)
 	stage("bm25", tBM25)
 	if err != nil {
-		return nil, fmt.Errorf("bm25 search: %w", err)
+		return nil, nil, fmt.Errorf("bm25 search: %w", err)
 	}
 
 	// Step 2: LSA search.
@@ -462,7 +462,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	results, err := buildResults(indexDB, scoredResults, filters, candidatePool)
 	stage("build", tBuild)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Fold subagent/workflow hits under their trunk conversation — one
@@ -470,6 +470,15 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	tGroup := startStage()
 	grouped := groupByConversation(indexDB, results, parentIDs, limit)
 	stage("group", tGroup)
+
+	// Knowledge layer: separate block, never interleaved with session
+	// results — a file hit at HEAD (current truth, next action: Read) and a
+	// session hit (history, next action: drill) have different epistemic
+	// status, and their scores are not comparable. The query vector from the
+	// session semantic pass is shared so one recall embeds its query once.
+	tKnow := startStage()
+	knowledge := knowledgeSearch(indexDB, filters.Query, gitRoot, w, qe, sem.QueryVec, sem.Model)
+	stage("knowledge", tKnow)
 
 	if on {
 		timings["total"] = time.Since(totalStart).Milliseconds()
@@ -507,12 +516,13 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 				"after_filter":   len(results),
 				"after_group":    len(grouped),
 				"returned":       len(grouped),
+				"knowledge_hits": len(knowledge),
 			},
 			Skipped: skipOut,
 		})
 	}
 
-	return grouped, nil
+	return grouped, knowledge, nil
 }
 
 // candidateLineage is the per-session math snapshot retained only when
@@ -849,6 +859,9 @@ type semanticSearchResult struct {
 	EmbedChars int
 	Model      string
 	Backend    string
+	// QueryVec is the embedded query, shared with the knowledge layer so one
+	// recall embeds its query exactly once. Nil when the layer skipped.
+	QueryVec []float64
 }
 
 // nomicSearch computes deep semantic similarity against the index's stored
@@ -900,6 +913,7 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder
 	if err != nil {
 		return out, err
 	}
+	out.QueryVec = queryVec
 
 	out.Scores = make(map[string]float64)
 	for sid, emb := range embeddings {
@@ -1526,11 +1540,12 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 	w = w.orDefaults()
 
 	var results []Result
+	var knowledge []KnowledgeHit
 	var err error
 	mode := "filter"
 	if filters.Query != "" {
 		mode = "hybrid"
-		results, err = hybridSearch(indexDB, filters, limit, gitRoot, w, qe)
+		results, knowledge, err = hybridSearch(indexDB, filters, limit, gitRoot, w, qe)
 	} else {
 		results, err = filterSearch(indexDB, filters, limit)
 	}
@@ -1542,15 +1557,6 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 
 	if filters.Explain {
 		attachRelated(indexDB, results)
-	}
-
-	// Knowledge layer: separate block, never interleaved with session
-	// results — a file hit at HEAD (current truth, next action: Read) and a
-	// session hit (history, next action: drill) have different epistemic
-	// status, and their scores are not comparable.
-	var knowledge []KnowledgeHit
-	if filters.Query != "" {
-		knowledge = knowledgeSearch(indexDB, filters.Query, gitRoot)
 	}
 
 	return Output{

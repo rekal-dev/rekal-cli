@@ -191,7 +191,15 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 			Query:   filters.Query,
 			Mode:    "hybrid",
 			Filters: map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
-			Weights: LineageWeights(w),
+			Weights: LineageWeights{
+				BM25:               w.BM25,
+				LSA:                w.LSA,
+				Nomic:              w.Semantic, // lineage keeps historical field name
+				SteeringBoost:      w.SteeringBoost,
+				SummaryBoost:       w.SummaryBoost,
+				SubagentDownweight: w.SubagentDownweight,
+				FacetBoost:         w.FacetBoost,
+			},
 			WeightsNormalized: LineageNormWeights{
 				BM25: wb, LSA: wl, Nomic: wn,
 			},

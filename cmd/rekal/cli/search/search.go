@@ -448,16 +448,12 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 			skipOut = skipped
 		}
 		lin.Emit(LineageQuery{
-			Type:    "query",
-			TS:      time.Now().UTC(),
-			Query:   filters.Query,
-			Mode:    "hybrid",
-			Filters: map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
-			Weights: LineageWeights{
-				BM25: w.BM25, LSA: w.LSA, Nomic: w.Nomic,
-				SteeringBoost: w.SteeringBoost, SummaryBoost: w.SummaryBoost,
-				SubagentDownweight: w.SubagentDownweight, FacetBoost: w.FacetBoost,
-			},
+			Type:              "query",
+			TS:                time.Now().UTC(),
+			Query:             filters.Query,
+			Mode:              "hybrid",
+			Filters:           map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
+			Weights:           LineageWeights(w),
 			WeightsNormalized: norm,
 			UseNomic:          useNomic,
 			EmbedderModel:     embedModel,

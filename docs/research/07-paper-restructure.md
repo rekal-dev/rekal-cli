@@ -203,7 +203,7 @@ numbers (one frozen snapshot) but stands as the long-form reference.
   facets); decision-scoped gather primitive + synthesis skill with
   mandatory evidence pointers; structural map as SHA-watermarked
   regenerable artifact; router in the skill layer first (SHIPPED: one
-  `rekal` skill with internal gated routing — MAP/HUNT/WHY); facet layer
+  `rekal` skill with internal gated routing — MAP/MINE/HUNT/WHY); facet layer
   (SHIPPED: default facet_boost=0.3, guarded index, explicit 0 =
   byte-identical baseline); capture-gap measurement (verbalization rate).
 - **Falls:** further ranking-mechanism work — the graveyard says the

@@ -37,7 +37,7 @@ graveyard with two RHO-disciplined survivors (per-corpus tuning; the SPM
 facet term — shipped default `facet_boost=0.3`), and the lesson that gains
 come from orthogonal evidence layers, not rank polish. Above retrieval the
 same lesson becomes the system: real questions split into broad / pointed /
-why; a gated router (shipped as the single `rekal` skill: MAP / HUNT / WHY
+why; a gated router (shipped as the single `rekal` skill: MAP / MINE / HUNT / WHY
 workflows) answers each kind at 382–980 tokens per question, and decision
 synthesis reconstructs the "why" arcs single-shot retrieval fragments. The
 binding constraint that remains is capture.
@@ -68,7 +68,7 @@ binding constraint that remains is capture.
 - [x] Rung 1 run (single corpus) — committed manifest
 - [x] Multi-corpus retrieval matrix + mechanism sweeps + facet port (consolidated record; anonymized aggregates committed)
 - [x] Mode/sufficiency runs (n=12–15, two corpora) — directional
-- [x] Engine aligned to the paper: facet layer shipped (default 0.3); router shipped as the single `rekal` skill (MAP/HUNT/WHY, gated)
+- [x] Engine aligned to the paper: facet layer shipped (default 0.3); router shipped as the single `rekal` skill (MAP/MINE/HUNT/WHY, gated)
 - [ ] Verify the transcribed consolidated record against the operator copy (flip its status field)
 - [ ] Gate recalibration on the facet-enabled engine → freeze the snapshot all paper numbers cite
 - [ ] Sufficiency at scale: n ≫ 15, second judge + agreement, T4 mined gold for synthesis

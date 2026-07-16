@@ -34,6 +34,11 @@ rules the project actually runs on.
 
 ## Workflow
 
+When the base **rekal** router reaches you via **MINE** (analytical
+"mistakes / direction shifts"), it may already hand you a scoped
+`human_steering` turn set — skip straight to distill (step 3) on those
+turns. Otherwise start from step 1.
+
 ### 1. Find where you were corrected most
 
 Steering turns concentrate in the sessions where the agent most misjudged the

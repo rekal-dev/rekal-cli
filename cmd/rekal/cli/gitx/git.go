@@ -5,8 +5,10 @@
 package gitx
 
 import (
+	"bytes"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -94,6 +96,90 @@ func ShowFile(gitRoot, ref, path string) []byte {
 		return nil
 	}
 	return out
+}
+
+// TrackedBlobs returns path → blob SHA for every tracked file at ref
+// (`git ls-tree -r <ref>`). Git content-addresses every tracked file, so this
+// is a free, exact change detector: the knowledge layer compares it against
+// the blob SHAs it indexed to find files needing a re-chunk. Returns nil on
+// error (e.g. a repo with no commits).
+func TrackedBlobs(gitRoot, ref string) map[string]string {
+	// -z: NUL-separated entries with raw (unquoted) paths — without it git
+	// C-quotes paths containing spaces/UTF-8, and a quoted path would never
+	// match the blob store, leaving those files permanently unindexed.
+	out, err := exec.Command("git", "-C", gitRoot, "ls-tree", "-r", "-z", ref).Output()
+	if err != nil {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, entry := range strings.Split(string(out), "\x00") {
+		// Format: "<mode> blob <sha>\t<path>"
+		tab := strings.IndexByte(entry, '\t')
+		if tab < 0 {
+			continue
+		}
+		meta := strings.Fields(entry[:tab])
+		if len(meta) != 3 || meta[1] != "blob" {
+			continue
+		}
+		result[entry[tab+1:]] = meta[2]
+	}
+	return result
+}
+
+// BlobContents returns blob SHA → content for the given SHAs through one
+// `git cat-file --batch` process — the bulk read for the knowledge layer's
+// full build, where per-file `git show` would cost one process spawn per
+// prose file (an Obsidian-vault-sized repo has thousands). Missing SHAs are
+// simply absent from the result; nil on process error.
+func BlobContents(gitRoot string, shas []string) map[string][]byte {
+	if len(shas) == 0 {
+		return map[string][]byte{}
+	}
+	cmd := exec.Command("git", "-C", gitRoot, "cat-file", "--batch")
+	cmd.Stdin = strings.NewReader(strings.Join(shas, "\n") + "\n")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string][]byte, len(shas))
+	rest := out
+	for len(rest) > 0 {
+		nl := bytes.IndexByte(rest, '\n')
+		if nl < 0 {
+			break
+		}
+		header := string(rest[:nl])
+		rest = rest[nl+1:]
+		// Header: "<sha> <type> <size>" or "<sha> missing".
+		fields := strings.Fields(header)
+		if len(fields) < 3 {
+			continue // "missing" (or malformed) — no payload follows
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || size > len(rest) {
+			break
+		}
+		if fields[1] == "blob" {
+			result[fields[0]] = rest[:size]
+		}
+		rest = rest[size:]
+		if len(rest) > 0 && rest[0] == '\n' {
+			rest = rest[1:]
+		}
+	}
+	return result
+}
+
+// LastCommitShort returns the abbreviated SHA of the last commit touching
+// path, or "" when unknown.
+func LastCommitShort(gitRoot, path string) string {
+	out, err := exec.Command("git", "-C", gitRoot, "log", "-1", "--format=%h", "--", path).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // ConfigValue reads a git config value, or "" if unset.

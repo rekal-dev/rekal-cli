@@ -138,11 +138,17 @@ type SessionDetail struct {
 }
 
 type Output struct {
-	Results []Result          `json:"results"`
-	Query   string            `json:"query"`
-	Filters map[string]string `json:"filters"`
-	Mode    string            `json:"mode"`
-	Total   int               `json:"total"`
+	// Knowledge holds the knowledge layer's file hits — what the repo's
+	// prose files at HEAD currently say about the query, as pointers, with
+	// provenance edges into sessions (docs/design/knowledge-layer.md).
+	// Additive and omitted when empty: the Results block is byte-identical
+	// to pre-knowledge output, same discipline as facet_boost=0/--explain.
+	Knowledge []KnowledgeHit    `json:"knowledge,omitempty"`
+	Results   []Result          `json:"results"`
+	Query     string            `json:"query"`
+	Filters   map[string]string `json:"filters"`
+	Mode      string            `json:"mode"`
+	Total     int               `json:"total"`
 }
 
 // bm25Hit represents a BM25 match from the FTS index.
@@ -1538,9 +1544,19 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 		attachRelated(indexDB, results)
 	}
 
+	// Knowledge layer: separate block, never interleaved with session
+	// results — a file hit at HEAD (current truth, next action: Read) and a
+	// session hit (history, next action: drill) have different epistemic
+	// status, and their scores are not comparable.
+	var knowledge []KnowledgeHit
+	if filters.Query != "" {
+		knowledge = knowledgeSearch(indexDB, filters.Query, gitRoot)
+	}
+
 	return Output{
-		Results: results,
-		Query:   filters.Query,
+		Knowledge: knowledge,
+		Results:   results,
+		Query:     filters.Query,
 		Filters: map[string]string{
 			"file":   filters.File,
 			"actor":  filters.Actor,

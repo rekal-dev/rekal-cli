@@ -188,6 +188,13 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		return err
 	}
 
+	// Knowledge layer — full build into the fresh index, same as runIndex
+	// (this is a from-scratch file, so the watermark is absent and every
+	// prose file at HEAD is chunked). Non-fatal.
+	if err := refreshKnowledge(w, indexDB, gitRoot); err != nil {
+		fmt.Fprintf(w, "rekal: warning: knowledge layer skipped: %v\n", err)
+	}
+
 	// 5d: LSA pass.
 	embeddingDim := 0
 	if sessionCount >= 2 {

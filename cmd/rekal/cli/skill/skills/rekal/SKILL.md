@@ -23,8 +23,19 @@ the question belongs to.
 | Substrate | Holds | Tense | Primitive | Answers |
 |---|---|---|---|---|
 | **Tree** (code @ HEAD) | current state | present | `grep` / read / AST | "what does X do / where is it / what's the value now" |
+| **Knowledge** (prose @ HEAD) | current truths — docs, conventions, design notes | present | `rekal` knowledge block → Read the pointer | "what do we know about X / what's our convention for Y" |
 | **Ledger** (sessions) | recorded intent | past | `rekal` recall + modes | "why is it like this / what was tried / what was rejected" |
 | **Map** (structure) | comprehended shape | — | MAP workflow | "how is the whole thing built / what connects to what" |
+
+Knowledge and Ledger are two strata of one memory substrate: the knowledge
+stratum is what the repo's prose files at HEAD currently say (current truth
+by construction — higher confidence than any session hit), the ledger is why
+they say it. Every `rekal "<query>"` returns both: a `knowledge` block of
+file pointers (path + anchor + lines + snippet + the sessions that shaped the
+file) above the session `results`. A knowledge hit's next action is Read the
+pointer (live HEAD, never indexed bytes); a session hit's next action is
+drill. The `sessions` field on a knowledge hit is the provenance edge —
+"what we know" joined to "why we believe it".
 
 The map is derived from the tree but serves memory: it is the tree's shape,
 cached and git-watermarked, so breadth questions don't re-grep the world.
@@ -42,12 +53,19 @@ If `rekal` is not on PATH, run `export PATH="$HOME/.local/bin:$PATH"` first.
    grep / read / your code tools. Do NOT use rekal — the ledger does not
    store current code content; it would be slower and risk a stale answer.
    This is the most common misroute. Answer from the source.
-2. **Is it about the SHAPE of the system?** ("how is the pipeline
+2. **Is it about what the team currently KNOWS?** ("what's our convention
+   for X", "what do we know about token refresh", "is there a doc on Y") →
+   **Knowledge stratum.** Run `rekal "<query>"` and take the `knowledge`
+   block: file pointers at HEAD, ranked. Read the winning pointer with your
+   Read tool; follow its `sessions` edge into the ledger only if you also
+   need the why. Grep can't rank prose by meaning, and sessions hold the
+   debate — the conclusion lives in the file.
+3. **Is it about the SHAPE of the system?** ("how is the pipeline
    architected end-to-end", "what subsystems exist", "how do they connect")
    → **MAP workflow.** No single file or session holds this; structure
    does. The map also orients steps 1 and 3 (where to grep, which sessions
    to recall).
-3. **Is it about WHY / how it evolved / a past decision / a pattern across
+4. **Is it about WHY / how it evolved / a past decision / a pattern across
    prior sessions?** → **Ledger.** Not in the code — the reasoning expired
    with the session. Pick the ledger workflow by question shape:
    - **analytical / pattern-mining** ("my mistakes on X", "agent mistakes
@@ -62,7 +80,7 @@ If `rekal` is not on PATH, run `export PATH="$HOME/.local/bin:$PATH"` first.
      (gather every decision-relevant turn, synthesize the arc; single-shot
      recall only returns one fragment). Prefer MINE→WHY when the topic is
      fuzzy and you need the signal vocabulary first.
-4. **Hybrid — need the actual code behind a past decision?** Rekal owns the
+5. **Hybrid — need the actual code behind a past decision?** Rekal owns the
    pointer, git owns the content: recall gives the commit SHA it recorded,
    then `git show <sha>` reconstructs the diff on demand. That is "grep on
    content, scoped by memory" — it keeps the ledger thin.
@@ -275,6 +293,12 @@ human correcting the agent — high intent; `summary` = harness distillation
 summary exists), `children` (grouped subagent/workflow transcripts),
 `origin` (present only on cross-repo hits — prior art from *another*
 project, not this repo's conventions).
+
+The top-level `knowledge` block (when present) sits above `results`: file
+hits at HEAD with `path`, `anchor`, `lines`, `snippet`, `also` (runner-up
+sections), `last_modified` (commit), and `sessions` (the ledger sessions
+that touched the file). A strong knowledge hit outranks the episode gate —
+HEAD is current truth by construction; Read it before drilling sessions.
 
 ## Workflow WHY — rationale, reconstructed by synthesis
 

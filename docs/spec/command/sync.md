@@ -28,6 +28,7 @@ Captures local work, pushes it, fetches remote branches, and rebuilds the search
    - For each remote branch: decode wire format (`rekal.body` + `dict.bin`), insert into `turns_ft`, `session_facets`, `files_index` — **skip tool calls** for remote data
    - Create FTS index (BM25)
    - Build facet documents (`session_facets.facet_text`, covering synced teammate sessions too) and the guarded facet FTS index — skipped when no session has facet material
+   - Build the knowledge layer (chunked prose files at HEAD + guarded FTS index) into the fresh index — full build, since the from-scratch file has no watermark; non-fatal
    - LSA embedding pass
    - Nomic deep semantic embedding pass (non-fatal, skipped on unsupported platforms)
    - Write index state

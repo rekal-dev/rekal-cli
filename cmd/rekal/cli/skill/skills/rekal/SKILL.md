@@ -9,7 +9,9 @@ description: |
   rekal), or the MAP (comprehended structure, the bridge). This skill is the
   triage and the workflows: classify the question, dispatch to the one
   substrate that can answer it, and stay silent where memory is not the
-  right tool. Route, do not stack.
+  right tool. On analytical ledger questions (mistakes, undecided work,
+  pattern-mining), decompose into SQL signal queries before routing — do not
+  throw the natural-language ask at hybrid search. Route, do not stack.
 ---
 
 # Rekal — which substrate answers this?
@@ -45,14 +47,21 @@ If `rekal` is not on PATH, run `export PATH="$HOME/.local/bin:$PATH"` first.
    → **MAP workflow.** No single file or session holds this; structure
    does. The map also orients steps 1 and 3 (where to grep, which sessions
    to recall).
-3. **Is it about WHY / how it evolved / a past decision?** ("why was X
-   chosen over Y", "what did we reject", "who decided") → **Ledger.** Not
-   in the code — the reasoning expired with the session.
+3. **Is it about WHY / how it evolved / a past decision / a pattern across
+   prior sessions?** → **Ledger.** Not in the code — the reasoning expired
+   with the session. Pick the ledger workflow by question shape:
+   - **analytical / pattern-mining** ("my mistakes on X", "agent mistakes
+     from missing context", "what's still undecided", "where did direction
+     keep shifting") → **MINE workflow** first. Decompose into
+     `scope × signal × role` SQL, gather the turns, *then* route to
+     reflect / synthesize / census / WHY. Hybrid search on the raw ask
+     will miss — the answer is a set of linguistic signals, not one episode.
    - pointed ("which session did X, and the detail") → **HUNT workflow**
      (seed recall + drill, confidence-gated).
    - rationale / evolved decision ("why X instead of Y") → **WHY workflow**
      (gather every decision-relevant turn, synthesize the arc; single-shot
-     recall only returns one fragment).
+     recall only returns one fragment). Prefer MINE→WHY when the topic is
+     fuzzy and you need the signal vocabulary first.
 4. **Hybrid — need the actual code behind a past decision?** Rekal owns the
    pointer, git owns the content: recall gives the commit SHA it recorded,
    then `git show <sha>` reconstructs the diff on demand. That is "grep on
@@ -60,7 +69,7 @@ If `rekal` is not on PATH, run `export PATH="$HOME/.local/bin:$PATH"` first.
 
 ### The gate — when to stay silent
 
-Answering from the wrong substrate is worse than not answering. Two
+Answering from the wrong substrate is worse than not answering. Three
 silences matter:
 
 - **Don't inject memory into a tree question.** If step 1 fits, read the
@@ -70,6 +79,9 @@ silences matter:
   clear top hit, flat score gap — see the gate below), the episode stays
   OUT of context. Ungated low-confidence episodes measurably degrade a good
   answer. Silence beats noise.
+- **Don't throw an analytical ask at hybrid search.** "My mistakes on X"
+  is not a retrieval query — decompose it (MINE) or you will get a top-k
+  of vaguely related sessions and narrate noise.
 
 ## Workflow MAP — breadth, answered from structure
 
@@ -146,6 +158,89 @@ Line 1 is the watermark: `<!-- rekal-map <branch> <HEAD-sha> -->`.
 stated as behavior; every edge says what crosses it; anyone reading only
 the map can decide where to grep and which sessions to recall next.
 
+## Workflow MINE — analytical questions, decompose then route
+
+Hybrid search answers "which episode matches this phrase?" Analytical
+questions ask something else: "where in the ledger do the *signals of X*
+cluster?" Throwing the natural-language ask at `rekal "..."` skips the
+decomposition and returns the wrong evidence. **MINE is the missing
+front-step:** classify → decompose → gather → route → narrate.
+
+### Pipeline
+
+1. **Classify.** Confirm it is reflection / pattern-mining / open-question
+   inventory — not a single pointed episode (that is HUNT) and not a pure
+   tree fact.
+2. **Decompose.** Turn the ask into SQL over the ledger using three
+   filters:
+   - **scope** — bind to a subsystem or topic via `files_index` (or drop
+     the join for a whole-repo scan).
+   - **signal** — the linguistic fingerprint of the phenomenon (the words
+     people actually type when the thing happens).
+   - **role** — who said it: `human_steering` (user corrections),
+     `assistant` (agent self-corrections), or any.
+3. **Gather turns.** Run the query; keep session/turn pointers. Widen the
+   signal list once if the trail is thin; do not pad with near-miss recall.
+4. **Route** the gathered turns to the workflow that can answer:
+   - pattern → rules → **rekal-reflect**
+   - decision arc → **WHY** (synthesize)
+   - coverage of a slice → **rekal-census**
+   - one concrete episode revealed by the signals → **HUNT** drill
+5. **Narrate** from the routed result. Every claim carries
+   `(session <id> turn <n>)`. Do not invent a pattern from fewer than a
+   handful of turns.
+
+### Decomposition table
+
+| Analytical question | Signal vocabulary (decompose to these) | Role | Then |
+|---|---|---|---|
+| "my mistakes / direction shifts" | `no`, `actually`, `instead`, `wrong`, `rethink`, `revert`, `stop` | `human_steering` | **rekal-reflect** |
+| "agent mistakes from missing context" | `already exist`, `assumed`, `turns out`, `i missed`, `duplicate`, `different _ model` | `assistant` | synthesize (WHY-shaped arc) |
+| "what's still undecided" | `TODO`, `unsure`, `later`, `revisit`, `open question` | any | **rekal-census** (scoped) |
+| "why X" | the choice + `because`, `instead of`, `constraint`, `rejected` | any | **WHY** |
+
+Extend the signal column with topic terms from the ask ("poc4", "JWT",
+"duckdb"). The vocabulary is a starting set, not a closed lexicon — add
+phrasings you have seen in *this* repo's corrections.
+
+### Gather template
+
+```bash
+# scope × signal × role — swap the three filters for the row you picked
+rekal query --index "SELECT session_id, turn_index, role, substr(content,1,300) AS snip \
+  FROM turns_ft \
+  WHERE role = 'human_steering' \
+    AND (content LIKE '%actually%' OR content LIKE '%instead%' \
+         OR content LIKE '%revert%' OR content LIKE '%wrong%' \
+         OR content LIKE '%rethink%' OR content LIKE '% stop%') \
+    AND session_id IN ( \
+      SELECT session_id FROM files_index WHERE file_path LIKE '%poc4%' \
+    ) \
+  ORDER BY session_id, turn_index"
+```
+
+Drop the `files_index` join when the question is repo-wide. For assistant
+self-corrections, set `role = 'assistant'` and swap in that row's signal
+list. For "any" role, drop the role predicate.
+
+### Example — "agent mistakes on poc4"
+
+- **scope:** `files_index.file_path LIKE '%poc4%'`
+- **signal:** `already exist`, `actually`, `turns out`, `i assumed`,
+  `different _ model`, `revert`, `duplicate`
+- **role:** `assistant` (self-corrections) — run a second pass with
+  `human_steering` if you also want the user's corrections
+- **then:** synthesize the arc (what was assumed → what contradicted it →
+  what changed), each step cited; if the turns cluster into recurring
+  rules, hand them to **rekal-reflect**
+
+### When not to MINE
+
+- A clear episode ask with a concrete noun phrase → **HUNT**.
+- A known decision with named alternatives already in mind → **WHY**
+  directly (its gather SQL is this pattern specialized to decision words).
+- Present-tense code facts → **Tree**. Structure → **MAP**.
+
 ## Workflow HUNT — pointed, gated episodic recall
 
 1. **Search:**
@@ -186,10 +281,13 @@ project, not this repo's conventions).
 The rationale for an evolved decision is distributed across sessions.
 Gather the decision trail, then synthesize. **The gather bounds the
 quality** — an under-gathered synthesis starves; gather generously before
-concluding anything.
+concluding anything. WHY's gather is MINE specialized to decision
+vocabulary; if the topic is fuzzy, run **MINE** first and feed its turns
+here.
 
 1. **Seed:** search 2–3 phrasings of the decision and its alternatives.
-   Note candidate sessions and their commits.
+   Note candidate sessions and their commits. Or start from a MINE gather
+   already scoped to the topic.
 2. **Gather the decision trail** — steering turns and reasoning-marked
    turns across *all* sessions, not the top hit:
 
@@ -253,12 +351,14 @@ session interact with" source.
 ## Companion skills
 
 Deep-dive skills build on this router; reach for them when the task *is*
-the deep dive:
+the deep dive (MINE may hand them a pre-gathered turn set):
 
 - **rekal-provenance** — artifact → commit → session → intent why-chain
 - **rekal-reflect** — mine your own steering turns into explicit rules
+  (MINE's "mistakes / direction shifts" row feeds it)
 - **rekal-distill** — survey memory as four libraries (context / decision / rules / boundary)
-- **rekal-census** — exhaustive full-corpus scan (coverage, not relevance)
+- **rekal-census** — exhaustive full-corpus scan (coverage, not relevance;
+  MINE's "still undecided" row scopes it)
 - **rekal-wiki** — materialize committed `docs/wiki/` topic pages via PR
 
 ## Why this boundary
@@ -273,12 +373,14 @@ keeps the line clean.
 ## Guidelines
 
 - Triage first; one question, one substrate — routed, not stacked
+- Analytical ledger asks decompose (MINE) before they route — never raw
+  hybrid search on "my mistakes" / "what's undecided"
 - Gate episodes: below the confidence bar, silence beats noise
-- Breadth answers come from the map, why answers from synthesis — don't
-  force either through top-k retrieval
+- Breadth answers come from the map, why answers from synthesis, patterns
+  from mined signal turns — don't force any of them through top-k alone
 - Start small when drilling (`summary` role, snippet window); `--full` is a
   last resort
 - Human turns carry intent; `human_steering` carries the moments decisions
-  actually got made
+  actually got made; assistant turns carry self-corrections worth mining
 - Cross-repo hits (`origin` set) are prior art, not this repo's conventions
 - Report pointers (session, turn, commit) with every claim from memory

@@ -148,14 +148,17 @@ session discovery keep using the invoking worktree.
 - `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are
   embedded via `//go:embed all:skills`; `skill.All()` returns them (`rekal`
   first). `init` installs each to `.claude/skills/<name>/SKILL.md`, `clean`
-  removes them. The suite: `rekal` (the router — first decide the substrate:
+  removes them.   The suite: `rekal` (the router — first decide the substrate:
   tree (grep, present tense) vs ledger (rekal, past tense) vs map (structure);
-  then triage ledger questions as broad/pointed/why and run the matching
+  then triage ledger questions as analytical/pointed/why and run the matching
   internal workflow: MAP builds the SHA-watermarked condensed map at
   `.rekal/map.md` — structured markdown with greppable path anchors, not a
-  diagram — refreshed by diffing the watermark against HEAD; HUNT is gated
-  episodic recall — inject only above a confidence bar on top score/gap; WHY
-  is decision synthesis over a gathered steering/reasoning trail with
+  diagram — refreshed by diffing the watermark against HEAD; MINE is
+  decompose-then-route for analytical asks — `scope × signal × role` SQL
+  over the ledger, then hand the gathered turns to reflect / WHY / census /
+  HUNT (never raw hybrid search on "my mistakes"); HUNT is gated episodic
+  recall — inject only above a confidence bar on top score/gap; WHY is
+  decision synthesis over a gathered steering/reasoning trail with
   turn+commit pointers), `rekal-provenance`
   (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
   `human_steering` turns into rules), `rekal-distill` (four-library knowledge

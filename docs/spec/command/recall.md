@@ -212,8 +212,9 @@ Each hybrid recall emits, in order:
    score, snippet_turn_index), `counts` (`bm25_hits`, `candidates`,
    `after_filter`, `after_group`, `returned`, …), `timings_ms` (`bm25`,
    `lsa`, `nomic`, `embed_query`, `facet`, `combine`, `build`, `group`,
-   `total`), `tokens` (`embed_query_chars`, `payload_bytes`), and skip
-   reasons when a layer soft-failed.
+   `total`), `use_nomic` (whether the neural layer produced scores —
+   known only after search runs), `tokens` (`embed_query_chars`,
+   `payload_bytes`), and skip reasons when a layer soft-failed.
 
 Stdout JSON is unchanged (agents keep parsing it). Lineage is a separate
 stream from `--explain` (which adds thin `layers`/`related` fields on

@@ -471,6 +471,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		lin.StageResult(LineageResult{
 			Returned:  returned,
 			TimingsMS: timings,
+			UseNomic:  useNomic,
 			Tokens:    tokens,
 			Counts: map[string]int{
 				"bm25_hits":      len(bm25Hits),

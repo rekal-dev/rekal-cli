@@ -1,8 +1,12 @@
 package db
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
+
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/scrub"
 )
 
 // knowledgeDDL defines the knowledge layer's index-side table: heading-anchored
@@ -117,12 +121,28 @@ func InsertKnowledgeChunks(d *sql.DB, chunks []KnowledgeChunkRow) error {
 	}
 	defer stmt.Close() //nolint:errcheck
 	for _, c := range chunks {
+		// Last-line UTF-8/NUL guard (same as session scrub): prose files can
+		// hold arbitrary bytes — a single bad .txt used to abort the whole
+		// knowledge-layer transaction with "could not bind parameter".
+		id := scrub.SanitizeText(c.ID)
+		path := scrub.SanitizeText(c.Path)
+		anchor := scrub.SanitizeText(c.Anchor)
+		breadcrumb := scrub.SanitizeText(c.Breadcrumb)
+		content := scrub.SanitizeText(c.Content)
+		hash := c.ContentHash
+		if content != c.Content || hash == "" {
+			// Content changed under sanitize (or hash missing) — identity
+			// must track the stored text for the embed-cache key.
+			sum := sha256.Sum256([]byte(content))
+			hash = hex.EncodeToString(sum[:])
+		}
+		blobSHA := scrub.SanitizeText(c.BlobSHA)
 		if _, err := stmt.Exec(
-			c.ID, c.Path, c.Anchor, c.Breadcrumb, c.StartLine, c.EndLine,
-			c.Content, c.ContentHash, c.BlobSHA,
+			id, path, anchor, breadcrumb, c.StartLine, c.EndLine,
+			content, hash, blobSHA,
 		); err != nil {
 			tx.Rollback() //nolint:errcheck
-			return fmt.Errorf("insert knowledge chunk %s: %w", c.ID, err)
+			return fmt.Errorf("insert knowledge chunk %s: %w", id, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {

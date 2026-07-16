@@ -4,8 +4,62 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
+
+// TestInsertKnowledgeChunks_SanitizesInvalidUTF8 is the FCT-Discovery footgun:
+// a tracked .txt with truncated multi-byte runes used to abort the whole
+// knowledge-layer transaction ("could not bind parameter"). Insert must
+// sanitize VARCHARs the same way session scrub does.
+func TestInsertKnowledgeChunks_SanitizesInvalidUTF8(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	t.Cleanup(func() { d.Close() })
+	if err := EnsureKnowledgeSchema(d); err != nil {
+		t.Fatalf("EnsureKnowledgeSchema: %v", err)
+	}
+
+	bad := "incident log: \xc3 truncated"
+	if utf8.ValidString(bad) {
+		t.Fatal("fixture must be invalid UTF-8")
+	}
+	if err := InsertKnowledgeChunks(d, []KnowledgeChunkRow{
+		{
+			ID: "tmncs_incident_log.txt#1", Path: "tmncs_incident_log.txt",
+			Anchor: "", Breadcrumb: "tmncs_incident_log.txt",
+			StartLine: 1, EndLine: 1,
+			Content: bad, ContentHash: "ignored", BlobSHA: "abc123",
+		},
+	}); err != nil {
+		t.Fatalf("insert with invalid UTF-8: %v", err)
+	}
+
+	var content, hash string
+	if err := d.QueryRow(
+		`SELECT content, content_hash FROM knowledge_chunks WHERE id = $1`,
+		"tmncs_incident_log.txt#1",
+	).Scan(&content, &hash); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if !utf8.ValidString(content) {
+		t.Fatalf("stored content still invalid UTF-8: %q", content)
+	}
+	if !strings.Contains(content, "�") {
+		t.Fatalf("expected replacement char in sanitized content: %q", content)
+	}
+	if hash == "" || hash == "ignored" {
+		t.Fatalf("content_hash = %q, want sha256 of sanitized content", hash)
+	}
+}
 
 // TestKnowledgeEmbeddings covers the semantic rung's storage helpers: the
 // missing-vectors join that drives budgeted convergence, the store/query

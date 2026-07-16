@@ -120,7 +120,10 @@ markdown heading until the next same-or-higher heading. Each chunk carries:
 Oversized sections (heading-free walls of text) split at paragraph
 boundaries under a size cap; trailing fragments merge into their parent.
 Plain-text files without headings chunk by paragraph with the filename as
-breadcrumb. Binary and oversized files are skipped.
+breadcrumb. Binary and oversized files are skipped. Chunk text is run through
+`scrub.SanitizeText` before hashing and again at insert (DuckDB rejects
+invalid-UTF-8 VARCHAR binds — one bad incident-log `.txt` must not abort the
+whole knowledge-layer transaction).
 
 Content-hash identity makes reindexing surgical: edit one section of a
 500-line doc and only that chunk re-embeds; every other chunk is a cache

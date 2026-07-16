@@ -59,12 +59,24 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: %v — using default weights\n", err)
 		weights = search.DefaultWeights()
 	}
+	// Query embedder must speak the same model the index was built with.
+	// When embedding is configured, use that HTTP backend — never fall back
+	// to embedded nomic on resolve failure (that silently mismatches a
+	// Cohere/HTTP-built index and disables the neural layer with no reason).
 	var qe search.QueryEmbedder
 	if cfg.Embedding != nil {
 		if ec, eerr := cfg.Embedding.resolve(); eerr != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: %v — semantic layer uses the embedded model\n", eerr)
+			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: %v — semantic query embedder unavailable\n", eerr)
 		} else {
 			qe = embedhttp.New(ec)
+		}
+	}
+	if embedModel, ok, _ := db.ReadIndexState(indexDB, "embed_model"); ok && embedModel != "" {
+		switch {
+		case qe == nil && embedModel != "nomic-v1.5":
+			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: index embed_model is %q but no embedding config is set — semantic layer will skip\n", embedModel)
+		case qe != nil && qe.ModelName() != embedModel:
+			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: query embedder model %q != index embed_model %q — semantic layer may skip\n", qe.ModelName(), embedModel)
 		}
 	}
 

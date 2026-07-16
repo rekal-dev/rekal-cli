@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -365,6 +366,43 @@ func WriteIndexState(d *sql.DB, key, value string) error {
 		return fmt.Errorf("write index_state: %w", err)
 	}
 	return nil
+}
+
+// ReadIndexState returns the value for key, or ("", false, nil) when absent.
+func ReadIndexState(d *sql.DB, key string) (string, bool, error) {
+	var value string
+	err := d.QueryRow("SELECT value FROM index_state WHERE key = $1", key).Scan(&value)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("read index_state: %w", err)
+	}
+	return value, true, nil
+}
+
+// ListSemanticModels returns distinct deep-semantic model names stored in
+// session_embeddings (excludes the LSA model key). Ordered for stable logs.
+func ListSemanticModels(d *sql.DB) ([]string, error) {
+	rows, err := d.Query(`
+		SELECT DISTINCT model FROM session_embeddings
+		WHERE model != 'lsa-v1'
+		ORDER BY model
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list semantic models: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var models []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err != nil {
+			return nil, fmt.Errorf("scan semantic model: %w", err)
+		}
+		models = append(models, m)
+	}
+	return models, rows.Err()
 }
 
 // StoreEmbeddings bulk-inserts session embeddings into the index DB.

@@ -806,31 +806,37 @@ type QueryEmbedder interface {
 }
 
 // nomicSearch computes deep semantic similarity against the index's stored
-// session vectors. Non-fatal: returns nil on any failure or when no backend
-// is available.
+// session vectors. Non-fatal at the hybrid layer: any returned error is
+// recorded in lineage skipped["nomic"] and ranking falls back to 2-way
+// weights — but the error string must explain *why* (model mismatch, missing
+// HTTP embedder, embed failure), never a silent empty skip.
 //
 // The embedder must match the model the index was built with — vectors from
-// different models live in incompatible spaces, so on a mismatch the layer is
-// skipped (scores nil → hybrid falls back to 2-way weights) rather than
-// comparing garbage. qe == nil selects the embedded nomic backend.
+// different models live in incompatible spaces. qe == nil selects the
+// embedded nomic backend only when the index actually has nomic vectors (or
+// no semantic vectors at all); an HTTP-indexed corpus without a matching
+// query embedder returns a clear mismatch error instead of pretending the
+// layer is empty.
 func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder) (scores map[string]float64, embedMS int64, embedChars int, err error) {
 	if qe == nil {
 		if !nomic.Supported() {
-			return nil, 0, 0, nil
+			return nil, 0, 0, semanticSkipReason(indexDB, "")
 		}
-		client, err := nomic.NewClient(gitRoot)
-		if err != nil {
-			return nil, 0, 0, err
+		client, cerr := nomic.NewClient(gitRoot)
+		if cerr != nil {
+			return nil, 0, 0, cerr
 		}
 		qe = nomicQueryEmbedder{client}
 	}
 	defer qe.Close()
 
-	// Load stored vectors for this embedder's model; none (e.g. the index was
-	// built with a different backend) means the layer is skipped.
-	embeddings, err := db.QueryEmbeddings(indexDB, qe.ModelName())
-	if err != nil || len(embeddings) == 0 {
+	queryModel := qe.ModelName()
+	embeddings, err := db.QueryEmbeddings(indexDB, queryModel)
+	if err != nil {
 		return nil, 0, 0, err
+	}
+	if len(embeddings) == 0 {
+		return nil, 0, 0, semanticSkipReason(indexDB, queryModel)
 	}
 
 	embedChars = len(query)
@@ -849,6 +855,24 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder
 		}
 	}
 	return scores, embedMS, embedChars, nil
+}
+
+// semanticSkipReason explains why the deep semantic layer produced no scores.
+// Returns nil when the index simply has no semantic vectors (legitimate
+// 2-way fallback with nothing to diagnose).
+func semanticSkipReason(indexDB *sql.DB, queryModel string) error {
+	models, err := db.ListSemanticModels(indexDB)
+	if err != nil {
+		return err
+	}
+	if len(models) == 0 {
+		return nil
+	}
+	if queryModel == "" {
+		return fmt.Errorf("no query embedder configured; index has semantic model(s) %s — set embedding in ~/.config/rekal/config.json (or .rekal/config.json) to match",
+			strings.Join(models, ", "))
+	}
+	return fmt.Errorf("no vectors for query model %q (index has: %s)", queryModel, strings.Join(models, ", "))
 }
 
 // nomicQueryEmbedder adapts the embedded nomic client to QueryEmbedder.

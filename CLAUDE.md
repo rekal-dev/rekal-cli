@@ -73,11 +73,12 @@ session discovery keep using the invoking worktree.
   `local_import` not inherited (per-repo), `scoring_lineage` **global-only**
   (machine diagnostic switch; ignored from local, never written to the repo
   file; default off — observe-only NDJSON of recall score lineage + stage
-  timings to stderr or a local path). `readConfig` is local-only (the
-  write path — the `--include*` flags read-modify-write it, so global values
-  are never baked in); `readMergedConfig` is the consumption view (recall
-  weights, index embedding, scoring lineage). Holds the cross-repo
-  `local_import` preference,
+  timings to stderr or a lumberjack-rotated local path; envelope
+  `ts`/`v`/`run_id`/`event` joins query→candidate→result). `readConfig` is
+  local-only (the write path — the `--include*` flags read-modify-write it,
+  so global values are never baked in); `readMergedConfig` is the
+  consumption view (recall weights, index embedding, scoring lineage). Holds
+  the cross-repo `local_import` preference,
   the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
   summary boost, subagent discount, facet boost — applied at query time, no
   reindex), and

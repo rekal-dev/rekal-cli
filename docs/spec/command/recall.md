@@ -175,8 +175,14 @@ machine-local developer switch.
 {
   "scoring_lineage": {
     "enabled": true,
-    "path": "scoring-lineage.jsonl",
-    "max_candidates": 50
+    "path": "scoring-lineage.ndjson",
+    "max_candidates": 50,
+    "rotation": {
+      "max_megabytes": 10,
+      "max_backups": 5,
+      "max_age_days": 14,
+      "compress": true
+    }
   }
 }
 ```
@@ -186,16 +192,28 @@ machine-local developer switch.
 | `enabled` | `false` | Master switch |
 | `path` | empty → **stderr** | Append NDJSON here. Relative paths resolve under the global config dir; absolute paths are used as-is. Local file only — never a network sink. |
 | `max_candidates` | `50` | Cap per-session `candidate` events (top of the pre-group ranked pool) |
+| `rotation` | 10 MB / 5 backups / 14 days / gzip | Size-based roller (lumberjack) when `path` is set. Ignored for stderr. |
 
-Each hybrid recall emits:
+Every line is one JSON object with a shared envelope:
 
-- **`candidate`** events — per session: raw + normalized scores for
-  bm25 / lsa / nomic / facet, weighted contributions, role boost on the
-  winning turn, subagent discount, final hybrid score (the in→out lineage
-  of every ranking signal).
-- one **`query`** event — weight snapshot, `timings_ms` per stage
-  (`bm25`, `lsa`, `nomic`, `facet`, `combine`, `build`, `group`, `total`),
-  hit/candidate counts, and skip reasons when a layer soft-failed.
+```json
+{"ts":"2026-07-16T03:00:00.000Z","v":1,"run_id":"a1b2c3d4e5f60708","event":"query", ...}
+```
+
+`run_id` joins all events from one recall. Schema version is `v` (currently 1).
+
+Each hybrid recall emits, in order:
+
+1. **`query`** (start) — query string, mode, filters, weights, embedder model.
+2. **`candidate`** (mid, ≤ `max_candidates`) — per session: raw + normalized
+   scores for bm25 / lsa / nomic / facet, weighted contributions, role boost
+   on the winning turn, subagent discount, final hybrid score.
+3. **`result`** (end) — final post-group `returned` rows (rank, session_id,
+   score, snippet_turn_index), `counts` (`bm25_hits`, `candidates`,
+   `after_filter`, `after_group`, `returned`, …), `timings_ms` (`bm25`,
+   `lsa`, `nomic`, `embed_query`, `facet`, `combine`, `build`, `group`,
+   `total`), `tokens` (`embed_query_chars`, `payload_bytes`), and skip
+   reasons when a layer soft-failed.
 
 Stdout JSON is unchanged (agents keep parsing it). Lineage is a separate
 stream from `--explain` (which adds thin `layers`/`related` fields on

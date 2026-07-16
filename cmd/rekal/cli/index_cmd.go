@@ -33,6 +33,9 @@ The index is local-only and never synced. It contains:
   - Session facets (author, branch, actor, counts) for fast filtering
   - File co-occurrence graph
   - Tool call indexes
+  - Knowledge layer: heading-anchored chunks of the repo's tracked prose
+    files (markdown/plain text) at HEAD, searched by recall's knowledge
+    block; kept fresh incrementally via git blob SHAs
 
 Rebuild when the index is out of date or after importing new data.
 'rekal sync' rebuilds the index automatically.
@@ -218,6 +221,13 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	}
 	if err := db.CreateFacetFTSIndex(indexDB); err != nil {
 		return err
+	}
+
+	// Knowledge layer: chunk the repo's tracked prose files at HEAD into the
+	// index (docs/design/knowledge-layer.md). Non-fatal — recall works
+	// without the layer, so a chunking failure must not fail the rebuild.
+	if err := refreshKnowledge(w, indexDB, gitRoot); err != nil {
+		fmt.Fprintf(w, "warning: knowledge layer skipped: %v\n", err)
 	}
 
 	// LSA pass.

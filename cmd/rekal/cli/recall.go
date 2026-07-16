@@ -47,6 +47,14 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		}
 	}
 
+	// Keep the knowledge layer fresh with HEAD. Watermark-gated: the steady
+	// state (no new commits since the last refresh) costs one rev-parse; a
+	// moved HEAD re-chunks only prose files whose blobs changed. Best-effort —
+	// recall proceeds on a stale or absent layer.
+	if err := refreshKnowledge(nil, indexDB, gitRoot); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: knowledge refresh failed: %v\n", err)
+	}
+
 	// Recall tuning + embedding backend come from .rekal/config.json. A bad
 	// config falls back to defaults with a warning — recall must keep working.
 	cfg, err := readMergedConfig(gitRoot)

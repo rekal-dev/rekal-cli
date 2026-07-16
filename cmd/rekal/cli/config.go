@@ -135,11 +135,11 @@ func (c *scoringLineageConfig) openLineage(stderr io.Writer) (search.Lineage, io
 // distinguish "absent — keep default" from an explicit 0 (e.g. lsa: 0 turns
 // the LSA layer off entirely).
 type weightsConfig struct {
-	BM25               *float64 `json:"bm25,omitempty"`
-	LSA                *float64 `json:"lsa,omitempty"`
+	BM25 *float64 `json:"bm25,omitempty"`
+	LSA  *float64 `json:"lsa,omitempty"`
 	// Backwards-compat note: the historical key was "nomic". We now accept
 	// and prefer "semantic". If both are present, "semantic" wins.
-	Semantic          *float64 `json:"semantic,omitempty"`
+	Semantic *float64 `json:"semantic,omitempty"`
 	// Deprecated: kept for transitional reads; ignored when "semantic" is set.
 	Nomic              *float64 `json:"nomic,omitempty"`
 	SteeringBoost      *float64 `json:"steering_boost,omitempty"`
@@ -184,9 +184,7 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 			return w, err
 		}
 	}
-	if w.Semantic == 0 && wc.Semantic == nil && wc.Nomic == nil {
-		// nothing explicitly set; keep default from DefaultWeights
-	}
+	// When neither semantic nor nomic is set, the DefaultWeights value stands.
 	if err := set(&w.SteeringBoost, wc.SteeringBoost, "steering_boost", false); err != nil {
 		return w, err
 	}

@@ -10,8 +10,8 @@ package search
 type Weights struct {
 	// Layer weights for the hybrid score. Normalized to sum to 1 before use,
 	// so only their ratio matters.
-	BM25  float64 // keyword precision
-	LSA   float64 // corpus-specific co-occurrence
+	BM25     float64 // keyword precision
+	LSA      float64 // corpus-specific co-occurrence
 	Semantic float64 // deep semantic understanding (historical layer key "nomic")
 
 	// SteeringBoost multiplies BM25 scores of human_steering turns — text a

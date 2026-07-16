@@ -21,7 +21,8 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 3. **Dispatch search mode:**
    - **With query text** → Hybrid search (BM25 + LSA + Nomic combined scoring).
    - **Without query text** → Filter-only search (latest sessions matching filters).
-4. **Output** — Structured JSON to stdout. Fields: `results`, `query`, `filters`, `mode`, `total`. Each result's `session` detail carries optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) when present, omitted otherwise — grouping/drill-down data, deliberately not a filter surface (see [agent-metadata.md](../../agent-metadata.md)).
+4. **Refresh the knowledge layer** — watermark-gated against HEAD: when the indexed commit matches, this is one `rev-parse`; when HEAD moved, only prose files whose git blob SHAs changed are re-chunked (see [knowledge-layer design](../../design/knowledge-layer.md)). Best-effort — recall proceeds on a stale or absent layer.
+5. **Output** — Structured JSON to stdout. Fields: `knowledge` (omitted when empty), `results`, `query`, `filters`, `mode`, `total`. Each result's `session` detail carries optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) when present, omitted otherwise — grouping/drill-down data, deliberately not a filter surface (see [agent-metadata.md](../../agent-metadata.md)).
 
 ---
 
@@ -38,6 +39,25 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 6. **Apply filters** — Actor, author, commit, file regex — all ANDed.
 7. **Fold subagent/workflow hits under their trunk conversation** — Sessions are grouped by walking `parent_session_id` to the root. Each group becomes one top-level result (headed by the group's best-scoring turn, which may belong to a descendant transcript), with the rest nested under `children` — capped to 3 per group so one large workflow can't dominate the result budget. A session with no parent and no matching descendants is unaffected: `children` is omitted.
 8. **Return top N conversations** — Sorted by each group's best hybrid score descending.
+
+### Knowledge layer (query provided)
+
+Alongside the session search, the query runs BM25 over `knowledge_chunks` —
+heading-anchored sections of the repo's tracked prose files (`.md`,
+`.markdown`, `.mdx`, `.txt`, `.text`, `.rst`, `.adoc`) at HEAD. Chunks are
+scored, **files are returned** (best chunk drives the score, anchor, and
+snippet; runner-up sections become `also` pointers; multiple matching
+sections earn a coverage bonus). Hits are **pointers, never file content** —
+the agent Reads the path/lines itself, live from HEAD, so served content is
+never stale. Each hit carries a `sessions` provenance edge: the ledger
+sessions that touched the file (`files_index` join).
+
+Knowledge and session scores are **never merged into one ranking** — a file
+hit at HEAD (current truth; next action: Read) and a session hit (history;
+next action: drill) have different epistemic status. The block is additive:
+`results` is byte-identical to pre-knowledge output, and the layer fails
+soft (no prose files, or an index.db predating the layer ⇒ no block).
+Capped at 5 file hits.
 
 ### Filter search (no query)
 
@@ -64,6 +84,18 @@ Multiple filters = AND.
 
 ```json
 {
+  "knowledge": [
+    {
+      "path": "docs/auth.md",
+      "anchor": "### Refresh rotation",
+      "lines": "41-78",
+      "snippet": "Refresh tokens rotate on every use; the old token is...",
+      "also": [{"anchor": "## Failure modes", "lines": "102-131"}],
+      "last_modified": "a3f9c21",
+      "sessions": ["01J8...", "01J9..."],
+      "score": 0.81
+    }
+  ],
   "results": [
     {
       "session_id": "...",
@@ -105,6 +137,10 @@ Multiple filters = AND.
   "total": 3
 }
 ```
+
+`knowledge` is present only when the query matched the repo's prose files at
+HEAD (see "Knowledge layer" above). Hits are pointers — Read `path` at
+`lines` for the content; `sessions` is the provenance edge into the ledger.
 
 `children` is present only when other matching transcripts (subagent runs,
 workflow steps, other agents in the same team) share this result's trunk

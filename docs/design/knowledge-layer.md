@@ -1,10 +1,19 @@
 # The knowledge layer (files at HEAD as memory)
 
-**Status:** proposed (2026-07). Index the repo's tracked prose files (markdown
-and plain text) into recall as a **knowledge layer**: file hits at HEAD
-returned alongside session hits, as pointers, cross-linked through the
+**Status:** implemented, v1 (2026-07). Index the repo's tracked prose files
+(markdown and plain text) into recall as a **knowledge layer**: file hits at
+HEAD returned alongside session hits, as pointers, cross-linked through the
 sessions that touched them. Derived entirely in `index.db` — zero bytes on
 the wire, no new commands, no new config.
+
+v1 ships the keyword-fresh layer (steps 1–5 of the sketch): chunker
+(`cmd/rekal/cli/knowledge/`), `knowledge_chunks` + guarded FTS in `index.db`
+(`db/knowledge.go`), blob-SHA incremental refresh at recall and full build at
+`rekal index` (`cli/knowledge_index.go`), the `knowledge` output block with
+provenance edges (`search/knowledge.go`), and the router-skill knowledge
+stratum. Chunk embeddings through the embedcache (step 2's semantic half) and
+the RekalBench knowledge task set (step 6) are the follow-up — the layer
+fails soft to keyword-only exactly as designed.
 
 ## Problem
 

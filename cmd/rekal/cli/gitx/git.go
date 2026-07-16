@@ -96,6 +96,42 @@ func ShowFile(gitRoot, ref, path string) []byte {
 	return out
 }
 
+// TrackedBlobs returns path → blob SHA for every tracked file at ref
+// (`git ls-tree -r <ref>`). Git content-addresses every tracked file, so this
+// is a free, exact change detector: the knowledge layer compares it against
+// the blob SHAs it indexed to find files needing a re-chunk. Returns nil on
+// error (e.g. a repo with no commits).
+func TrackedBlobs(gitRoot, ref string) map[string]string {
+	out, err := exec.Command("git", "-C", gitRoot, "ls-tree", "-r", ref).Output()
+	if err != nil {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		// Format: "<mode> blob <sha>\t<path>"
+		tab := strings.IndexByte(line, '\t')
+		if tab < 0 {
+			continue
+		}
+		meta := strings.Fields(line[:tab])
+		if len(meta) != 3 || meta[1] != "blob" {
+			continue
+		}
+		result[line[tab+1:]] = meta[2]
+	}
+	return result
+}
+
+// LastCommitShort returns the abbreviated SHA of the last commit touching
+// path, or "" when unknown.
+func LastCommitShort(gitRoot, path string) string {
+	out, err := exec.Command("git", "-C", gitRoot, "log", "-1", "--format=%h", "--", path).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // ConfigValue reads a git config value, or "" if unset.
 func ConfigValue(key string) string {
 	out, err := exec.Command("git", "config", key).Output()

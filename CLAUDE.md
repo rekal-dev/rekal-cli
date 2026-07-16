@@ -53,8 +53,14 @@ session discovery keep using the invoking worktree.
 
 - `root.go`: Root command (recall is the default) + command registration
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
-  index DB, call the `search` package, marshal JSON. The ranking engine itself
-  lives in `search/`.
+  index DB, refresh the knowledge layer (watermark-gated), call the `search`
+  package, marshal JSON. The ranking engine itself lives in `search/`.
+- `knowledge_index.go`: Knowledge-layer build/refresh — chunk the repo's
+  tracked prose files at HEAD into `index.db` (`knowledge_chunks`), diffing
+  stored git blob SHAs against `git ls-tree -r HEAD` so only changed files
+  re-chunk; commit-SHA watermark (`knowledge_head_sha`) makes the steady
+  state one rev-parse. Called by `index` (full) and recall (incremental,
+  best-effort). See `docs/design/knowledge-layer.md`
 - `checkpoint.go`: Capture session after commit
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
@@ -110,6 +116,9 @@ session discovery keep using the invoking worktree.
   `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
   `BranchTip` for the merged-only export gate, `MainWorktreeRoot` for the
   worktree-shared store) shared by the command and transport layers
+- `knowledge/`: Prose-file chunker for the knowledge layer — markdown/plain
+  text into heading-anchored sections (breadcrumb trails, 1-indexed line
+  ranges, content hashes). Pure functions, no git/DB
 - `search/`: Recall ranking engine — hybrid BM25 + LSA + Nomic scoring plus
   the additive facet layer (BM25 over per-session tool paths + command
   prefixes + steering text; `weights.facet_boost`, default 0.3, `0` =
@@ -128,7 +137,11 @@ session discovery keep using the invoking worktree.
   contrib + stage `timings_ms`; `result.semantic{used,backend,model}` names
   the real embedder — `http`|`embedded` + model id — distinct from the
   historical layer key `nomic` in weights/timings/skipped; observe-only,
-  ranking unchanged)
+  ranking unchanged), and the **knowledge layer** (`knowledge.go` — BM25 over
+  prose-file chunks at HEAD, chunks scored / files returned as pointers with
+  anchor + lines + `sessions` provenance edge; separate additive `knowledge`
+  block above `results`, never merged with session ranking; fails soft
+  without a knowledge FTS index — `docs/design/knowledge-layer.md`)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the
@@ -142,7 +155,9 @@ session discovery keep using the invoking worktree.
   population (incl. `PopulateFacetText` — per-session facet documents from
   the index's own tables, full + incremental — and the guarded
   `CreateFacetFTSIndex`, built by `index`/`sync` only when facet material
-  exists). `embedcache.go` is the content-hash-keyed embedding cache
+  exists). `knowledge.go` holds the knowledge layer's table
+  (`knowledge_chunks`, created on demand by `EnsureKnowledgeSchema` so old
+  index DBs upgrade in place) and the guarded `CreateKnowledgeFTSIndex`. `embedcache.go` is the content-hash-keyed embedding cache
   (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;
   a model switch invalidates by key construction
 - `embedhttp/`: HTTP embedding client — batched, hard-timeboxed so the

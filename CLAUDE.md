@@ -139,9 +139,10 @@ session discovery keep using the invoking worktree.
   post-commit hook can never stall; selected over the embedded nomic model
   via config. Two providers: `openai` (default; any OpenAI-compatible
   `/embeddings` server — vLLM/Ollama/TEI, or a gateway; a Cohere Embed model
-  here auto-sends `input_type` so Cohere works over the plain `/embeddings`
-  shape) and `bedrock` (Amazon Bedrock runtime, Cohere Embed models, bearer
-  API key, no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
+  here auto-sends `input_type` and client-caps each input at 2048 chars so
+  Portkey/Bedrock gateways that 400 before server-side truncate still work)
+  and `bedrock` (Amazon Bedrock runtime, Cohere Embed models, bearer API key,
+  no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
 - `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are

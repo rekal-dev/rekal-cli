@@ -37,6 +37,12 @@ const (
 	// stay inside typical request-size limits (Cohere Embed on Bedrock caps
 	// at 96 texts per invoke).
 	BatchSize = 64
+
+	// MaxInputChars caps each input sent on the OpenAI-compatible path when
+	// the model is Cohere Embed (incl. via Portkey/Bedrock gateways). Those
+	// endpoints reject inputs > 2048 chars with a 400 before any server-side
+	// truncate applies, so the client must cap first. Rune-counted.
+	MaxInputChars = 2048
 )
 
 // Provider values select the wire protocol.
@@ -169,10 +175,16 @@ func (c *Client) embed(inputs []string, query bool) ([][]float64, error) {
 
 // embedOpenAI speaks OpenAI-compatible POST {endpoint}/embeddings. For Cohere
 // Embed models served over this shape (a gateway in front of Bedrock/Cohere),
-// it adds Cohere's required input_type; other models omit it.
+// it adds Cohere's required input_type and caps each input at MaxInputChars;
+// other models omit input_type and are left uncapped.
 func (c *Client) embedOpenAI(inputs []string, query bool) ([][]float64, error) {
 	req := embedRequest{Model: c.cfg.Model, Input: inputs}
 	if strings.Contains(strings.ToLower(c.cfg.Model), "cohere") {
+		capped := make([]string, len(inputs))
+		for i, text := range inputs {
+			capped[i] = capChars(text, MaxInputChars)
+		}
+		req.Input = capped
 		req.InputType = "search_document"
 		if query {
 			req.InputType = "search_query"
@@ -298,4 +310,21 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// capChars returns at most n runes of s. Byte-length short-circuits the common
+// ASCII case; the rune path avoids splitting multi-byte UTF-8 (which would
+// produce invalid JSON string values and a 400 from the embedding server).
+func capChars(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if len(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }

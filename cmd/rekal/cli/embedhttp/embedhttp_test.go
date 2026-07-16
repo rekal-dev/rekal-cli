@@ -121,6 +121,70 @@ func TestEmbedOpenAI_NonCohereNoInputType(t *testing.T) {
 	}
 }
 
+func TestCapChars(t *testing.T) {
+	t.Parallel()
+	if got := capChars("short", 10); got != "short" {
+		t.Fatalf("short = %q, want unchanged", got)
+	}
+	long := strings.Repeat("a", MaxInputChars+100)
+	if got := capChars(long, MaxInputChars); len([]rune(got)) != MaxInputChars {
+		t.Fatalf("rune len = %d, want %d", len([]rune(got)), MaxInputChars)
+	}
+	// Multi-byte runes must not be split mid-codepoint.
+	emoji := strings.Repeat("🙂", MaxInputChars+5)
+	got := capChars(emoji, MaxInputChars)
+	if len([]rune(got)) != MaxInputChars {
+		t.Fatalf("emoji rune len = %d, want %d", len([]rune(got)), MaxInputChars)
+	}
+	if !json.Valid([]byte(`{"t":` + mustJSONString(t, got) + `}`)) {
+		t.Fatal("capped multi-byte string must remain valid UTF-8 JSON")
+	}
+}
+
+func mustJSONString(t *testing.T, s string) string {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	return string(b)
+}
+
+func TestEmbedOpenAI_CohereCapsLongInput(t *testing.T) {
+	t.Parallel()
+	var got embedRequest
+	srv := captureServer(t, &got)
+	defer srv.Close()
+
+	long := strings.Repeat("x", MaxInputChars+500)
+	c := New(Config{Endpoint: srv.URL + "/v1", Model: "@bedrock/cohere.embed-english-v3"})
+	if _, err := c.EmbedSessions(map[string]string{"s": long}); err != nil {
+		t.Fatalf("EmbedSessions: %v", err)
+	}
+	if len(got.Input) != 1 {
+		t.Fatalf("inputs = %d, want 1", len(got.Input))
+	}
+	if n := len([]rune(got.Input[0])); n != MaxInputChars {
+		t.Fatalf("capped len = %d, want %d", n, MaxInputChars)
+	}
+}
+
+func TestEmbedOpenAI_NonCohereLeavesLongInput(t *testing.T) {
+	t.Parallel()
+	var got embedRequest
+	srv := captureServer(t, &got)
+	defer srv.Close()
+
+	long := strings.Repeat("y", MaxInputChars+500)
+	c := New(Config{Endpoint: srv.URL + "/v1", Model: "text-embedding-3-small"})
+	if _, err := c.EmbedSessions(map[string]string{"s": long}); err != nil {
+		t.Fatalf("EmbedSessions: %v", err)
+	}
+	if len(got.Input) != 1 || got.Input[0] != long {
+		t.Fatalf("non-Cohere input must stay uncapped (got len %d)", len(got.Input[0]))
+	}
+}
+
 func TestEmbedSessions_BatchesRequests(t *testing.T) {
 	t.Parallel()
 	var requests atomic.Int64

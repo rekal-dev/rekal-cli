@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
@@ -134,6 +135,55 @@ func TestMergedConfig_ScoringLineageGlobalOnly(t *testing.T) {
 	}
 	if local.ScoringLineage != nil {
 		t.Fatalf("writeConfig must strip scoring_lineage, got %+v", local.ScoringLineage)
+	}
+}
+
+func TestOpenLineage_RotationWritesNDJSON(t *testing.T) {
+	// Sets env, so not parallel.
+	globalHome := t.TempDir()
+	t.Setenv("REKAL_CONFIG_HOME", globalHome)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	cfg := &scoringLineageConfig{
+		Enabled:       true,
+		Path:          "scoring-lineage.ndjson",
+		MaxCandidates: 5,
+		Rotation: &scoringLineageRotation{
+			MaxMegabytes: 1,
+			MaxBackups:   2,
+			MaxAgeDays:   1,
+		},
+	}
+	lin, closer, err := cfg.openLineage(io.Discard)
+	if err != nil {
+		t.Fatalf("openLineage: %v", err)
+	}
+	if closer != nil {
+		defer closer.Close() //nolint:errcheck
+	}
+	if lin == nil || lin.RunID() == "" {
+		t.Fatal("expected lineage with run_id")
+	}
+	lin.EmitQuery(search.LineageQuery{Query: "x", Mode: "hybrid"})
+	lin.StageResult(search.LineageResult{
+		Returned:  []search.LineageReturned{{Rank: 1, SessionID: "s1", Score: 0.5}},
+		Counts:    map[string]int{"returned": 1},
+		TimingsMS: map[string]int64{"total": 1},
+	})
+	lin.FlushResult(42)
+	if closer != nil {
+		_ = closer.Close()
+	}
+	path := filepath.Join(globalHome, "scoring-lineage.ndjson")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if !strings.Contains(string(data), `"event":"query"`) || !strings.Contains(string(data), `"event":"result"`) {
+		t.Fatalf("log missing events: %s", data)
+	}
+	if !strings.Contains(string(data), `"run_id":"`+lin.RunID()+`"`) {
+		t.Fatalf("log missing run_id: %s", data)
 	}
 }
 

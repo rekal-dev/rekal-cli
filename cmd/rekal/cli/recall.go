@@ -88,6 +88,11 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 	if err != nil {
 		return fmt.Errorf("marshal output: %w", err)
 	}
+	// Flush the staged lineage "result" event with the agent-facing payload
+	// size. No-op when lineage is off or nothing was staged (filter mode).
+	if filters.Lineage != nil {
+		filters.Lineage.FlushResult(len(data))
+	}
 	fmt.Fprintln(cmd.OutOrStdout(), string(data))
 	return nil
 }

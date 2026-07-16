@@ -13,6 +13,7 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Config is Rekal's configuration. Per-repo settings live in the gitignored
@@ -65,6 +66,18 @@ type scoringLineageConfig struct {
 	// MaxCandidates caps per-session candidate events (top of the pre-group
 	// ranked pool). Default 50.
 	MaxCandidates int `json:"max_candidates,omitempty"`
+	// Rotation configures size-based log rolling when Path is set. Omitted
+	// fields use defaults (10 MB / 5 backups / 14 days / compress). Ignored
+	// when Path is empty (stderr has nowhere to rotate).
+	Rotation *scoringLineageRotation `json:"rotation,omitempty"`
+}
+
+// scoringLineageRotation is the lumberjack size/retention knobs.
+type scoringLineageRotation struct {
+	MaxMegabytes int   `json:"max_megabytes,omitempty"`
+	MaxBackups   int   `json:"max_backups,omitempty"`
+	MaxAgeDays   int   `json:"max_age_days,omitempty"`
+	Compress     *bool `json:"compress,omitempty"` // pointer: absent → default true
 }
 
 // openLineage builds a search.Lineage sink from the config, or nil when
@@ -87,12 +100,33 @@ func (c *scoringLineageConfig) openLineage(stderr io.Writer) (search.Lineage, io
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return nil, nil, fmt.Errorf("scoring_lineage.path: %w", err)
 		}
-		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			return nil, nil, fmt.Errorf("scoring_lineage.path: %w", err)
+		rot := c.Rotation
+		maxMB, maxBackups, maxAge := 10, 5, 14
+		compress := true
+		if rot != nil {
+			if rot.MaxMegabytes > 0 {
+				maxMB = rot.MaxMegabytes
+			}
+			if rot.MaxBackups > 0 {
+				maxBackups = rot.MaxBackups
+			}
+			if rot.MaxAgeDays > 0 {
+				maxAge = rot.MaxAgeDays
+			}
+			if rot.Compress != nil {
+				compress = *rot.Compress
+			}
 		}
-		w = f
-		closer = f
+		lj := &lumberjack.Logger{
+			Filename:   path,
+			MaxSize:    maxMB,
+			MaxBackups: maxBackups,
+			MaxAge:     maxAge,
+			Compress:   compress,
+			LocalTime:  true,
+		}
+		w = lj
+		closer = lj
 	}
 	return search.NewNDJSONLineage(w, c.MaxCandidates), closer, nil
 }

@@ -161,6 +161,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	var timings map[string]int64
 	var skipped map[string]string
 	var totalStart time.Time
+	var embedQueryChars int
 	startStage := func() time.Time {
 		if !on {
 			return time.Time{}
@@ -173,9 +174,25 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		}
 	}
 	if on {
-		timings = make(map[string]int64, 8)
+		timings = make(map[string]int64, 10)
 		skipped = make(map[string]string)
 		totalStart = time.Now()
+		// Start event — join later candidate/result lines on run_id.
+		embedModel := ""
+		if qe != nil {
+			embedModel = qe.ModelName()
+		}
+		wb, wl, wn := w.layers3()
+		lin.EmitQuery(LineageQuery{
+			Query:   filters.Query,
+			Mode:    "hybrid",
+			Filters: map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
+			Weights: LineageWeights(w),
+			WeightsNormalized: LineageNormWeights{
+				BM25: wb, LSA: wl, Nomic: wn,
+			},
+			EmbedderModel: embedModel,
+		})
 	}
 
 	// Step 1: BM25 search.
@@ -200,10 +217,14 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 
 	// Step 3: Nomic deep semantic search (non-fatal).
 	tNomic := startStage()
-	nomicScores, nomicErr := nomicSearch(indexDB, filters.Query, gitRoot, qe)
+	nomicScores, embedMS, embedChars, nomicErr := nomicSearch(indexDB, filters.Query, gitRoot, qe)
 	stage("nomic", tNomic)
-	if nomicErr != nil && on {
-		skipped["nomic"] = nomicErr.Error()
+	if on {
+		timings["embed_query"] = embedMS
+		embedQueryChars = embedChars
+		if nomicErr != nil {
+			skipped["nomic"] = nomicErr.Error()
+		}
 	}
 
 	// Step 4: Facet layer — BM25 over per-session facet documents (tool
@@ -431,33 +452,26 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 
 	if on {
 		timings["total"] = time.Since(totalStart).Milliseconds()
-		norm := LineageNormWeights{}
-		if useNomic {
-			norm.BM25, norm.LSA, norm.Nomic = bm25W3, lsaW3, nomicW3
-		} else {
-			norm.BM25, norm.LSA = bm25W2, lsaW2
-		}
-		embedModel := ""
-		if qe != nil {
-			embedModel = qe.ModelName()
-		} else if useNomic {
-			embedModel = nomic.ModelName
-		}
 		var skipOut map[string]string
 		if len(skipped) > 0 {
 			skipOut = skipped
 		}
-		lin.Emit(LineageQuery{
-			Type:              "query",
-			TS:                time.Now().UTC(),
-			Query:             filters.Query,
-			Mode:              "hybrid",
-			Filters:           map[string]string{"file": filters.File, "actor": filters.Actor, "commit": filters.Commit, "author": filters.Author},
-			Weights:           LineageWeights(w),
-			WeightsNormalized: norm,
-			UseNomic:          useNomic,
-			EmbedderModel:     embedModel,
-			TimingsMS:         timings,
+		returned := make([]LineageReturned, 0, len(grouped))
+		for i, r := range grouped {
+			returned = append(returned, LineageReturned{
+				Rank:           i + 1,
+				SessionID:      r.SessionID,
+				Score:          r.Score,
+				SnippetTurnIdx: r.SnippetTurnIdx,
+				SnippetRole:    r.SnippetRole,
+				Children:       len(r.Children),
+			})
+		}
+		tokens := &LineageTokens{EmbedQueryChars: embedQueryChars}
+		lin.StageResult(LineageResult{
+			Returned:  returned,
+			TimingsMS: timings,
+			Tokens:    tokens,
 			Counts: map[string]int{
 				"bm25_hits":      len(bm25Hits),
 				"lsa_sessions":   len(lsaScores),
@@ -465,6 +479,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 				"facet_hits":     len(facetScores),
 				"candidates":     len(scoredResults),
 				"after_filter":   len(results),
+				"after_group":    len(grouped),
 				"returned":       len(grouped),
 			},
 			Skipped: skipOut,
@@ -499,7 +514,6 @@ func emitCandidateLineage(lin Lineage, scoredResults []scored, w Weights, useNom
 		}
 		sh := sc.hit
 		ev := LineageCandidate{
-			Type:         "candidate",
 			SessionID:    sc.sessionID,
 			RankPreGroup: i + 1,
 			BM25:         LineageLayer{Raw: round4(sh.bm25Raw), Norm: round4(cl.bm25Norm)},
@@ -527,7 +541,7 @@ func emitCandidateLineage(lin Lineage, scoredResults []scored, w Weights, useNom
 		if cl.parent != "" {
 			ev.Subagent = &LineageSubagent{Parent: cl.parent, Multiplier: w.SubagentDownweight}
 		}
-		lin.Emit(ev)
+		lin.EmitCandidate(ev)
 	}
 }
 
@@ -799,14 +813,14 @@ type QueryEmbedder interface {
 // different models live in incompatible spaces, so on a mismatch the layer is
 // skipped (scores nil → hybrid falls back to 2-way weights) rather than
 // comparing garbage. qe == nil selects the embedded nomic backend.
-func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder) (map[string]float64, error) {
+func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder) (scores map[string]float64, embedMS int64, embedChars int, err error) {
 	if qe == nil {
 		if !nomic.Supported() {
-			return nil, nil
+			return nil, 0, 0, nil
 		}
 		client, err := nomic.NewClient(gitRoot)
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
 		qe = nomicQueryEmbedder{client}
 	}
@@ -816,22 +830,25 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder
 	// built with a different backend) means the layer is skipped.
 	embeddings, err := db.QueryEmbeddings(indexDB, qe.ModelName())
 	if err != nil || len(embeddings) == 0 {
-		return nil, err
+		return nil, 0, 0, err
 	}
 
+	embedChars = len(query)
+	tEmbed := time.Now()
 	queryVec, err := qe.EmbedQuery(query)
+	embedMS = time.Since(tEmbed).Milliseconds()
 	if err != nil {
-		return nil, err
+		return nil, embedMS, embedChars, err
 	}
 
-	scores := make(map[string]float64)
+	scores = make(map[string]float64)
 	for sid, emb := range embeddings {
 		sim := lsa.CosineSimilarity(queryVec, emb)
 		if sim > 0 {
 			scores[sid] = sim
 		}
 	}
-	return scores, nil
+	return scores, embedMS, embedChars, nil
 }
 
 // nomicQueryEmbedder adapts the embedded nomic client to QueryEmbedder.

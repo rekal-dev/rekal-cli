@@ -53,6 +53,7 @@ func TestLoadSessionFacet(t *testing.T) {
 type stubEmbedder struct{}
 
 func (stubEmbedder) ModelName() string                    { return "test-model-with-no-vectors" }
+func (stubEmbedder) Backend() string                      { return EmbedderBackendHTTP }
 func (stubEmbedder) EmbedQuery(string) ([]float64, error) { return nil, errors.New("unused") }
 func (stubEmbedder) Close()                               {}
 

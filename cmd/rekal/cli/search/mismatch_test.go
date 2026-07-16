@@ -26,12 +26,18 @@ func TestNomicSearch_ModelMismatchReportsReason(t *testing.T) {
 		t.Fatalf("WriteIndexState: %v", err)
 	}
 
-	scores, _, _, err := nomicSearch(indexDB, "auth", t.TempDir(), stubEmbedder{})
+	out, err := nomicSearch(indexDB, "auth", t.TempDir(), stubEmbedder{})
 	if err == nil {
 		t.Fatal("expected model-mismatch error, got nil")
 	}
-	if scores != nil {
-		t.Fatalf("scores = %v, want nil", scores)
+	if out.Scores != nil {
+		t.Fatalf("scores = %v, want nil", out.Scores)
+	}
+	if out.Backend != EmbedderBackendHTTP {
+		t.Fatalf("backend = %q, want %s", out.Backend, EmbedderBackendHTTP)
+	}
+	if out.Model != (stubEmbedder{}).ModelName() {
+		t.Fatalf("model = %q, want stub model", out.Model)
 	}
 	if !strings.Contains(err.Error(), "no vectors for query model") {
 		t.Fatalf("err = %v, want no vectors for query model", err)
@@ -52,12 +58,12 @@ func TestNomicSearch_NoSemanticVectorsIsQuietSkip(t *testing.T) {
 		t.Fatalf("StoreEmbeddings: %v", err)
 	}
 
-	scores, _, _, err := nomicSearch(indexDB, "auth", t.TempDir(), stubEmbedder{})
+	out, err := nomicSearch(indexDB, "auth", t.TempDir(), stubEmbedder{})
 	if err != nil {
 		t.Fatalf("err = %v, want nil (no semantic models)", err)
 	}
-	if scores != nil {
-		t.Fatalf("scores = %v, want nil", scores)
+	if out.Scores != nil {
+		t.Fatalf("scores = %v, want nil", out.Scores)
 	}
 }
 
@@ -92,7 +98,8 @@ func TestLineage_RecordsNomicMismatchSkip(t *testing.T) {
 			continue
 		}
 		var r struct {
-			Skipped map[string]string `json:"skipped"`
+			Skipped  map[string]string `json:"skipped"`
+			Semantic LineageSemantic   `json:"semantic"`
 		}
 		if err := json.Unmarshal([]byte(line), &r); err != nil {
 			t.Fatalf("result: %v", err)
@@ -101,6 +108,12 @@ func TestLineage_RecordsNomicMismatchSkip(t *testing.T) {
 			sawSkip = true
 			if !strings.Contains(reason, "cohere") {
 				t.Fatalf("skip reason missing index model: %s", reason)
+			}
+			if r.Semantic.Used {
+				t.Fatalf("semantic.used = true on mismatch skip: %+v", r.Semantic)
+			}
+			if r.Semantic.Backend != EmbedderBackendHTTP || r.Semantic.Model != (stubEmbedder{}).ModelName() {
+				t.Fatalf("semantic = %+v, want http + stub model", r.Semantic)
 			}
 		}
 	}

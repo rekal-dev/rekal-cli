@@ -106,6 +106,9 @@ func New(cfg Config) *Client {
 // ModelName returns the model vectors are stored under.
 func (c *Client) ModelName() string { return c.cfg.Model }
 
+// Backend identifies this as the HTTP embedding path (vs embedded nomic).
+func (c *Client) Backend() string { return "http" }
+
 // Close exists for symmetry with the embedded backend; nothing to release.
 func (c *Client) Close() {}
 

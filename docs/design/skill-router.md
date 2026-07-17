@@ -53,12 +53,14 @@ Bars and labels live in scripts — not in tip prose.
 flowchart LR
   r["rekal JSON"] --> rr["recall-route.py"]
   rr --> hg["hunt-gate.py"]
-  hg -->|knowledge non-empty| k["KNOWLEDGE<br/>exit 0 — no episode inject"]
-  hg -->|top≥0.9 or gap≥0.04 n≥2| i["INJECT / PASS_EPISODE"]
+  hg -->|top≥0.9 or gap≥0.04 n≥2| i["INJECT / PASS_EPISODE<br/>even if knowledge present"]
+  hg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
   hg -->|else| s["SILENCE"]
 ```
 
-Single result: absolute top ≥ 0.9 only (gap alone must not pass).
+Single result: absolute top ≥ 0.9 only (gap alone must not pass). Knowledge
+is a **fallback** when the episode gate fails — never an unconditional
+override (prose-heavy repos always return docs).
 
 ## Other gates
 

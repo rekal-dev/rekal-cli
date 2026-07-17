@@ -37,15 +37,16 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 ## Silence is a machine event
 
-Do not invent thresholds. Pipe recall through the route script. No `INJECT` /
-`KNOWLEDGE` line → stay silent on memory (or re-route). Near-misses are noise.
+Do not invent thresholds. Pipe recall through the route script. `INJECT` wins
+over a non-empty knowledge block; `KNOWLEDGE` is the fallback when the episode
+gate fails. No `INJECT` / `KNOWLEDGE` → stay silent on memory. Near-misses are noise.
 
 ## Dispatch — one Read or one script, then stop
 
 | The question is… | Do |
 |---|---|
 | Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/recall-route.py"` → on `KNOWLEDGE`, Read `path`@`lines`, **stop** |
-| Pointed past episode | same pipeline → on `INJECT`, `Read references/hunt.md` and drill; on `SILENCE`, stop |
+| Pointed past episode | same pipeline → on `INJECT`, `Read references/hunt.md` and drill; on `KNOWLEDGE`/`SILENCE`, stop |
 | Why / decision arc | `Read references/why.md` · gate gather with `scripts/why-trail-gate.py` |
 | Analytical patterns | `Read references/mine.md` |
 | File / line / commit archaeology | `Read references/provenance.md` |

@@ -142,11 +142,13 @@ session discovery keep using the invoking worktree.
   `--explain` enrichments (per-layer normalized scores + query-time
   related-session joins over `files_index`; default output unchanged
   without the flag), and optional scoring-lineage NDJSON (`lineage.go` —
-  global `scoring_lineage` config only; default off; per-layer raw/norm/
-  contrib + stage `timings_ms`; `result.semantic{used,backend,model}` names
-  the real embedder — `http`|`embedded` + model id — distinct from the
-  historical layer key `nomic` in weights/timings/skipped; observe-only,
-  ranking unchanged), and the **knowledge layer** (`knowledge.go` — hybrid
+  global `scoring_lineage` config only; default off; schema v3: per-layer
+  raw/norm/contrib + stage `timings_ms` + candidate/returned `confidence`/`mass`
+  + `result.knowledge` file hits with winning-chunk bm25/semantic;
+  `result.semantic{used,backend,model}` names the real embedder —
+  `http`|`embedded` + model id — distinct from the historical layer key
+  `nomic` in weights/timings/skipped; observe-only, ranking unchanged), and
+  the **knowledge layer** (`knowledge.go` — hybrid
   BM25 + chunk-vector cosine over prose-file chunks at HEAD, blended with the
   `layers2` keyword/semantic split, query vector shared from the session
   semantic pass; chunks scored / files returned as pointers with

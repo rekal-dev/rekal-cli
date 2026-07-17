@@ -94,6 +94,8 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 				RankPreGroup int                `json:"rank_pre_group"`
 				Contrib      map[string]float64 `json:"contrib"`
 				BestTurn     *LineageBestTurn   `json:"best_turn"`
+				Confidence   float64            `json:"confidence"`
+				Mass         float64            `json:"mass"`
 			}
 			if err := json.Unmarshal([]byte(line), &c); err != nil {
 				t.Fatalf("candidate: %v", err)
@@ -107,20 +109,27 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 			if c.BestTurn == nil || c.BestTurn.Role == "" {
 				t.Fatalf("best_turn missing: %+v", c.BestTurn)
 			}
+			if c.Confidence <= 0 {
+				t.Fatalf("candidate missing confidence: %+v", c)
+			}
 		case "result":
 			sawResult = true
 			var r struct {
-				Returned  []LineageReturned `json:"returned"`
-				Counts    map[string]int    `json:"counts"`
-				TimingsMS map[string]int64  `json:"timings_ms"`
-				Semantic  LineageSemantic   `json:"semantic"`
-				Tokens    *LineageTokens    `json:"tokens"`
+				Returned  []LineageReturned     `json:"returned"`
+				Knowledge []LineageKnowledgeHit `json:"knowledge"`
+				Counts    map[string]int        `json:"counts"`
+				TimingsMS map[string]int64      `json:"timings_ms"`
+				Semantic  LineageSemantic       `json:"semantic"`
+				Tokens    *LineageTokens        `json:"tokens"`
 			}
 			if err := json.Unmarshal([]byte(line), &r); err != nil {
 				t.Fatalf("result: %v", err)
 			}
 			if len(r.Returned) < 1 || r.Returned[0].Rank != 1 {
 				t.Fatalf("returned: %+v", r.Returned)
+			}
+			if r.Returned[0].Confidence <= 0 {
+				t.Fatalf("returned missing confidence/mass: %+v", r.Returned[0])
 			}
 			if r.Counts["after_group"] < 1 || r.Counts["candidates"] < 1 {
 				t.Fatalf("counts: %+v", r.Counts)

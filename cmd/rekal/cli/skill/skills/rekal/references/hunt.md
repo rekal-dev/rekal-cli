@@ -21,9 +21,10 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 | `SILENCE …` | No confident episode and no knowledge. Say so. Do not pad with near-misses. |
 
 Bars live only in `scripts/hunt-gate.py` (via recall-route): absolute
-`confidence` ≥ 0.70 (and raw `mass` floor when present). Max-normalized
-`score` alone is not enough — junk queries also normalize near 1.0.
-Confident episode outranks a non-empty knowledge block. No gate output → SILENCE.
+`confidence` ≥ 0.70 (soft ≥ 0.68 with gap ≥ 0.04; raw `mass` floor when
+present). Max-normalized `score` alone is not enough — junk queries also
+normalize near 1.0. Confident episode outranks a non-empty knowledge block.
+No gate output → SILENCE.
 
 ## 2. Drill, cheapest first
 

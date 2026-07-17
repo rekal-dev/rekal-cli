@@ -87,11 +87,12 @@ type knowledgeChunkHit struct {
 // recall, shared); when the session layer skipped but an HTTP query embedder
 // exists, the query is embedded lazily — and only if chunk vectors for that
 // model are actually stored. Never fails recall: any error returns an absent
-// or keyword-only layer.
-func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) []KnowledgeHit {
+// or keyword-only layer. The second return is scoring-lineage detail (nil
+// when the layer is off) — never written to recall stdout JSON.
+func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) ([]KnowledgeHit, []LineageKnowledgeHit) {
 	hits := knowledgeBM25(indexDB, query)
 	if len(hits) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	hashes := make([]string, len(hits))
@@ -109,7 +110,7 @@ func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe Query
 			}
 		}
 		if maxBM <= 0 {
-			return nil
+			return nil, nil
 		}
 		for i := range hits {
 			hits[i].score = hits[i].bm25 / maxBM
@@ -213,8 +214,9 @@ func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec
 // aggregateKnowledge folds chunk candidates (sorted by combined score
 // descending) into file-level hits: best chunk drives the score and supplies
 // snippet+anchor, runners-up become Also pointers, extra matching sections
-// earn a coverage bonus.
-func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoot string) []KnowledgeHit {
+// earn a coverage bonus. LineageKnowledgeHit carries the winning chunk's
+// raw signals for scoring_lineage (never stdout).
+func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoot string) ([]KnowledgeHit, []LineageKnowledgeHit) {
 	type fileAgg struct {
 		best   knowledgeChunkHit
 		others []knowledgeChunkHit
@@ -240,11 +242,13 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 	})
 
 	out := make([]KnowledgeHit, 0, knowledgeLimit)
+	lin := make([]LineageKnowledgeHit, 0, knowledgeLimit)
 	for _, path := range order {
 		if len(out) >= knowledgeLimit {
 			break
 		}
 		f := files[path]
+		score := round2(scoreOf(f))
 		hit := KnowledgeHit{
 			Path:         path,
 			Anchor:       f.best.anchor,
@@ -252,7 +256,7 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 			Snippet:      extractSnippet(f.best.content, query),
 			LastModified: gitx.LastCommitShort(gitRoot, path),
 			Sessions:     knowledgeSessions(indexDB, path),
-			Score:        round2(scoreOf(f)),
+			Score:        score,
 		}
 		for i, o := range f.others {
 			if i >= knowledgeAlsoLimit {
@@ -264,8 +268,16 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 			})
 		}
 		out = append(out, hit)
+		lin = append(lin, LineageKnowledgeHit{
+			Rank:     len(out),
+			Path:     path,
+			Anchor:   f.best.anchor,
+			Score:    score,
+			BM25:     round4(f.best.bm25),
+			Semantic: round4(f.best.semantic),
+		})
 	}
-	return out
+	return out, lin
 }
 
 // knowledgeSessions loads the provenance edge: sessions that touched the

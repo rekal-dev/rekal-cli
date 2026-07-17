@@ -133,6 +133,27 @@ func TestHuntGateScript(t *testing.T) {
 		t.Fatalf("want SILENCE, got %s", out)
 	}
 
+	// BUG 11: offtopic confidence (~0.63) must not soft-pass even with strong mass + gap.
+	offtopicJSON := `{"results":[{"confidence":0.63,"mass":4.0,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(offtopicJSON)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("offtopic conf 0.63 should SILENCE, got %s", out)
+	}
+	if !strings.Contains(string(out), "SILENCE") {
+		t.Fatalf("want SILENCE for offtopic, got %s", out)
+	}
+
+	// With confidence present, never fall back to max-norm score for gating.
+	scoreOnlyMixed := `{"results":[{"confidence":0.5,"score":1.19},{"score":0.95}],"knowledge":[]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(scoreOnlyMixed)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("confidence set must not gate on score, got %s", out)
+	}
+
 	silenceJSON := `{"results":[{"confidence":0.5,"score":0.5},{"confidence":0.49,"score":0.49}],"knowledge":[]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(silenceJSON)

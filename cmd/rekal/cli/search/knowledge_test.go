@@ -101,7 +101,7 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 		t.Skipf("FTS extension unavailable: %v", err)
 	}
 
-	if hits := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
+	if hits, _ := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
 		t.Fatalf("knowledgeSearch without an index should be nil, got %+v", hits)
 	}
 
@@ -112,7 +112,7 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 	if err := db.CreateKnowledgeFTSIndex(indexDB); err != nil {
 		t.Fatalf("guarded create should be a no-op, got %v", err)
 	}
-	if hits := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
+	if hits, _ := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
 		t.Fatalf("knowledgeSearch with an empty table should be nil, got %+v", hits)
 	}
 }
@@ -172,9 +172,12 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 	}
 
 	queryVec := []float64{1, 0, 0}
-	hits := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "test-model")
+	hits, knowLin := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "test-model")
 	if len(hits) != 2 {
 		t.Fatalf("want 2 BM25 candidate hits, got %+v", hits)
+	}
+	if len(knowLin) != 2 {
+		t.Fatalf("want lineage knowledge hits matching stdout, got %+v", knowLin)
 	}
 	for _, h := range hits {
 		if h.Path == "docs/orphan.md" {
@@ -184,9 +187,12 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 	if hits[0].Path != "docs/deploy.md" {
 		t.Fatalf("semantic-aligned BM25 candidate should rank first, got %+v", hits)
 	}
+	if knowLin[0].Path != "docs/deploy.md" || knowLin[0].BM25 <= 0 || knowLin[0].Semantic <= 0 {
+		t.Fatalf("lineage should carry winning-chunk bm25/semantic: %+v", knowLin[0])
+	}
 
 	// Unknown model → no vectors → keyword-only ranking among BM25 hits.
-	kw := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "other-model")
+	kw, _ := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "other-model")
 	if len(kw) != 2 {
 		t.Fatalf("keyword-only should return both BM25 hits, got %+v", kw)
 	}

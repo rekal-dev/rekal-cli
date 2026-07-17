@@ -253,7 +253,7 @@ Every line is one JSON object with a shared envelope:
 {"ts":"2026-07-16T03:00:00.000Z","v":1,"run_id":"a1b2c3d4e5f60708","event":"query", ...}
 ```
 
-`run_id` joins all events from one recall. Schema version is `v` (currently 2).
+`run_id` joins all events from one recall. Schema version is `v` (currently 3).
 
 Each hybrid recall emits, in order:
 
@@ -261,15 +261,18 @@ Each hybrid recall emits, in order:
    `embedder_backend` (`http` | `embedded`) and `embedder_model`.
 2. **`candidate`** (mid, ≤ `max_candidates`) — per session: raw + normalized
    scores for bm25 / lsa / nomic / facet, weighted contributions, role boost
-   on the winning turn, subagent discount, final hybrid score.
+   on the winning turn, subagent discount, final hybrid `score`, plus absolute
+   `confidence` / raw BM25 `mass` (the silence-gate signals).
 3. **`result`** (end) — final post-group `returned` rows (rank, session_id,
-   score, snippet_turn_index), `counts` (`bm25_hits`, `candidates`,
-   `after_filter`, `after_group`, `returned`, …), `timings_ms` (`bm25`,
-   `lsa`, `nomic`, `embed_query`, `facet`, `combine`, `build`, `group`,
-   `total`), `semantic` (`used`, `backend`, `model` — whether the deep
-   vector layer scored and which embedder did it; known only after search),
-   `tokens` (`embed_query_chars`, `payload_bytes`), and skip reasons when
-   a layer soft-failed.
+   score, confidence, mass, snippet_turn_index), `knowledge` file hits
+   (rank, path, anchor, score, winning-chunk `bm25` / `semantic`), `counts`
+   (`bm25_hits`, `candidates`, `after_filter`, `after_group`, `returned`,
+   `knowledge_hits`, …), `timings_ms` (`bm25`, `lsa`, `nomic`, `embed_query`,
+   `facet`, `combine`, `build`, `group`, `knowledge`, `total`), `semantic`
+   (`used`, `backend`, `model` — whether the deep vector layer scored and
+   which embedder did it; known only after search), `tokens`
+   (`embed_query_chars`, `payload_bytes`), and skip reasons when a layer
+   soft-failed.
 
 The hybrid weight / timing / skip key `nomic` is the historical name of the
 deep semantic *layer*, not the model. Prefer `semantic.model` /

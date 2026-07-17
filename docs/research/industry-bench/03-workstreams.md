@@ -141,11 +141,11 @@ useful simultaneous agents: 3–4.
 
 | WS | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| A | Datasets | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LongMemEval-S + LoCoMo downloaded, normalized, `verify_dataset.py` green (500/23867/246750 and 10/272/5882); MSC + LongMemEval-M still open |
-| B | sh-gen | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | toy + LME-S limit-1/3 verify green (~100s/conv); stock recall hits gold on `e47becba` (0.87); full 500-conv ~12h serial — `runs/notes/2026-07-17-ws-b-lme-s-real-ingest.md` |
+| A | Datasets | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S + LoCoMo normalize/verify green; Penfield known-bad 99 rows committed (`locomo-known-bad.jsonl`); MSC + LME-M still open |
+| B | sh-gen | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S limit-1/3 + LoCoMo conv-26 verify green; LME-S limit-20 ingest running; recall gold on e47becba (0.87) |
 | C | Modes | open | — | |
 | D | Calibration | open | — | pre-registration gate; abstention separation observed on toy (conf 0.21 vs 0.33) |
-| E | Shim + scoring | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | stock smoke on LME-S `e47becba`: evidence_hit=1.0, ctx_tok≈272, answer_path≈315; lock-retry in shim; exact-match scorer sanity-wrong=0 — `runs/smoke/lme-s-e47becba/` |
+| E | Shim + scoring | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S e47becba smoke evidence_hit=1.0; LoCoMo conv-26 first-10 evidence_hit=0.90 (~210 ctx tok); `--limit-questions` on shim |
 | F | Baselines | open | — | |
 | G | Analysis + paper | open | — | claim #1 has first toy-scale evidence |
 

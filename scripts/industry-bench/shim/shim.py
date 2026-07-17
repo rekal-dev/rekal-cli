@@ -174,12 +174,15 @@ def smoke_one(
     conversations_jsonl: Path,
     conversation_id: str,
     out_dir: Path,
+    limit_questions: int = 0,
 ) -> dict:
     """End-to-end smoke for one pre-ingested conversation's questions."""
     repo = workdir / conversation_id / "repo"
     if not (repo / ".rekal").exists():
         raise FileNotFoundError(f"missing ingested repo {repo}")
     questions = load_questions(conversations_jsonl, conversation_id)
+    if limit_questions:
+        questions = questions[:limit_questions]
     env = rekal_env(repo, workdir / conversation_id / "claude-config", rekal)
     per_q = []
     for q in questions:
@@ -267,6 +270,8 @@ def main() -> None:
     p_smoke.add_argument("--input", type=Path, required=True, help="conversations.jsonl")
     p_smoke.add_argument("--out", type=Path, required=True, help="runs/... output dir")
     p_smoke.add_argument("--rekal", default="rekal")
+    p_smoke.add_argument("--limit-questions", type=int, default=0,
+                         help="only first N questions (LoCoMo smoke)")
 
     args = ap.parse_args()
     rekal = Path(args.rekal).resolve()
@@ -274,7 +279,14 @@ def main() -> None:
         env = rekal_env(args.repo.resolve(), None, rekal)
         print(json.dumps(search(rekal, args.repo.resolve(), args.query, args.limit, env), indent=2))
     elif args.cmd == "smoke":
-        smoke_one(rekal, args.workdir.resolve(), args.input, args.conversation_id, args.out)
+        smoke_one(
+            rekal,
+            args.workdir.resolve(),
+            args.input,
+            args.conversation_id,
+            args.out,
+            limit_questions=args.limit_questions,
+        )
 
 
 if __name__ == "__main__":

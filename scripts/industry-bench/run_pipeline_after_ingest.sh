@@ -38,7 +38,8 @@ wait_shards() {
       i=$((i + SHARD_SIZE))
     done
     local running
-    running="$(pgrep -f "sh_gen/gen.py.*imb-lme-s" 2>/dev/null | wc -l | tr -d ' ')"
+    running="$(pgrep -f "sh_gen/gen.py.*imb-lme-s" 2>/dev/null | wc -l | tr -d ' ' || true)"
+    [[ -z "$running" ]] && running=0
     log "shards_finished=$done/$EXPECTED_SHARDS (verify_soft_fail=$failed) ingest_procs=$running"
     if [[ "$done" -ge "$EXPECTED_SHARDS" ]]; then
       if [[ "$failed" -gt 0 ]]; then

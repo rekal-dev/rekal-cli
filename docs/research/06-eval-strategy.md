@@ -89,7 +89,7 @@ all labeled repos (raw SQL over the corpus, no new labeling):
   differ — but directional, at a scale no A/B can reach, and honest about
   being a correlation.
 - **Provenance chains followed** — how often an agent walks
-  artifact→commit→session→intent in practice (the `rekal-provenance`
+  artifact→commit→session→intent in practice (`references/provenance.md`
   playbook), evidence the pointer structure gets used, not just shipped.
 
 State the confounds plainly: this is a natural experiment, not a controlled

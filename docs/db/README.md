@@ -317,6 +317,49 @@ CREATE TABLE IF NOT EXISTS session_embeddings (
 
 ---
 
+## `knowledge_chunks`
+
+Heading-anchored sections of tracked prose files at HEAD (markdown / plain
+text). Derived and local-only — rebuilt by `rekal index` / watermark refresh
+at recall. See [knowledge-layer design](../design/knowledge-layer.md).
+
+```sql
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id          VARCHAR PRIMARY KEY,
+    path        VARCHAR NOT NULL,
+    anchor      VARCHAR,
+    breadcrumb  VARCHAR,
+    start_line  INTEGER NOT NULL,
+    end_line    INTEGER NOT NULL,
+    content     VARCHAR NOT NULL,
+    content_hash VARCHAR NOT NULL,
+    blob_sha    VARCHAR NOT NULL
+);
+```
+
+Guarded FTS over `content` (`fts_main_knowledge_chunks`) — built only when
+chunks exist. Recall BM25-caps candidates (≤100), then cosine-re-ranks those
+hashes only (no full-corpus embedding scan).
+
+---
+
+## `knowledge_embeddings`
+
+Content-hash + model keyed vectors for knowledge chunks (same embed-cache
+path as session embeddings). Filled by background `rekal embed` after
+structural index/sync, and by a budgeted bite in the post-commit hook.
+
+```sql
+CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+    content_hash VARCHAR NOT NULL,
+    model        VARCHAR NOT NULL,
+    embedding    FLOAT[],
+    PRIMARY KEY (content_hash, model)
+);
+```
+
+---
+
 ## `file_cooccurrence`
 
 File co-occurrence graph derived from tool calls. Two files that appear in the same session are co-occurring.

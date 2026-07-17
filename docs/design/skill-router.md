@@ -47,20 +47,22 @@ ledger for the why that was.*
 
 ## Recall route (knowledge vs episode vs silence)
 
-Bars and labels live in scripts — not in tip prose.
+Bars live in scripts — not tip prose. Ranking still uses max-normalized
+`score`; the gate uses absolute `confidence` (and raw BM25 `mass`).
 
 ```mermaid
 flowchart LR
   r["rekal JSON"] --> rr["recall-route.py"]
   rr --> hg["hunt-gate.py"]
-  hg -->|top≥0.9 or gap≥0.04 n≥2| i["INJECT / PASS_EPISODE<br/>even if knowledge present"]
+  hg -->|confidence≥0.70<br/>mass floor when set| i["INJECT / PASS_EPISODE<br/>even if knowledge present"]
   hg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
   hg -->|else| s["SILENCE"]
 ```
 
-Single result: absolute top ≥ 0.9 only (gap alone must not pass). Knowledge
-is a **fallback** when the episode gate fails — never an unconditional
-override (prose-heavy repos always return docs).
+`confidence` = `max(saturate(bm25), cosine) + 0.15·saturate(facet)` — never
+divided by the candidate-set max (junk queries also normalize `score` ≈ 1.0).
+Soft path: confidence ≥ 0.55 with gap ≥ 0.04. Knowledge is a **fallback**
+when the episode gate fails — never an unconditional override.
 
 ## Other gates
 

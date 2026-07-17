@@ -44,6 +44,8 @@ $ rekal "should webhook retries use a fixed delay?"
     {
       "session_id": "01JNQX8F2K9M...",
       "score": 0.87,
+      "confidence": 0.81,
+      "mass": 5.4,
       "snippet": "...no, a fixed 5s delay stampedes the downstream on
                   recovery. Use exponential backoff with jitter instead.",
       "snippet_role": "human_steering",
@@ -58,6 +60,9 @@ $ rekal "should webhook retries use a fixed delay?"
 }
 ```
 
+`score` ranks within the result set (max-normalized). The skill silence gate
+uses absolute `confidence` (and raw BM25 `mass`) so junk queries do not
+clear the bar just by being the best of a weak set.
 The agent gets the decision **and the reason the alternative was rejected** — sourced from the human's own mid-course correction — before it wastes a round re-proposing it. That is the whole product in one exchange. It drills in for the full reasoning with one more call:
 
 ```console
@@ -91,7 +96,8 @@ The full version: [SOUL.md](SOUL.md).
 
 The design is argued and measured in our paper — *"Why Git Is the Memory
 Solution for the Agentic Development Lifecycle"*
-([docs/research/paper/](docs/research/paper/)): memory bound to git inherits
+([arXiv:2607.14390](https://arxiv.org/abs/2607.14390),
+[docs/research/paper/](docs/research/paper/)): memory bound to git inherits
 its hard guarantees instead of rebuilding them; retrieval is closed as a
 seed-supply problem (honest grep floors, a mechanism study, the facet term);
 and a gated router answers each question kind — structure, episode, or
@@ -132,7 +138,7 @@ rekal init
 
 - `.rekal/` directory containing `data.db` (shared truth) and `index.db` (local search index)
 - A `post-commit` and `pre-push` git hook (marked `# managed by rekal`)
-- The Claude Code skill suite under `.claude/skills/` (see [Agent skills](#agent-skills))
+- The Claude Code skill under `.claude/skills/rekal/` (see [Agent skill](#agent-skill))
 - One marker-tagged sentence in `CLAUDE.md` pointing agents at the skill (created if missing; your own content is never touched)
 - An orphan branch `rekal/<your-email>` for transport
 - Appends `.rekal/` to your `.gitignore`
@@ -141,9 +147,9 @@ That one sentence is the whole developer experience for most users: init,
 then commit and push as normal — your agent routes its own memory from there.
 
 Running `rekal init` again in an already-initialized repo does **not** rebuild
-your store. It refreshes the version-managed skills and hooks and leaves your
-data untouched — so after you upgrade the binary, `rekal init` is how new or
-changed skills reach an existing repo. A full reinitialize still requires
+your store. It refreshes the version-managed skill and hooks and leaves your
+data untouched — so after you upgrade the binary, `rekal init` is how skill
+updates reach an existing repo. A full reinitialize still requires
 `rekal clean` first.
 
 ### Tear down
@@ -156,9 +162,9 @@ rekal clean
 
 - Deletes the `.rekal/` directory and all its contents
 - Removes the git hooks (only the ones marked `# managed by rekal`)
-- Removes the installed skill suite (`.claude/skills/rekal*/`), pruning
-  `.claude/skills/` and `.claude/` only if they are left empty — your own
-  `.claude` content is never touched
+- Removes the installed skill (`.claude/skills/rekal/` plus any legacy
+  `rekal-*` companion dirs), pruning `.claude/skills/` and `.claude/` only
+  if they are left empty — your own `.claude` content is never touched
 - Removes the marker-tagged `CLAUDE.md` sentence (deleting the file only if
   nothing else remains)
 
@@ -190,14 +196,15 @@ flowchart LR
         D -->|"rekal sync"| E
         E --- F["BM25 FTS"]
         E --- G["LSA Embeddings"]
-        E --- N["Nomic Deep Embeddings"]
+        E --- N["Deep Embeddings"]
         E --- H["Co-occurrence"]
         E --- I["Facets"]
+        E --- KN["Knowledge chunks"]
     end
 
     subgraph query ["Query"]
-        J["rekal 'keyword'"] -->|"hybrid search"| E
-        E -->|"scored JSON"| K["Agent"]
+        J["rekal 'keyword'"] -->|"hybrid + knowledge"| E
+        E -->|"scored JSON<br/>confidence · mass"| K["Agent"]
         K -->|"rekal query<br/>--session &lt;id&gt;"| B
         B -->|"full conversation"| K
     end
@@ -214,7 +221,7 @@ The flow: commit → capture → push → sync → recall.
 
 | You do | Rekal does |
 |--------|------------|
-| `rekal init` (once per repo) | Creates `.rekal/`, installs git hooks, writes the agent skill suite |
+| `rekal init` (once per repo) | Creates `.rekal/`, installs git hooks, writes the agent skill (tip + scripts + references) |
 | `git commit` | Hook runs `rekal checkpoint` — snapshots your active AI session into `data.db` (append-only) |
 | `git push` | Hook runs `rekal push` — encodes only your unexported data into compact wire format (zstd + string interning) and pushes to your orphan branch `rekal/<email>` |
 | `rekal sync` (manual, when you want team context) | Fetches teammates' orphan branches, imports their sessions into your local DB and rebuilds the search index |
@@ -226,7 +233,7 @@ Day-to-day: commit and push as normal. Everything else is automatic.
 
 | Agent does | Rekal does |
 |------------|------------|
-| `rekal "auth middleware"` | Runs hybrid search (BM25 + LSA + Nomic + a facet layer over tool metadata), returns scored JSON with `snippet_turn_index` pointing to the best-matching turn |
+| `rekal "auth middleware"` | Hybrid search (BM25 + LSA + deep embed + facets) plus a separate `knowledge` block for prose at HEAD; returns scored JSON with `confidence` / `mass` for silence gates and `snippet_turn_index` for drill |
 | `rekal query --session <id> --offset N --limit 5` | Returns a small window of turns around the relevant part of the conversation, with `has_more` for pagination |
 | `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
 | `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |

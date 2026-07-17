@@ -19,6 +19,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 3. **Check for changes** — For each session file, compare size + SHA-256 hash against `checkpoint_state` cache. Skip unchanged files.
 4. **Dedup by content hash** — Check `sessions.session_hash` to skip already-imported sessions.
 5. **Parse transcript** — Extract conversation turns and tool calls from session JSON. Skip sessions with no turns and no tool calls.
+5b. **Skip harness / bench pollution** — If `session.SkipCapture` is true, do not write the session (BUG 6). Triggers: `REKAL_BENCH` or `REKAL_SKIP_CHECKPOINT` set; transcript cwd under a bench tree (`scripts/bench`, `rekal-bench`); human turns matching RekalBench `gen_queries.py` prompt fingerprints. Same guard applies to cross-repo local import. See [scripts/bench/README.md](../../scripts/bench/README.md).
 6. **Write to data DB:**
    - Insert session row (`sessions` table) with ULID, content hash, actor type, email, branch, timestamp.
    - Insert turn rows (`turns` table) with role, content, timestamp.

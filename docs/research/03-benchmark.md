@@ -175,7 +175,7 @@ never reframed.
    table (`tab-drill`).
 6. Run rung 2–3 (judged) on a 200-query stratified subset for B0–B6.
 7. L3-gate wiki experiment (optional, after rung 1): generate K topic pages
-   via the rekal-wiki workflow on a named `workflow_name`, pull generation
+   via the wiki workflow (`references/wiki.md`) on a named `workflow_name`, pull generation
    cost from the ledger lineage, re-answer a broad-query subset from pages
    vs recall+drill with the rung-3 proxy, and record the regeneration diff
    rate over the following weeks. Fills the paper's `tab-wiki`.

@@ -188,16 +188,13 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		return err
 	}
 
-	// Knowledge layer — full build into the fresh index, same as runIndex
-	// (this is a from-scratch file, so the watermark is absent and every
-	// prose file at HEAD is chunked). Non-fatal.
+	// Knowledge layer — structural chunk build into the fresh index (vectors
+	// fill via background 'rekal embed' after rename). Non-fatal.
 	if err := refreshKnowledge(w, indexDB, gitRoot); err != nil {
 		fmt.Fprintf(w, "rekal: warning: knowledge layer skipped: %v\n", err)
-	} else if err := embedKnowledgeChunks(w, indexDB, gitRoot, 0); err != nil {
-		fmt.Fprintf(w, "rekal: warning: knowledge embeddings skipped: %v\n", err)
 	}
 
-	// 5d: LSA pass.
+	// 5d: LSA pass (local — stays synchronous). Deep semantic is deferred.
 	embeddingDim := 0
 	if sessionCount >= 2 {
 		fmt.Fprintln(w, "building LSA embeddings...")
@@ -221,11 +218,6 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 			if err := search.StoreLSAProjection(indexDB, model); err != nil {
 				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
 			}
-		}
-
-		// 5d-ii: Nomic pass (non-fatal).
-		if err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
-			fmt.Fprintf(w, "warning: nomic embeddings skipped: %v\n", err)
 		}
 	}
 
@@ -261,6 +253,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		fmt.Fprintf(w, ", %d cross-repo sessions from %d project(s)", importedSessions, importedProjects)
 	}
 	fmt.Fprintln(w)
+	startBackgroundEmbed(w, gitRoot)
 
 	return nil
 }

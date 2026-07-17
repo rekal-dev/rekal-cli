@@ -16,18 +16,19 @@ stratum.
 v1.1 ships the semantic half: chunk vectors in `knowledge_embeddings`
 (content-hash + model keyed), built through the same `.rekal/embed-cache.db`
 the session layer uses — a moved section or reverted edit re-fills from
-cache, never from the model. Vectors are built where session vectors are
-built: `rekal index`/`sync` embed everything missing; the post-commit hook
-embeds up to 256 chunks per pass (a giant prose import converges over the
-next few commits, keyword-findable meanwhile); recall never embeds — its
-latency stays pure read. At query time the knowledge score blends normalized
-BM25 with cosine similarity using the session ranking's keyword/semantic
-split (`weights.layers2`), the query vector shared from the session semantic
-pass so one recall embeds its query once; semantic-only chunks (no keyword
-overlap) join the candidate pool. Every rung fails soft: no vectors, model
-mismatch, or an old index.db degrades to keyword-only, byte-identical to v1.
-Orphaned vectors are pruned when their content leaves every chunk. The
-RekalBench knowledge task set (step 6) remains the follow-up.
+cache, never from the model. Structural rebuilds (`rekal index`/`sync`)
+chunk + FTS synchronously, then spawn background `rekal embed` for vectors
+(budgeted bites, DuckDB lock released between passes — see
+`docs/spec/command/embed.md`). The post-commit hook still embeds up to 256
+chunks per commit. Recall never embeds — latency stays pure read. At query
+time the knowledge score blends normalized BM25 with cosine similarity using
+the session ranking's keyword/semantic split (`weights.layers2`), the query
+vector shared from the session semantic pass so one recall embeds its query
+once; semantic-only chunks (no keyword overlap) join the candidate pool.
+Every rung fails soft: no vectors, model mismatch, or an old index.db
+degrades to keyword-only, byte-identical to v1. Orphaned vectors are pruned
+when their content leaves every chunk. The RekalBench knowledge task set
+(step 6) remains the follow-up.
 
 ## Problem
 

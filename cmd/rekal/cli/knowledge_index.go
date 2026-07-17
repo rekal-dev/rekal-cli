@@ -118,11 +118,10 @@ func refreshKnowledge(w io.Writer, indexDB *sql.DB, gitRoot string) error {
 	return nil
 }
 
-// knowledgeEmbedBudget caps how many chunks one budgeted embedding pass (the
-// post-commit hook) will embed. A giant prose import converges over the next
-// few commits instead of stalling one of them; every un-embedded chunk stays
-// findable by keyword meanwhile (the two-speed contract). Full passes
-// (`rekal index`/`sync`) are unbudgeted.
+// knowledgeEmbedBudget caps how many chunks one budgeted embedding pass will
+// embed (post-commit hook and each bite of `rekal embed`). A giant prose
+// import converges across bites/commits; un-embedded chunks stay
+// keyword-findable (the two-speed contract).
 const knowledgeEmbedBudget = 256
 
 // embedKnowledgeChunks builds semantic vectors for knowledge chunks that
@@ -134,7 +133,7 @@ const knowledgeEmbedBudget = 256
 // semantic pass.
 //
 // Not called at recall time: recall latency stays pure read. Vectors are
-// built where session vectors are built — `rekal index`/`sync` (full) and the
+// built by `rekal embed` (background after index/sync, or by hand) and the
 // post-commit hook (budgeted).
 func embedKnowledgeChunks(w io.Writer, indexDB *sql.DB, gitRoot string, budget int) error {
 	model := intendedEmbedModel(gitRoot)

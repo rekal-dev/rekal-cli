@@ -49,6 +49,27 @@ def has_confidence(results: list) -> bool:
     return any(isinstance(r, dict) and "confidence" in r for r in results)
 
 
+def _is_marker_only_knowledge(k: object) -> bool:
+    """True when a 'knowledge' hit is effectively a marker file.
+
+    In the industry-bench synthetic repos, sh-gen creates tiny marker files
+    under sessions/ and uses CLAUDE.md for a setup sentinel. Those files are
+    not meaningful prose, but they can still score above KNOWLEDGE_MIN due
+    to max-norm scoring behavior.
+    """
+    if not isinstance(k, dict):
+        return False
+    path = str(k.get("path") or "")
+    snip = str(k.get("snippet") or "")
+    if path == "CLAUDE.md":
+        return True
+    if path.startswith("sessions/"):
+        # Our sh-gen marker headers include `benchmark_session_id: ...`.
+        if "benchmark_session_id:" in snip:
+            return True
+    return False
+
+
 def episode_verdict(results: list) -> tuple[str, float, float, str]:
     """Return (kind, top_signal, gap, reason)."""
     if not results:
@@ -112,14 +133,19 @@ def knowledge_ok(knowledge: list) -> bool:
     """True when the top knowledge hit has absolute score ≥ KNOWLEDGE_MIN."""
     if not knowledge:
         return False
-    top = knowledge[0] if isinstance(knowledge[0], dict) else {}
+    # Ignore marker-only 'knowledge' (synthetic sentinel/provenance files).
+    meaningful = [k for k in knowledge if not _is_marker_only_knowledge(k)]
+    if not meaningful:
+        return False
+    top = meaningful[0] if isinstance(meaningful[0], dict) else {}
     score = _f(top.get("score", 0))
     return score >= KNOWLEDGE_MIN
 
 
 def knowledge_line(knowledge: list) -> str:
+    meaningful = [k for k in knowledge if not _is_marker_only_knowledge(k)]
     paths = []
-    for k in knowledge[:5]:
+    for k in meaningful[:5]:
         if isinstance(k, dict) and k.get("path"):
             paths.append(str(k["path"]))
     suffix = (" " + " ".join(paths)) if paths else ""

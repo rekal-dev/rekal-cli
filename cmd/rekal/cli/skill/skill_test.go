@@ -141,13 +141,25 @@ func TestHuntGateScript(t *testing.T) {
 		t.Fatalf("single weak hit should SILENCE, got %s", out)
 	}
 
-	// Knowledge routes away from episode inject (exit 3).
-	knowJSON := `{"results":[{"score":0.95}],"knowledge":[{"path":"docs/x.md"}]}`
+	// Confident episode wins even when knowledge docs are present.
+	strongPlusKnow := `{"results":[{"score":1.08},{"score":0.5}],"knowledge":[{"path":"docs/x.md"}]}`
 	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(knowJSON)
+	cmd.Stdin = strings.NewReader(strongPlusKnow)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("strong episode + knowledge should PASS_EPISODE: %v (%s)", err, out)
+	}
+	if !strings.Contains(string(out), "PASS_EPISODE") {
+		t.Fatalf("want PASS_EPISODE, got %s", out)
+	}
+
+	// Knowledge is only a fallback when the episode gate fails.
+	weakPlusKnow := `{"results":[{"score":0.5},{"score":0.49}],"knowledge":[{"path":"docs/x.md"}]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(weakPlusKnow)
 	out, err = cmd.CombinedOutput()
 	if err == nil {
-		t.Fatalf("knowledge should exit 3 (ROUTE_KNOWLEDGE), got ok: %s", out)
+		t.Fatalf("weak episode + knowledge should exit 3, got ok: %s", out)
 	}
 	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 3 {
 		t.Fatalf("want exit 3, got %v (%s)", err, out)
@@ -172,7 +184,7 @@ func TestRecallRouteScript(t *testing.T) {
 		t.Fatalf("want KNOWLEDGE, got %s", out)
 	}
 	if strings.Contains(string(out), "INJECT") {
-		t.Fatalf("knowledge must not INJECT episodes: %s", out)
+		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
 	}
 
 	injectJSON := `{"results":[{"score":0.95},{"score":0.5}],"knowledge":[]}`
@@ -181,6 +193,18 @@ func TestRecallRouteScript(t *testing.T) {
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("INJECT should exit 0: %v (%s)", err, out)
+	}
+	if !strings.Contains(string(out), "INJECT") {
+		t.Fatalf("want INJECT, got %s", out)
+	}
+
+	// PKYC-class bug: confident session must INJECT despite prose hits.
+	bothJSON := `{"results":[{"score":1.08},{"score":0.5}],"knowledge":[{"path":"docs/a.md"},{"path":"docs/b.md"}]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(bothJSON)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("strong episode + knowledge should INJECT: %v (%s)", err, out)
 	}
 	if !strings.Contains(string(out), "INJECT") {
 		t.Fatalf("want INJECT, got %s", out)

@@ -281,8 +281,8 @@ flowchart TB
 flowchart LR
     j["rekal JSON"] --> rr["recall-route.py"]
     rr --> hg["hunt-gate.py"]
-    hg -->|knowledge| k["KNOWLEDGE<br/>Read HEAD — no episodes"]
-    hg -->|confident episode| i["INJECT"]
+    hg -->|confident episode| i["INJECT<br/>even if knowledge present"]
+    hg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
     hg -->|else| s["SILENCE"]
 ```
 

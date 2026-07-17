@@ -64,7 +64,10 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 ```mermaid
 flowchart LR
   j["rekal JSON"] --> rr["recall-route"]
-  rr -->|KNOWLEDGE| k["Read HEAD"]
   rr -->|INJECT| i["hunt drill"]
+  rr -->|KNOWLEDGE| k["Read HEAD"]
   rr -->|SILENCE| s["stop"]
 ```
+
+Confident episode → INJECT even when knowledge docs are present. Knowledge is
+the fallback when the episode gate fails.

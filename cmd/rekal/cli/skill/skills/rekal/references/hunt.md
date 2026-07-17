@@ -16,12 +16,12 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 
 | Route stdout | Action |
 |---|---|
-| `KNOWLEDGE …` | From recall JSON `knowledge[0]`: Read `path` at `lines` (heading `anchor`). **Do not** drill sessions. |
-| `INJECT …` | Drill below. |
-| `SILENCE …` | No confident episode. Say so. Do not pad with near-misses. |
+| `INJECT …` | Confident episode — drill below. Knowledge docs may also exist; do not let them block. |
+| `KNOWLEDGE …` | Episode below bars; from `knowledge[0]` Read `path` at `lines` (`anchor`). **Do not** drill weak sessions. |
+| `SILENCE …` | No confident episode and no knowledge. Say so. Do not pad with near-misses. |
 
 Episode bars live only in `scripts/hunt-gate.py` (invoked by recall-route).
-No gate output → treat as SILENCE.
+Confident episode outranks a non-empty knowledge block. No gate output → SILENCE.
 
 ## 2. Drill, cheapest first
 

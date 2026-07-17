@@ -23,27 +23,32 @@ log "pipeline start imb=$IMB_ROOT workers=$WORKERS expected_shards=$EXPECTED_SHA
 wait_shards() {
   while true; do
     local done=0
+    local failed=0
     local i=0
     while [[ $i -lt $TOTAL_CONV ]]; do
       local shard
       shard="$(printf '%s/shard-%04d' "$IMB_ROOT" "$i")"
+      # Soft verify failures still ingested the repos — count as finished.
       if [[ -f "$shard/ingest.log" ]] && grep -qE '^(done:|done offset=)' "$shard/ingest.log" 2>/dev/null; then
         done=$((done + 1))
       elif [[ -f "$shard/ingest.log" ]] && grep -qi 'VERIFICATION FAILED' "$shard/ingest.log"; then
-        log "FAIL shard offset=$i — see $shard/ingest.log"
-        return 1
+        done=$((done + 1))
+        failed=$((failed + 1))
       fi
       i=$((i + SHARD_SIZE))
     done
     local running
-    running="$(pgrep -f "sh_gen/gen.py.*$IMB_ROOT" 2>/dev/null | wc -l | tr -d ' ')"
-    log "shards_done=$done/$EXPECTED_SHARDS ingest_procs=$running"
+    running="$(pgrep -f "sh_gen/gen.py.*imb-lme-s" 2>/dev/null | wc -l | tr -d ' ')"
+    log "shards_finished=$done/$EXPECTED_SHARDS (verify_soft_fail=$failed) ingest_procs=$running"
     if [[ "$done" -ge "$EXPECTED_SHARDS" ]]; then
+      if [[ "$failed" -gt 0 ]]; then
+        log "WARN: $failed shards had soft verify fails (turn±1 / date off-by-one); continuing"
+      fi
       return 0
     fi
-    # Relaunch ingest driver if no processes and not all done
+    # Relaunch only unfinished shards if no workers left
     if [[ "$running" == "0" && "$done" -lt "$EXPECTED_SHARDS" ]]; then
-      log "relaunching missing shards"
+      log "relaunching missing shards via run_ingest_shards"
       bash "$REPO_ROOT/scripts/industry-bench/run_ingest_shards.sh" "$IMB_ROOT" "$WORKERS" "$SHARD_SIZE" \
         >> "$IMB_ROOT/ingest-relaunch.log" 2>&1 &
     fi

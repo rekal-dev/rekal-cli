@@ -2,15 +2,19 @@
 
 Decision doc. The landscape it selects from is [00-landscape.md](00-landscape.md).
 
-## Selected, in run order
+## Selected, in run order — **full tier for all**
 
-| # | Benchmark | Why | Role in the paper |
-|---|---|---|---|
-| 1 | **LongMemEval-S** | Cleanest labels of the general benchmarks; five ability categories map onto Rekal's routing story (single-hop → episodic recall, multi-hop → synthesis, temporal → ledger timestamps, knowledge-update → HEAD-vs-history split, abstention → the confidence gate). Small enough to iterate fast. | Primary headline table |
-| 2 | **LongMemEval (full)** | Same labels at a size that no longer fits a context window — answers the "S is just a context-window test" objection against our own result. | Scale column of the headline table |
-| 3 | **LoCoMo** | The score every vendor page quotes; required for comparability. Run *last of the QA set*, never headlined alone, always with the flaw caveat (~6.4% bad labels, gameable judge). | Comparability appendix |
-| 4 | **MSC** | Cheap sanity baseline; catches adapter regressions before expensive runs. | Smoke test only, not in the paper |
-| 5 | **BEAM / AMB tiers** (stretch) | The only token-pressure benchmark; directly exercises the "thin wire, rich machine" design and our tokens-per-question discipline at 10M tokens. Self-reported leaderboard — treat as directional. | Stress section, if WS-F lands it |
+Every row below is a **full-corpus** target. Smoke/limit runs are green lights
+only; they are not the published number. See
+[`scripts/industry-bench/FULL_TIER.md`](../../scripts/industry-bench/FULL_TIER.md).
+
+| # | Benchmark | Why | Role in the paper | Full-tier bar |
+|---|---|---|---|---|
+| 1 | **LongMemEval-S** | Cleanest labels of the general benchmarks; five ability categories map onto Rekal's routing story (single-hop → episodic recall, multi-hop → synthesis, temporal → ledger timestamps, knowledge-update → HEAD-vs-history split, abstention → the confidence gate). | Primary headline table | 500 conversations, all 500 questions |
+| 2 | **LongMemEval (full / M)** | Same labels at a size that no longer fits a context window — answers the "S is just a context-window test" objection against our own result. | Scale column of the headline table | Full cleaned LongMemEval-M release |
+| 3 | **LoCoMo** | The score every vendor page quotes; required for comparability. Never headlined alone; always with the flaw caveat (~6.4% bad labels, gameable judge). | Comparability appendix | All 10 conversations / 1986 questions + official judge |
+| 4 | **MSC** | Cheap sanity baseline; catches adapter regressions before expensive runs. | Smoke + regression table (may appear in appendix) | Full MSC multi-session corpus |
+| 5 | **BEAM / AMB tiers** | The only token-pressure benchmark; directly exercises the "thin wire, rich machine" design and our tokens-per-question discipline at 10M tokens. Self-reported leaderboard — treat as directional. | Stress section | Published BEAM tiers through 10M |
 
 ## Harness strategy
 

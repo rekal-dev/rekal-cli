@@ -46,6 +46,10 @@ EXPECT = {
         "turns": 12,
         "abstention": 1,
     },
+    # MSC: no paper QA counts; use --skip-count-check until we pin after first full normalize.
+    "msc": {
+        "file": "data/msc-conversations.jsonl",
+    },
 }
 
 REQUIRED_CONV = ("conversation_id", "sessions", "questions")

@@ -106,8 +106,11 @@ DuckDB locks are **per repo** — parallel smokes on *different* conversations a
 |---|---|---|---|
 | toy | yes | `/tmp/imb-toy-local` | yes |
 | LME-S (3) | yes | `/tmp/imb-lme-s-smoke` | yes |
-| LME-S (500) | yes | not started | — |
-| LME oracle | yes (new) | pending | pending |
-| LoCoMo (10) | yes | `~/imb-locomo` | in progress |
-| LME-M | **corrupt raw** | — | — |
-| MSC | no getter | — | — |
+| LME-S (500) | yes | `~/imb-lme-s` (~90% ingest) | pending index+dev |
+| LME oracle | yes | `~/imb-lme-oracle` | yes |
+| LoCoMo (10) | yes | `~/imb-locomo` | yes (full retrieve) |
+| LME-M | re-download | — | — |
+| MSC | getter wired | — | — |
+| BEAM | path only | — | — |
+
+**Policy:** full tier on all five selected benchmarks — see `FULL_TIER.md`.

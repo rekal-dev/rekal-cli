@@ -141,13 +141,13 @@ useful simultaneous agents: 3–4.
 
 | WS | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| A | Datasets | in-progress | session-2026-07-17 | LME-S + LoCoMo normalize/verify green; Penfield known-bad 99 rows; M/MSC still open |
-| B | sh-gen | review | session-2026-07-17 | round-trip green; macOS `Path.resolve()` for session discovery; `--offset` sharding |
+| A | Datasets | in-progress | session-2026-07-17 | **Full-tier aim** (all 5). LME-S+LoCoMo green; LME-M re-download; MSC getter; BEAM path documented |
+| B | sh-gen | review | session-2026-07-17 | round-trip green; macOS `Path.resolve()`; `--offset` sharding; LME-S full ingest ~90% |
 | C | Modes | open | — | multi-hop LoCoMo misses → WHY/persona routes (WS-C) |
-| D | Calibration | in-progress | session-2026-07-17 | `calibration/chat-provisional.json` smoke-only; freeze on LME-S dev before test |
-| E | Shim + scoring | in-progress | session-2026-07-17 | `shim/shim.py` + `--route skill`; marker-only knowledge suppressed; official judges open |
-| F | Baselines | open | — | |
-| G | Analysis + paper | open | — | claim #1 has toy + LME-S smoke evidence |
+| D | Calibration | in-progress | session-2026-07-17 | `chat-provisional.json` smoke-only; freeze on LME-S **dev** before **test** full eval |
+| E | Shim + scoring | in-progress | session-2026-07-17 | shim+skill route; official judges still open — required for full-tier headline |
+| F | Baselines | open | — | full-tier same pins as Rekal |
+| G | Analysis + paper | open | — | claim #1 has toy + LME-S smoke; full tables pending |
 
 Update this table in the same commit as the work. Statuses:
 `open → in-progress (<owner>) → review → done`.

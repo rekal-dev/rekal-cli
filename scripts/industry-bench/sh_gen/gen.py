@@ -94,12 +94,13 @@ def session_jsonl_lines(conv_id, session, repo_path):
 def ingest_conversation(conv, out_dir: Path, rekal: Path, email: str, fast: int):
     conv_id = conv["conversation_id"]
     conv_dir = out_dir / conv_id
-    repo = conv_dir / "repo"
+    repo = (conv_dir / "repo").resolve()
     config = conv_dir / "claude-config"
     if conv_dir.exists():
         shutil.rmtree(conv_dir)
     repo.mkdir(parents=True)
     config.mkdir(parents=True)
+    repo_path = str(repo)
 
     env = ingest_env(os.environ, config, rekal.parent)
 
@@ -117,7 +118,7 @@ def ingest_conversation(conv, out_dir: Path, rekal: Path, email: str, fast: int)
     run(["git", "add", "-A"], repo, env_init)
     run(["git", "commit", "-q", "--allow-empty", "-m", "init"], repo, env_init)
 
-    session_dir = Path(config) / "projects" / sanitize_repo_path(str(repo))
+    session_dir = Path(config) / "projects" / sanitize_repo_path(repo_path)
     session_dir.mkdir(parents=True, exist_ok=True)
     (repo / "sessions").mkdir(exist_ok=True)
 
@@ -125,7 +126,7 @@ def ingest_conversation(conv, out_dir: Path, rekal: Path, email: str, fast: int)
     batch = []
     sessions = conv["sessions"]
     for n, session in enumerate(sessions):
-        sid, lines = session_jsonl_lines(conv_id, session, str(repo))
+        sid, lines = session_jsonl_lines(conv_id, session, repo_path)
         (session_dir / f"{sid}.jsonl").write_text("\n".join(lines) + "\n")
         marker = repo / "sessions" / f"{session['date'][:10]}-{session['session_id']}.md"
         marker.write_text(

@@ -8,7 +8,7 @@ Cloud-agent `/tmp` workdirs are **not portable**. On your machine you re-downloa
 ### Copy-paste start (after clone + build)
 
 ```bash
-git checkout cursor/industry-bench-longmemeval-real-ff4f
+git checkout research/industry-bench
 export REKAL="$PWD/rekal"   # or path to built binary
 
 bash scripts/industry-bench/datasets/get_longmemeval.sh s
@@ -77,8 +77,7 @@ Playbook (read first): `docs/research/industry-bench/README.md`
 ```bash
 git clone https://github.com/rekal-dev/rekal-cli.git
 cd rekal-cli
-git fetch origin cursor/industry-bench-longmemeval-real-ff4f
-git checkout cursor/industry-bench-longmemeval-real-ff4f
+git checkout research/industry-bench
 ```
 
 ### 3.2 Build `rekal` (match CI — important)

@@ -1,0 +1,10 @@
+{
+  "conversation_id": "toy-001",
+  "system": "rekal-stock",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 4,
+  "evidence_hit_rate": 0.75,
+  "retrieved_context_tokens_mean": 121.25,
+  "answer_path_tokens_mean": 141.0
+}

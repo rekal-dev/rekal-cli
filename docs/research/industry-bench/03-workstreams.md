@@ -141,13 +141,13 @@ useful simultaneous agents: 3–4.
 
 | WS | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| A | Datasets | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S + LoCoMo normalize/verify green; Penfield known-bad 99 rows committed (`locomo-known-bad.jsonl`); MSC + LME-M still open |
-| B | sh-gen | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S limit-1/3 + LoCoMo conv-26 verify green; LME-S limit-20 ingest running; recall gold on e47becba (0.87) |
-| C | Modes | open | — | |
-| D | Calibration | open | — | pre-registration gate; abstention separation observed on toy (conf 0.21 vs 0.33) |
-| E | Shim + scoring | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | shim now supports `--route skill` (`recall-route.py`), marker-only knowledge suppression, and non-abstention SILENCE→stock fallback; LME/LoCoMo skill smokes committed |
+| A | Datasets | in-progress | session-2026-07-17 | LME-S + LoCoMo normalize/verify green; Penfield known-bad 99 rows; M/MSC still open |
+| B | sh-gen | review | session-2026-07-17 | round-trip green; macOS `Path.resolve()` for session discovery; `--offset` sharding |
+| C | Modes | open | — | multi-hop LoCoMo misses → WHY/persona routes (WS-C) |
+| D | Calibration | in-progress | session-2026-07-17 | `calibration/chat-provisional.json` smoke-only; freeze on LME-S dev before test |
+| E | Shim + scoring | in-progress | session-2026-07-17 | `shim/shim.py` + `--route skill`; marker-only knowledge suppressed; official judges open |
 | F | Baselines | open | — | |
-| G | Analysis + paper | open | — | claim #1 has first toy-scale evidence |
+| G | Analysis + paper | open | — | claim #1 has toy + LME-S smoke evidence |
 
 Update this table in the same commit as the work. Statuses:
 `open → in-progress (<owner>) → review → done`.

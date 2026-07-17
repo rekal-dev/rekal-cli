@@ -123,6 +123,18 @@ func TestIsSquashMergedInto(t *testing.T) {
 	}
 }
 
+func pathsEqual(a, b string) bool {
+	ca, errA := filepath.EvalSymlinks(filepath.Clean(a))
+	cb, errB := filepath.EvalSymlinks(filepath.Clean(b))
+	if errA != nil {
+		ca = filepath.Clean(a)
+	}
+	if errB != nil {
+		cb = filepath.Clean(b)
+	}
+	return ca == cb
+}
+
 func TestMainWorktreeRoot(t *testing.T) {
 	t.Parallel()
 	main := t.TempDir()
@@ -130,7 +142,7 @@ func TestMainWorktreeRoot(t *testing.T) {
 	commit(t, main, "base")
 
 	// In the main checkout, the resolver is a no-op (equals the checkout root).
-	if got := MainWorktreeRoot(main); got != filepath.Clean(main) {
+	if got := MainWorktreeRoot(main); !pathsEqual(got, main) {
 		t.Fatalf("main worktree: MainWorktreeRoot(%q) = %q, want the same", main, got)
 	}
 
@@ -138,7 +150,7 @@ func TestMainWorktreeRoot(t *testing.T) {
 	// the main checkout so the .rekal store is shared.
 	linked := t.TempDir() + "-wt"
 	git(t, main, "worktree", "add", "-b", "feature", linked)
-	if got := MainWorktreeRoot(linked); got != filepath.Clean(main) {
+	if got := MainWorktreeRoot(linked); !pathsEqual(got, main) {
 		t.Fatalf("linked worktree: MainWorktreeRoot(%q) = %q, want main %q", linked, got, filepath.Clean(main))
 	}
 }

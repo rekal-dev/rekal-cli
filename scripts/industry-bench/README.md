@@ -22,20 +22,23 @@ runs/        # committed manifests + aggregates
 
 ## Quickstart: ingest the toy corpus and verify (WS-B round trip)
 
-Requirements: a built `rekal` binary on PATH (see `docs/DEVELOPMENT.md` —
-llama.cpp under `.deps/` first; **CI pins llama.cpp `b8157`** and
-`--target common` — see `.github/workflows/ci.yml`), `git`, Python 3.11+.
+Requirements: a **local build** of `rekal` from this branch (release 0.2.27
+lacks industry-bench hunt-gate fixes — build below), `git`, Python 3.11+.
 
 ```bash
 cd rekal-cli
+# One-time: build rekal with embedded nomic + marker-aware hunt-gate (see DEVELOPMENT.md)
+go build -ldflags "-X github.com/rekal-dev/rekal-cli/cmd/rekal/cli.Version=$(git describe --tags --always --dirty)" -o ./rekal ./cmd/rekal
+export REKAL="$PWD/rekal"
+
 python3 scripts/industry-bench/sh_gen/gen.py \
   --input scripts/industry-bench/datasets/toy/conversations.jsonl \
-  --out /tmp/imb-toy --verify
+  --out /tmp/imb-toy --verify --index --rekal "$REKAL"
 ```
 
-`--verify` runs the ingest-verification SQL from
-[04-procedures §3](../../docs/research/industry-bench/04-procedures.md) per
-conversation and exits non-zero on any mismatch.
+Datasets: see **Real datasets (WS-A)** below, then `verify_dataset.py <name>`.
+
+Stock smoke (WS-E): see **Stock smoke** below (`shim/shim.py smoke`).
 
 ## Real datasets (WS-A)
 

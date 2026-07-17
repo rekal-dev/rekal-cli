@@ -26,7 +26,7 @@
    - Hooks contain the marker `# managed by rekal`. Existing non-Rekal hooks are not overwritten.
 8. **Create orphan branch** — `rekal/<email>` with empty `rekal.body` and `dict.bin`. If the branch exists on the remote, fetch it. If it exists locally, leave it.
 9. **Import existing data** — If the orphan branch has data (body > 9 bytes), import sessions and checkpoints into data DB.
-10. **Install Claude Code skills** — Write the skill suite to `.claude/skills/<name>/SKILL.md` (rekal, rekal-provenance, rekal-reflect, rekal-distill, rekal-census, rekal-wiki) for agent integration. Always overwritten — skills are managed by rekal and track the binary version.
+10. **Install Claude Code skill** — Write `.claude/skills/rekal/` (SKILL.md tip + `scripts/` + `references/`) for agent integration. Always overwritten; legacy companion dirs (`rekal-provenance`, `rekal-reflect`, `rekal-distill`, `rekal-census`, `rekal-wiki`) are purged so upgrades leave no residue.
 10b. **Inject one CLAUDE.md sentence** — Append (or refresh in place, keyed by the `<!-- managed by rekal -->` marker) a single sentence pointing agents at the `rekal` skill and its routing rule. Creates CLAUDE.md when missing; never touches the user's own content. This is the whole dev-experience surface: init, done.
 11. **Gitignore `.claude`** — If `.claude/` already existed (user has settings, CLAUDE.md, etc.), only ignore `.claude/skills/`. Otherwise ignore the entire `.claude/` directory.
 12. **Initial checkpoint** — Capture any existing sessions.

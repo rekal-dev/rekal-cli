@@ -210,27 +210,29 @@ func TestInit_Reinit(t *testing.T) {
 
 // TestInit_ReinitRefreshesSkills is the upgrade path: after Rekal is already
 // initialized, a second `rekal init` must re-install the version-managed skill
-// suite (so a binary upgrade delivers new/changed skills) without disturbing
-// the store.
+// tree (tip + scripts + references) without disturbing the store.
 func TestInit_ReinitRefreshesSkills(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
 	base := filepath.Join(".claude", "skills", "rekal", "SKILL.md")
-	census := filepath.Join(".claude", "skills", "rekal-census", "SKILL.md")
+	script := filepath.Join(".claude", "skills", "rekal", "scripts", "hunt-gate.py")
 	if !env.FileExists(base) {
 		t.Fatalf("base skill missing after init: %s", base)
 	}
-
-	// Simulate an older install that predates a skill: delete one skill dir.
-	if err := os.RemoveAll(filepath.Join(env.RepoDir, ".claude", "skills", "rekal-census")); err != nil {
-		t.Fatalf("remove skill: %v", err)
-	}
-	if env.FileExists(census) {
-		t.Fatalf("skill should be gone before refresh")
+	if !env.FileExists(script) {
+		t.Fatalf("skill script missing after init: %s", script)
 	}
 
-	// Re-init must not rebuild the store, but must restore the missing skill.
+	// Simulate a stale tree: delete a gate script; re-init must restore it.
+	if err := os.Remove(filepath.Join(env.RepoDir, script)); err != nil {
+		t.Fatalf("remove skill script: %v", err)
+	}
+	if env.FileExists(script) {
+		t.Fatalf("skill script should be gone before refresh")
+	}
+
+	// Re-init must not rebuild the store, but must restore the missing script.
 	if env.FileExists(".rekal/data.db") == false {
 		t.Fatalf("data.db missing before reinit")
 	}
@@ -241,8 +243,8 @@ func TestInit_ReinitRefreshesSkills(t *testing.T) {
 	if !strings.Contains(stdout, "Refreshed skills and hooks") {
 		t.Errorf("reinit should report a refresh, got: %q", stdout)
 	}
-	if !env.FileExists(census) {
-		t.Errorf("reinit should have restored the missing skill %s", census)
+	if !env.FileExists(script) {
+		t.Errorf("reinit should have restored the missing skill script %s", script)
 	}
 	if !env.FileExists(".rekal/data.db") {
 		t.Errorf("reinit must not disturb the store")

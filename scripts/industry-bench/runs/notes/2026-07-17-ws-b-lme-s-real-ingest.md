@@ -51,3 +51,16 @@ recall transfers on LongMemEval-S single-session-user.
    per session (`--fast` batches sessions/commit for BEAM only).
 3. Local build used tip llama.cpp; prefer CI pin `b8157` for reproducibility
    (see `.github/workflows/ci.yml`).
+
+## WS-E stock smoke (same conversation)
+
+`shim/shim.py smoke` on `/tmp/imb-lme-s-limit1` →
+`runs/smoke/lme-s-e47becba/`:
+
+- evidence_in_top rate: 1.0
+- retrieved_context_tokens mean: 272 (whitespace counter)
+- answer_path_tokens mean: 315
+- `scoring/smoke_score.py --sanity-wrong` → score 0
+
+Token numbers non-zero and plausible (paper #1 range was 382–980 with
+answer-model path; extractive smoke is lower, as expected).

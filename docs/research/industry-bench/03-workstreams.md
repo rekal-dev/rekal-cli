@@ -145,7 +145,7 @@ useful simultaneous agents: 3–4.
 | B | sh-gen | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | toy + LME-S limit-1/3 verify green (~100s/conv); stock recall hits gold on `e47becba` (0.87); full 500-conv ~12h serial — `runs/notes/2026-07-17-ws-b-lme-s-real-ingest.md` |
 | C | Modes | open | — | |
 | D | Calibration | open | — | pre-registration gate; abstention separation observed on toy (conf 0.21 vs 0.33) |
-| E | Shim + scoring | open | — | shim must retry on index.db lock ("another rekal process") |
+| E | Shim + scoring | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | stock smoke on LME-S `e47becba`: evidence_hit=1.0, ctx_tok≈272, answer_path≈315; lock-retry in shim; exact-match scorer sanity-wrong=0 — `runs/smoke/lme-s-e47becba/` |
 | F | Baselines | open | — | |
 | G | Analysis + paper | open | — | claim #1 has first toy-scale evidence |
 

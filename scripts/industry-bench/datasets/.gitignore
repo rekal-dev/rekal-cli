@@ -1,0 +1,3 @@
+data/
+*.jsonl
+!toy/conversations.jsonl

@@ -10,7 +10,7 @@ Priority:
 
 Gating uses absolute `confidence` (and optional `mass`) when present — not
 max-normalized `score`, which tops out near 1.0 for junk queries too.
-Legacy recalls without `confidence` fall back to `score` (weaker).
+Legacy recalls without `confidence` keep the old score bars (top ≥ 0.9).
 
 Exit codes:
   0 — PASS_EPISODE
@@ -24,45 +24,56 @@ import json
 import sys
 
 # Absolute confidence floor (see search/confidence.go saturating BM25).
+# Tuned so real domain queries (~0.85) clear and offtopic/junk (~0.48–0.63) do not.
 CONF_MIN = 0.70
-# Soft path: slightly lower confidence but clear gap to #2.
-CONF_SOFT = 0.55
+# Soft path: near the hard floor with a clear gap to #2 — still above offtopic.
+CONF_SOFT = 0.68
 GAP_MIN = 0.04
 # Lexical floor: raw BM25 mass when the field is present (Option C).
 MASS_MIN = 3.5
+# Knowledge fallback: absolute knowledge score must clear this (BUG 14 —
+# max-norm made every top hit ~1.0; weak prose must not ROUTE_KNOWLEDGE).
+KNOWLEDGE_MIN = 0.40
+# Legacy (no confidence field): max-norm score bars from the pre-#45 gate.
+LEGACY_TOP_MIN = 0.9
 
 
-def episode_signal(r: dict) -> tuple[float, float]:
-    """Return (confidence_or_score, mass) for one result."""
-    conf = r.get("confidence")
-    if conf is None:
-        conf = r.get("score", 0)
+def _f(v, default: float = 0.0) -> float:
     try:
-        conf_f = float(conf)
+        return float(v)
     except (TypeError, ValueError):
-        conf_f = 0.0
-    try:
-        mass = float(r.get("mass") or 0)
-    except (TypeError, ValueError):
-        mass = 0.0
-    return conf_f, mass
+        return default
+
+
+def has_confidence(results: list) -> bool:
+    return any(isinstance(r, dict) and "confidence" in r for r in results)
 
 
 def episode_verdict(results: list) -> tuple[str, float, float, str]:
-    """Return (kind, top_conf, gap, reason)."""
+    """Return (kind, top_signal, gap, reason)."""
     if not results:
         return "empty", 0.0, 0.0, "no_results"
 
-    scored = []
+    if has_confidence(results):
+        return confidence_verdict(results)
+    return legacy_score_verdict(results)
+
+
+def confidence_verdict(results: list) -> tuple[str, float, float, str]:
+    """Gate on absolute confidence + mass — never max-norm score (BUG 11)."""
+    scored: list[tuple[float, float]] = []
     for r in results:
-        conf, mass = episode_signal(r)
+        if not isinstance(r, dict):
+            scored.append((0.0, 0.0))
+            continue
+        # Missing confidence on a mixed set → 0 (do not fall back to score).
+        conf = _f(r["confidence"]) if "confidence" in r else 0.0
+        mass = _f(r.get("mass") or 0)
         scored.append((conf, mass))
     scored.sort(key=lambda x: x[0], reverse=True)
     top, mass = scored[0]
     gap = (scored[0][0] - scored[1][0]) if len(scored) > 1 else top
 
-    # Lexical floor when mass is present and non-zero: weak BM25 must not
-    # PASS via facet/max-norm inflation. mass==0 ⇒ pure semantic candidate.
     has_mass_field = any(isinstance(r, dict) and "mass" in r for r in results)
     weak_mass = has_mass_field and 0 < mass < MASS_MIN
 
@@ -75,6 +86,35 @@ def episode_verdict(results: list) -> tuple[str, float, float, str]:
     if len(scored) == 1:
         return "silence", top, gap, "single_below_conf"
     return "silence", top, gap, "below_gate"
+
+
+def legacy_score_verdict(results: list) -> tuple[str, float, float, str]:
+    """Pre-confidence recalls: score bars only (never apply CONF_* to score)."""
+    scores: list[float] = []
+    for r in results:
+        if isinstance(r, dict):
+            scores.append(_f(r.get("score", 0)))
+        else:
+            scores.append(0.0)
+    scores.sort(reverse=True)
+    top = scores[0]
+    gap = (scores[0] - scores[1]) if len(scores) > 1 else top
+    if len(scores) >= 2:
+        if top >= LEGACY_TOP_MIN or gap >= GAP_MIN:
+            return "pass", top, gap, ""
+        return "silence", top, gap, "below_gate"
+    if top >= LEGACY_TOP_MIN:
+        return "pass", top, gap, ""
+    return "silence", top, gap, "single_below_conf"
+
+
+def knowledge_ok(knowledge: list) -> bool:
+    """True when the top knowledge hit has absolute score ≥ KNOWLEDGE_MIN."""
+    if not knowledge:
+        return False
+    top = knowledge[0] if isinstance(knowledge[0], dict) else {}
+    score = _f(top.get("score", 0))
+    return score >= KNOWLEDGE_MIN
 
 
 def knowledge_line(knowledge: list) -> str:
@@ -105,12 +145,16 @@ def main() -> int:
         print(f"PASS_EPISODE top={top:.4f} gap={gap:.4f}")
         return 0
 
-    if knowledge:
+    if knowledge_ok(knowledge):
         print(knowledge_line(knowledge))
         return 3
 
     if kind == "empty":
         print("SILENCE top=0 gap=0 reason=no_results")
+        return 1
+    # Weak knowledge present but below absolute floor — treat as silence.
+    if knowledge:
+        print(f"SILENCE top={top:.4f} gap={gap:.4f} reason=knowledge_below_floor")
         return 1
     print(f"SILENCE top={top:.4f} gap={gap:.4f} reason={reason or 'below_gate'}")
     return 1

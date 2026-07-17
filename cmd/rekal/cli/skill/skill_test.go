@@ -133,6 +133,27 @@ func TestHuntGateScript(t *testing.T) {
 		t.Fatalf("want SILENCE, got %s", out)
 	}
 
+	// BUG 11: offtopic confidence (~0.63) must not soft-pass even with strong mass + gap.
+	offtopicJSON := `{"results":[{"confidence":0.63,"mass":4.0,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(offtopicJSON)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("offtopic conf 0.63 should SILENCE, got %s", out)
+	}
+	if !strings.Contains(string(out), "SILENCE") {
+		t.Fatalf("want SILENCE for offtopic, got %s", out)
+	}
+
+	// With confidence present, never fall back to max-norm score for gating.
+	scoreOnlyMixed := `{"results":[{"confidence":0.5,"score":1.19},{"score":0.95}],"knowledge":[]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(scoreOnlyMixed)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("confidence set must not gate on score, got %s", out)
+	}
+
 	silenceJSON := `{"results":[{"confidence":0.5,"score":0.5},{"confidence":0.49,"score":0.49}],"knowledge":[]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(silenceJSON)
@@ -154,7 +175,7 @@ func TestHuntGateScript(t *testing.T) {
 	}
 
 	// Knowledge is only a fallback when the episode gate fails.
-	weakPlusKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md"}]}`
+	weakPlusKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(weakPlusKnow)
 	out, err = cmd.CombinedOutput()
@@ -167,13 +188,25 @@ func TestHuntGateScript(t *testing.T) {
 	if !strings.Contains(string(out), "ROUTE_KNOWLEDGE") {
 		t.Fatalf("want ROUTE_KNOWLEDGE, got %s", out)
 	}
+
+	// BUG 14: weak absolute knowledge score must not ROUTE_KNOWLEDGE.
+	weakKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(weakKnow)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("weak knowledge should SILENCE, got %s", out)
+	}
+	if !strings.Contains(string(out), "SILENCE") {
+		t.Fatalf("want SILENCE for weak knowledge, got %s", out)
+	}
 }
 
 func TestRecallRouteScript(t *testing.T) {
 	t.Parallel()
 	path := writeScript(t, "scripts/recall-route.py")
 
-	knowJSON := `{"results":[{"score":0.4}],"knowledge":[{"path":"docs/x.md"}]}`
+	knowJSON := `{"results":[{"score":0.4}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`
 	cmd := exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(knowJSON)
 	out, err := cmd.CombinedOutput()

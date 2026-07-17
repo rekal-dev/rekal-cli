@@ -24,6 +24,45 @@ func TestMeaningfulQuery(t *testing.T) {
 	}
 }
 
+// TestRun_ThinTextQuerySilences covers BUG 3: an explicit empty/whitespace
+// query arg must not fall through to filterSearch (which returns score-0 rows).
+func TestRun_ThinTextQuerySilences(t *testing.T) {
+	t.Parallel()
+	indexDB := seedLineageCorpus(t)
+
+	for _, tc := range []struct {
+		name  string
+		query string
+		text  bool
+	}{
+		{"empty_arg", "", true},
+		{"whitespace", "   ", true},
+		{"single_char", "a", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := Run(indexDB, Filters{Query: tc.query, TextQuery: tc.text}, t.TempDir(), DefaultWeights(), stubEmbedder{})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if out.Total != 0 || len(out.Results) != 0 || len(out.Knowledge) != 0 {
+				t.Fatalf("thin text query must silence, got total=%d results=%+v knowledge=%+v", out.Total, out.Results, out.Knowledge)
+			}
+			if out.Mode != "hybrid" {
+				t.Fatalf("mode=%q, want hybrid", out.Mode)
+			}
+		})
+	}
+
+	// Filter-only (no text arg) still returns rows.
+	out, err := Run(indexDB, Filters{TextQuery: false, Limit: 5}, t.TempDir(), DefaultWeights(), stubEmbedder{})
+	if err != nil {
+		t.Fatalf("filter-only Run: %v", err)
+	}
+	if out.Total == 0 {
+		t.Fatal("filter-only recall should return sessions")
+	}
+}
+
 func TestAbsoluteConfidence_JunkVsReal(t *testing.T) {
 	t.Parallel()
 	w := DefaultWeights()

@@ -20,7 +20,8 @@ runs/        # committed manifests + aggregates
 ## Quickstart: ingest the toy corpus and verify (WS-B round trip)
 
 Requirements: a built `rekal` binary on PATH (see `docs/DEVELOPMENT.md` —
-llama.cpp under `.deps/` first), `git`, Python 3.11+.
+llama.cpp under `.deps/` first; **CI pins llama.cpp `b8157`** and
+`--target common` — see `.github/workflows/ci.yml`), `git`, Python 3.11+.
 
 ```bash
 cd rekal-cli
@@ -32,6 +33,36 @@ python3 scripts/industry-bench/sh_gen/gen.py \
 `--verify` runs the ingest-verification SQL from
 [04-procedures §3](../../docs/research/industry-bench/04-procedures.md) per
 conversation and exits non-zero on any mismatch.
+
+## Real datasets (WS-A)
+
+```bash
+# LongMemEval-S (cleaned, Hugging Face) → conversations.jsonl
+scripts/industry-bench/datasets/get_longmemeval.sh s
+python3 scripts/industry-bench/datasets/normalize_longmemeval.py --variant s
+python3 scripts/industry-bench/datasets/verify_dataset.py longmemeval-s
+
+# LoCoMo + Penfield known-bad (99 score-corrupting)
+scripts/industry-bench/datasets/get_locomo.sh
+python3 scripts/industry-bench/datasets/normalize_locomo.py
+scripts/industry-bench/datasets/get_locomo_known_bad.sh
+python3 scripts/industry-bench/datasets/verify_dataset.py locomo
+```
+
+Raw files stay under `datasets/data/` (gitignored).
+
+## Stock smoke (WS-E)
+
+After `sh_gen --index` on a conversation:
+
+```bash
+python3 scripts/industry-bench/shim/shim.py smoke \
+  --workdir /tmp/imb-lme-s-limit1 \
+  --conversation-id e47becba \
+  --input scripts/industry-bench/datasets/data/longmemeval-s-limit1.jsonl \
+  --out scripts/industry-bench/runs/smoke/lme-s-e47becba \
+  --rekal ./rekal
+```
 
 ## Environment hazards (learned the hard way; encoded in sh_gen)
 

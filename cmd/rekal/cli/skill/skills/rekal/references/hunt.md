@@ -20,7 +20,9 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 | `KNOWLEDGE …` | Episode below bars; from `knowledge[0]` Read `path` at `lines` (`anchor`). **Do not** drill weak sessions. |
 | `SILENCE …` | No confident episode and no knowledge. Say so. Do not pad with near-misses. |
 
-Episode bars live only in `scripts/hunt-gate.py` (invoked by recall-route).
+Bars live only in `scripts/hunt-gate.py` (via recall-route): absolute
+`confidence` ≥ 0.70 (and raw `mass` floor when present). Max-normalized
+`score` alone is not enough — junk queries also normalize near 1.0.
 Confident episode outranks a non-empty knowledge block. No gate output → SILENCE.
 
 ## 2. Drill, cheapest first

@@ -89,6 +89,9 @@ func importLocalSessions(indexDB *sql.DB, gitRoot string, pref localPref, w io.W
 			if len(payload.Turns) == 0 {
 				continue
 			}
+			if session.SkipCapture(payload) {
+				continue
+			}
 
 			origin := originLabel(payload.CWD, projectDir)
 			if err := insertLocalSession(indexDB, newID, payload, origin); err != nil {

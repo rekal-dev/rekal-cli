@@ -37,7 +37,8 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 ## Silence is a machine event
 
-Do not invent thresholds. Pipe recall through the route script. `INJECT` wins
+Do not invent thresholds. Pipe recall through the route script — it gates on
+absolute `confidence` (and `mass`), not max-normalized `score`. `INJECT` wins
 over a non-empty knowledge block; `KNOWLEDGE` is the fallback when the episode
 gate fails. No `INJECT` / `KNOWLEDGE` → stay silent on memory. Near-misses are noise.
 

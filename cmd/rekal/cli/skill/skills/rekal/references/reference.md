@@ -21,7 +21,7 @@ mode bits never matter.
 | `--commit <sha>` | Filter by git commit SHA |
 | `--author <email>` | Filter by author email |
 | `--actor <human\|agent>` | Filter by actor type |
-| `-n`, `--limit <n>` | Max results (default 20; 0 = no limit) |
+| `-n`, `--limit <n>` | Max results (default 20; `0` = empty set; negative rejected) |
 | `--explain` | Adds `layers` + `related` (file-sharing sessions) |
 
 ## Cross-repo local import (index-only, never pushed)

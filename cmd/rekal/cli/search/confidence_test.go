@@ -1,0 +1,56 @@
+package search
+
+import "testing"
+
+func TestMeaningfulQuery(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		q    string
+		want bool
+	}{
+		{"", false},
+		{" ", false},
+		{"\t\n", false},
+		{"a", false},
+		{" a ", false},
+		{"ab", true},
+		{"JWT expiry", true},
+		{"  token  refresh ", true},
+	}
+	for _, tc := range cases {
+		if got := MeaningfulQuery(tc.q); got != tc.want {
+			t.Errorf("MeaningfulQuery(%q)=%v, want %v", tc.q, got, tc.want)
+		}
+	}
+}
+
+func TestAbsoluteConfidence_JunkVsReal(t *testing.T) {
+	t.Parallel()
+	w := DefaultWeights()
+	// Evidence from scoring-lineage: real BM25 ~5.64, junk ~2.59, offtopic ~3.06.
+	real := absoluteConfidence(5.64, 0, 0, 5.99, false, w, "")
+	junk := absoluteConfidence(2.59, 0, 0, 2.40, false, w, "")
+	off := absoluteConfidence(3.06, 0, 0, 2.90, false, w, "")
+	if real < 0.70 {
+		t.Fatalf("real confidence=%v, want >= 0.70 (got formula max(bm25Abs)+facet)", real)
+	}
+	if junk >= 0.70 {
+		t.Fatalf("junk confidence=%v, want < 0.70", junk)
+	}
+	if off >= 0.70 {
+		t.Fatalf("offtopic confidence=%v, want < 0.70", off)
+	}
+	if !(real > junk && real > off) {
+		t.Fatalf("real=%v should outrank junk=%v offtopic=%v", real, junk, off)
+	}
+}
+
+func TestSaturate(t *testing.T) {
+	t.Parallel()
+	if saturate(0, 4) != 0 {
+		t.Fatal("zero")
+	}
+	if saturate(4, 4) < 0.6 || saturate(4, 4) > 0.7 {
+		t.Fatalf("tau half-life: got %v", saturate(4, 4))
+	}
+}

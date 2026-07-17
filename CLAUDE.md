@@ -133,7 +133,10 @@ session discovery keep using the invoking worktree.
   (steering-turn boost, compaction-summary boost, subagent down-weight),
   conversation grouping
   (see `docs/agent-metadata.md`), snippet extraction, the LSA
-  query-projection cache (`projection.go`), the per-result
+  query-projection cache (`projection.go`), absolute `confidence` + raw
+  BM25 `mass` for silence gates (`confidence.go`; ranking still uses
+  max-normalized `score`), thin-query rejection (empty/whitespace/single-char
+  → empty hybrid, no knowledge), the per-result
   `summary_turn_index` pointer (latest compaction-summary turn — pointer,
   never the 10-17KB payload; drill with `--role summary`), the
   `--explain` enrichments (per-layer normalized scores + query-time
@@ -152,6 +155,10 @@ session discovery keep using the invoking worktree.
   without a knowledge FTS index, and to keyword-only without chunk vectors —
   `docs/design/knowledge-layer.md`)
 - `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
+  `SkipCapture` refuses RekalBench/harness sessions (`REKAL_BENCH` /
+  `REKAL_SKIP_CHECKPOINT`, bench cwd, gen_queries prompt fingerprints) so
+  synthetic fixtures are never checkpointed or locally imported into a
+  real store.
   Turn roles: `human`, `human_steering` (queue-operation captures), `assistant`,
   `summary` (isCompactSummary compaction distillations; rows written before the
   role existed stay `human` in append-only data.db and are reclassified by

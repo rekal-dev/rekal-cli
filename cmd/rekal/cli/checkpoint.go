@@ -159,6 +159,12 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 				continue
 			}
 
+			// Never capture RekalBench / harness sessions into a real store
+			// (BUG 6 — synthetic fixtures pollute recall).
+			if session.SkipCapture(payload) {
+				continue
+			}
+
 			sessionID := newID()
 			capturedAt := time.Now().UTC()
 

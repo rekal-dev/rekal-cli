@@ -48,12 +48,11 @@ export FULL ROOT SHARD_SIZE REKAL_BIN REPO_ROOT
 if command -v parallel >/dev/null; then
   seq 0 "$SHARD_SIZE" $((TOTAL - 1)) | parallel -j "$WORKERS" run_shard {}
 else
-  echo "GNU parallel not found; running shards sequentially" >&2
-  offset=0
-  while [ "$offset" -lt "$TOTAL" ]; do
-    run_shard "$offset"
-    offset=$((offset + SHARD_SIZE))
-  done
+  echo "GNU parallel not found; using xargs -P $WORKERS" >&2
+  JOBFILE="$(mktemp)"
+  seq 0 "$SHARD_SIZE" $((TOTAL - 1)) > "$JOBFILE"
+  xargs -P "$WORKERS" -n 1 bash -c 'run_shard "$1"' _ < "$JOBFILE"
+  rm -f "$JOBFILE"
 fi
 
 echo "all shards finished under $ROOT"

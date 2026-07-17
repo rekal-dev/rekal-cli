@@ -1,0 +1,19 @@
+{
+  "conversation_id": "conv-48",
+  "system": "rekal-stock",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 239,
+  "evidence_at_5_rate": 0.9214659685863874,
+  "evidence_at_10_rate": 0.9267015706806283,
+  "evidence_hit_rate": 0.7364016736401674,
+  "retrieved_context_tokens_mean": 194.3305439330544,
+  "answer_path_tokens_mean": 224.81589958158995,
+  "miss_reasons": {
+    "abstention": 48,
+    "deep_rank_lt10": 1,
+    "deep_rank_lt5": 43,
+    "hit": 133,
+    "true_miss": 14
+  }
+}

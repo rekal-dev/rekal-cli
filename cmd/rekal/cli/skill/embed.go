@@ -54,13 +54,18 @@ func All() []Skill {
 			continue // a dir without SKILL.md is not a skill
 		}
 		files := map[string][]byte{"SKILL.md": body}
-		_ = fs.WalkDir(skillsFS, path.Join("skills", name), func(p string, d fs.DirEntry, err error) error {
+		root := path.Join("skills", name)
+		prefix := root + "/"
+		_ = fs.WalkDir(skillsFS, root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
 			}
-			rel, err := path.Rel(path.Join("skills", name), p)
-			if err != nil || rel == "SKILL.md" {
-				return err
+			if !strings.HasPrefix(p, prefix) {
+				return nil
+			}
+			rel := strings.TrimPrefix(p, prefix)
+			if rel == "" || rel == "SKILL.md" {
+				return nil
 			}
 			data, err := skillsFS.ReadFile(p)
 			if err != nil {

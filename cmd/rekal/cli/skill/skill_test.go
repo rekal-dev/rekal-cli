@@ -86,14 +86,12 @@ func TestIsScript(t *testing.T) {
 func writeScript(t *testing.T, rel string) string {
 	t.Helper()
 	skills := All()
-	script, ok := skills[0].Files[rel]
-	if !ok {
+	if _, ok := skills[0].Files[rel]; !ok {
 		t.Fatalf("missing %s", rel)
 	}
 	dir := t.TempDir()
 	// Preserve sibling scripts when recall-route needs hunt-gate next door.
-	scriptsDir := filepath.Join(dir, "scripts")
-	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, data := range skills[0].Files {

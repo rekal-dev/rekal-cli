@@ -1,0 +1,4 @@
+data/
+*.jsonl
+!toy/conversations.jsonl
+!locomo-known-bad.jsonl

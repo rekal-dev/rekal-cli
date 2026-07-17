@@ -4,6 +4,9 @@ Implementation package for the program in
 [`docs/research/industry-bench/`](../../docs/research/industry-bench/README.md).
 Read the playbook first; this README is only the quickstart.
 
+**Continuing on your machine (full LME-S ingest, parallel shards):**
+see [`HANDOVER.md`](HANDOVER.md).
+
 ## Layout (target; built incrementally per workstream)
 
 ```

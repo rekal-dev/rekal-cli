@@ -54,6 +54,7 @@ gate fails. No `INJECT` / `KNOWLEDGE` → stay silent on memory. Near-misses are
 | Breadth / shape | `bash "$ROOT/scripts/map-fresh.sh"` then `Read references/map.md` |
 | Rules / libraries / census | `Read references/analytics.md` |
 | Publish `docs/wiki/` | `bash "$ROOT/scripts/wiki-branch-gate.sh"` then `Read references/wiki.md` |
+| Recall wrong / calibrate local profile | `Read references/calibrate.md` · `scripts/calibrate-recall.py` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
 
 One question, one substrate. Cite session / turn / commit with every memory claim.

@@ -1,0 +1,517 @@
+{
+  "cases": [
+    {
+      "dataset": "locomo",
+      "conversation_id": "conv-26",
+      "question_id": "q5",
+      "category": "multi-hop",
+      "question": "What is Caroline's identity?",
+      "gold_answer": "Transgender woman",
+      "evidence_session_ids": [
+        "s1"
+      ],
+      "evidence_hit_rank0_top10": 5,
+      "top5": [
+        {
+          "rank0": 0,
+          "session_id": "01KXQDFS4QPRS8ANCZNJA2MF8N",
+          "score": 0.95,
+          "confidence": 0.57,
+          "mass": 2.13,
+          "files": [
+            "2023-08-23-s13.md"
+          ],
+          "layers": {
+            "bm25": 1,
+            "lsa": 1,
+            "nomic": 0.91,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 1,
+          "session_id": "01KXQDFN6P4YBTPZK1NNEQ4BQJ",
+          "score": 0.87,
+          "confidence": 0.62,
+          "mass": 1.49,
+          "files": [
+            "2023-08-14-s11.md"
+          ],
+          "layers": {
+            "bm25": 0.7,
+            "lsa": 0.87,
+            "nomic": 0.99,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 2,
+          "session_id": "01KXQDEQYGQZW8F7TDQ54143T5",
+          "score": 0.82,
+          "confidence": 0.61,
+          "mass": 1.31,
+          "files": [
+            "2023-06-09-s3.md"
+          ],
+          "layers": {
+            "bm25": 0.61,
+            "lsa": 0.69,
+            "nomic": 0.97,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 3,
+          "session_id": "01KXQDG79RJG1CJQ8BG2RKXYZA",
+          "score": 0.8,
+          "confidence": 0.57,
+          "mass": 1.42,
+          "files": [
+            "2023-09-13-s16.md"
+          ],
+          "layers": {
+            "bm25": 0.67,
+            "lsa": 0.66,
+            "nomic": 0.91,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 4,
+          "session_id": "01KXQDGA9WMRJRDECR1ENQG3B3",
+          "score": 0.72,
+          "confidence": 0.56,
+          "mass": 1.42,
+          "files": [
+            "2023-10-13-s17.md"
+          ],
+          "layers": {
+            "bm25": 0.67,
+            "lsa": 0,
+            "nomic": 0.89,
+            "facet": 0
+          }
+        }
+      ],
+      "top10": [
+        {
+          "rank0": 0,
+          "session_id": "01KXQDFS4QPRS8ANCZNJA2MF8N",
+          "score": 0.95,
+          "confidence": 0.57,
+          "mass": 2.13,
+          "files": [
+            "2023-08-23-s13.md"
+          ],
+          "layers": {
+            "bm25": 1,
+            "lsa": 1,
+            "nomic": 0.91,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 1,
+          "session_id": "01KXQDFN6P4YBTPZK1NNEQ4BQJ",
+          "score": 0.87,
+          "confidence": 0.62,
+          "mass": 1.49,
+          "files": [
+            "2023-08-14-s11.md"
+          ],
+          "layers": {
+            "bm25": 0.7,
+            "lsa": 0.87,
+            "nomic": 0.99,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 2,
+          "session_id": "01KXQDEQYGQZW8F7TDQ54143T5",
+          "score": 0.82,
+          "confidence": 0.61,
+          "mass": 1.31,
+          "files": [
+            "2023-06-09-s3.md"
+          ],
+          "layers": {
+            "bm25": 0.61,
+            "lsa": 0.69,
+            "nomic": 0.97,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 3,
+          "session_id": "01KXQDG79RJG1CJQ8BG2RKXYZA",
+          "score": 0.8,
+          "confidence": 0.57,
+          "mass": 1.42,
+          "files": [
+            "2023-09-13-s16.md"
+          ],
+          "layers": {
+            "bm25": 0.67,
+            "lsa": 0.66,
+            "nomic": 0.91,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 4,
+          "session_id": "01KXQDGA9WMRJRDECR1ENQG3B3",
+          "score": 0.72,
+          "confidence": 0.56,
+          "mass": 1.42,
+          "files": [
+            "2023-10-13-s17.md"
+          ],
+          "layers": {
+            "bm25": 0.67,
+            "lsa": 0,
+            "nomic": 0.89,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 5,
+          "session_id": "01KXQDEMP944XH6PPA1R2PG9KG",
+          "score": 0.59,
+          "confidence": 0.63,
+          "mass": 0.13,
+          "files": [
+            "2023-05-08-s1.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 0.15,
+            "nomic": 1,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 6,
+          "session_id": "01KXQDF6DS3Z3VKQVBNYRBM965",
+          "score": 0.57,
+          "confidence": 0.62,
+          "mass": 0.12,
+          "files": [
+            "2023-07-06-s6.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 0.06,
+            "nomic": 1,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 7,
+          "session_id": "01KXQDETZRX8HPYDXWBN4YBF8W",
+          "score": 0.57,
+          "confidence": 0.63,
+          "mass": 0.12,
+          "files": [
+            "2023-06-27-s4.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 0,
+            "nomic": 1,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 8,
+          "session_id": "01KXQDGEREHFBVYHT7YRK2B8J9",
+          "score": 0.56,
+          "confidence": 0.61,
+          "mass": 0.14,
+          "files": [
+            "2023-10-22-s19.md"
+          ],
+          "layers": {
+            "bm25": 0.07,
+            "lsa": 0,
+            "nomic": 0.98,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 9,
+          "session_id": "01KXQDF3E7DV1DTG93T5P53PRY",
+          "score": 0.55,
+          "confidence": 0.61,
+          "mass": 0.11,
+          "files": [
+            "2023-07-03-s5.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.04,
+            "nomic": 0.97,
+            "facet": 0
+          }
+        }
+      ]
+    },
+    {
+      "dataset": "locomo",
+      "conversation_id": "conv-26",
+      "question_id": "q8",
+      "category": "multi-hop",
+      "question": "What is Caroline's relationship status?",
+      "gold_answer": "Single",
+      "evidence_session_ids": [
+        "s2",
+        "s3"
+      ],
+      "evidence_hit_rank0_top10": 8,
+      "top5": [
+        {
+          "rank0": 0,
+          "session_id": "01KXQDG79RJG1CJQ8BG2RKXYZA",
+          "score": 0.85,
+          "confidence": 0.57,
+          "mass": 2.18,
+          "files": [
+            "2023-09-13-s16.md"
+          ],
+          "layers": {
+            "bm25": 1,
+            "lsa": 0.18,
+            "nomic": 0.89,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 1,
+          "session_id": "01KXQDEMP944XH6PPA1R2PG9KG",
+          "score": 0.67,
+          "confidence": 0.71,
+          "mass": 0.13,
+          "files": [
+            "2023-05-08-s1.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 1,
+            "nomic": 0.99,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 2,
+          "session_id": "01KXQDF6DS3Z3VKQVBNYRBM965",
+          "score": 0.62,
+          "confidence": 0.64,
+          "mass": 0.12,
+          "files": [
+            "2023-07-06-s6.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.55,
+            "nomic": 1,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 3,
+          "session_id": "01KXQDFG0K6B79PBX9Z2QSR2GS",
+          "score": 0.6,
+          "confidence": 0.61,
+          "mass": 0.12,
+          "files": [
+            "2023-07-17-s9.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.58,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 4,
+          "session_id": "01KXQDF3E7DV1DTG93T5P53PRY",
+          "score": 0.59,
+          "confidence": 0.61,
+          "mass": 0.11,
+          "files": [
+            "2023-07-03-s5.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.53,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        }
+      ],
+      "top10": [
+        {
+          "rank0": 0,
+          "session_id": "01KXQDG79RJG1CJQ8BG2RKXYZA",
+          "score": 0.85,
+          "confidence": 0.57,
+          "mass": 2.18,
+          "files": [
+            "2023-09-13-s16.md"
+          ],
+          "layers": {
+            "bm25": 1,
+            "lsa": 0.18,
+            "nomic": 0.89,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 1,
+          "session_id": "01KXQDEMP944XH6PPA1R2PG9KG",
+          "score": 0.67,
+          "confidence": 0.71,
+          "mass": 0.13,
+          "files": [
+            "2023-05-08-s1.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 1,
+            "nomic": 0.99,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 2,
+          "session_id": "01KXQDF6DS3Z3VKQVBNYRBM965",
+          "score": 0.62,
+          "confidence": 0.64,
+          "mass": 0.12,
+          "files": [
+            "2023-07-06-s6.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.55,
+            "nomic": 1,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 3,
+          "session_id": "01KXQDFG0K6B79PBX9Z2QSR2GS",
+          "score": 0.6,
+          "confidence": 0.61,
+          "mass": 0.12,
+          "files": [
+            "2023-07-17-s9.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.58,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 4,
+          "session_id": "01KXQDF3E7DV1DTG93T5P53PRY",
+          "score": 0.59,
+          "confidence": 0.61,
+          "mass": 0.11,
+          "files": [
+            "2023-07-03-s5.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.53,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 5,
+          "session_id": "01KXQDFPYMNYJ8R0AEDNEAXHFB",
+          "score": 0.58,
+          "confidence": 0.6,
+          "mass": 0.13,
+          "files": [
+            "2023-08-17-s12.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 0.46,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 6,
+          "session_id": "01KXQDETZRX8HPYDXWBN4YBF8W",
+          "score": 0.58,
+          "confidence": 0.62,
+          "mass": 0.12,
+          "files": [
+            "2023-06-27-s4.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 0.35,
+            "nomic": 0.96,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 7,
+          "session_id": "01KXQDGEREHFBVYHT7YRK2B8J9",
+          "score": 0.58,
+          "confidence": 0.59,
+          "mass": 0.14,
+          "files": [
+            "2023-10-22-s19.md"
+          ],
+          "layers": {
+            "bm25": 0.07,
+            "lsa": 0.52,
+            "nomic": 0.91,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 8,
+          "session_id": "01KXQDEPC6X1P7GSR6SCW0PFCF",
+          "score": 0.57,
+          "confidence": 0.61,
+          "mass": 0.11,
+          "files": [
+            "2023-05-25-s2.md"
+          ],
+          "layers": {
+            "bm25": 0.05,
+            "lsa": 0.39,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        },
+        {
+          "rank0": 9,
+          "session_id": "01KXQDFH0QBZZDG24VABWN3AK4",
+          "score": 0.56,
+          "confidence": 0.6,
+          "mass": 0.14,
+          "files": [
+            "2023-07-20-s10.md"
+          ],
+          "layers": {
+            "bm25": 0.06,
+            "lsa": 0.26,
+            "nomic": 0.94,
+            "facet": 0
+          }
+        }
+      ]
+    }
+  ]
+}

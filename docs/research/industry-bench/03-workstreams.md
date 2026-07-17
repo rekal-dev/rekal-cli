@@ -141,11 +141,11 @@ useful simultaneous agents: 3–4.
 
 | WS | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| A | Datasets | open | — | SCHEMA.md + toy corpus exist (landed with B); real datasets still open |
-| B | sh-gen | review | session-2026-07-17 | round-trip green on toy corpus; recall verified; see `scripts/industry-bench/runs/notes/2026-07-17-ws-b-round-trip.md` |
+| A | Datasets | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S + LoCoMo normalize/verify green; Penfield known-bad 99 rows committed (`locomo-known-bad.jsonl`); MSC + LME-M still open |
+| B | sh-gen | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LME-S limit-1/3 + LoCoMo conv-26 verify green; LME-S limit-20 ingest running; recall gold on e47becba (0.87) |
 | C | Modes | open | — | |
 | D | Calibration | open | — | pre-registration gate; abstention separation observed on toy (conf 0.21 vs 0.33) |
-| E | Shim + scoring | open | — | shim must retry on index.db lock ("another rekal process") |
+| E | Shim + scoring | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | shim now supports `--route skill` (`recall-route.py`), marker-only knowledge suppression, and non-abstention SILENCE→stock fallback; LME/LoCoMo skill smokes committed |
 | F | Baselines | open | — | |
 | G | Analysis + paper | open | — | claim #1 has first toy-scale evidence |
 

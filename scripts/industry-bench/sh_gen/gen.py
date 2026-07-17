@@ -216,6 +216,7 @@ def main():
     ap.add_argument("--rekal", default=shutil.which("rekal"), help="path to rekal binary")
     ap.add_argument("--email", default="bench@industry.local")
     ap.add_argument("--limit", type=int, default=0, help="ingest only the first N conversations")
+    ap.add_argument("--offset", type=int, default=0, help="skip the first N conversations (with --limit, a shard)")
     ap.add_argument("--fast", type=int, default=1,
                     help="sessions per commit (BEAM tiers only; default 1 = contract mode)")
     ap.add_argument("--index", action="store_true", help="run 'rekal index' after ingest")
@@ -238,6 +239,8 @@ def main():
         for line in f:
             if line.strip():
                 conversations.append(json.loads(line))
+    if args.offset:
+        conversations = conversations[args.offset :]
     if args.limit:
         conversations = conversations[: args.limit]
 

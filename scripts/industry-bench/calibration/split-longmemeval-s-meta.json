@@ -1,0 +1,9 @@
+{
+  "dataset": "longmemeval-s",
+  "seed": 42,
+  "dev_ratio": 0.2,
+  "n_conversations": 500,
+  "n_dev": 100,
+  "n_test": 400,
+  "input": "scripts/industry-bench/datasets/data/longmemeval-s-conversations.jsonl"
+}

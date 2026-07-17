@@ -218,6 +218,64 @@ func QueryKnowledgeEmbeddingsByHashes(d *sql.DB, model string, hashes []string) 
 	return queryKnowledgeEmbeddings(d, model, hashes)
 }
 
+// CountKnowledgeEmbeddings returns how many vectors are stored for model.
+// Used to gate the semantic-only knowledge fallback (BUG 13).
+func CountKnowledgeEmbeddings(d *sql.DB, model string) (int, error) {
+	var n int
+	err := d.QueryRow(`SELECT count(*) FROM knowledge_embeddings WHERE model = $1`, model).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count knowledge embeddings: %w", err)
+	}
+	return n, nil
+}
+
+// QueryKnowledgeChunksByHashes returns chunk rows for the given content
+// hashes (one row per hash; if multiple chunks share a hash, any one wins).
+func QueryKnowledgeChunksByHashes(d *sql.DB, hashes []string) ([]KnowledgeChunkRow, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	inClause, args := knowledgeHashInClause(hashes, "")
+	// knowledgeHashInClause always prepends model as $1 — reuse a dedicated builder.
+	args = make([]interface{}, len(hashes))
+	parts := make([]string, len(hashes))
+	for i, h := range hashes {
+		parts[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = h
+	}
+	_ = inClause
+	rows, err := d.Query(`
+		SELECT id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha
+		FROM knowledge_chunks
+		WHERE content_hash IN (`+strings.Join(parts, ",")+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query knowledge chunks by hash: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var out []KnowledgeChunkRow
+	seen := make(map[string]bool, len(hashes))
+	for rows.Next() {
+		var c KnowledgeChunkRow
+		var anchor, breadcrumb sql.NullString
+		if err := rows.Scan(&c.ID, &c.Path, &anchor, &breadcrumb, &c.StartLine, &c.EndLine, &c.Content, &c.ContentHash, &c.BlobSHA); err != nil {
+			return nil, fmt.Errorf("scan knowledge chunk: %w", err)
+		}
+		if seen[c.ContentHash] {
+			continue
+		}
+		seen[c.ContentHash] = true
+		if anchor.Valid {
+			c.Anchor = anchor.String
+		}
+		if breadcrumb.Valid {
+			c.Breadcrumb = breadcrumb.String
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 func queryKnowledgeEmbeddings(d *sql.DB, model string, hashes []string) (map[string][]float64, error) {
 	var (
 		rows *sql.Rows

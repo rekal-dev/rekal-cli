@@ -22,9 +22,10 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 
 Bars live only in `scripts/hunt-gate.py` (via recall-route): absolute
 `confidence` ≥ 0.70 (soft ≥ 0.68 with gap ≥ 0.04; raw `mass` floor when
-present). Max-normalized `score` alone is not enough — junk queries also
-normalize near 1.0. Confident episode outranks a non-empty knowledge block.
-No gate output → SILENCE.
+present). Knowledge fallback requires absolute `knowledge[0].score` ≥ 0.40
+(max-norm knowledge scores are gone — weak prose must not route).
+Max-normalized session `score` alone is not enough. Confident episode
+outranks a non-empty knowledge block. No gate output → SILENCE.
 
 ## 2. Drill, cheapest first
 

@@ -175,7 +175,7 @@ func TestHuntGateScript(t *testing.T) {
 	}
 
 	// Knowledge is only a fallback when the episode gate fails.
-	weakPlusKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md"}]}`
+	weakPlusKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(weakPlusKnow)
 	out, err = cmd.CombinedOutput()
@@ -188,13 +188,25 @@ func TestHuntGateScript(t *testing.T) {
 	if !strings.Contains(string(out), "ROUTE_KNOWLEDGE") {
 		t.Fatalf("want ROUTE_KNOWLEDGE, got %s", out)
 	}
+
+	// BUG 14: weak absolute knowledge score must not ROUTE_KNOWLEDGE.
+	weakKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(weakKnow)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("weak knowledge should SILENCE, got %s", out)
+	}
+	if !strings.Contains(string(out), "SILENCE") {
+		t.Fatalf("want SILENCE for weak knowledge, got %s", out)
+	}
 }
 
 func TestRecallRouteScript(t *testing.T) {
 	t.Parallel()
 	path := writeScript(t, "scripts/recall-route.py")
 
-	knowJSON := `{"results":[{"score":0.4}],"knowledge":[{"path":"docs/x.md"}]}`
+	knowJSON := `{"results":[{"score":0.4}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`
 	cmd := exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(knowJSON)
 	out, err := cmd.CombinedOutput()

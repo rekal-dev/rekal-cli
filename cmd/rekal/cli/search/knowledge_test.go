@@ -196,7 +196,52 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 	if len(kw) != 2 {
 		t.Fatalf("keyword-only should return both BM25 hits, got %+v", kw)
 	}
-	if kw[0].Score != 1 {
-		t.Fatalf("keyword-only top score should be normalized BM25 (1.0), got %v", kw[0].Score)
+	// Absolute saturating BM25 — top is strongest, not forced to 1.0 (BUG 14).
+	if kw[0].Score <= 0 || kw[0].Score > 1 {
+		t.Fatalf("keyword-only top score out of range: %v", kw[0].Score)
+	}
+	if len(kw) > 1 && !(kw[0].Score >= kw[1].Score) {
+		t.Fatalf("keyword-only should rank by absolute BM25: %+v", kw)
+	}
+}
+
+// TestKnowledgeSemanticOnlyFallback covers BUG 13: when BM25 finds nothing,
+// a capped semantic scan can still return the right prose (corpora ≤ cap).
+func TestKnowledgeSemanticOnlyFallback(t *testing.T) {
+	t.Parallel()
+	indexDB := openTempIndexDB(t)
+	if err := db.LoadFTSExtension(indexDB); err != nil {
+		t.Skipf("FTS extension unavailable: %v", err)
+	}
+	if err := db.EnsureKnowledgeSchema(indexDB); err != nil {
+		t.Fatalf("ensure knowledge schema: %v", err)
+	}
+	if err := db.InsertKnowledgeChunks(indexDB, []db.KnowledgeChunkRow{
+		{
+			ID: "docs/orphan.md#1", Path: "docs/orphan.md",
+			Anchor: "# Orphan", Breadcrumb: "Orphan",
+			StartLine: 1, EndLine: 3,
+			Content:     "Orphan\n\nCredentials expire after an hour of inactivity.",
+			ContentHash: "hash-orphan", BlobSHA: "b3",
+		},
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := db.CreateKnowledgeFTSIndex(indexDB); err != nil {
+		t.Fatalf("fts: %v", err)
+	}
+	if err := db.StoreKnowledgeEmbeddings(indexDB, map[string][]float64{
+		"hash-orphan": {1, 0, 0},
+	}, "test-model"); err != nil {
+		t.Fatalf("embed: %v", err)
+	}
+
+	// Query has zero keyword overlap with the chunk but aligns with its vector.
+	hits, _ := knowledgeSearch(indexDB, "xyzzy-no-overlap", t.TempDir(), DefaultWeights(), nil, []float64{1, 0, 0}, "test-model")
+	if len(hits) != 1 || hits[0].Path != "docs/orphan.md" {
+		t.Fatalf("semantic-only fallback should return orphan.md, got %+v", hits)
+	}
+	if hits[0].Score <= 0 {
+		t.Fatalf("semantic-only score should be absolute cosine > 0, got %v", hits[0].Score)
 	}
 }

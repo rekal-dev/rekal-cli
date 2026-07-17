@@ -31,6 +31,9 @@ CONF_SOFT = 0.68
 GAP_MIN = 0.04
 # Lexical floor: raw BM25 mass when the field is present (Option C).
 MASS_MIN = 3.5
+# Knowledge fallback: absolute knowledge score must clear this (BUG 14 —
+# max-norm made every top hit ~1.0; weak prose must not ROUTE_KNOWLEDGE).
+KNOWLEDGE_MIN = 0.40
 # Legacy (no confidence field): max-norm score bars from the pre-#45 gate.
 LEGACY_TOP_MIN = 0.9
 
@@ -105,6 +108,15 @@ def legacy_score_verdict(results: list) -> tuple[str, float, float, str]:
     return "silence", top, gap, "single_below_conf"
 
 
+def knowledge_ok(knowledge: list) -> bool:
+    """True when the top knowledge hit has absolute score ≥ KNOWLEDGE_MIN."""
+    if not knowledge:
+        return False
+    top = knowledge[0] if isinstance(knowledge[0], dict) else {}
+    score = _f(top.get("score", 0))
+    return score >= KNOWLEDGE_MIN
+
+
 def knowledge_line(knowledge: list) -> str:
     paths = []
     for k in knowledge[:5]:
@@ -133,12 +145,16 @@ def main() -> int:
         print(f"PASS_EPISODE top={top:.4f} gap={gap:.4f}")
         return 0
 
-    if knowledge:
+    if knowledge_ok(knowledge):
         print(knowledge_line(knowledge))
         return 3
 
     if kind == "empty":
         print("SILENCE top=0 gap=0 reason=no_results")
+        return 1
+    # Weak knowledge present but below absolute floor — treat as silence.
+    if knowledge:
+        print(f"SILENCE top={top:.4f} gap={gap:.4f} reason=knowledge_below_floor")
         return 1
     print(f"SILENCE top={top:.4f} gap={gap:.4f} reason={reason or 'below_gate'}")
     return 1

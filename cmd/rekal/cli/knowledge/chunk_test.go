@@ -1,8 +1,11 @@
 package knowledge
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestIsProseFile(t *testing.T) {
@@ -153,5 +156,27 @@ func TestChunkFile_SkipsOversizedAndNonProse(t *testing.T) {
 	}
 	if got := ChunkFile("empty.md", nil); got != nil {
 		t.Fatal("empty file must be skipped")
+	}
+}
+
+// TestChunkFile_SanitizesInvalidUTF8: prose dumps (incident logs, etc.) can
+// carry truncated runes — chunk Content/Hash must be DuckDB-safe and matched.
+func TestChunkFile_SanitizesInvalidUTF8(t *testing.T) {
+	t.Parallel()
+	data := []byte("line one\nincident \xc3 log\n")
+	chunks := ChunkFile("tmncs_incident_log.txt", data)
+	if len(chunks) != 1 {
+		t.Fatalf("want 1 chunk, got %d", len(chunks))
+	}
+	if !utf8.ValidString(chunks[0].Content) {
+		t.Fatalf("Content not valid UTF-8: %q", chunks[0].Content)
+	}
+	if chunks[0].Hash == "" {
+		t.Fatal("Hash empty")
+	}
+	sum := sha256.Sum256([]byte(chunks[0].Content))
+	want := hex.EncodeToString(sum[:])
+	if chunks[0].Hash != want {
+		t.Fatalf("Hash = %s, want sha256(Content) %s", chunks[0].Hash, want)
 	}
 }

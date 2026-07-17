@@ -16,6 +16,8 @@ import (
 	"encoding/hex"
 	"path/filepath"
 	"strings"
+
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/scrub"
 )
 
 const (
@@ -224,8 +226,13 @@ func finishSection(path string, s *section) []Chunk {
 		if len(lines) == 0 {
 			continue
 		}
-		text := strings.Join(lines, "\n")
-		content := s.breadcrumb + "\n\n" + text
+		text := scrub.SanitizeText(strings.Join(lines, "\n"))
+		breadcrumb := scrub.SanitizeText(s.breadcrumb)
+		anchor := scrub.SanitizeText(s.anchor)
+		// Sanitize before hashing — DuckDB rejects invalid UTF-8 VARCHARs,
+		// and the content hash keys the embed cache, so stored text and
+		// hash must describe the same bytes.
+		content := scrub.SanitizeText(breadcrumb + "\n\n" + text)
 		startLine := start
 		if i == 0 && s.anchor != "" {
 			// The first part's range includes the heading line, so a Read
@@ -233,8 +240,8 @@ func finishSection(path string, s *section) []Chunk {
 			startLine = s.startLine
 		}
 		chunks = append(chunks, Chunk{
-			Anchor:     s.anchor,
-			Breadcrumb: s.breadcrumb,
+			Anchor:     anchor,
+			Breadcrumb: breadcrumb,
 			StartLine:  startLine,
 			EndLine:    start + len(lines) - 1,
 			Text:       text,

@@ -256,12 +256,35 @@ The raw commands above are the interface; the **skill** is the playbook.
 a thin tip (triage + gates) plus on-demand `references/` and built-in
 `scripts/` (progressive disclosure). The agent never picks among skills;
 it classifies the question and loads only the module it needs.
+Design detail: [`docs/design/skill-router.md`](docs/design/skill-router.md).
+
+```mermaid
+flowchart TB
+    tip["SKILL.md tip<br/>always loaded"]
+    tip --> triage{"Which substrate?"}
+    triage -->|Tree now| grep["grep / read HEAD"]
+    triage -->|Knowledge / pointed past| route["recall-route.py"]
+    triage -->|Map| mapf["map-fresh.sh → map.md"]
+    triage -->|Why · mine · …| ref["Read one references/*.md"]
+    route -->|KNOWLEDGE| readk["Read pointer — stop"]
+    route -->|INJECT| hunt["hunt.md → drill"]
+    route -->|SILENCE| quiet["No memory inject"]
+```
 
 | Layer | What |
 |-------|------|
 | **Tip** (`SKILL.md`) | Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **map** / **ledger** (past). Silence when memory is the wrong tool. |
 | **Scripts** | Gates, not prose: `recall-route.py` (KNOWLEDGE/INJECT/SILENCE), `why-trail-gate.py`, `map-fresh.sh` + `map-write-watermark.sh`, `wiki-branch-gate.sh`. |
 | **References** | hunt · why · mine · map · provenance · analytics (reflect/distill/census) · wiki · flags/SQL — `Read` one file and stop. |
+
+```mermaid
+flowchart LR
+    j["rekal JSON"] --> rr["recall-route.py"]
+    rr --> hg["hunt-gate.py"]
+    hg -->|knowledge| k["KNOWLEDGE<br/>Read HEAD — no episodes"]
+    hg -->|confident episode| i["INJECT"]
+    hg -->|else| s["SILENCE"]
+```
 
 Skills are versioned with the binary. After you upgrade, run `rekal init` once
 to refresh them (it leaves your data untouched; legacy `rekal-*` dirs are removed).

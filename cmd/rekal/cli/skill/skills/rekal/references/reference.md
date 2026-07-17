@@ -60,3 +60,11 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 | `map-fresh.sh` | Map watermark vs HEAD |
 | `map-write-watermark.sh` | Write/refresh watermark (+ stub) |
 | `wiki-branch-gate.sh` | Refuse wiki on default branch |
+
+```mermaid
+flowchart LR
+  j["rekal JSON"] --> rr["recall-route"]
+  rr -->|KNOWLEDGE| k["Read HEAD"]
+  rr -->|INJECT| i["hunt drill"]
+  rr -->|SILENCE| s["stop"]
+```

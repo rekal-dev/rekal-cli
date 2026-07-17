@@ -191,6 +191,7 @@ session discovery keep using the invoking worktree.
   the tip dispatches). `init` installs the whole tree (scripts 0755) and
   purges legacy `rekal-*` companion dirs; `clean` removes current + legacy.
   Adding a module = adding a file under `skills/rekal/`; tip must name it.
+  Topology diagrams: `docs/design/skill-router.md`.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 

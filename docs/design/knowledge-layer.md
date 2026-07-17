@@ -245,10 +245,11 @@ gains one row:
   (file hits at HEAD, provenance edges into sessions)
 - past-tense why / history / what-was-tried → ledger stratum (unchanged)
 
-HUNT's confidence gate extends naturally: a strong file hit at HEAD is
-*higher* confidence than a session hit — HEAD is current truth by
-construction. MINE gains a knowledge dimension in its `scope × signal ×
-role` decomposition.
+A non-empty knowledge block **routes to HEAD prose** (`KNOWLEDGE`) — it does
+not clear the episode inject gate. HEAD outranks sessions by sending the
+agent to Read the pointer, not by injecting weak episodes. Full skill
+topology (tip → scripts → references): [`skill-router.md`](skill-router.md).
+MINE gains a knowledge dimension in its `scope × signal × role` decomposition.
 
 ## Onboarding cost (measured)
 

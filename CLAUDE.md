@@ -68,9 +68,15 @@ session discovery keep using the invoking worktree.
   skill suite, and one marker-tagged CLAUDE.md sentence (the whole DX:
   init, done; `clean` removes the line, refresh replaces it in place)
 - `clean.go`: Remove Rekal setup — completely, no residue
-- `index_cmd.go`: Rebuild index DB from data DB. Also carries the cross-repo
-  local-import flags (`--include-all`/`--include`/`--no-local`), which set a
-  persistent preference and rebuild
+- `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
+  knowledge chunks). Deep-semantic session + knowledge vectors are deferred
+  to background `rekal embed` after the atomic rename. Also carries the
+  cross-repo local-import flags (`--include-all`/`--include`/`--no-local`),
+  which set a persistent preference and rebuild
+- `embed_cmd.go`: `rekal embed` — fill missing semantic vectors in budgeted
+  bites (session + knowledge), releasing the DuckDB write lock between
+  passes so recall can interleave. Spawned by `index`/`sync`; safe to run
+  by hand. Lock: `.rekal/embed.lock`; log when background: `.rekal/embed.log`
 - `config.go`: Two-tier config, both gitignored/local-only (never committed,
   pushed, or synced) — local `.rekal/config.json` deep-merges over global
   `~/.config/rekal/config.json` (path honors `$REKAL_CONFIG_HOME` then

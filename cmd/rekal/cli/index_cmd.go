@@ -29,13 +29,15 @@ func newIndexCmd() *cobra.Command {
 The index is local-only and never synced. It contains:
   - Full-text search index (BM25) over conversation turns
   - LSA vector embeddings for lightweight semantic similarity
-  - Nomic deep semantic embeddings (on supported platforms)
   - Session facets (author, branch, actor, counts) for fast filtering
   - File co-occurrence graph
   - Tool call indexes
-  - Knowledge layer: heading-anchored chunks of the repo's tracked prose
-    files (markdown/plain text) at HEAD, searched by recall's knowledge
-    block; kept fresh incrementally via git blob SHAs
+  - Knowledge layer chunks (prose files at HEAD) + FTS
+
+Deep-semantic vectors (HTTP/nomic session embeddings and knowledge chunk
+vectors) continue in the background via 'rekal embed' after the structural
+rebuild — they are network-bound and already soft-fail. Run 'rekal embed'
+by hand to finish or resume.
 
 Rebuild when the index is out of date or after importing new data.
 'rekal sync' rebuilds the index automatically.
@@ -224,15 +226,14 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	}
 
 	// Knowledge layer: chunk the repo's tracked prose files at HEAD into the
-	// index (docs/design/knowledge-layer.md). Non-fatal — recall works
-	// without the layer, so a chunking failure must not fail the rebuild.
+	// index (docs/design/knowledge-layer.md). Structural only here — chunk
+	// vectors are filled by the background 'rekal embed' after rename
+	// (network-bound; already soft-fail). Non-fatal chunking.
 	if err := refreshKnowledge(w, indexDB, gitRoot); err != nil {
 		fmt.Fprintf(w, "warning: knowledge layer skipped: %v\n", err)
-	} else if err := embedKnowledgeChunks(w, indexDB, gitRoot, 0); err != nil {
-		fmt.Fprintf(w, "warning: knowledge embeddings skipped: %v\n", err)
 	}
 
-	// LSA pass.
+	// LSA pass (local, deterministic — stays synchronous).
 	embeddingDim := 0
 	if sessionCount >= 2 {
 		fmt.Fprintln(w, "building LSA embeddings...")
@@ -259,11 +260,8 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 				fmt.Fprintf(w, "warning: caching LSA projection failed: %v\n", err)
 			}
 		}
-
-		// Nomic pass (non-fatal).
-		if err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot); err != nil {
-			fmt.Fprintf(w, "warning: nomic embeddings skipped: %v\n", err)
-		}
+		// Deep semantic (HTTP/nomic) is deferred to startBackgroundEmbed —
+		// thousands of Cohere round-trips must not block the structural rebuild.
 	}
 
 	// Write index state.
@@ -294,6 +292,9 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	rebuildOK = true
 
 	fmt.Fprintf(w, "index rebuilt: %d sessions, %d turns\n", sessionCount, turnCount)
+	// Semantic vectors (session + knowledge) continue out of band — keyword /
+	// LSA / facet / knowledge-FTS are already searchable.
+	startBackgroundEmbed(w, gitRoot)
 	return nil
 }
 
@@ -340,32 +341,49 @@ func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
 	return nomicSessionEmbedder{client}, nil
 }
 
-// buildSemanticEmbeddings generates deep semantic embeddings for the given
-// sessions and stores them in the index DB under the backend's model name,
-// recording that name in index_state (embed_model) so recall knows which
-// vector space the index speaks.
+// buildSemanticEmbeddings generates deep semantic embeddings for sessions
+// that do not yet have a vector under the backend's model, stores them, and
+// records embed_model in index_state.
 //
-// A content-hash-keyed cache (.rekal/embed-cache.db) makes rebuilds cheap:
-// only content the model has never seen is embedded; everything else is a
-// lookup. Switching models invalidates by key construction (new model, no
-// entries) and costs one full re-embed. The cache is best-effort — any cache
-// failure degrades to embedding everything, never to a build failure.
+// budget caps how many *uncached* contents are sent to the model this call
+// (0 = no cap). Cache hits are always applied and do not count against the
+// budget. remaining is true when uncached sessions still lack vectors after
+// this bite — the background embed loop uses that to decide whether to
+// continue.
 //
+// A content-hash-keyed cache (.rekal/embed-cache.db) makes rebuilds cheap.
 // Callers treat this whole function as non-fatal.
-func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string) error {
+func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string, budget int) (remaining bool, err error) {
 	emb, err := semanticEmbedder(gitRoot)
 	if err != nil || emb == nil {
-		return err
+		return false, err
 	}
 	defer emb.Close()
 	model := emb.ModelName()
 
+	existing, err := db.QueryEmbeddings(indexDB, model)
+	if err != nil {
+		return false, err
+	}
+	needed := make(map[string]string, len(sessionContent))
+	for sid, content := range sessionContent {
+		if _, ok := existing[sid]; ok {
+			continue
+		}
+		needed[sid] = content
+	}
+	if len(needed) == 0 {
+		if err := db.WriteIndexState(indexDB, "embed_model", model); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
 	fmt.Fprintf(w, "building deep semantic embeddings (%s)...\n", model)
 
-	// Hash each session's content for cache lookup.
-	hashBySession := make(map[string]string, len(sessionContent))
-	hashes := make([]string, 0, len(sessionContent))
-	for sid, content := range sessionContent {
+	hashBySession := make(map[string]string, len(needed))
+	hashes := make([]string, 0, len(needed))
+	for sid, content := range needed {
 		h := sha256Hex([]byte(content))
 		hashBySession[sid] = h
 		hashes = append(hashes, h)
@@ -374,16 +392,15 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 	var cached map[string][]float64
 	cacheDB, cacheErr := db.OpenEmbedCache(gitRoot)
 	if cacheErr == nil {
-		defer cacheDB.Close()
+		defer cacheDB.Close() //nolint:errcheck
 		if got, gerr := db.CacheGetEmbeddings(cacheDB, model, hashes); gerr == nil {
 			cached = got
 		}
 	}
 
-	// Embed only content the cache doesn't know.
-	vectors := make(map[string][]float64, len(sessionContent))
+	vectors := make(map[string][]float64, len(needed))
 	toEmbed := make(map[string]string)
-	for sid, content := range sessionContent {
+	for sid, content := range needed {
 		if vec, ok := cached[hashBySession[sid]]; ok {
 			vectors[sid] = vec
 			continue
@@ -391,10 +408,17 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 		toEmbed[sid] = content
 	}
 
+	uncachedBefore := len(toEmbed)
+	toEmbed = limitStringMap(toEmbed, budget)
 	if len(toEmbed) > 0 {
 		fresh, err := emb.EmbedSessions(toEmbed)
 		if err != nil {
-			return err
+			// Still store whatever the cache supplied this bite.
+			if len(vectors) > 0 {
+				_ = db.StoreEmbeddings(indexDB, vectors, model)
+				_ = db.WriteIndexState(indexDB, "embed_model", model)
+			}
+			return true, err
 		}
 		newEntries := make(map[string][]float64, len(fresh))
 		for sid, vec := range fresh {
@@ -402,18 +426,19 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 			newEntries[hashBySession[sid]] = vec
 		}
 		if cacheErr == nil {
-			// Best-effort: a failed cache write only costs a future re-embed.
 			_ = db.CachePutEmbeddings(cacheDB, model, newEntries)
 		}
 	}
 
 	if err := db.StoreEmbeddings(indexDB, vectors, model); err != nil {
-		return err
+		return false, err
 	}
 	if err := db.WriteIndexState(indexDB, "embed_model", model); err != nil {
-		return err
+		return false, err
 	}
 	fmt.Fprintf(w, "stored %d semantic embeddings (%d cached, %d embedded)\n",
 		len(vectors), len(vectors)-len(toEmbed), len(toEmbed))
-	return nil
+	// More work remains when we had to leave some uncached sessions for later.
+	remaining = uncachedBefore > len(toEmbed)
+	return remaining, nil
 }

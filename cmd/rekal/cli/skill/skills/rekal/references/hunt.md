@@ -16,7 +16,7 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 
 | Route stdout | Action |
 |---|---|
-| `KNOWLEDGE …` | Read the pointer at HEAD. **Do not** drill sessions. |
+| `KNOWLEDGE …` | From recall JSON `knowledge[0]`: Read `path` at `lines` (heading `anchor`). **Do not** drill sessions. |
 | `INJECT …` | Drill below. |
 | `SILENCE …` | No confident episode. Say so. Do not pad with near-misses. |
 

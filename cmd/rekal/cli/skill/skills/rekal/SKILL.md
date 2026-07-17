@@ -44,7 +44,7 @@ Do not invent thresholds. Pipe recall through the route script. No `INJECT` /
 
 | The question is… | Do |
 |---|---|
-| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/recall-route.py"` → on `KNOWLEDGE`, Read pointer, **stop** |
+| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/recall-route.py"` → on `KNOWLEDGE`, Read `path`@`lines`, **stop** |
 | Pointed past episode | same pipeline → on `INJECT`, `Read references/hunt.md` and drill; on `SILENCE`, stop |
 | Why / decision arc | `Read references/why.md` · gate gather with `scripts/why-trail-gate.py` |
 | Analytical patterns | `Read references/mine.md` |

@@ -13,10 +13,28 @@ rekal version                             # goes in every run manifest
 
 # Python: 3.11+; stdlib + duckdb + requests only (03-workstreams global rules)
 python3 -m venv .venv && . .venv/bin/activate && pip install duckdb requests
-
-# Guard: never capture harness sessions into any corpus
-export REKAL_BENCH=1
 ```
+
+**`REKAL_BENCH` is a capture kill-switch — handle it precisely.** Setting it
+makes `SkipCapture` true for *every* payload
+(`cmd/rekal/cli/session/bench.go`), which protects your real repos while a
+coding agent runs harness scripts — and silently breaks synthetic ingestion
+if it leaks into `sh-gen`'s environment. The rule:
+
+- In the shell where a coding agent drives this work: `export REKAL_BENCH=1`.
+- `sh_gen/gen.py` strips `REKAL_BENCH`/`REKAL_SKIP_CHECKPOINT` from the
+  child environment it uses for `git commit`/`rekal` — never bypass that.
+- Synthetic workdir paths must not contain `/scripts/bench`, `rekal-bench`,
+  or `/.rekal-bench` (the same guard's cwd fingerprints); `sh-gen` refuses
+  such `--out` paths.
+
+**Building `rekal` (2026-07 gotcha):** upstream llama.cpp renamed the
+`common` target to `llama-common` and gates it behind
+`LLAMA_BUILD_COMMON=ON`. Until DEVELOPMENT.md catches up: configure with
+`-DLLAMA_BUILD_COMMON=ON`, build `--target llama-common`, copy
+`libllama-common.a` to `build/common/libcommon.a` (plus
+`libllama-common-base.a` alongside), and link with
+`CGO_LDFLAGS="-lllama-common-base"`.
 
 GPU/embedding server (full LongMemEval / BEAM only): serve
 `nomic-embed-text-v1.5` on an OpenAI-compatible endpoint (vLLM/Ollama), then
@@ -39,15 +57,22 @@ the manifest.
 
 ## <a name="verify"></a>3. Ingest verification (after every `sh-gen` run)
 
+`sh_gen/gen.py --verify` runs this automatically; the checks it makes:
+
 ```bash
-cd <workdir>/<conversation-id>
+cd <workdir>/<conversation-id>/repo
 rekal query "SELECT count(*) FROM sessions"              # = session count
 rekal query "SELECT count(*) FROM turns"                 # = sum of turns
-rekal query "SELECT count(*) FROM checkpoints"           # = session count
 rekal query "SELECT count(*) FROM checkpoint_sessions"   # = session count
-rekal query "SELECT min(captured_at), max(captured_at) FROM sessions"
-                                          # spans the benchmark's date range
+rekal query "SELECT count(DISTINCT session_id) FROM checkpoint_sessions"
+rekal query "SELECT min(ts), max(ts) FROM turns"  # spans the benchmark dates
+git log --format='%aI %s' --reverse           # commit dates = session dates
 ```
+
+**`sessions.captured_at` is ingestion time by design** (`ParseTranscript`
+sets `CapturedAt = time.Now()`), so it must NOT be used to verify the
+benchmark's temporal axis — that axis lives in `turns.ts` and the backdated
+commit dates, which is what temporal-reasoning questions retrieve against.
 
 Any mismatch: stop, fix `sh-gen`, re-ingest from scratch (`rekal clean` +
 delete workdir). Never hand-patch a corpus.

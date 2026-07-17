@@ -141,13 +141,13 @@ useful simultaneous agents: 3–4.
 
 | WS | Title | Status | Owner | Notes |
 |---|---|---|---|---|
-| A | Datasets | open | — | |
-| B | sh-gen | open | — | start here; critical path |
+| A | Datasets | open | — | SCHEMA.md + toy corpus exist (landed with B); real datasets still open |
+| B | sh-gen | review | session-2026-07-17 | round-trip green on toy corpus; recall verified; see `scripts/industry-bench/runs/notes/2026-07-17-ws-b-round-trip.md` |
 | C | Modes | open | — | |
-| D | Calibration | open | — | pre-registration gate |
-| E | Shim + scoring | open | — | |
+| D | Calibration | open | — | pre-registration gate; abstention separation observed on toy (conf 0.21 vs 0.33) |
+| E | Shim + scoring | open | — | shim must retry on index.db lock ("another rekal process") |
 | F | Baselines | open | — | |
-| G | Analysis + paper | open | — | |
+| G | Analysis + paper | open | — | claim #1 has first toy-scale evidence |
 
 Update this table in the same commit as the work. Statuses:
 `open → in-progress (<owner>) → review → done`.

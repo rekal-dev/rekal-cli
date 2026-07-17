@@ -48,10 +48,10 @@ heading-anchored sections of the repo's tracked prose files (`.md`,
 BM25 + chunk-vector cosine similarity, blended by the same keyword/semantic
 split the session ranking uses for its 2-way fallback (`weights` `bm25` vs
 `lsa`+`nomic` shares; defaults 0.35/0.65). The query vector is shared from
-the session semantic pass, so one recall embeds its query once;
-semantic-only chunks (relevant but no keyword overlap) join the candidates.
-Without chunk vectors (no embedding backend, model mismatch, or an index.db
-predating them) the layer degrades to keyword-only BM25. Chunks are
+the session semantic pass, so one recall embeds its query once. Cosine
+re-ranks BM25 candidates only (≤100 hashes) — never a full-corpus embedding
+scan. Without chunk vectors (no embedding backend, model mismatch, or an
+index.db predating them) the layer degrades to keyword-only BM25. Chunks are
 scored, **files are returned** (best chunk drives the score, anchor, and
 snippet; runner-up sections become `also` pointers; multiple matching
 sections earn a coverage bonus). Hits are **pointers, never file content** —

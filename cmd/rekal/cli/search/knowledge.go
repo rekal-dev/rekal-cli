@@ -23,6 +23,11 @@ import (
 // means an absent block; no chunk vectors (or no query vector) means
 // keyword-only scoring — the two-speed contract. The sessions ranking is
 // untouched either way.
+//
+// Latency: cosine runs only over BM25 candidate hashes (≤100), never the
+// full embedding table. Semantic-only extras without keyword overlap are
+// deferred until an ANN index exists — a full-corpus scan dominated recall
+// (~half of wall time on prose-heavy repos).
 
 const (
 	// knowledgeLimit caps returned file hits — thin output, agent drills.
@@ -36,9 +41,8 @@ const (
 	// matching in several sections is more likely *the* document than
 	// several files matching once.
 	knowledgeCoverageBonus = 0.1
-	// knowledgeSemanticCandidates caps how many semantic-only chunks (no
-	// BM25 hit) join the candidate pool per query.
-	knowledgeSemanticCandidates = 50
+	// knowledgeBM25Limit caps FTS candidates before semantic re-rank.
+	knowledgeBM25Limit = 100
 )
 
 // KnowledgeAnchor is a runner-up section pointer within a knowledge hit.
@@ -86,12 +90,17 @@ type knowledgeChunkHit struct {
 // or keyword-only layer.
 func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) []KnowledgeHit {
 	hits := knowledgeBM25(indexDB, query)
-	semScores := knowledgeSemantic(indexDB, query, qe, queryVec, model)
+	if len(hits) == 0 {
+		return nil
+	}
+
+	hashes := make([]string, len(hits))
+	for i, h := range hits {
+		hashes[i] = h.hash
+	}
+	semScores := knowledgeSemantic(indexDB, query, qe, queryVec, model, hashes)
 
 	if len(semScores) == 0 {
-		if len(hits) == 0 {
-			return nil
-		}
 		// Keyword-only: score is normalized BM25, the v1 behavior.
 		var maxBM float64
 		for _, h := range hits {
@@ -108,30 +117,10 @@ func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe Query
 		return aggregateKnowledge(indexDB, hits, query, gitRoot)
 	}
 
-	// Hybrid: attach semantic scores to BM25 hits, pull in semantic-only
-	// chunks, blend with the keyword/semantic split the session ranking
-	// uses for its own 2-way fallback (LSA share folds into semantic).
-	seen := make(map[string]bool, len(hits))
+	// Hybrid: re-rank BM25 candidates with cosine. No full-corpus scan —
+	// semantic-only (zero keyword overlap) chunks stay out until ANN.
 	for i := range hits {
 		hits[i].semantic = semScores[hits[i].hash]
-		seen[hits[i].hash] = true
-	}
-	extra := make([]string, 0, knowledgeSemanticCandidates)
-	for hash := range semScores {
-		if !seen[hash] {
-			extra = append(extra, hash)
-		}
-	}
-	sort.Slice(extra, func(i, j int) bool { return semScores[extra[i]] > semScores[extra[j]] })
-	if len(extra) > knowledgeSemanticCandidates {
-		extra = extra[:knowledgeSemanticCandidates]
-	}
-	for _, h := range loadChunksByHash(indexDB, extra) {
-		h.semantic = semScores[h.hash]
-		hits = append(hits, h)
-	}
-	if len(hits) == 0 {
-		return nil
 	}
 
 	var maxBM, maxSem float64
@@ -168,8 +157,7 @@ func knowledgeBM25(indexDB *sql.DB, query string) []knowledgeChunkHit {
 		FROM knowledge_chunks kc
 		WHERE score IS NOT NULL
 		ORDER BY score DESC
-		LIMIT 100
-	`, query)
+		LIMIT `+fmt.Sprintf("%d", knowledgeBM25Limit), query)
 	if err != nil {
 		return nil
 	}
@@ -191,16 +179,13 @@ func knowledgeBM25(indexDB *sql.DB, query string) []knowledgeChunkHit {
 	return hits
 }
 
-// knowledgeSemantic returns content_hash → cosine similarity against the
-// query vector, or nil when the semantic rung is unavailable: no stored
-// chunk vectors for the model, no query vector and no way to embed one, or
-// an index.db without the embeddings table. Failing soft here degrades the
-// layer to keyword-only, never breaks it.
-func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec []float64, model string) map[string]float64 {
-	if model == "" {
+// knowledgeSemantic returns content_hash → cosine similarity for the given
+// candidate hashes only. Nil when the semantic rung is unavailable.
+func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec []float64, model string, hashes []string) map[string]float64 {
+	if model == "" || len(hashes) == 0 {
 		return nil
 	}
-	embeddings, err := db.QueryKnowledgeEmbeddings(indexDB, model)
+	embeddings, err := db.QueryKnowledgeEmbeddingsByHashes(indexDB, model, hashes)
 	if err != nil || len(embeddings) == 0 {
 		return nil
 	}
@@ -223,37 +208,6 @@ func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec
 		}
 	}
 	return scores
-}
-
-// loadChunksByHash fetches chunk metadata for semantic-only candidates.
-// Best-effort: a failed load just means those candidates drop out.
-func loadChunksByHash(indexDB *sql.DB, hashes []string) []knowledgeChunkHit {
-	if len(hashes) == 0 {
-		return nil
-	}
-	inClause, args := sqlInClause(hashes)
-	rows, err := indexDB.Query(`
-		SELECT path, anchor, start_line, end_line, content, content_hash
-		FROM knowledge_chunks WHERE content_hash IN (`+inClause+`)`, args...)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close() //nolint:errcheck
-
-	var hits []knowledgeChunkHit
-	for rows.Next() {
-		var h knowledgeChunkHit
-		var anchor sql.NullString
-		if err := rows.Scan(&h.path, &anchor, &h.startLine, &h.endLine, &h.content, &h.hash); err != nil {
-			return nil
-		}
-		h.anchor = nullStr(anchor)
-		hits = append(hits, h)
-	}
-	if rows.Err() != nil {
-		return nil
-	}
-	return hits
 }
 
 // aggregateKnowledge folds chunk candidates (sorted by combined score

@@ -24,11 +24,13 @@ chunks per commit. Recall never embeds — latency stays pure read. At query
 time the knowledge score blends normalized BM25 with cosine similarity using
 the session ranking's keyword/semantic split (`weights.layers2`), the query
 vector shared from the session semantic pass so one recall embeds its query
-once; semantic-only chunks (no keyword overlap) join the candidate pool.
-Every rung fails soft: no vectors, model mismatch, or an old index.db
-degrades to keyword-only, byte-identical to v1. Orphaned vectors are pruned
-when their content leaves every chunk. The RekalBench knowledge task set
-(step 6) remains the follow-up.
+once. Cosine runs only over BM25 candidates (≤100 hashes) — never a
+full-corpus embedding scan (that path dominated recall wall time on
+prose-heavy repos). Semantic-only chunks with zero keyword overlap are
+deferred until an ANN index exists. Every rung fails soft: no vectors,
+model mismatch, or an old index.db degrades to keyword-only, byte-identical
+to v1. Orphaned vectors are pruned when their content leaves every chunk.
+The RekalBench knowledge task set (step 6) remains the follow-up.
 
 ## Problem
 

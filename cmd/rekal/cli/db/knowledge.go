@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/scrub"
 )
@@ -202,8 +203,34 @@ func StoreKnowledgeEmbeddings(d *sql.DB, vectors map[string][]float64, model str
 }
 
 // QueryKnowledgeEmbeddings returns content_hash → vector for a model.
+// Prefer QueryKnowledgeEmbeddingsByHashes on the recall hot path — loading
+// every vector for cosine is what made knowledge dominate recall latency.
 func QueryKnowledgeEmbeddings(d *sql.DB, model string) (map[string][]float64, error) {
-	rows, err := d.Query(`SELECT content_hash, embedding FROM knowledge_embeddings WHERE model = $1`, model)
+	return queryKnowledgeEmbeddings(d, model, nil)
+}
+
+// QueryKnowledgeEmbeddingsByHashes returns vectors for the given content
+// hashes only (same model). Empty hashes → empty map, no query.
+func QueryKnowledgeEmbeddingsByHashes(d *sql.DB, model string, hashes []string) (map[string][]float64, error) {
+	if len(hashes) == 0 {
+		return map[string][]float64{}, nil
+	}
+	return queryKnowledgeEmbeddings(d, model, hashes)
+}
+
+func queryKnowledgeEmbeddings(d *sql.DB, model string, hashes []string) (map[string][]float64, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if len(hashes) == 0 {
+		rows, err = d.Query(`SELECT content_hash, embedding FROM knowledge_embeddings WHERE model = $1`, model)
+	} else {
+		inClause, args := knowledgeHashInClause(hashes, model)
+		rows, err = d.Query(
+			`SELECT content_hash, embedding FROM knowledge_embeddings WHERE model = $1 AND content_hash IN (`+inClause+`)`,
+			args...)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("query knowledge embeddings: %w", err)
 	}
@@ -223,6 +250,18 @@ func QueryKnowledgeEmbeddings(d *sql.DB, model string) (map[string][]float64, er
 		result[hash] = vec
 	}
 	return result, rows.Err()
+}
+
+// knowledgeHashInClause builds "$2,$3,…" placeholders and args [model, hash…].
+func knowledgeHashInClause(hashes []string, model string) (string, []interface{}) {
+	args := make([]interface{}, 0, 1+len(hashes))
+	args = append(args, model)
+	parts := make([]string, len(hashes))
+	for i, h := range hashes {
+		parts[i] = fmt.Sprintf("$%d", i+2)
+		args = append(args, h)
+	}
+	return strings.Join(parts, ","), args
 }
 
 // PruneKnowledgeEmbeddings drops vectors whose content no longer exists in

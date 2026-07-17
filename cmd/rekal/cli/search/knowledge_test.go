@@ -117,10 +117,10 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 	}
 }
 
-// TestKnowledgeSemanticLayer covers the semantic rung: a chunk whose text
-// never mentions the query term surfaces via vector similarity, BM25 and
-// semantic scores blend with the session ranking's keyword/semantic split,
-// and a missing vector store degrades to keyword-only rather than failing.
+// TestKnowledgeSemanticLayer covers the semantic rung: cosine re-ranks BM25
+// candidates (never a full-corpus scan), BM25 and semantic scores blend with
+// the session ranking's keyword/semantic split, and a missing vector store
+// degrades to keyword-only rather than failing.
 func TestKnowledgeSemanticLayer(t *testing.T) {
 	t.Parallel()
 	indexDB := openTempIndexDB(t)
@@ -131,8 +131,10 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 		t.Fatalf("ensure knowledge schema: %v", err)
 	}
 
-	// auth.md matches "token" by keyword; sessions.md never says "token"
-	// but its vector is aligned with the query vector.
+	// Both docs match "token" by keyword. deploy.md's vector aligns with the
+	// query; auth.md's does not — semantic re-rank should promote deploy.
+	// orphan.md has a strong vector but zero keyword overlap and must stay
+	// out (no full-corpus semantic-only pass).
 	if err := db.InsertKnowledgeChunks(indexDB, []db.KnowledgeChunkRow{
 		{
 			ID: "docs/auth.md#1", Path: "docs/auth.md",
@@ -142,11 +144,18 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 			ContentHash: "hash-auth", BlobSHA: "b1",
 		},
 		{
-			ID: "docs/sessions.md#1", Path: "docs/sessions.md",
-			Anchor: "# Sessions", Breadcrumb: "Sessions",
+			ID: "docs/deploy.md#1", Path: "docs/deploy.md",
+			Anchor: "# Deploy", Breadcrumb: "Deploy",
 			StartLine: 1, EndLine: 3,
-			Content:     "Sessions\n\nCredentials expire after an hour of inactivity.",
-			ContentHash: "hash-sessions", BlobSHA: "b2",
+			Content:     "Deploy\n\nRotate the deploy token quarterly.",
+			ContentHash: "hash-deploy", BlobSHA: "b2",
+		},
+		{
+			ID: "docs/orphan.md#1", Path: "docs/orphan.md",
+			Anchor: "# Orphan", Breadcrumb: "Orphan",
+			StartLine: 1, EndLine: 3,
+			Content:     "Orphan\n\nCredentials expire after an hour of inactivity.",
+			ContentHash: "hash-orphan", BlobSHA: "b3",
 		},
 	}); err != nil {
 		t.Fatalf("insert chunks: %v", err)
@@ -155,39 +164,33 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 		t.Fatalf("create knowledge fts index: %v", err)
 	}
 	if err := db.StoreKnowledgeEmbeddings(indexDB, map[string][]float64{
-		"hash-auth":     {0, 1, 0},
-		"hash-sessions": {1, 0, 0},
+		"hash-auth":   {0, 1, 0},
+		"hash-deploy": {1, 0, 0},
+		"hash-orphan": {1, 0, 0},
 	}, "test-model"); err != nil {
 		t.Fatalf("store knowledge embeddings: %v", err)
 	}
 
-	// Query vector aligned with sessions.md: the semantic-only chunk must
-	// appear despite zero keyword overlap.
 	queryVec := []float64{1, 0, 0}
 	hits := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "test-model")
 	if len(hits) != 2 {
-		t.Fatalf("want 2 hits (keyword + semantic-only), got %+v", hits)
+		t.Fatalf("want 2 BM25 candidate hits, got %+v", hits)
 	}
-	paths := map[string]bool{}
 	for _, h := range hits {
-		paths[h.Path] = true
+		if h.Path == "docs/orphan.md" {
+			t.Fatalf("semantic-only (no BM25) chunk must not appear: %+v", hits)
+		}
 	}
-	if !paths["docs/sessions.md"] {
-		t.Fatalf("semantic-only chunk missing from hits: %+v", hits)
-	}
-	// With the default 0.35/0.65 keyword/semantic split, the perfectly
-	// aligned semantic-only doc outranks the keyword-only doc.
-	if hits[0].Path != "docs/sessions.md" {
-		t.Fatalf("semantic-aligned doc should rank first, got %+v", hits)
+	if hits[0].Path != "docs/deploy.md" {
+		t.Fatalf("semantic-aligned BM25 candidate should rank first, got %+v", hits)
 	}
 
-	// Unknown model → no vectors → keyword-only, and the semantic-only doc
-	// disappears (byte-identical v1 behavior).
+	// Unknown model → no vectors → keyword-only ranking among BM25 hits.
 	kw := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "other-model")
-	if len(kw) != 1 || kw[0].Path != "docs/auth.md" {
-		t.Fatalf("keyword-only fallback should return just auth.md, got %+v", kw)
+	if len(kw) != 2 {
+		t.Fatalf("keyword-only should return both BM25 hits, got %+v", kw)
 	}
 	if kw[0].Score != 1 {
-		t.Fatalf("keyword-only score should be normalized BM25 (1.0), got %v", kw[0].Score)
+		t.Fatalf("keyword-only top score should be normalized BM25 (1.0), got %v", kw[0].Score)
 	}
 }

@@ -127,6 +127,20 @@ func TestKnowledgeEmbeddings(t *testing.T) {
 		t.Fatalf("round trip = %+v, want original h-a vector", got)
 	}
 
+	// ByHashes is the recall hot path: only requested hashes, never the
+	// full table. Missing hashes are simply absent from the map.
+	if err := StoreKnowledgeEmbeddings(d, map[string][]float64{"h-b": {0.3, 0.4}}, "m1"); err != nil {
+		t.Fatalf("store h-b: %v", err)
+	}
+	subset, err := QueryKnowledgeEmbeddingsByHashes(d, "m1", []string{"h-b", "missing"})
+	if err != nil || len(subset) != 1 || len(subset["h-b"]) != 2 {
+		t.Fatalf("ByHashes = %+v (err %v), want just h-b", subset, err)
+	}
+	empty, err := QueryKnowledgeEmbeddingsByHashes(d, "m1", nil)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("ByHashes(nil) = %+v (err %v), want empty", empty, err)
+	}
+
 	// Model keying: another model sees everything as missing.
 	missing, err = QueryKnowledgeChunksMissingEmbeddings(d, "m2", 0)
 	if err != nil || len(missing) != 2 {
@@ -134,6 +148,7 @@ func TestKnowledgeEmbeddings(t *testing.T) {
 	}
 
 	// Prune: drop every chunk with hash h-a; its vector goes with it.
+	// h-b still has a live chunk, so its vector stays.
 	if err := DeleteKnowledgeChunks(d, []string{"a.md", "c.md"}); err != nil {
 		t.Fatalf("delete chunks: %v", err)
 	}
@@ -141,7 +156,7 @@ func TestKnowledgeEmbeddings(t *testing.T) {
 		t.Fatalf("prune: %v", err)
 	}
 	got, err = QueryKnowledgeEmbeddings(d, "m1")
-	if err != nil || len(got) != 0 {
-		t.Fatalf("after prune, embeddings = %+v (err %v), want empty", got, err)
+	if err != nil || len(got) != 1 || got["h-b"] == nil {
+		t.Fatalf("after prune, embeddings = %+v (err %v), want just h-b", got, err)
 	}
 }

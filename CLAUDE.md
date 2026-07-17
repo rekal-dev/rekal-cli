@@ -199,6 +199,8 @@ session discovery keep using the invoking worktree.
 
 - `DEVELOPMENT.md`: Dev process, testing, CI/CD
 - `git-transportation.md`: Git transport layer design
+- `design/skill-router.md`: Unified skill — substrate triage, progressive
+  disclosure, executable gate scripts (mermaid)
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent

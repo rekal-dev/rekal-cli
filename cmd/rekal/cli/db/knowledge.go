@@ -235,15 +235,12 @@ func QueryKnowledgeChunksByHashes(d *sql.DB, hashes []string) ([]KnowledgeChunkR
 	if len(hashes) == 0 {
 		return nil, nil
 	}
-	inClause, args := knowledgeHashInClause(hashes, "")
-	// knowledgeHashInClause always prepends model as $1 — reuse a dedicated builder.
-	args = make([]interface{}, len(hashes))
+	args := make([]interface{}, len(hashes))
 	parts := make([]string, len(hashes))
 	for i, h := range hashes {
 		parts[i] = fmt.Sprintf("$%d", i+1)
 		args[i] = h
 	}
-	_ = inClause
 	rows, err := d.Query(`
 		SELECT id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha
 		FROM knowledge_chunks

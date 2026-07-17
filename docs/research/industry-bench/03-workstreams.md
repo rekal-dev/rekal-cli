@@ -142,7 +142,7 @@ useful simultaneous agents: 3–4.
 | WS | Title | Status | Owner | Notes |
 |---|---|---|---|---|
 | A | Datasets | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | LongMemEval-S + LoCoMo downloaded, normalized, `verify_dataset.py` green (500/23867/246750 and 10/272/5882); MSC + LongMemEval-M still open |
-| B | sh-gen | review | session-2026-07-17 | round-trip green on toy corpus; recall verified; see `scripts/industry-bench/runs/notes/2026-07-17-ws-b-round-trip.md`; real-data ingest next |
+| B | sh-gen | in-progress (cursor/industry-bench-longmemeval-real-ff4f) | toy + LME-S limit-1/3 verify green (~100s/conv); stock recall hits gold on `e47becba` (0.87); full 500-conv ~12h serial — `runs/notes/2026-07-17-ws-b-lme-s-real-ingest.md` |
 | C | Modes | open | — | |
 | D | Calibration | open | — | pre-registration gate; abstention separation observed on toy (conf 0.21 vs 0.33) |
 | E | Shim + scoring | open | — | shim must retry on index.db lock ("another rekal process") |

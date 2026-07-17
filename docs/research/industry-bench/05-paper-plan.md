@@ -15,7 +15,7 @@ signature discipline: token-budget accounting and pre-registered gates.
 
 | # | Claim | Evidence required | Status |
 |---|---|---|---|
-| 1 | The commit anchor is a *format*, not a domain restriction: general conversational corpora ingest through the unchanged production pipeline. | WS-B round-trip + full LongMemEval-S ingest verification | open |
+| 1 | The commit anchor is a *format*, not a domain restriction: general conversational corpora ingest through the unchanged production pipeline. | WS-B round-trip + full LongMemEval-S ingest verification | partial — toy + LME-S limit-1/3 verified; stock recall hits gold evidence (`e47becba`); full 500 still running/pending |
 | 2 | Stock hybrid recall is competitive with purpose-built memory systems on single-hop/temporal categories, at a fraction of the context tokens. | WS-E/F headline table, LongMemEval-S + full | open |
 | 3 | The confidence gate transfers: abstention-category accuracy from the *same* SILENCE mechanism shipped for coding, with disclosed false-silence rate. | Per-category results + gate analysis | open |
 | 4 | Routing transfers: persona-map + synthesis modes beat single-shot retrieval on preference/knowledge-update categories, mirroring #1's answer-assembly finding. | Ablation: routed vs recall-only, same corpus/pins | open |

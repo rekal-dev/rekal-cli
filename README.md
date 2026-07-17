@@ -423,6 +423,22 @@ rekal <command> --help
 
 Issues: [github.com/rekal-dev/rekal-cli/issues](https://github.com/rekal-dev/rekal-cli/issues)
 
+## Citation
+
+If you use Rekal or build on the research, please cite the paper:
+
+```bibtex
+@misc{guo2026rekal,
+  title         = {Why Git Is the Memory Solution for the Agentic Development Lifecycle},
+  author        = {Guo, Frank},
+  year          = {2026},
+  eprint        = {2607.14390},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SE},
+  url           = {https://arxiv.org/abs/2607.14390}
+}
+```
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).

@@ -27,9 +27,31 @@ present). Knowledge fallback requires absolute `knowledge[0].score` ≥ 0.40
 Max-normalized session `score` alone is not enough. Confident episode
 outranks a non-empty knowledge block. No gate output → SILENCE.
 
-## 2. Drill, cheapest first
+## 2. One query is a guess — widen before you conclude
 
-Never `--full` by default:
+The ledger indexes the words the *past* session used, not the words you asked
+with. Evidence routinely lands at rank 5-9, not rank 1 — `rekal` already returns
+20 candidates (`-n` to change), so read past the first before you judge. A single
+phrasing is one lookup; a confident answer survives more than one. Re-query and
+fuse whenever the top episode does not answer, or before you conclude SILENCE:
+
+| Reformulation | When | Example |
+|---|---|---|
+| keyword-only (drop question words) | always — cheap second look | `rekal "token refresh expiry"` |
+| split a compound question | "X and Y", multi-hop | query each clause, then join |
+| temporal emphasis | "when / before / after / first / last" | add the date/era, or `--file` for that period |
+| entity / path anchor | you know a file or a name | `rekal --file src/auth/ "<q>"` |
+
+Take the union of top candidates across phrasings: a session that surfaces under
+two different queries is almost always the answer. Only SILENCE after a
+reformulation also comes back empty — one blank query is not absence. This
+multi-lookup loop is where recall moves from "top result" to "right result"
+(LoCoMo: single-shot 0.88 → multi-lookup 0.98 evidence-recall).
+
+## 3. Drill the strongest, cheapest first
+
+When the top candidates' `confidence` values are within the gate's gap band,
+drill the top 2-3 — not only #1. Never `--full` by default:
 
 ```bash
 rekal query --session <id> --role summary

@@ -21,19 +21,33 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import os
 import sys
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
 
 # Absolute confidence floor (see search/confidence.go saturating BM25).
 # Tuned so real domain queries (~0.85) clear and offtopic/junk (~0.48–0.63) do not.
-CONF_MIN = 0.70
+# Override via REKAL_HUNT_* for harness calibration (WS-D); defaults unchanged.
+CONF_MIN = _env_float("REKAL_HUNT_CONF_MIN", 0.70)
 # Soft path: near the hard floor with a clear gap to #2 — still above offtopic.
-CONF_SOFT = 0.68
-GAP_MIN = 0.04
+CONF_SOFT = _env_float("REKAL_HUNT_CONF_SOFT", 0.68)
+GAP_MIN = _env_float("REKAL_HUNT_GAP_MIN", 0.04)
 # Lexical floor: raw BM25 mass when the field is present (Option C).
-MASS_MIN = 3.5
+# Set REKAL_HUNT_MASS_MIN=0 to disable the mass gate (chat-scale corpora).
+MASS_MIN = _env_float("REKAL_HUNT_MASS_MIN", 3.5)
 # Knowledge fallback: absolute knowledge score must clear this (BUG 14 —
 # max-norm made every top hit ~1.0; weak prose must not ROUTE_KNOWLEDGE).
-KNOWLEDGE_MIN = 0.40
+KNOWLEDGE_MIN = _env_float("REKAL_HUNT_KNOWLEDGE_MIN", 0.40)
 # Legacy (no confidence field): max-norm score bars from the pre-#45 gate.
 LEGACY_TOP_MIN = 0.9
 
@@ -96,7 +110,7 @@ def confidence_verdict(results: list) -> tuple[str, float, float, str]:
     gap = (scored[0][0] - scored[1][0]) if len(scored) > 1 else top
 
     has_mass_field = any(isinstance(r, dict) and "mass" in r for r in results)
-    weak_mass = has_mass_field and 0 < mass < MASS_MIN
+    weak_mass = has_mass_field and MASS_MIN > 0 and 0 < mass < MASS_MIN
 
     if top >= CONF_MIN and not weak_mass:
         return "pass", top, gap, ""

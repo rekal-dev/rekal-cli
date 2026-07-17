@@ -70,6 +70,19 @@ python3 scripts/industry-bench/shim/shim.py smoke \
   --rekal ./rekal
 ```
 
+Skill route with chat calibration (uses source-tree `hunt-gate.py` + `REKAL_HUNT_*`
+overrides — not the stale copy frozen at ingest):
+
+```bash
+python3 scripts/industry-bench/shim/shim.py smoke \
+  --workdir /tmp/imb-locomo-smoke \
+  --conversation-id conv-26 \
+  --input /tmp/imb-locomo-1.jsonl \
+  --out scripts/industry-bench/runs/smoke/locomo-conv-26-q10-skill-v2 \
+  --rekal ./rekal --route skill \
+  --calibration scripts/industry-bench/calibration/chat-provisional.json
+```
+
 ## Environment hazards (learned the hard way; encoded in sh_gen)
 
 - **Never set `REKAL_BENCH` / `REKAL_SKIP_CHECKPOINT` in the ingest

@@ -3,8 +3,8 @@
     "CONF_MIN": 0.55,
     "CONF_SOFT": 0.50,
     "GAP_MIN": 0.03,
-    "MASS_MIN": 1.0,
+    "MASS_MIN": 0,
     "KNOWLEDGE_MIN": 0.90
   },
-  "notes": "PROVISIONAL chat-distribution bars for smoke only — not pre-registered. WS-D must retune on LongMemEval-S dev split and freeze before any test-split run (04-procedures §prereg)."
+  "notes": "PROVISIONAL chat-distribution bars for smoke only — not pre-registered. MASS_MIN=0 disables the lexical floor (chat sessions score ~0.1–0.2 mass vs coding's 3.5+). WS-D must retune on LongMemEval-S dev split and freeze before any test-split run (04-procedures §prereg)."
 }

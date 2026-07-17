@@ -6,11 +6,11 @@ before each full run.
 
 | # | Benchmark | Full-tier definition | Workdir | ETA order |
 |---|---|---|---|---|
-| 1 | **LongMemEval-S** | 500 conversations / ~23.8k sessions / 500 Q | `~/imb-lme-s` | **in progress** (ingest ~90%) |
-| 2 | **LongMemEval-M** | cleaned full LongMemEval (multi-session haystacks) | `~/imb-lme-m` | re-download → normalize → shard ingest |
-| 3 | **LoCoMo** | all 10 conversations / 1986 Q (official judge later) | `~/imb-locomo` | **ingest+retrieve smoke done**; official judge/eval next |
-| 4 | **MSC** | full Multi-Session Chat (ParlAI / HF mirror) | `~/imb-msc` | getter+normalize+ingest (WS-A open) |
-| 5 | **BEAM / AMB** | published BEAM tiers incl. 10M (stretch) | `~/imb-beam` | after F baselines + `--fast` ingest |
+| 1 | **LongMemEval-S** | 500 conversations / ~23.8k sessions / 500 Q | `~/imb-lme-s` | finishing last shards → full TEST |
+| 2 | **LongMemEval-M** | 500 conv / ~237k sessions | `~/imb-lme-m` | normalized; shard ingest with `--fast` (multi-day) |
+| 3 | **LoCoMo** | all 10 conversations / 1986 Q | `~/imb-locomo` | **retrieval full done** (~91%@5); official judge open |
+| 4 | **MSC** | test+valid first (1501), then train | `~/imb-msc` | eval shards ingesting |
+| 5 | **BEAM** | 128k → 500k → 1m → 10m | `~/imb-beam` | getter+normalize wired; download running |
 
 ## Discipline (unchanged)
 

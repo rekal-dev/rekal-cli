@@ -3,8 +3,8 @@
 
 MSC is multi-session dialogue with persona annotations — no official QA.
 For full-tier adapter regression we synthesize persona-fact questions:
-one question per persona bullet from session 0 / init_personas, answer =
-the bullet text, evidence = s1 (first dialogue session).
+one question per persona bullet from init_personas / session-0 personas,
+answer = the bullet text, evidence = s1.
 
 These questions are **synthetic** (see LICENSE-NOTE-msc.md). Headline
 paper numbers must not treat them as an official MSC score.
@@ -18,57 +18,48 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-def role_for(speaker: str, speaker_map: dict[str, str]) -> str:
-    return speaker_map.setdefault(speaker, "user" if len(speaker_map) == 0 else "assistant")
-
-
 def normalize_row(row: dict, split: str) -> dict:
     cid = f"msc-{split}-{row['id']}"
-    speakers: dict[str, str] = {}
     sessions_out = []
     base = datetime(2023, 1, 1, tzinfo=timezone.utc) + timedelta(days=int(row["id"]) % 365)
+    speaker_order: list[str] = []
 
     for i, sess in enumerate(row.get("sessions") or []):
+        dialogue = sess.get("dialogue") or []
+        if not dialogue:
+            continue
+        for utt in dialogue:
+            sp = utt.get("speaker") or "Speaker 1"
+            if sp not in speaker_order:
+                speaker_order.append(sp)
+        first = speaker_order[0] if speaker_order else "Speaker 1"
+        turns = []
+        for utt in dialogue:
+            sp = utt.get("speaker") or first
+            role = "user" if sp == first else "assistant"
+            turns.append({"role": role, "text": f"{sp}: {(utt.get('text') or '').strip()}"})
         sid = f"s{i + 1}"
         date = (base + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        turns = []
-        for j, utt in enumerate(sess.get("dialogue") or []):
-            sp = utt.get("speaker") or "Speaker 1"
-            role = role_for(sp, speakers)
-            text = f"{sp}: {(utt.get('text') or '').strip()}"
-            turns.append({"role": role if role in ("user", "assistant") else "user", "text": text})
-            # SCHEMA only allows user|assistant — map second speaker to assistant
-            if role not in ("user", "assistant"):
-                turns[-1]["role"] = "assistant" if len(speakers) > 1 else "user"
-        # Fix roles: first unique speaker → user, second → assistant
-        order = list(speakers.keys())
-        fixed = []
-        for utt in sess.get("dialogue") or []:
-            sp = utt.get("speaker") or order[0]
-            role = "user" if sp == order[0] else "assistant"
-            fixed.append({"role": role, "text": f"{sp}: {(utt.get('text') or '').strip()}"})
-        if not fixed:
-            continue
-        sessions_out.append({"session_id": sid, "date": date, "turns": fixed})
+        sessions_out.append({"session_id": sid, "date": date, "turns": turns})
 
-    questions = []
     facts = []
     for p in row.get("init_personas") or []:
         for t in p.get("text") or []:
             if t.strip():
                 facts.append((p.get("speaker") or "Speaker", t.strip()))
-    if sessions_out and not facts:
+    if sessions_out and not facts and row.get("sessions"):
         for p in (row["sessions"][0].get("personas") or []):
             for t in p.get("text") or []:
                 if t.strip():
                     facts.append((p.get("speaker") or "Speaker", t.strip()))
 
-    for qi, (speaker, fact) in enumerate(facts[:20]):  # cap per conversation
+    questions = []
+    for qi, (speaker, fact) in enumerate(facts[:20]):
         questions.append(
             {
                 "question_id": f"q{qi + 1}",
                 "category": "persona-fact",
-                "question": f"What did {speaker} say about themselves regarding: {fact[:60]}?",
+                "question": f"According to their persona, what did {speaker} say: {fact[:80]}?",
                 "answer": fact,
                 "evidence_session_ids": ["s1"] if sessions_out else [],
                 "extra": {"synthetic": True, "benchmark": "msc"},
@@ -104,8 +95,7 @@ def main() -> None:
                 for line in f:
                     if not line.strip():
                         continue
-                    row = json.loads(line)
-                    conv = normalize_row(row, split)
+                    conv = normalize_row(json.loads(line), split)
                     if not conv["sessions"]:
                         continue
                     fout.write(json.dumps(conv, ensure_ascii=False) + "\n")

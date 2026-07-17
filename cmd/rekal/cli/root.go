@@ -28,6 +28,18 @@ Getting Started:
   rekal index --include-all         Also recall your other repos' sessions (local only, never pushed)
 `
 
+// resolveRecallLimit interprets -n/--limit. Unset → (DefaultLimit, false).
+// Explicit 0 → empty result set. Negative → error (BUG 7).
+func resolveRecallLimit(cmd *cobra.Command, flag int) (limit int, explicit bool, err error) {
+	if !cmd.Flags().Changed("limit") {
+		return search.DefaultLimit, false, nil
+	}
+	if flag < 0 {
+		return 0, true, fmt.Errorf("rekal: --limit must be >= 0 (got %d)", flag)
+	}
+	return flag, true, nil
+}
+
 // NewRootCmd returns the root command for the rekal CLI.
 func NewRootCmd() *cobra.Command {
 	var (
@@ -68,14 +80,21 @@ func NewRootCmd() *cobra.Command {
 				return err
 			}
 
+			limit, explicit, err := resolveRecallLimit(cmd, limitFlag)
+			if err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), err)
+				return NewSilentError(err)
+			}
+
 			filters := search.Filters{
-				Query:   strings.Join(args, " "),
-				File:    fileFilter,
-				Commit:  commitFilter,
-				Author:  authorFilter,
-				Actor:   actorFilter,
-				Limit:   limitFlag,
-				Explain: explainFlag,
+				Query:         strings.Join(args, " "),
+				File:          fileFilter,
+				Commit:        commitFilter,
+				Author:        authorFilter,
+				Actor:         actorFilter,
+				Limit:         limit,
+				LimitExplicit: explicit,
+				Explain:       explainFlag,
 			}
 
 			return runRecall(cmd, gitRoot, filters)
@@ -87,7 +106,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&commitFilter, "commit", "", "Filter by git commit SHA")
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
-	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20)")
+	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")

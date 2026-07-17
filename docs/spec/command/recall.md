@@ -80,7 +80,7 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 | `--commit <sha>` | Sessions linked to a git commit (SHA prefix match) |
 | `--author <email>` | Sessions by this author email |
 | `--actor <human\|agent>` | Filter by actor type |
-| `-n`, `--limit <n>` | Max results (default: 20) |
+| `-n`, `--limit <n>` | Max results (default: 20 when unset; `0` = empty set; negative → error) |
 | `--explain` | Adds per-layer scores (`layers`: bm25/lsa/nomic/facet, normalized, pre-weight) and `related` (sessions sharing touched files, query-time join) to each result |
 
 Multiple filters = AND.
@@ -107,6 +107,8 @@ Multiple filters = AND.
     {
       "session_id": "...",
       "score": 0.85,
+      "confidence": 0.78,
+      "mass": 5.64,
       "snippet": "...",
       "snippet_turn_index": 3,
       "snippet_role": "assistant",
@@ -148,6 +150,14 @@ Multiple filters = AND.
 `knowledge` is present only when the query matched the repo's prose files at
 HEAD (see "Knowledge layer" above). Hits are pointers — Read `path` at
 `lines` for the content; `sessions` is the provenance edge into the ledger.
+
+`score` is max-normalized hybrid rank (ordering within the result set).
+`confidence` is absolute relevance for silence gates — saturating BM25/facet
+plus cosine layers, never divided by the candidate-set max — so junk /
+off-topic queries stay low even when they are the "best" of a weak set.
+`mass` is the winning turn's raw BM25. Empty, whitespace-only, and
+single-character queries return `results: []` (and no knowledge block)
+instead of filter-mode score-0 rows.
 
 `children` is present only when other matching transcripts (subagent runs,
 workflow steps, other agents in the same team) share this result's trunk

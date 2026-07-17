@@ -17,7 +17,9 @@ import (
 
 const (
 	defaultSnippetSize = 300
-	defaultLimit       = 20
+	// DefaultLimit is the recall -n default when the flag is unset.
+	DefaultLimit = 20
+	defaultLimit = DefaultLimit
 
 	// Layer weights and metadata-signal multipliers live in Weights
 	// (weights.go) — configurable via .rekal/config.json, applied at query
@@ -25,7 +27,9 @@ const (
 
 	// conversationChildBudget caps how many folded transcripts are nested
 	// under one collapsed conversation result, so a single large workflow
-	// cannot occupy the whole top-k result budget.
+	// cannot occupy the whole top-k result budget. Matching children beyond
+	// the cap are dropped from the nested list by design — not a join bug
+	// (BUG 9 retracted: fan-out is query-matched + capped).
 	conversationChildBudget = 3
 )
 
@@ -37,6 +41,9 @@ type Filters struct {
 	Author string // email
 	Actor  string // "human" | "agent"
 	Limit  int
+	// LimitExplicit is true when the caller set -n/--limit (including 0).
+	// Unset Limit≤0 still means DefaultLimit; explicit 0 means empty results.
+	LimitExplicit bool
 
 	// Explain enriches results with per-layer scores (Layers) and
 	// query-time related-session joins (Related). Off by default so the
@@ -73,8 +80,18 @@ type Related struct {
 
 // Result is a single search result for JSON output.
 type Result struct {
-	SessionID      string        `json:"session_id"`
-	Score          float64       `json:"score"`
+	SessionID string `json:"session_id"`
+	// Score is the max-normalized hybrid rank score — good for ordering
+	// within a result set, not for absolute confidence (junk queries also
+	// top out near 1.0). Gate silence on Confidence instead.
+	Score float64 `json:"score"`
+	// Confidence is absolute relevance in [0,1]: saturating BM25/facet +
+	// cosine layers, never divided by the candidate-set max. Used by the
+	// skill hunt gate (TOP_MIN). Omitted in filter mode (no query).
+	Confidence float64 `json:"confidence,omitempty"`
+	// Mass is the winning turn's raw BM25 (pre-boost) — an absolute
+	// hit-mass signal for gates that want a lexical floor.
+	Mass           float64       `json:"mass,omitempty"`
 	Snippet        string        `json:"snippet"`
 	SnippetTurnIdx int           `json:"snippet_turn_index"`
 	SnippetRole    string        `json:"snippet_role"`
@@ -422,7 +439,8 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		if parent != "" {
 			hybrid *= w.SubagentDownweight
 		}
-		sc := scored{sessionID: sid, score: hybrid, hit: sh}
+		conf := absoluteConfidence(sh.bm25Raw, sh.lsaScore, sh.nomicScore, sh.facetScore, useNomic, w, parent)
+		sc := scored{sessionID: sid, score: hybrid, confidence: conf, mass: sh.bm25Raw, hit: sh}
 		if filters.Explain {
 			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm), Facet: round2(facetNorm)}
 		}
@@ -1033,6 +1051,8 @@ func buildResults(indexDB *sql.DB, scored []scored, filters Filters, limit int) 
 		results = append(results, Result{
 			SessionID:      s.sessionID,
 			Score:          math.Round(s.score*100) / 100,
+			Confidence:     s.confidence,
+			Mass:           round2(s.mass),
 			Snippet:        snippet,
 			SnippetTurnIdx: snippetIdx,
 			SnippetRole:    snippetRole,
@@ -1351,6 +1371,8 @@ func groupByConversation(indexDB *sql.DB, results []Result, parentIDs map[string
 		out = append(out, Result{
 			SessionID:      root,
 			Score:          best.Score,
+			Confidence:     best.Confidence,
+			Mass:           best.Mass,
 			Snippet:        best.Snippet,
 			SnippetTurnIdx: best.SnippetTurnIdx,
 			SnippetRole:    best.SnippetRole,
@@ -1374,11 +1396,13 @@ func loadSessionFacet(indexDB *sql.DB, sessionID string) (SessionDetail, bool) {
 }
 
 type scored struct {
-	sessionID string
-	score     float64
-	hit       *sessionHit
-	layers    *Layers           // populated only under Filters.Explain
-	lineage   *candidateLineage // populated only when Filters.Lineage is set
+	sessionID  string
+	score      float64
+	confidence float64
+	mass       float64
+	hit        *sessionHit
+	layers     *Layers           // populated only under Filters.Explain
+	lineage    *candidateLineage // populated only when Filters.Lineage is set
 }
 
 // round2 rounds to two decimals for stable, thin JSON output.
@@ -1534,19 +1558,56 @@ func nullStr(ns sql.NullString) string {
 // the query for the deep semantic layer (nil → the embedded nomic backend).
 func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEmbedder) (Output, error) {
 	limit := filters.Limit
-	if limit <= 0 {
+	switch {
+	case filters.LimitExplicit && limit == 0:
+		// Explicit -n 0: empty set (BUG 7 — was coerced to default 20).
+	case filters.LimitExplicit && limit < 0:
+		// CLI rejects negatives; programmatic misuse → default.
+		limit = defaultLimit
+	case limit <= 0:
 		limit = defaultLimit
 	}
 	w = w.orDefaults()
+
+	rawQuery := filters.Query
+	q := NormalizeQuery(rawQuery)
+
+	emptyOut := func(mode string) Output {
+		return Output{
+			Results: []Result{},
+			Query:   rawQuery,
+			Filters: map[string]string{
+				"file": filters.File, "actor": filters.Actor,
+				"commit": filters.Commit, "author": filters.Author,
+			},
+			Mode:  mode,
+			Total: 0,
+		}
+	}
+
+	if filters.LimitExplicit && filters.Limit == 0 {
+		mode := "filter"
+		if q != "" {
+			mode = "hybrid"
+		}
+		return emptyOut(mode), nil
+	}
 
 	var results []Result
 	var knowledge []KnowledgeHit
 	var err error
 	mode := "filter"
-	if filters.Query != "" {
+
+	switch {
+	case q != "" && !MeaningfulQuery(q):
+		// Thin query ("", " ", "a"): silence — do not fall through to
+		// filterSearch (which returns score-0 rows) or knowledge FTS.
+		return emptyOut("hybrid"), nil
+	case MeaningfulQuery(q):
 		mode = "hybrid"
+		filters.Query = q
 		results, knowledge, err = hybridSearch(indexDB, filters, limit, gitRoot, w, qe)
-	} else {
+	default:
 		results, err = filterSearch(indexDB, filters, limit)
 	}
 	if err != nil {
@@ -1562,7 +1623,7 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 	return Output{
 		Knowledge: knowledge,
 		Results:   results,
-		Query:     filters.Query,
+		Query:     rawQuery,
 		Filters: map[string]string{
 			"file":   filters.File,
 			"actor":  filters.Actor,

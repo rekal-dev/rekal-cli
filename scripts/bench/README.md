@@ -32,6 +32,7 @@ $BENCH/mine_labels.sh $OUT          # writes labels-t{1,2,3}.jsonl
 
 # 2. generate natural-language queries with leakage control
 export BENCH_LLM="claude -p"        # any stdin→stdout paraphrase command
+export REKAL_BENCH=1                # skip capturing harness sessions into data.db
 python3 $BENCH/gen_queries.py $OUT  # writes queries.jsonl (+ skipped.jsonl)
 
 # 3. run systems (B1 grep-rank, B3 bm25-only, B4 neural-only, B5 hybrid)

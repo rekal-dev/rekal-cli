@@ -110,7 +110,7 @@ func TestHuntGateScript(t *testing.T) {
 	t.Parallel()
 	path := writeScript(t, "scripts/hunt-gate.py")
 
-	passJSON := `{"results":[{"score":0.95},{"score":0.5}],"knowledge":[]}`
+	passJSON := `{"results":[{"confidence":0.82,"mass":5.6,"score":0.99},{"confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`
 	cmd := exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(passJSON)
 	out, err := cmd.CombinedOutput()
@@ -121,28 +121,28 @@ func TestHuntGateScript(t *testing.T) {
 		t.Fatalf("want PASS_EPISODE, got %s", out)
 	}
 
-	silenceJSON := `{"results":[{"score":0.5},{"score":0.49}],"knowledge":[]}`
+	// Junk: high max-normalized score, low absolute confidence + weak mass.
+	junkJSON := `{"results":[{"confidence":0.48,"mass":2.59,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`
+	cmd = exec.Command("python3", path)
+	cmd.Stdin = strings.NewReader(junkJSON)
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("junk should SILENCE, got %s", out)
+	}
+	if !strings.Contains(string(out), "SILENCE") {
+		t.Fatalf("want SILENCE, got %s", out)
+	}
+
+	silenceJSON := `{"results":[{"confidence":0.5,"score":0.5},{"confidence":0.49,"score":0.49}],"knowledge":[]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(silenceJSON)
 	out, err = cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("SILENCE case should exit non-zero, got %s", out)
 	}
-	if !strings.Contains(string(out), "SILENCE") {
-		t.Fatalf("want SILENCE, got %s", out)
-	}
-
-	// Single weak hit must not pass via fake gap=top.
-	singleJSON := `{"results":[{"score":0.5}],"knowledge":[]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(singleJSON)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("single weak hit should SILENCE, got %s", out)
-	}
 
 	// Confident episode wins even when knowledge docs are present.
-	strongPlusKnow := `{"results":[{"score":1.08},{"score":0.5}],"knowledge":[{"path":"docs/x.md"}]}`
+	strongPlusKnow := `{"results":[{"confidence":0.8,"mass":5.0,"score":1.08},{"confidence":0.3,"score":0.5}],"knowledge":[{"path":"docs/x.md"}]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(strongPlusKnow)
 	out, err = cmd.CombinedOutput()
@@ -154,7 +154,7 @@ func TestHuntGateScript(t *testing.T) {
 	}
 
 	// Knowledge is only a fallback when the episode gate fails.
-	weakPlusKnow := `{"results":[{"score":0.5},{"score":0.49}],"knowledge":[{"path":"docs/x.md"}]}`
+	weakPlusKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md"}]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(weakPlusKnow)
 	out, err = cmd.CombinedOutput()
@@ -187,7 +187,7 @@ func TestRecallRouteScript(t *testing.T) {
 		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
 	}
 
-	injectJSON := `{"results":[{"score":0.95},{"score":0.5}],"knowledge":[]}`
+	injectJSON := `{"results":[{"confidence":0.8,"mass":5.5,"score":0.95},{"confidence":0.4,"score":0.5}],"knowledge":[]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(injectJSON)
 	out, err = cmd.CombinedOutput()
@@ -199,7 +199,7 @@ func TestRecallRouteScript(t *testing.T) {
 	}
 
 	// PKYC-class bug: confident session must INJECT despite prose hits.
-	bothJSON := `{"results":[{"score":1.08},{"score":0.5}],"knowledge":[{"path":"docs/a.md"},{"path":"docs/b.md"}]}`
+	bothJSON := `{"results":[{"confidence":0.85,"mass":6.0,"score":1.08},{"confidence":0.4,"score":0.5}],"knowledge":[{"path":"docs/a.md"},{"path":"docs/b.md"}]}`
 	cmd = exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(bothJSON)
 	out, err = cmd.CombinedOutput()

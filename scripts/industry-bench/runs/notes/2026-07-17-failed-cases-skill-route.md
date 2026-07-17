@@ -17,3 +17,17 @@ Date: 2026-07-17 · stock smoke misses re-run through
 2. **Skill gate already helps 2/3 of these "failures"** by preferring absolute confidence over max-norm-ish score rank — exactly what `hunt-gate.py` was built for.
 3. **LoCoMo q8 is the real product gap:** relationship-status multi-hop with weak lexical overlap; needs better retrieval or why-mode assembly, not a lower SILENCE bar.
 4. Next shim flag: `--route skill` recording `gate`, `gate_top_conf`, `confidence_top_is_evidence` beside stock columns.
+
+## Implemented in shim
+
+- `shim.py --route skill` now pipes recall JSON through `recall-route.py`.
+- On `INJECT`, contexts are ranked by absolute `confidence` (skill semantics).
+- On `KNOWLEDGE`, marker-only knowledge (`CLAUDE.md`, `sessions/*.md`) is
+  ignored; marker-only fallback becomes `SILENCE reason=knowledge_marker_only`.
+- For **non-abstention** benchmark questions, skill SILENCE falls back to
+  stock recall (`route.gate=FALLBACK_STOCK`) so we don't over-silence QA rows.
+
+Quick check after fix:
+
+- LME `118b2229`: skill top context is evidence session `answer_40a90d51`.
+- LoCoMo q8: still unresolved (true retrieval miss), now explicit SILENCE.

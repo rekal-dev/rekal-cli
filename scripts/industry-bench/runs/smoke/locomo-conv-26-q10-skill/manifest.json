@@ -1,0 +1,10 @@
+{
+  "conversation_id": "conv-26",
+  "system": "rekal-skill",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 10,
+  "evidence_hit_rate": 0.9,
+  "retrieved_context_tokens_mean": 196.7,
+  "answer_path_tokens_mean": 225.9
+}

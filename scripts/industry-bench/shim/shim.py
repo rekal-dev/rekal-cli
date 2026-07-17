@@ -19,13 +19,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
-import sys
 import time
 from pathlib import Path
 
 CAPTURE_KILL_SWITCHES = ("REKAL_BENCH", "REKAL_SKIP_CHECKPOINT")
+MARKER_KNOWLEDGE_PATHS = ("CLAUDE.md",)
 
 
 def count_tokens(text: str) -> int:
@@ -67,7 +66,56 @@ def run_rekal(rekal: Path, repo: Path, env: dict, args: list[str], retries: int 
     raise RuntimeError(f"rekal locked after retries: {last[-1000:] if last else ''}")
 
 
-def search(rekal: Path, repo: Path, query: str, limit: int = 5, env: dict | None = None) -> dict:
+def _extract_json_object(raw: str) -> tuple[dict, str]:
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end < 0:
+        raise RuntimeError(f"no JSON in recall output: {raw[:500]}")
+    body = raw[start : end + 1]
+    return json.loads(body), body
+
+
+def _skill_scripts_dir(repo: Path) -> Path:
+    local = repo / ".claude" / "skills" / "rekal" / "scripts"
+    if (local / "recall-route.py").exists():
+        return local
+    # Fallback for benchmark runs from the source tree.
+    return Path(__file__).resolve().parents[3] / "cmd" / "rekal" / "cli" / "skill" / "skills" / "rekal" / "scripts"
+
+
+def _run_recall_route(repo: Path, recall_json_body: str) -> dict:
+    scripts = _skill_scripts_dir(repo)
+    p = subprocess.run(
+        ["python3", str(scripts / "recall-route.py")],
+        input=recall_json_body,
+        capture_output=True,
+        text=True,
+    )
+    line = (p.stdout or "").strip()
+    out = {"gate": "SILENCE", "raw": line or (p.stderr or "").strip(), "exit_code": p.returncode}
+    if not line:
+        return out
+    if line.startswith("INJECT"):
+        out["gate"] = "INJECT"
+    elif line.startswith("KNOWLEDGE"):
+        out["gate"] = "KNOWLEDGE"
+    elif line.startswith("SILENCE"):
+        out["gate"] = "SILENCE"
+    return out
+
+
+def _is_marker_only_knowledge(path: str) -> bool:
+    return path in MARKER_KNOWLEDGE_PATHS or path.startswith("sessions/")
+
+
+def search(
+    rekal: Path,
+    repo: Path,
+    query: str,
+    limit: int = 5,
+    env: dict | None = None,
+    route: str = "stock",
+) -> dict:
     """search(user_id, query) → contexts with token counts.
 
     Invokes stock `rekal <query>` (JSON). No mode classifier yet (WS-C);
@@ -76,19 +124,21 @@ def search(rekal: Path, repo: Path, query: str, limit: int = 5, env: dict | None
     if env is None:
         env = rekal_env(repo, None, rekal)
     raw = run_rekal(rekal, repo, env, [query, "--limit", str(limit)])
-    # rekal may print version-update noise before/after JSON; extract object
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start < 0 or end < 0:
-        raise RuntimeError(f"no JSON in recall output: {raw[:500]}")
-    payload = json.loads(raw[start : end + 1])
+    payload, body = _extract_json_object(raw)
+
+    route_info = {"gate": "STOCK", "raw": "stock-route"}
+    if route == "skill":
+        route_info = _run_recall_route(repo, body)
 
     contexts = []
     retrieved_tokens = 0
-    for r in payload.get("results") or []:
+    results = list(payload.get("results") or [])
+    if route == "skill" and route_info["gate"] == "INJECT":
+        # The skill gate uses absolute confidence; rank contexts accordingly.
+        results.sort(key=lambda r: float(r.get("confidence") or 0.0), reverse=True)
+    for r in results:
         snippet = r.get("snippet") or ""
         tok = count_tokens(snippet)
-        retrieved_tokens += tok
         contexts.append(
             {
                 "session_id": r.get("session_id"),
@@ -101,17 +151,38 @@ def search(rekal: Path, repo: Path, query: str, limit: int = 5, env: dict | None
                 "files": (r.get("session") or {}).get("files"),
             }
         )
+
     knowledge = []
     for k in payload.get("knowledge") or []:
         snip = k.get("snippet") or ""
         tok = count_tokens(snip)
-        retrieved_tokens += tok
         knowledge.append({**k, "tokens": tok})
+
+    if route == "skill":
+        if route_info["gate"] == "KNOWLEDGE":
+            knowledge = [k for k in knowledge if not _is_marker_only_knowledge(str(k.get("path") or ""))]
+            if not knowledge:
+                # Synthetic marker files are not meaningful prose memory.
+                route_info = {
+                    "gate": "SILENCE",
+                    "raw": "SILENCE reason=knowledge_marker_only",
+                    "exit_code": route_info.get("exit_code"),
+                }
+        if route_info["gate"] == "INJECT":
+            knowledge = []
+        elif route_info["gate"] in ("KNOWLEDGE", "SILENCE"):
+            contexts = []
+
+    for c in contexts:
+        retrieved_tokens += int(c.get("tokens") or 0)
+    for k in knowledge:
+        retrieved_tokens += int(k.get("tokens") or 0)
 
     return {
         "query": query,
         "contexts": contexts,
         "knowledge": knowledge,
+        "route": route_info,
         "retrieved_context_tokens": retrieved_tokens,
         "token_counter": "whitespace",
         "limit": limit,
@@ -175,6 +246,7 @@ def smoke_one(
     conversation_id: str,
     out_dir: Path,
     limit_questions: int = 0,
+    route: str = "stock",
 ) -> dict:
     """End-to-end smoke for one pre-ingested conversation's questions."""
     repo = workdir / conversation_id / "repo"
@@ -186,7 +258,17 @@ def smoke_one(
     env = rekal_env(repo, workdir / conversation_id / "claude-config", rekal)
     per_q = []
     for q in questions:
-        sr = search(rekal, repo, q["question"], limit=5, env=env)
+        sr = search(rekal, repo, q["question"], limit=5, env=env, route=route)
+        if route == "skill" and (q.get("category") != "abstention"):
+            gate = ((sr.get("route") or {}).get("gate") or "").upper()
+            if gate == "SILENCE":
+                # Benchmark QA should not over-silence non-abstention categories.
+                stock = search(rekal, repo, q["question"], limit=5, env=env, route="stock")
+                stock["route"] = {
+                    "gate": "FALLBACK_STOCK",
+                    "raw": f"fallback_from_skill:{(sr.get('route') or {}).get('raw')}",
+                }
+                sr = stock
         ans = answer_extractive(q["question"], sr)
         # Evidence hit? session marker files encode benchmark session id.
         hit = False
@@ -215,7 +297,7 @@ def smoke_one(
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "conversation_id": conversation_id,
-        "system": "rekal-stock",
+        "system": f"rekal-{route}",
         "calibration": "stock",
         "token_counter": "whitespace",
         "n_questions": len(per_q),
@@ -237,6 +319,7 @@ def smoke_one(
         f"# smoke {conversation_id}",
         "",
         f"- questions: {manifest['n_questions']}",
+        f"- route: {route}",
         f"- evidence_in_top rate: {manifest['evidence_hit_rate']:.2f}",
         f"- retrieved_context_tokens mean: {manifest['retrieved_context_tokens_mean']:.1f}",
         f"- answer_path_tokens mean: {manifest['answer_path_tokens_mean']:.1f}",
@@ -263,6 +346,7 @@ def main() -> None:
     p_search.add_argument("--query", required=True)
     p_search.add_argument("--rekal", default="rekal")
     p_search.add_argument("--limit", type=int, default=5)
+    p_search.add_argument("--route", choices=("stock", "skill"), default="stock")
 
     p_smoke = sub.add_parser("smoke", help="smoke one ingested conversation")
     p_smoke.add_argument("--workdir", type=Path, required=True, help="sh_gen --out dir")
@@ -272,12 +356,13 @@ def main() -> None:
     p_smoke.add_argument("--rekal", default="rekal")
     p_smoke.add_argument("--limit-questions", type=int, default=0,
                          help="only first N questions (LoCoMo smoke)")
+    p_smoke.add_argument("--route", choices=("stock", "skill"), default="stock")
 
     args = ap.parse_args()
     rekal = Path(args.rekal).resolve()
     if args.cmd == "search":
         env = rekal_env(args.repo.resolve(), None, rekal)
-        print(json.dumps(search(rekal, args.repo.resolve(), args.query, args.limit, env), indent=2))
+        print(json.dumps(search(rekal, args.repo.resolve(), args.query, args.limit, env, args.route), indent=2))
     elif args.cmd == "smoke":
         smoke_one(
             rekal,
@@ -286,6 +371,7 @@ def main() -> None:
             args.conversation_id,
             args.out,
             limit_questions=args.limit_questions,
+            route=args.route,
         )
 
 

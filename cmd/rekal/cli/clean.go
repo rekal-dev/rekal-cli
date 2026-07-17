@@ -21,7 +21,7 @@ Removes:
   .rekal/            Data DB, index DB, and all local state
   post-commit hook   Only if it contains the rekal marker
   pre-push hook      Only if it contains the rekal marker
-  agent skills       .claude/skills/rekal*/ installed by 'rekal init'
+  agent skill        .claude/skills/rekal/ (+ legacy rekal-* dirs)
   CLAUDE.md line     Only the marker-tagged sentence injected by 'rekal init'
 
 Run 'rekal init' to reinitialize after cleaning.`,
@@ -83,12 +83,16 @@ func removeClaudeMDLine(gitRoot string) {
 	_ = os.WriteFile(path, []byte(strings.TrimRight(out, "\n")+"\n"), 0o644)
 }
 
-// removeSkill deletes every rekal-managed skill directory installed by init,
-// then prunes .claude/skills/ and .claude/ if that left them empty — a
-// user's own .claude content (settings, other skills) is never touched.
+// removeSkill deletes every rekal-managed skill directory installed by init
+// (current suite + legacy companion dirs), then prunes .claude/skills/ and
+// .claude/ if that left them empty — a user's own .claude content (settings,
+// other skills) is never touched.
 func removeSkill(gitRoot string) {
 	for _, s := range skill.All() {
 		_ = os.RemoveAll(filepath.Join(gitRoot, ".claude", "skills", s.Name))
+	}
+	for _, name := range skill.LegacyNames {
+		_ = os.RemoveAll(filepath.Join(gitRoot, ".claude", "skills", name))
 	}
 	// os.Remove refuses non-empty directories, which is exactly the
 	// behavior wanted here.

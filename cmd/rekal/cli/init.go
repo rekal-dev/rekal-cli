@@ -24,7 +24,7 @@ const rekalClaudeMDMarker = "<!-- managed by rekal -->"
 
 // rekalClaudeMDLine is the one sentence of dev experience most users need:
 // the skill carries the full routing policy; this line just makes it load.
-const rekalClaudeMDLine = "Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code facts, recall the ledger (`rekal`) for past-tense intent, the map for structure. " + rekalClaudeMDMarker
+const rekalClaudeMDLine = "Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code, `rekal` knowledge for present prose at HEAD, the ledger (`rekal` + gates) for past intent, the map for structure. " + rekalClaudeMDMarker
 
 func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -37,7 +37,7 @@ Creates:
   post-commit hook   Runs 'rekal checkpoint' after each commit
   pre-push hook      Runs 'rekal push' before each push
   orphan branch      rekal/<email> for wire format storage
-  agent skill        .claude/skills/rekal/SKILL.md for Claude Code
+  agent skill        .claude/skills/rekal/ (tip + scripts/ + references/)
   CLAUDE.md line     One marker-tagged sentence pointing agents at the skill
 
 If the remote already has data on your rekal branch, it is fetched and
@@ -311,17 +311,31 @@ func ensureClaudeMDLine(gitRoot string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-// installSkill writes the Rekal skill suite to .claude/skills/<name>/SKILL.md.
-// Always overwrites — the skills are managed by rekal and updated with each
-// version.
+// installSkill writes every Rekal-managed skill directory (SKILL.md plus
+// scripts/ and references/) under .claude/skills/<name>/. Always overwrites —
+// skills are managed by rekal and updated with each version. Also purges
+// legacy companion skill dirs from older installs so the collapsed suite
+// leaves no residue.
 func installSkill(gitRoot string) error {
+	for _, name := range skill.LegacyNames {
+		_ = os.RemoveAll(filepath.Join(gitRoot, ".claude", "skills", name))
+	}
 	for _, s := range skill.All() {
 		skillDir := filepath.Join(gitRoot, ".claude", "skills", s.Name)
-		if err := os.MkdirAll(skillDir, 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(s.Content), 0o644); err != nil {
-			return err
+		// Replace the whole dir so removed modules/scripts don't linger.
+		_ = os.RemoveAll(skillDir)
+		for rel, data := range s.Files {
+			dst := filepath.Join(skillDir, rel)
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return err
+			}
+			mode := os.FileMode(0o644)
+			if skill.IsScript(rel) {
+				mode = 0o755
+			}
+			if err := os.WriteFile(dst, data, mode); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

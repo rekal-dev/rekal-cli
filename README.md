@@ -249,24 +249,22 @@ rekal query --session 01JNQX... --offset 10 --limit 5
 rekal query --session 01JNQX... --full
 ```
 
-### Agent skills
+### Agent skill
 
-The raw commands above are the interface; the **skills** are the playbooks.
-`rekal init` installs a suite of Claude Code skills under `.claude/skills/`, so
-the agent reaches for the right Rekal workflow on its own. Each is a focused
-recipe over the same commands — the agent loads only the one the task needs.
+The raw commands above are the interface; the **skill** is the playbook.
+`rekal init` installs one Claude Code skill under `.claude/skills/rekal/` —
+a thin tip (triage + gates) plus on-demand `references/` and built-in
+`scripts/` (progressive disclosure). The agent never picks among skills;
+it classifies the question and loads only the module it needs.
 
-| Skill | Use it when | What it does |
-|-------|-------------|--------------|
-| **rekal** | any question about the project | The router. Decides which substrate answers — the **tree** (current code: grep/read), the **ledger** (past intent: recall), or the **map** (structure) — then runs the matching workflow: **MAP** (a SHA-watermarked condensed map of the repo at `.rekal/map.md`, refreshed by diff), **MINE** (decompose analytical asks into `scope × signal × role` SQL, gather turns, then route — never raw hybrid search on "my mistakes"), **HUNT** (recall gated on confidence — low-confidence episodes stay out of context), or **WHY** (gather the decision trail across sessions and synthesize the arc, every claim carrying session/turn/commit pointers). Route, don't stack. |
-| **rekal-provenance** | reading unfamiliar code, onboarding, reviewing a diff | Walks *artifact → commit → session → intent*: anchor on a file or commit, find the session that produced it, emit the why-chain git alone can't give you. |
-| **rekal-reflect** | before or after a task | Mines your own prior sessions — especially the `human_steering` corrections — for recurring mistakes and distills them into explicit rules, so a correction happens once, not every session. |
-| **rekal-distill** | scoping a problem space | Reads memory as four libraries — **context** (what's known), **decision** (what's open), **rules** (what's preferred), **boundary** (what's been abandoned) — and "zooms" around a topic by file co-occurrence and session lineage. |
-| **rekal-census** | "summarise everything", retrospectives, onboarding digests | Exhaustively scans a bounded scope (all / a branch / a time window / a subsystem) on raw SQL and folds it into one faithful summary — coverage, not relevance. |
-| **rekal-wiki** | bootstrapping a knowledge base; repos too big to map by hand; noisy commit messages | Discovers topics from file co-occurrence, summarises each from its sessions (never from "update"-grade commit messages), and writes provenance-linked `docs/wiki/` pages that ship as a PR — review is the admission gate. |
+| Layer | What |
+|-------|------|
+| **Tip** (`SKILL.md`) | Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **map** / **ledger** (past). Silence when memory is the wrong tool. |
+| **Scripts** | Gates, not prose: `recall-route.py` (KNOWLEDGE/INJECT/SILENCE), `why-trail-gate.py`, `map-fresh.sh` + `map-write-watermark.sh`, `wiki-branch-gate.sh`. |
+| **References** | hunt · why · mine · map · provenance · analytics (reflect/distill/census) · wiki · flags/SQL — `Read` one file and stop. |
 
 Skills are versioned with the binary. After you upgrade, run `rekal init` once
-to refresh them (it leaves your data untouched).
+to refresh them (it leaves your data untouched; legacy `rekal-*` dirs are removed).
 
 ### Ad-hoc usage
 

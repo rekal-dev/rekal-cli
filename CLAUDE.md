@@ -182,29 +182,15 @@ session discovery keep using the invoking worktree.
   no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
-- `skill/`: Rekal Claude Code skill suite. `skills/<name>/SKILL.md` files are
-  embedded via `//go:embed all:skills`; `skill.All()` returns them (`rekal`
-  first). `init` installs each to `.claude/skills/<name>/SKILL.md`, `clean`
-  removes them.   The suite: `rekal` (the router — first decide the substrate:
-  tree (grep, present tense) vs ledger (rekal, past tense) vs map (structure);
-  then triage ledger questions as analytical/pointed/why and run the matching
-  internal workflow: MAP builds the SHA-watermarked condensed map at
-  `.rekal/map.md` — structured markdown with greppable path anchors, not a
-  diagram — refreshed by diffing the watermark against HEAD; MINE is
-  decompose-then-route for analytical asks — `scope × signal × role` SQL
-  over the ledger, then hand the gathered turns to reflect / WHY / census /
-  HUNT (never raw hybrid search on "my mistakes"); HUNT is gated episodic
-  recall — inject only above a confidence bar on top score/gap; WHY is
-  decision synthesis over a gathered steering/reasoning trail with
-  turn+commit pointers), `rekal-provenance`
-  (artifact→commit→session→intent why-chain), `rekal-reflect` (mine own
-  `human_steering` turns into rules), `rekal-distill` (four-library knowledge
-  map + topic/session zoom), `rekal-census` (exhaustive full-corpus
-  scan+summarise via raw SQL, bounded by an explicit scope), `rekal-wiki`
-  (materialize `docs/wiki/<topic>.md` pages from co-occurrence clusters +
-  the sessions behind them, shipped as a PR — review is the admission gate;
-  noise commit messages cited by SHA, never quoted as evidence). Adding a
-  skill = adding `skills/<name>/SKILL.md`; no other wiring.
+- `skill/`: One Claude Code skill with progressive disclosure.
+  `skills/rekal/` embeds `SKILL.md` (thin tip: triage + boundary + silence +
+  dispatch), `scripts/` (deterministic gates — `recall-route.py` /
+  `hunt-gate.py`, `why-trail-gate.py`, `map-fresh.sh` /
+  `map-write-watermark.sh`, `wiki-branch-gate.sh`), and `references/`
+  (hunt/why/mine/map/provenance/analytics/wiki/reference — loaded only when
+  the tip dispatches). `init` installs the whole tree (scripts 0755) and
+  purges legacy `rekal-*` companion dirs; `clean` removes current + legacy.
+  Adding a module = adding a file under `skills/rekal/`; tip must name it.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 

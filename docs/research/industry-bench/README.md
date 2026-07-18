@@ -27,6 +27,7 @@ coordinating beyond these documents.
 | [03-workstreams.md](03-workstreams.md) | The distributable work: seven workstreams with contracts, dependencies, and definitions of done. |
 | [04-procedures.md](04-procedures.md) | Runbooks: environment, dataset acquisition, smoke test, full-run protocol, pre-registration discipline, honesty rules. |
 | [05-paper-plan.md](05-paper-plan.md) | Paper #2's claims ladder and evidence-gap table. |
+| [06-locomo-skill-closure.md](06-locomo-skill-closure.md) | The iterative subagent loop for closing the LoCoMo skill-layer gap with Mem0 — handover, ledger of merged skill PRs, definition of done. |
 
 ## The five decisions that shape everything (made; do not relitigate in a workstream)
 

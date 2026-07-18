@@ -20,6 +20,14 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 | `KNOWLEDGE …` | Episode below bars; from `knowledge[0]` Read `path` at `lines` (`anchor`). **Do not** drill weak sessions. |
 | `SILENCE …` | No confident episode and no knowledge. Say so. Do not pad with near-misses. |
 
+On `INJECT` the route script also prints a candidate digest — top hits with a
+trimmed snippet, the rest as `session_id(confidence)` one-liners. **Work from
+the digest.** It carries the full ranking and the drill targets at ~1/7 the
+tokens of the raw JSON; re-read the raw recall output only when you need a
+field the digest omits (e.g. `files`, `mass`). The same discipline scales with
+depth: a `-n 100` raw read costs ~8k tokens — piped through the route script
+it stays a few hundred.
+
 Bars live only in `scripts/hunt-gate.py` (via recall-route): absolute
 `confidence` ≥ 0.70 (soft ≥ 0.68 with gap ≥ 0.04; raw `mass` floor when
 present). Knowledge fallback requires absolute `knowledge[0].score` ≥ 0.40

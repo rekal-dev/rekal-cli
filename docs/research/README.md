@@ -6,7 +6,8 @@ literature shows a better design.
 
 **Current state:** the program converged on one flagship paper — *"Why Git
 Is the Memory Solution for the Agentic Development Lifecycle"*
-(`paper/rekal-paper.typ`) — whose structure is derived in
+([arXiv:2607.14390](https://arxiv.org/abs/2607.14390),
+`paper/rekal-paper.typ`) — whose structure is derived in
 `07-paper-restructure.md` (git-bound memory; two problems solved separately
 — seed supply, answer assembly — then combined by a gated router; measured
 by answer-sufficiency per token). The docs below are the working-backwards
@@ -27,8 +28,8 @@ distributable workstreams: [industry-bench/](industry-bench/).
 | [07-paper-restructure.md](07-paper-restructure.md) | The flagship paper's working-backwards structure, evidence-gap table, and landing order (facets → gate recalibration → frozen snapshot). |
 | [00-sources.md](00-sources.md) | The verified source list (arXiv links). |
 | [RUN.md](RUN.md) | The full multi-repo run sequence and the paper's data pack. |
-| [runs/](runs/) | Committed aggregate run records: `single-corpus/` (rung 1) and `consolidated/` (multi-corpus matrix, mechanism sweeps, facet, sufficiency — status TRANSCRIBED_PENDING_VERIFICATION). |
-| [paper/](paper/) | The flagship paper (Typst source + PDF) and its provenance README. |
+| [paper/](paper/) | Flagship paper — [arXiv:2607.14390](https://arxiv.org/abs/2607.14390) (Typst source + PDF + LaTeX). |
+| [runs/](runs/) | Committed aggregate run records: `single-corpus/` (rung 1) and `consolidated/` (multi-corpus matrix, mechanism sweeps, facet, sufficiency). |
 
 ## The chain in one paragraph
 

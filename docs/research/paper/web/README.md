@@ -9,8 +9,8 @@ repo — copy these two files across and wire one route.
 
 | File | Serves at | Purpose |
 |---|---|---|
-| `index.html` | `/paper` | SEO landing: Scholar `citation_*` tags, OpenGraph, Twitter card, JSON-LD `ScholarlyArticle`, crawlable abstract + key stats, inlined PDF viewer |
-| `rekal-paper.pdf` | `/paper/rekal-paper.pdf` | the paper (also the `citation_pdf_url`) |
+| `index.html` | `/paper` | SEO landing: Scholar `citation_*` tags (incl. `citation_arxiv_id` 2607.14390), OpenGraph, Twitter card, JSON-LD `ScholarlyArticle` with `sameAs` arXiv + `identifier`, crawlable abstract + key stats, inlined PDF viewer |
+| `rekal-paper.pdf` | `/paper/rekal-paper.pdf` | local PDF mirror (Scholar/`citation_pdf_url` and primary download point at arXiv: `https://arxiv.org/pdf/2607.14390`) |
 
 Regenerate the PDF from `../rekal-paper.typ` (or the LaTeX in `../arxiv/`) and
 re-copy it here whenever the paper changes.

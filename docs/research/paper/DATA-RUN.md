@@ -128,10 +128,10 @@ answer quality. It must never be reported as rung 2.
 
 ## 4b. Optional: L3-gate wiki experiment (fills `tab-wiki`)
 
-Only if time permits; requires the rekal-wiki skill (installed by `rekal
-init` on a current binary).
+Only if time permits; requires the wiki workflow (`references/wiki.md`,
+installed by `rekal init` on a current binary).
 
-1. Generate K=10 topic pages with the rekal-wiki skill, **as a dynamic
+1. Generate K=10 topic pages with the wiki workflow, **as a dynamic
    workflow with a memorable name** (one subagent per topic) — the name is
    how the ledger finds the run afterwards.
 2. Generation cost, from the ledger itself (after the wiki PR merges and
@@ -173,7 +173,7 @@ is exactly what this step measures.
    each topic page TWICE, in separate workflow runs with distinct
    `workflow_name`s:
    - mode A: own-repo evidence only (ignore origin-labeled recall hits)
-   - mode B: cross-repo mode per the rekal-wiki skill (foreign citations
+   - mode B: cross-repo mode per `references/wiki.md` (foreign citations
      labeled with origins; PR body declares the origin list)
 3. Record: per-page foreign-citation count (mode B), and re-run the step-4b
    broad-query coverage measurement against both page sets — the coverage

@@ -65,7 +65,7 @@ session discovery keep using the invoking worktree.
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
-  skill suite, and one marker-tagged CLAUDE.md sentence (the whole DX:
+  skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence (the whole DX:
   init, done; `clean` removes the line, refresh replaces it in place)
 - `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
@@ -217,13 +217,13 @@ session discovery keep using the invoking worktree.
   the multi-repo-at-scale + Rekal-usage/effectiveness eval strategy
   (`06-eval-strategy.md`), the working-backwards flagship-paper restructure —
   git-bound memory, tool + skill + router, answer-sufficiency per token
-  (`07-paper-restructure.md`), and `paper/` (Typst source + PDF of the unified
+  (`07-paper-restructure.md`), and `paper/` (Typst + PDF + LaTeX of the
   flagship "Why Git Is the Memory Solution for the Agentic Development
-  Lifecycle"; supersedes v1 "The Commit Is the Label" in git history;
+  Lifecycle", accepted as [arXiv:2607.14390](https://arxiv.org/abs/2607.14390);
+  supersedes v1 "The Commit Is the Label" in git history;
   single-corpus values from `runs/single-corpus/manifest.json`, multi-corpus
   and sufficiency values from `runs/consolidated/manifest.json` —
-  anonymized by workload class, status TRANSCRIBED_PENDING_VERIFICATION
-  against the operator-held source record). The
+  anonymized by workload class). The
   runnable harness lives in `scripts/bench/` (corpus card, T1–T3 + T4
   multi-hop label mining, T5 candidate miner, query generation with leakage
   filter + multi-hop validation, system runner incl. weight ablations +

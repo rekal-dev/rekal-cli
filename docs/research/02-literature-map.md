@@ -45,7 +45,8 @@ LightRAG, GraphRAG).
   compiled structure* — but its compilation is expensive and its freshness
   story is the deferred open problem. Rekal's counter-position: same
   traversal ergonomics (search → follow session/file/lineage links) without
-  a compile step to go stale. STEAL the Error Book: `rekal-reflect` already
+  a compile step to go stale. STEAL the Error Book: analytics reflect
+  (`references/analytics.md`) already
   mines corrections; formalize its output as a durable rules file (05 §R4).
 
 ### 3. AdaMem (arXiv 2603.16496)
@@ -66,10 +67,10 @@ Formal theorem: active retrieval strictly more powerful than passive
 (binary-tree needle construction); reasoning depth cannot be substituted by
 retrieval breadth. +23% relative over strongest baseline on LoCoMo multi-hop;
 fewer total tokens than Mem0 on LongMemEval.
-- **Verdict: SUPPORT (the theory for our skills).** Rekal's skill suite *is*
+- **Verdict: SUPPORT (the theory for our skills).** Rekal's skill *is*
   an active-reconstruction policy over primitives: search → facets →
   co-occurrence zoom → lineage → windowed drill. The theorem is the citation
-  for why `rekal` + skills beats one-shot top-k RAG, and why the CLI exposes
+  for why the gated router (one skill, progressive disclosure) beats one-shot top-k RAG, and why the CLI exposes
   navigation primitives rather than a single answer endpoint. Benchmark
   implication: include multi-hop tasks (T4) where one-shot retrieval fails.
 
@@ -106,8 +107,8 @@ admission to memory).
   line: "your shared memory contains only experience that shipped."
   Also a caution for the local index: unmerged/abandoned sessions are
   valuable as *negative* knowledge (dead-ends) but must be labeled as such
-  in skills — never presented as endorsed practice (rekal-distill's boundary
-  library already frames this correctly).
+  in skills — never presented as endorsed practice (the boundary library in
+  `references/analytics.md` already frames this correctly).
 
 ### 8. AutoMem (arXiv 2607.01224, Stanford)
 Metamemory: memory management as a trainable skill; file-system ops promoted
@@ -206,7 +207,7 @@ sanitizing the completed summary leaves hidden influence.
 Evidence tracing under conflict/contamination; memories invalidated by later
 evidence reused as trustworthy.
 - **Verdict: SUPPORT.** Provenance is Rekal's native primitive
-  (artifact→commit→session→turn; `rekal-provenance`). The survey supplies the
+  (artifact→commit→session→turn; `references/provenance.md`). The survey supplies the
   vocabulary for why that chain matters.
 
 ### 18. Agent-Native Memory evaluation (arXiv 2606.24775)

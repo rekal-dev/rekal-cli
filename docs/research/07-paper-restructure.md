@@ -170,12 +170,13 @@ numbers (one frozen snapshot) but stands as the long-form reference.
 
 1. Land the facet implementation branch (RHO-gated: done — significant
    on both valid corpora).
-2. Recalibrate the confidence gate on the facet-enabled score
-   distribution (top1–top2 gap thresholds shift when a 4th term enters
-   the mix).
+2. Recalibrate the silence gate on absolute `confidence` / `mass` after the
+   facet term (paper episode-gate numbers were reported on max-normalized
+   hybrid `score`; product gate no longer uses that distribution — see
+   `docs/design/skill-router.md`).
 3. Freeze one snapshot; every number in the paper comes from it.
 
-## 7. Evidence gaps before submission (updated)
+## 7. Evidence gaps after arXiv accept (updated)
 
 | Gap | Status after data pack | Cost |
 |---|---|---|
@@ -199,8 +200,9 @@ numbers (one frozen snapshot) but stands as the long-form reference.
 
 ## 9. What this decides for the product
 
-- **Rises:** confidence gate in recall output (engine; recalibrate after
-  facets); decision-scoped gather primitive + synthesis skill with
+- **Rises:** absolute `confidence` / `mass` silence gate in recall output
+  (engine; product gate no longer max-norms — recalibrate paper numbers if
+  re-reporting); decision-scoped gather primitive + synthesis skill with
   mandatory evidence pointers; structural map as SHA-watermarked
   regenerable artifact; router in the skill layer first (SHIPPED: one
   `rekal` skill with internal gated routing — MAP/MINE/HUNT/WHY); facet layer

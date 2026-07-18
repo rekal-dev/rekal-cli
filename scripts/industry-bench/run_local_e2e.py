@@ -134,7 +134,7 @@ Reply with ONLY the final short answer (one or two sentences), no preamble."""
 # (observed: 17/22 haiku errors were wrongful abstentions with evidence present
 # in memory). The card inlines the operative rules so the model's effort goes
 # to navigation, not doc comprehension.
-ANSWER_PROMPT_CARD = """Answer ONE question using ONLY this repo's Rekal memory (a searchable ledger of past conversations). No outside knowledge.
+ANSWER_PROMPT_CARD = """Answer ONE question about the people in this repo's Rekal memory (a searchable ledger of past conversations). Every FACT about these people must come from the memory; you may combine those facts with general world knowledge to reason to a conclusion, but never invent personal facts.
 
 TOOLS
 Search: {rekal} --weights '{weights}' -n 20 "<query>" | python3 {skill_dir}/scripts/recall-route.py
@@ -149,11 +149,14 @@ THE LOOP — you MUST complete it before ever saying you don't know:
 2. No answer yet? Reformulate at least twice: keyword-only (drop question words), synonyms, split compound questions. Search each. A session that surfaces under two phrasings is almost always the answer.
 3. Still nothing? Widen: -n 50. Large histories bury evidence deep.
 4. Drill the top 2-3 candidates (turn window around the snippet) — snippets are keyholes; the answer text is usually in the surrounding turns, not the snippet.
-5. Time questions ("when/how long/which month/what order"): use SQL. Anchor dates first (the event you can date), scan the window with ts BETWEEN, ORDER BY ts. Event time ≠ mention time ("last week I…" shifts it). COUNT before LIMIT; page — never trust a truncated list.
-6. "All/every/what order" questions: enumerate with SQL until exhausted, don't stop at the first hits.
+5. Time questions ("when/how long/which month/what order"): use SQL. Anchor dates first (the event you can date), scan the window with ts BETWEEN, ORDER BY ts. Event time ≠ mention time ("last week I…" shifts it). COUNT before LIMIT; page — never trust a truncated list. When the speaker used a relative phrase, KEEP it relative in your answer: "yesterday" on Oct 21 → "October 20"; "a few days ago" on Aug 19 → "a few days before August 19" (do NOT flatten it to the session date).
+6. "All/every/what order/what activities/besides X" questions: the gold answer is a COMPLETE list. Enumerate every distinct item across ALL sessions (SQL ILIKE over turns is the reliable way), dedupe, and list them all. A partial list is graded wrong. Do not stop after the first session that mentions two items.
 7. "My/I" preference questions: answer from the user's own assertion ("I bought/made/love"), not from things merely discussed.
+8. Multi-hop questions (the answer needs TWO facts joined — "who did X tell about Y", "what do A and B both own", "what does X do besides Y"): search each entity/fact SEPARATELY, collect every mention (people, items, activities) across ALL matching sessions, then combine. One search cannot answer a two-fact question — the two facts almost never sit in the same session. Enumerate mentions per entity with SQL if needed.
+9. Recommendation/judgment questions ("what would X enjoy", "would this suit X", "does X employ many people"): first retrieve what memory establishes about X (preferences, facts, context), then REASON over it with general world knowledge to conclude. Memory gives the premises; you supply the inference (e.g. memory says X loves Star Wars and visits Ireland → world knowledge names the Star Wars filming locations in Ireland). Do not abstain just because the conclusion itself is not stated verbatim in memory — abstain only if memory lacks even the premises.
+10. FALSE-PREMISE TRAP: if the memory shows the question's premise is wrong — the event/attribute belongs to a DIFFERENT person, or the event never happened at the stated time ("What did Deborah design…" when it was Jolene who designed it) — the correct answer is "I DON'T KNOW — NOT IN MEMORY". Do NOT answer with the corrected fact or name the right person; a question built on a false premise has no answer in memory.
 
-ABSTAIN ("I DON'T KNOW — NOT IN MEMORY") ONLY IF: you did steps 1-4 (reformulated twice, widened to -n 50, drilled top candidates) and everything came back genuinely unrelated. Wrongful abstention on an answerable question is as bad as a wrong answer. But NEVER invent: if the loop truly finds nothing, say so.
+ABSTAIN ("I DON'T KNOW — NOT IN MEMORY") ONLY IF: (a) rule 10 applies — the premise is false, OR (b) you did steps 1-4 (reformulated twice, widened to -n 50, drilled top candidates) and everything came back genuinely unrelated. Wrongful abstention on an answerable question is as bad as a wrong answer. But NEVER invent: if the loop truly finds nothing, say so.
 
 Question: {question}
 

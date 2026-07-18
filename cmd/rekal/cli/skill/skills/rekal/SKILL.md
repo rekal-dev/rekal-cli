@@ -49,6 +49,8 @@ gate fails. No `INJECT` / `KNOWLEDGE` → stay silent on memory. Near-misses are
 | Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/recall-route.py"` → on `KNOWLEDGE`, Read `path`@`lines`, **stop** |
 | Pointed past episode | same pipeline → on `INJECT`, `Read references/hunt.md` and drill; on `KNOWLEDGE`/`SILENCE`, stop |
 | Temporal / ordering / complete-set past | same pipeline; then hunt.md §2b time-axis + enumerate — SQL over `ts`, count, page |
+| Judgment over past facts ("would X enjoy", "does X's shop…") | hunt.md §2d — gather premises from the ledger, then infer; silence only when premises are missing |
+| Premise smells wrong (subject/event/time mismatch) | hunt.md §2c — verify against the turn; false premise → say the ledger doesn't hold it, never correct-and-answer |
 | Why / decision arc | `Read references/why.md` · gate gather with `scripts/why-trail-gate.py` |
 | Analytical patterns | `Read references/mine.md` |
 | File / line / commit archaeology | `Read references/provenance.md` |

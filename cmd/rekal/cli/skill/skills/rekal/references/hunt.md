@@ -95,9 +95,11 @@ large-haystack corpus 11 of 15 top-20 misses were already sitting at rank
 
 ### Complete-set questions: enumerate, don't rank
 
-"All", "every", "in what order", "which of the N" — ranked recall returns the
-loudest matches, not the full set. Switch to SQL enumeration, and make it
-exhaustive:
+"All", "every", "in what order", "which of the N" — and the quieter shapes
+whose gold is still a list: "what activities does X do", "what does X do
+besides Y", "who did X tell about Z". Ranked recall returns the loudest
+matches, not the full set, and a partial list is a wrong answer. Switch to SQL
+enumeration across *all* sessions, dedupe, and make it exhaustive:
 
 ```bash
 rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'"
@@ -108,8 +110,26 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
   silent truncation — the answer is often in the rows you cut.
 - **LIKE is stricter than search.** Reformulation applies to SQL patterns too:
   synonyms and adjacent vocabulary, not just the words your first hits used.
+- **Enumerate by the entity, not the verbs.** "What does X do with the
+  turtles" — pattern on `%turtle%` and read *every* row, don't chase activity
+  verbs you already guessed (walk, feed). The item you'd never guess ("give
+  them a bath") only surfaces from the entity's own mention list.
 - **Check the set size.** If the question fixes N, do not answer until you can
   point at N distinct events, each verified in context.
+- **Non-verbal evidence counts.** Turns carry more than speech: shared-media
+  captions (`[shares a photo: …]`), links, quoted lists. A caption saying the
+  photo shows *a group of people at the shop* is a premise about the shop —
+  read it as part of the turn, not decoration.
+- **Scan the uptake, not just the utterance.** In two-party questions ("what
+  did A recommend / tell / give to B") the cleanest evidence is often B's
+  reaction — "gonna try it", "thanks, I'll check it out" — while A's own line
+  is keyword-sparse ("let me know how you like it"). Enumerate both sides of
+  the exchange before closing the set.
+- **The ledger speaks in instances; the question may ask in classes.** "Which
+  authors has X read" — the turns name *titles* ("The Alchemist", "Lord of the
+  Rings"), not authors. Enumerate the instances (books, trips, dishes), then
+  map each to the class the question asks for with world knowledge. Searching
+  the class word alone ("author") misses every instance that never says it.
 
 ## 2b. Time questions navigate by time, not by keyword
 
@@ -132,6 +152,10 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   month I…", "back in February…" shift the event. Date the event, not the
   mention — and expect the report of a night or a trip to land in the *next*
   session, after it happened.
+- **Answer in event time, and keep honest precision.** "Yesterday" said on
+  Oct 21 → the answer is *October 20*, not Oct 21. "A few days ago" said on
+  Aug 19 → *a few days before August 19* — do not flatten a relative phrase to
+  the mention date, and do not fake a precision the record doesn't carry.
 - **Routine ≠ episode.** "I usually / around 10pm" describes a habit. A
   question about one specific occasion needs the past-tense report of that
   occasion. Do not let a routine stand in for the episode.
@@ -147,6 +171,25 @@ or compared is not the user's. When two candidates compete (two brands, two
 recipes, two events), drill both to the ownership or outcome statement; answer
 from the one the user owns, and keep the other out of the answer — a near-miss
 entity in the output is a wrong answer, not extra color.
+
+**A false premise is a SILENCE, not a correction.** Questions arrive loaded:
+"what did A design…" when the ledger shows *B* designed it; "the campaign in
+May" when the ledger has no such campaign. Verify the premise — subject, event,
+time — against the turn before answering. If the premise fails, the honest
+answer is that the ledger doesn't hold it. Do **not** swap in the right person
+or the nearest similar event and answer anyway: a corrected answer to a
+question nobody asked is a fabrication with citations.
+
+## 2d. Premises from the ledger, inference from you
+
+Judgment questions — "would X enjoy …", "does X's shop employ many people",
+"what nearby would suit X" — are rarely answered verbatim by any turn. The
+ledger's job is the *premises*: what X loves, owns, plans, said. Your job is
+the *inference*: combine those premises with general world knowledge and
+conclude. Gather the premises with the pipeline above (they are facts, cite
+them); then reason — do not demand the conclusion itself appear in a session,
+and do not go silent when the premises are on the record. SILENCE is for
+missing premises, not for missing conclusions.
 
 ## 3. Drill the strongest, cheapest first
 

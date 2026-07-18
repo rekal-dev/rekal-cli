@@ -49,7 +49,7 @@ The skill is how the agent meets Rekal. It must make the agent stronger, not sma
 - The skill enables; it does not prescribe. It orients the agent — where the answer lives — hands it memory and tools, and trusts its reasoning. Tools remove toil, never thought. A skill that scripts the agent's steps has traded reasoning for obedience.
 - Thin on the route, rich on arrival. One thin route is always loaded; everything rich is pulled on demand. This is thin on the wire, rich on the machine turned inward. The token budget follows from getting this right — it is not a cap to enforce.
 - Three homes: function, knowledge, judgment.
-  - Function belongs in a script. Deterministic, mechanical work that runs the same way every time. A script executes; it does not judge. A rule the agent must remember and then perform is a script waiting to be written — this is how rule-accretion stops.
+  - Function belongs in a script. A script does deterministic, mechanical work and hands back deterministic data for the agent's judgment to act on. It computes and reports; it does not decide. A rule the agent must remember and then perform is a script waiting to be written — this is how rule-accretion stops.
   - Knowledge belongs in rich prose, loaded on demand. It informs the agent's judgment. It never makes it.
   - Judgment belongs to the agent's reasoning. Weighing, interpreting, deciding under ambiguity stays with the agent — never frozen into a script, never frozen into a rule. Scripts surface signals; reasoning reads them.
 - Every rule is an unwritten spec for a tool that doesn't exist yet. Close a gap by moving capability down to function, not by adding prose. The skill shrinks as it sharpens.

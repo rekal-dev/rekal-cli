@@ -45,6 +45,12 @@ type Filters struct {
 	// Unset Limit≤0 still means DefaultLimit; explicit 0 means empty results.
 	LimitExplicit bool
 
+	// TextQuery is true when the caller supplied a text query argument,
+	// including empty or whitespace-only strings (`rekal ""`, `rekal " "`).
+	// Distinguishes intentional thin queries (silence) from filter-only
+	// recalls with no query arg (`rekal --file …`) — BUG 3.
+	TextQuery bool
+
 	// Explain enriches results with per-layer scores (Layers) and
 	// query-time related-session joins (Related). Off by default so the
 	// standard output stays thin; benchmarking and skill-driven zooming
@@ -495,7 +501,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	// status, and their scores are not comparable. The query vector from the
 	// session semantic pass is shared so one recall embeds its query once.
 	tKnow := startStage()
-	knowledge := knowledgeSearch(indexDB, filters.Query, gitRoot, w, qe, sem.QueryVec, sem.Model)
+	knowledge, knowLin := knowledgeSearch(indexDB, filters.Query, gitRoot, w, qe, sem.QueryVec, sem.Model)
 	stage("knowledge", tKnow)
 
 	if on {
@@ -510,6 +516,8 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 				Rank:           i + 1,
 				SessionID:      r.SessionID,
 				Score:          r.Score,
+				Confidence:     r.Confidence,
+				Mass:           r.Mass,
 				SnippetTurnIdx: r.SnippetTurnIdx,
 				SnippetRole:    r.SnippetRole,
 				Children:       len(r.Children),
@@ -518,6 +526,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		tokens := &LineageTokens{EmbedQueryChars: embedQueryChars}
 		lin.StageResult(LineageResult{
 			Returned:  returned,
+			Knowledge: knowLin,
 			TimingsMS: timings,
 			Semantic: LineageSemantic{
 				Used:    useNomic,
@@ -581,6 +590,8 @@ func emitCandidateLineage(lin Lineage, scoredResults []scored, w Weights, useNom
 			},
 			HybridPreSub: round4(cl.hybridPreSub),
 			Score:        round4(sc.score),
+			Confidence:   round4(sc.confidence),
+			Mass:         round4(sc.mass),
 		}
 		if useNomic {
 			ev.Contrib["nomic"] = round4(cl.nomicC)
@@ -1599,9 +1610,10 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 	mode := "filter"
 
 	switch {
-	case q != "" && !MeaningfulQuery(q):
+	case (filters.TextQuery || q != "") && !MeaningfulQuery(q):
 		// Thin query ("", " ", "a"): silence — do not fall through to
 		// filterSearch (which returns score-0 rows) or knowledge FTS.
+		// TextQuery catches `rekal ""` after NormalizeQuery empties it (BUG 3).
 		return emptyOut("hybrid"), nil
 	case MeaningfulQuery(q):
 		mode = "hybrid"

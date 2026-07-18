@@ -13,7 +13,9 @@ import (
 //
 // v2: result.semantic{used,backend,model} replaces result.use_nomic; query
 // gains embedder_backend. Config weight key "nomic" is unchanged.
-const LineageSchemaVersion = 2
+// v3: candidate + returned carry confidence/mass; result.knowledge lists
+// file-level knowledge hits with per-winning-chunk bm25/semantic (BUG 10/12).
+const LineageSchemaVersion = 3
 
 // Lineage records observe-only scoring lineage and stage timings for a
 // recall query. Nil means disabled — ranking stays byte-identical to a run
@@ -186,6 +188,8 @@ type LineageCandidate struct {
 	HybridPreSub float64            `json:"hybrid_pre_subagent"`
 	Subagent     *LineageSubagent   `json:"subagent,omitempty"`
 	Score        float64            `json:"score"`
+	Confidence   float64            `json:"confidence,omitempty"`
+	Mass         float64            `json:"mass,omitempty"`
 }
 
 // LineageBestTurn identifies the BM25 turn that won the session slot.
@@ -210,12 +214,24 @@ type LineageSubagent struct {
 // LineageResult is the end-of-run event: final returned set, pool counts,
 // stage timings, deep-semantic layer outcome, and token/byte cost.
 type LineageResult struct {
-	Returned  []LineageReturned `json:"returned"`
-	Counts    map[string]int    `json:"counts"`
-	TimingsMS map[string]int64  `json:"timings_ms"`
-	Semantic  LineageSemantic   `json:"semantic"`
-	Tokens    *LineageTokens    `json:"tokens,omitempty"`
-	Skipped   map[string]string `json:"skipped,omitempty"`
+	Returned  []LineageReturned     `json:"returned"`
+	Knowledge []LineageKnowledgeHit `json:"knowledge,omitempty"`
+	Counts    map[string]int        `json:"counts"`
+	TimingsMS map[string]int64      `json:"timings_ms"`
+	Semantic  LineageSemantic       `json:"semantic"`
+	Tokens    *LineageTokens        `json:"tokens,omitempty"`
+	Skipped   map[string]string     `json:"skipped,omitempty"`
+}
+
+// LineageKnowledgeHit is one file-level knowledge hit with the winning
+// chunk's retrieval signals (BUG 10 — knowledge was absent from lineage).
+type LineageKnowledgeHit struct {
+	Rank     int     `json:"rank"`
+	Path     string  `json:"path"`
+	Anchor   string  `json:"anchor,omitempty"`
+	Score    float64 `json:"score"`
+	BM25     float64 `json:"bm25,omitempty"`
+	Semantic float64 `json:"semantic,omitempty"`
 }
 
 // LineageSemantic records whether the deep vector layer contributed and
@@ -233,6 +249,8 @@ type LineageReturned struct {
 	Rank           int     `json:"rank"`
 	SessionID      string  `json:"session_id"`
 	Score          float64 `json:"score"`
+	Confidence     float64 `json:"confidence,omitempty"`
+	Mass           float64 `json:"mass,omitempty"`
 	SnippetTurnIdx int     `json:"snippet_turn_index"`
 	SnippetRole    string  `json:"snippet_role,omitempty"`
 	Children       int     `json:"children,omitempty"`

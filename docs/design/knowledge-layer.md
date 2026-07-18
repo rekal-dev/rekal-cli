@@ -21,15 +21,16 @@ chunk + FTS synchronously, then spawn background `rekal embed` for vectors
 (budgeted bites, DuckDB lock released between passes — see
 `docs/spec/command/embed.md`). The post-commit hook still embeds up to 256
 chunks per commit. Recall never embeds — latency stays pure read. At query
-time the knowledge score blends normalized BM25 with cosine similarity using
-the session ranking's keyword/semantic split (`weights.layers2`), the query
-vector shared from the session semantic pass so one recall embeds its query
-once. Cosine runs only over BM25 candidates (≤100 hashes) — never a
-full-corpus embedding scan (that path dominated recall wall time on
-prose-heavy repos). Semantic-only chunks with zero keyword overlap are
-deferred until an ANN index exists. Every rung fails soft: no vectors,
-model mismatch, or an old index.db degrades to keyword-only, byte-identical
-to v1. Orphaned vectors are pruned when their content leaves every chunk.
+time the knowledge score blends *absolute* saturating BM25 with cosine
+similarity using the session ranking's keyword/semantic split
+(`weights.layers2`) — never max-normalized within the candidate set (that
+made every top hit ≈1.0 and hid weak matches from the router). The query
+vector is shared from the session semantic pass so one recall embeds its query
+once. Cosine runs over BM25 candidates (≤100 hashes); when BM25 returns
+nothing, a capped semantic-only fallback (≤2000 embeddings) can still surface
+prose — larger corpora wait for ANN. Semantic-only extras *alongside* BM25
+hits stay deferred. Every rung fails soft: no vectors,
+model mismatch, or an old index.db degrades to keyword-only. Orphaned vectors are pruned when their content leaves every chunk.
 The RekalBench knowledge task set (step 6) remains the follow-up.
 
 ## Problem

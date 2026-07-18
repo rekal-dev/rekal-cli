@@ -101,7 +101,7 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 		t.Skipf("FTS extension unavailable: %v", err)
 	}
 
-	if hits := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
+	if hits, _ := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
 		t.Fatalf("knowledgeSearch without an index should be nil, got %+v", hits)
 	}
 
@@ -112,7 +112,7 @@ func TestKnowledgeSearch_FailsSoftWithoutIndex(t *testing.T) {
 	if err := db.CreateKnowledgeFTSIndex(indexDB); err != nil {
 		t.Fatalf("guarded create should be a no-op, got %v", err)
 	}
-	if hits := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
+	if hits, _ := knowledgeSearch(indexDB, "anything", t.TempDir(), DefaultWeights(), nil, nil, ""); hits != nil {
 		t.Fatalf("knowledgeSearch with an empty table should be nil, got %+v", hits)
 	}
 }
@@ -172,9 +172,12 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 	}
 
 	queryVec := []float64{1, 0, 0}
-	hits := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "test-model")
+	hits, knowLin := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "test-model")
 	if len(hits) != 2 {
 		t.Fatalf("want 2 BM25 candidate hits, got %+v", hits)
+	}
+	if len(knowLin) != 2 {
+		t.Fatalf("want lineage knowledge hits matching stdout, got %+v", knowLin)
 	}
 	for _, h := range hits {
 		if h.Path == "docs/orphan.md" {
@@ -184,13 +187,61 @@ func TestKnowledgeSemanticLayer(t *testing.T) {
 	if hits[0].Path != "docs/deploy.md" {
 		t.Fatalf("semantic-aligned BM25 candidate should rank first, got %+v", hits)
 	}
+	if knowLin[0].Path != "docs/deploy.md" || knowLin[0].BM25 <= 0 || knowLin[0].Semantic <= 0 {
+		t.Fatalf("lineage should carry winning-chunk bm25/semantic: %+v", knowLin[0])
+	}
 
 	// Unknown model → no vectors → keyword-only ranking among BM25 hits.
-	kw := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "other-model")
+	kw, _ := knowledgeSearch(indexDB, "token", t.TempDir(), DefaultWeights(), nil, queryVec, "other-model")
 	if len(kw) != 2 {
 		t.Fatalf("keyword-only should return both BM25 hits, got %+v", kw)
 	}
-	if kw[0].Score != 1 {
-		t.Fatalf("keyword-only top score should be normalized BM25 (1.0), got %v", kw[0].Score)
+	// Absolute saturating BM25 — top is strongest, not forced to 1.0 (BUG 14).
+	if kw[0].Score <= 0 || kw[0].Score > 1 {
+		t.Fatalf("keyword-only top score out of range: %v", kw[0].Score)
+	}
+	if len(kw) > 1 && !(kw[0].Score >= kw[1].Score) {
+		t.Fatalf("keyword-only should rank by absolute BM25: %+v", kw)
+	}
+}
+
+// TestKnowledgeSemanticOnlyFallback covers BUG 13: when BM25 finds nothing,
+// a capped semantic scan can still return the right prose (corpora ≤ cap).
+func TestKnowledgeSemanticOnlyFallback(t *testing.T) {
+	t.Parallel()
+	indexDB := openTempIndexDB(t)
+	if err := db.LoadFTSExtension(indexDB); err != nil {
+		t.Skipf("FTS extension unavailable: %v", err)
+	}
+	if err := db.EnsureKnowledgeSchema(indexDB); err != nil {
+		t.Fatalf("ensure knowledge schema: %v", err)
+	}
+	if err := db.InsertKnowledgeChunks(indexDB, []db.KnowledgeChunkRow{
+		{
+			ID: "docs/orphan.md#1", Path: "docs/orphan.md",
+			Anchor: "# Orphan", Breadcrumb: "Orphan",
+			StartLine: 1, EndLine: 3,
+			Content:     "Orphan\n\nCredentials expire after an hour of inactivity.",
+			ContentHash: "hash-orphan", BlobSHA: "b3",
+		},
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := db.CreateKnowledgeFTSIndex(indexDB); err != nil {
+		t.Fatalf("fts: %v", err)
+	}
+	if err := db.StoreKnowledgeEmbeddings(indexDB, map[string][]float64{
+		"hash-orphan": {1, 0, 0},
+	}, "test-model"); err != nil {
+		t.Fatalf("embed: %v", err)
+	}
+
+	// Query has zero keyword overlap with the chunk but aligns with its vector.
+	hits, _ := knowledgeSearch(indexDB, "xyzzy-no-overlap", t.TempDir(), DefaultWeights(), nil, []float64{1, 0, 0}, "test-model")
+	if len(hits) != 1 || hits[0].Path != "docs/orphan.md" {
+		t.Fatalf("semantic-only fallback should return orphan.md, got %+v", hits)
+	}
+	if hits[0].Score <= 0 {
+		t.Fatalf("semantic-only score should be absolute cosine > 0, got %v", hits[0].Score)
 	}
 }

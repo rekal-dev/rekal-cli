@@ -4,12 +4,14 @@
 
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/rekal-dev/rekal-cli)](https://goreportcard.com/report/github.com/rekal-dev/rekal-cli)
+[![arXiv](https://img.shields.io/badge/arXiv-2607.14390-b31b1b)](https://arxiv.org/abs/2607.14390)
 [![License](https://img.shields.io/github/license/rekal-dev/rekal-cli?color=blue)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eNNabp4b)
 [![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
-[Website](https://rekal.dev) · [GitHub](https://github.com/rekal-dev/rekal-cli) · [Discord](https://discord.gg/eNNabp4b)
+[Website](https://rekal.dev) · [arXiv Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/eNNabp4b)
+
+📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
 > Works with Claude Code, Codex, Gemini, and OpenCode.
 
@@ -95,15 +97,14 @@ The full version: [SOUL.md](SOUL.md).
 ## The research
 
 The design is argued and measured in our paper — *"Why Git Is the Memory
-Solution for the Agentic Development Lifecycle"*
-([arXiv:2607.14390](https://arxiv.org/abs/2607.14390),
-[docs/research/paper/](docs/research/paper/)): memory bound to git inherits
+Solution for the Agentic Development Lifecycle"* ([arXiv:2607.14390](https://arxiv.org/abs/2607.14390), 
+[PDF](https://arxiv.org/pdf/2607.14390)): memory bound to git inherits
 its hard guarantees instead of rebuilding them; retrieval is closed as a
 seed-supply problem (honest grep floors, a mechanism study, the facet term);
 and a gated router answers each question kind — structure, episode, or
 rationale — at a few hundred tokens per question. The benchmark labels
 itself from your own commit–session links, so every result is replicable on
-your own history at zero annotation cost ([docs/research/](docs/research/)).
+your own history at zero annotation cost. See [docs/research/](docs/research/) for details.
 
 ## Install and uninstall
 
@@ -427,6 +428,22 @@ rekal <command> --help
 ```
 
 Issues: [github.com/rekal-dev/rekal-cli/issues](https://github.com/rekal-dev/rekal-cli/issues)
+
+## Citation
+
+If you use Rekal or build on the research, please cite the paper:
+
+```bibtex
+@misc{guo2026rekal,
+  title         = {Why Git Is the Memory Solution for the Agentic Development Lifecycle},
+  author        = {Guo, Frank},
+  year          = {2026},
+  eprint        = {2607.14390},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SE},
+  url           = {https://arxiv.org/abs/2607.14390}
+}
+```
 
 ## License
 

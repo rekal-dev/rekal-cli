@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 )
 
 // LoadFTSExtension loads the DuckDB FTS extension.
@@ -267,6 +269,80 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		return err
 	}
 
+	// BUG 6 residual: drop RekalBench harness sessions that already landed in
+	// data.db before SkipCapture. Index-only — data.db stays append-only.
+	if err := PurgeBenchSessionsFromIndex(d); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// PurgeBenchSessionsFromIndex removes RekalBench harness sessions from the
+// derived index (BUG 6 residual). Capture now skips them via
+// session.SkipCapture; this cleans corpora that already imported fixtures.
+// data.db is untouched (append-only).
+func PurgeBenchSessionsFromIndex(d *sql.DB) error {
+	ids := map[string]struct{}{}
+	for _, fp := range session.BenchFingerprints() {
+		rows, err := d.Query(`
+			SELECT DISTINCT session_id FROM turns_ft
+			WHERE role IN ('human', 'human_steering') AND content LIKE '%' || $1 || '%'`, fp)
+		if err != nil {
+			return fmt.Errorf("find bench sessions: %w", err)
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close() //nolint:errcheck
+				return fmt.Errorf("scan bench session: %w", err)
+			}
+			ids[id] = struct{}{}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close() //nolint:errcheck
+			return err
+		}
+		rows.Close() //nolint:errcheck
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	list := make([]string, 0, len(ids))
+	for id := range ids {
+		list = append(list, id)
+	}
+	return deleteSessionsFromIndex(d, list)
+}
+
+func deleteSessionsFromIndex(d *sql.DB, sessionIDs []string) error {
+	if len(sessionIDs) == 0 {
+		return nil
+	}
+	parts := make([]string, len(sessionIDs))
+	args := make([]interface{}, len(sessionIDs))
+	for i, id := range sessionIDs {
+		parts[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	in := strings.Join(parts, ",")
+	tables := []string{
+		"turns_ft",
+		"tool_calls_index",
+		"files_index",
+		"session_facets",
+		"session_embeddings",
+	}
+	for _, table := range tables {
+		q := fmt.Sprintf("DELETE FROM %s WHERE session_id IN (%s)", table, in)
+		if _, err := d.Exec(q, args...); err != nil {
+			// session_embeddings may be absent on very old indexes — ignore.
+			if table == "session_embeddings" && strings.Contains(err.Error(), "does not exist") {
+				continue
+			}
+			return fmt.Errorf("purge %s: %w", table, err)
+		}
+	}
 	return nil
 }
 

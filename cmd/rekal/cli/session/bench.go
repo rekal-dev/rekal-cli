@@ -18,6 +18,14 @@ var benchFingerprints = []string{
 	"RekalBench",
 }
 
+// BenchFingerprints returns the harness prompt substrings used to detect
+// RekalBench pollution (capture skip + index purge).
+func BenchFingerprints() []string {
+	out := make([]string, len(benchFingerprints))
+	copy(out, benchFingerprints)
+	return out
+}
+
 // SkipCapture reports whether this payload should not be written to data.db.
 // True when the operator set REKAL_BENCH / REKAL_SKIP_CHECKPOINT, the
 // transcript cwd looks like a bench tree, or turn text matches harness prompts.

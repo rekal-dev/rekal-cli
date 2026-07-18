@@ -13,6 +13,10 @@ Is the Memory Solution for the Agentic Development Lifecycle"*
 by answer-sufficiency per token). The docs below are the working-backwards
 chain that produced it; where a doc and the paper disagree, the paper wins.
 
+**Next program:** paper #2 — Rekal on the industry-standard memory
+benchmarks (LongMemEval, LoCoMo, …) via adapters, core frozen. Playbook and
+distributable workstreams: [industry-bench/](industry-bench/).
+
 | Doc | Question it answers |
 |---|---|
 | [01-positioning.md](01-positioning.md) | What exactly are we claiming, and what evidence would prove it? (the evidence ladder) |

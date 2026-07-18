@@ -61,7 +61,9 @@ flowchart LR
 
 `confidence` = `max(saturate(bm25), cosine) + 0.15·saturate(facet)` — never
 divided by the candidate-set max (junk queries also normalize `score` ≈ 1.0).
-Soft path: confidence ≥ 0.55 with gap ≥ 0.04. Knowledge is a **fallback**
+Hard floor 0.70; soft path 0.68 with gap ≥ 0.04 (above offtopic ~0.55–0.63).
+Mass floor 3.5 when `mass` is present. Knowledge fallback requires absolute
+`knowledge[0].score` ≥ 0.40. Knowledge is a **fallback**
 when the episode gate fails — never an unconditional override.
 
 ## Other gates

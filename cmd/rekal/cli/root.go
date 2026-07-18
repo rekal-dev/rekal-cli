@@ -88,6 +88,7 @@ func NewRootCmd() *cobra.Command {
 
 			filters := search.Filters{
 				Query:         strings.Join(args, " "),
+				TextQuery:     len(args) > 0,
 				File:          fileFilter,
 				Commit:        commitFilter,
 				Author:        authorFilter,

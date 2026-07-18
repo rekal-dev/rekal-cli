@@ -43,6 +43,10 @@ const (
 	knowledgeCoverageBonus = 0.1
 	// knowledgeBM25Limit caps FTS candidates before semantic re-rank.
 	knowledgeBM25Limit = 100
+	// knowledgeSemanticOnlyCap caps cosine comparisons when BM25 returns
+	// nothing (BUG 13). Above this count we skip the fallback — full-corpus
+	// scan is what dominated recall latency before #44. ANN replaces this.
+	knowledgeSemanticOnlyCap = 2000
 )
 
 // KnowledgeAnchor is a runner-up section pointer within a knowledge hit.
@@ -87,11 +91,18 @@ type knowledgeChunkHit struct {
 // recall, shared); when the session layer skipped but an HTTP query embedder
 // exists, the query is embedded lazily — and only if chunk vectors for that
 // model are actually stored. Never fails recall: any error returns an absent
-// or keyword-only layer.
-func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) []KnowledgeHit {
+// or keyword-only layer. The second return is scoring-lineage detail (nil
+// when the layer is off) — never written to recall stdout JSON.
+//
+// Scores are absolute (saturating BM25 + cosine), never max-normalized
+// within the candidate set — otherwise the top hit is always ~1.0 and the
+// router cannot tell strong from weak (BUG 14).
+func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) ([]KnowledgeHit, []LineageKnowledgeHit) {
+	w = w.orDefaults()
 	hits := knowledgeBM25(indexDB, query)
 	if len(hits) == 0 {
-		return nil
+		// BUG 13: no keyword overlap — try a capped semantic-only fallback.
+		return knowledgeSemanticOnly(indexDB, query, gitRoot, w, qe, queryVec, model)
 	}
 
 	hashes := make([]string, len(hits))
@@ -101,47 +112,67 @@ func knowledgeSearch(indexDB *sql.DB, query, gitRoot string, w Weights, qe Query
 	semScores := knowledgeSemantic(indexDB, query, qe, queryVec, model, hashes)
 
 	if len(semScores) == 0 {
-		// Keyword-only: score is normalized BM25, the v1 behavior.
-		var maxBM float64
-		for _, h := range hits {
-			if h.bm25 > maxBM {
-				maxBM = h.bm25
-			}
-		}
-		if maxBM <= 0 {
-			return nil
-		}
+		// Keyword-only: absolute saturating BM25 (not / maxBM).
 		for i := range hits {
-			hits[i].score = hits[i].bm25 / maxBM
+			hits[i].score = saturate(hits[i].bm25, bm25Tau)
 		}
+		sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
 		return aggregateKnowledge(indexDB, hits, query, gitRoot)
 	}
 
-	// Hybrid: re-rank BM25 candidates with cosine. No full-corpus scan —
-	// semantic-only (zero keyword overlap) chunks stay out until ANN.
+	// Hybrid: absolute BM25 + absolute cosine (already in [0,1]).
 	for i := range hits {
 		hits[i].semantic = semScores[hits[i].hash]
 	}
-
-	var maxBM, maxSem float64
-	for _, h := range hits {
-		if h.bm25 > maxBM {
-			maxBM = h.bm25
-		}
-		if h.semantic > maxSem {
-			maxSem = h.semantic
-		}
-	}
 	bmW, semW := w.layers2()
 	for i := range hits {
-		bmNorm, semNorm := 0.0, 0.0
-		if maxBM > 0 {
-			bmNorm = hits[i].bm25 / maxBM
+		hits[i].score = bmW*saturate(hits[i].bm25, bm25Tau) + semW*clamp01(hits[i].semantic)
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+	return aggregateKnowledge(indexDB, hits, query, gitRoot)
+}
+
+// knowledgeSemanticOnly is the BUG 13 fallback: when BM25 finds nothing,
+// cosine over a capped embedding set can still surface the right prose.
+// Skips entirely when the corpus exceeds knowledgeSemanticOnlyCap — that
+// path was the latency regression #44 removed; ANN is the real fix.
+func knowledgeSemanticOnly(indexDB *sql.DB, query, gitRoot string, w Weights, qe QueryEmbedder, queryVec []float64, model string) ([]KnowledgeHit, []LineageKnowledgeHit) {
+	if model == "" {
+		return nil, nil
+	}
+	n, err := db.CountKnowledgeEmbeddings(indexDB, model)
+	if err != nil || n == 0 || n > knowledgeSemanticOnlyCap {
+		return nil, nil
+	}
+	semScores := knowledgeSemantic(indexDB, query, qe, queryVec, model, nil) // nil hashes → all (capped count)
+	if len(semScores) == 0 {
+		return nil, nil
+	}
+	hashes := make([]string, 0, len(semScores))
+	for h, s := range semScores {
+		if s > 0 {
+			hashes = append(hashes, h)
 		}
-		if maxSem > 0 {
-			semNorm = hits[i].semantic / maxSem
-		}
-		hits[i].score = bmW*bmNorm + semW*semNorm
+	}
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	chunks, err := db.QueryKnowledgeChunksByHashes(indexDB, hashes)
+	if err != nil || len(chunks) == 0 {
+		return nil, nil
+	}
+	hits := make([]knowledgeChunkHit, 0, len(chunks))
+	for _, c := range chunks {
+		hits = append(hits, knowledgeChunkHit{
+			path:      c.Path,
+			anchor:    c.Anchor,
+			startLine: c.StartLine,
+			endLine:   c.EndLine,
+			content:   c.Content,
+			hash:      c.ContentHash,
+			semantic:  semScores[c.ContentHash],
+			score:     clamp01(semScores[c.ContentHash]),
+		})
 	}
 	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
 	return aggregateKnowledge(indexDB, hits, query, gitRoot)
@@ -180,12 +211,24 @@ func knowledgeBM25(indexDB *sql.DB, query string) []knowledgeChunkHit {
 }
 
 // knowledgeSemantic returns content_hash → cosine similarity for the given
-// candidate hashes only. Nil when the semantic rung is unavailable.
+// candidate hashes. Nil hashes loads the full model table (only used by the
+// capped semantic-only fallback). Nil when the semantic rung is unavailable.
 func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec []float64, model string, hashes []string) map[string]float64 {
-	if model == "" || len(hashes) == 0 {
+	if model == "" {
 		return nil
 	}
-	embeddings, err := db.QueryKnowledgeEmbeddingsByHashes(indexDB, model, hashes)
+	var (
+		embeddings map[string][]float64
+		err        error
+	)
+	if hashes == nil {
+		embeddings, err = db.QueryKnowledgeEmbeddings(indexDB, model)
+	} else {
+		if len(hashes) == 0 {
+			return nil
+		}
+		embeddings, err = db.QueryKnowledgeEmbeddingsByHashes(indexDB, model, hashes)
+	}
 	if err != nil || len(embeddings) == 0 {
 		return nil
 	}
@@ -213,8 +256,9 @@ func knowledgeSemantic(indexDB *sql.DB, query string, qe QueryEmbedder, queryVec
 // aggregateKnowledge folds chunk candidates (sorted by combined score
 // descending) into file-level hits: best chunk drives the score and supplies
 // snippet+anchor, runners-up become Also pointers, extra matching sections
-// earn a coverage bonus.
-func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoot string) []KnowledgeHit {
+// earn a coverage bonus. LineageKnowledgeHit carries the winning chunk's
+// raw signals for scoring_lineage (never stdout).
+func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoot string) ([]KnowledgeHit, []LineageKnowledgeHit) {
 	type fileAgg struct {
 		best   knowledgeChunkHit
 		others []knowledgeChunkHit
@@ -240,11 +284,13 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 	})
 
 	out := make([]KnowledgeHit, 0, knowledgeLimit)
+	lin := make([]LineageKnowledgeHit, 0, knowledgeLimit)
 	for _, path := range order {
 		if len(out) >= knowledgeLimit {
 			break
 		}
 		f := files[path]
+		score := round4(scoreOf(f))
 		hit := KnowledgeHit{
 			Path:         path,
 			Anchor:       f.best.anchor,
@@ -252,7 +298,7 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 			Snippet:      extractSnippet(f.best.content, query),
 			LastModified: gitx.LastCommitShort(gitRoot, path),
 			Sessions:     knowledgeSessions(indexDB, path),
-			Score:        round2(scoreOf(f)),
+			Score:        score,
 		}
 		for i, o := range f.others {
 			if i >= knowledgeAlsoLimit {
@@ -264,8 +310,16 @@ func aggregateKnowledge(indexDB *sql.DB, hits []knowledgeChunkHit, query, gitRoo
 			})
 		}
 		out = append(out, hit)
+		lin = append(lin, LineageKnowledgeHit{
+			Rank:     len(out),
+			Path:     path,
+			Anchor:   f.best.anchor,
+			Score:    score,
+			BM25:     round4(f.best.bm25),
+			Semantic: round4(f.best.semantic),
+		})
 	}
-	return out
+	return out, lin
 }
 
 // knowledgeSessions loads the provenance edge: sessions that touched the

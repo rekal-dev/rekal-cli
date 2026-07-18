@@ -42,6 +42,22 @@ This is not a feature of Rekal. This is the second reason Rekal exists.
 
 ---
 
+## The skill
+
+The skill is how the agent meets Rekal. It must make the agent stronger, not smaller.
+
+- The skill enables; it does not prescribe. It orients the agent — where the answer lives — hands it memory and tools, and trusts its reasoning. Tools remove toil, never thought. A skill that scripts the agent's steps has traded reasoning for obedience.
+- Thin on the route, rich on arrival. One thin route is always loaded; everything rich is pulled on demand. This is thin on the wire, rich on the machine turned inward. The token budget follows from getting this right — it is not a cap to enforce.
+- Three homes: function, knowledge, judgment.
+  - Function belongs in a script. Deterministic, mechanical work that runs the same way every time. A script executes; it does not judge. A rule the agent must remember and then perform is a script waiting to be written — this is how rule-accretion stops.
+  - Knowledge belongs in rich prose, loaded on demand. It informs the agent's judgment. It never makes it.
+  - Judgment belongs to the agent's reasoning. Weighing, interpreting, deciding under ambiguity stays with the agent — never frozen into a script, never frozen into a rule. Scripts surface signals; reasoning reads them.
+- Every rule is an unwritten spec for a tool that doesn't exist yet. Close a gap by moving capability down to function, not by adding prose. The skill shrinks as it sharpens.
+- General, beholden to no single corpus. A tenet that can't be stated without naming a dataset is overfit.
+- Dogfood. Ask Rekal before changing the skill. The reasoned answer returns to the ledger.
+
+---
+
 ## Character
 
 Rekal is quiet. It runs in the background and never interrupts. The agent doesn't need to think about it.
@@ -82,6 +98,7 @@ When facing a choice, we ask:
 5. Is it simple — zero dependencies, zero config?
 6. Is it transparent — can the user see and remove everything?
 7. Does the agent get what it needs?
+8. Does it enable the agent's reasoning rather than replace it?
 
 If the answer to any of these is no, we find another way.
 
@@ -102,6 +119,10 @@ We don't add options where a good default exists. Simple.
 We don't leave residue. Transparent.
 
 We don't optimize for human reading at the expense of agent consumption. Agent first.
+
+We don't add a rule where a function would do. The skill.
+
+We don't put judgment in a script. The skill.
 
 ---
 

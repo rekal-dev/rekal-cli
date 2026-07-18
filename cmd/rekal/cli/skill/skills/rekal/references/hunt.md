@@ -125,6 +125,11 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
   reaction — "gonna try it", "thanks, I'll check it out" — while A's own line
   is keyword-sparse ("let me know how you like it"). Enumerate both sides of
   the exchange before closing the set.
+- **The ledger speaks in instances; the question may ask in classes.** "Which
+  authors has X read" — the turns name *titles* ("The Alchemist", "Lord of the
+  Rings"), not authors. Enumerate the instances (books, trips, dishes), then
+  map each to the class the question asks for with world knowledge. Searching
+  the class word alone ("author") misses every instance that never says it.
 
 ## 2b. Time questions navigate by time, not by keyword
 

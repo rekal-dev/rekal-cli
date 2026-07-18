@@ -19,6 +19,7 @@ rekal -n 5 --explain "error handling" | python3 "$ROOT/scripts/recall-route.py"
 | `INJECT …` | Confident episode — drill below. Knowledge docs may also exist; do not let them block. |
 | `KNOWLEDGE …` | Episode below bars; from `knowledge[0]` Read `path` at `lines` (`anchor`). **Do not** drill weak sessions. |
 | `SILENCE …` | No confident episode and no knowledge. Say so. Do not pad with near-misses. |
+| `SILENCE … below_mass` / `below_gate` on **chat** dialogue | Wrong profile, not absence — load the chat gate/weights (`SKILL.md` Profile section / `calibrate-recall.py --profile chat`) and re-query once before abstaining. Coding bars silence true chat hits. |
 
 On `INJECT` the route script also prints a candidate digest — top hits with a
 trimmed snippet, the rest as `session_id(confidence)` one-liners. **Work from

@@ -13,7 +13,13 @@ import (
 // runRecall opens (and, if empty, rebuilds) the index DB, runs the search, and
 // prints the result as JSON. The ranking/grouping engine lives in the search
 // package; this function is the command-side orchestration around it.
-func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error {
+//
+// weightsJSON is the optional --weights flag: same shape as config.json
+// "weights", applied field-by-field over the merged config (CLI wins). Empty
+// means config/defaults only. Invalid JSON is a hard error (agent must fix
+// the payload); invalid numeric ranges fall back to defaults with a warning,
+// matching the config path.
+func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, weightsJSON string) error {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
@@ -55,14 +61,25 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: knowledge refresh failed: %v\n", err)
 	}
 
-	// Recall tuning + embedding backend come from .rekal/config.json. A bad
-	// config falls back to defaults with a warning — recall must keep working.
+	// Recall tuning + embedding backend come from .rekal/config.json, then
+	// optional --weights JSON overlays field-by-field. A bad config falls
+	// back to defaults with a warning — recall must keep working. Bad
+	// --weights JSON is a hard error (the agent authored it this turn).
 	cfg, err := readMergedConfig(gitRoot)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: config unreadable, using defaults: %v\n", err)
 		cfg = Config{}
 	}
-	weights, err := cfg.Weights.resolve()
+	override, err := parseWeightsJSON(weightsJSON)
+	if err != nil {
+		fmt.Fprintln(cmd.ErrOrStderr(), err)
+		return NewSilentError(err)
+	}
+	if override != nil {
+		// Tag lineage so calibrate can join contribs to a CLI profile turn.
+		filters.WeightsSource = "cli"
+	}
+	weights, err := resolveRecallWeights(cfg, override)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: %v — using default weights\n", err)
 		weights = search.DefaultWeights()
@@ -88,9 +105,11 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		}
 	}
 
-	// Scoring lineage is global-only and off by default. Failures opening the
-	// sink warn and continue — diagnostics must never break recall.
-	if lin, closer, lerr := cfg.ScoringLineage.openLineage(cmd.ErrOrStderr()); lerr != nil {
+	// Scoring lineage is off by default. When enabled, relative paths land
+	// under `.rekal/` so contribs sit with calibration for the closed loop.
+	// Failures opening the sink warn and continue — diagnostics must never
+	// break recall.
+	if lin, closer, lerr := cfg.ScoringLineage.openLineage(cmd.ErrOrStderr(), gitRoot); lerr != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: scoring_lineage: %v — lineage disabled\n", lerr)
 	} else {
 		if closer != nil {

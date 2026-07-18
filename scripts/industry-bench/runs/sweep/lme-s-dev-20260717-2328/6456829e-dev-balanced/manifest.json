@@ -1,0 +1,15 @@
+{
+  "conversation_id": "6456829e",
+  "system": "rekal-skill",
+  "calibration": "dev-balanced.json",
+  "token_counter": "whitespace",
+  "n_questions": 1,
+  "evidence_at_5_rate": 1.0,
+  "evidence_at_10_rate": 1.0,
+  "evidence_hit_rate": 1.0,
+  "retrieved_context_tokens_mean": 483.0,
+  "answer_path_tokens_mean": 529.0,
+  "miss_reasons": {
+    "deep_rank_lt5": 1
+  }
+}

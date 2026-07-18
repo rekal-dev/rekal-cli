@@ -5,8 +5,9 @@ package search
 // query time only — the index stores raw signals (FTS postings, LSA and
 // semantic vectors), so changing weights never requires a rebuild.
 //
-// Configured via the "weights" section of .rekal/config.json (see the cli
-// package); the zero value is replaced by DefaultWeights.
+// Configured via the "weights" section of .rekal/config.json and/or the
+// recall --weights JSON flag (see the cli package); the zero value is
+// replaced by DefaultWeights.
 type Weights struct {
 	// Layer weights for the hybrid score. Normalized to sum to 1 before use,
 	// so only their ratio matters.

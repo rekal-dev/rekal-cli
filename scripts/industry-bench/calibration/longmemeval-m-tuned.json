@@ -1,0 +1,26 @@
+{
+  "gate": {
+    "CONF_MIN": 0.55,
+    "CONF_SOFT": 0.5,
+    "GAP_MIN": 0.03,
+    "MASS_MIN": 0,
+    "KNOWLEDGE_MIN": 0.9
+  },
+  "weights": {
+    "bm25": 0.55,
+    "lsa": 0.1,
+    "semantic": 0.35,
+    "steering_boost": 1.0,
+    "summary_boost": 1.0,
+    "subagent_downweight": 1.0,
+    "facet_boost": 0.05
+  },
+  "split": {
+    "dataset": "longmemeval-m",
+    "seed": 42,
+    "dev_ratio": 0.2,
+    "n_dev": 100,
+    "n_test": 400
+  },
+  "notes": "bm25-push weights, dev-confirmed on the LME-M dev split (same winner as LME-S). Gate reused from longmemeval-s-tuned.json; weights are benchmark-agnostic. LME-M is the longer-haystack variant of the same question format."
+}

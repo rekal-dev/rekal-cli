@@ -1,0 +1,20 @@
+{
+  "conversation_id": "conv-30",
+  "system": "rekal-stock",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 105,
+  "evidence_at_5_rate": 0.9012345679012346,
+  "evidence_at_10_rate": 0.9753086419753086,
+  "evidence_at_20_rate": 1.0,
+  "evidence_hit_rate": 0.6952380952380952,
+  "retrieved_context_tokens_mean": 451.14285714285717,
+  "answer_path_tokens_mean": 479.5047619047619,
+  "miss_reasons": {
+    "abstention": 24,
+    "deep_rank_gte10": 2,
+    "deep_rank_lt10": 6,
+    "deep_rank_lt5": 30,
+    "hit": 43
+  }
+}

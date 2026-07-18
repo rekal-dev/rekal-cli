@@ -1,0 +1,19 @@
+{
+  "conversation_id": "conv-26",
+  "system": "rekal-skill",
+  "calibration": "locomo-multi-hop.json",
+  "token_counter": "whitespace",
+  "n_questions": 199,
+  "evidence_at_5_rate": 0.8466666666666667,
+  "evidence_at_10_rate": 0.88,
+  "evidence_hit_rate": 0.6381909547738693,
+  "retrieved_context_tokens_mean": 177.0,
+  "answer_path_tokens_mean": 207.31658291457288,
+  "miss_reasons": {
+    "abstention": 49,
+    "deep_rank_lt10": 5,
+    "deep_rank_lt5": 61,
+    "hit": 66,
+    "true_miss": 18
+  }
+}

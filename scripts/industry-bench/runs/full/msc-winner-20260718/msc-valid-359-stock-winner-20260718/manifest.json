@@ -1,0 +1,15 @@
+{
+  "conversation_id": "msc-valid-359",
+  "system": "rekal-stock",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 10,
+  "evidence_at_5_rate": 1.0,
+  "evidence_at_10_rate": 1.0,
+  "evidence_hit_rate": 1.0,
+  "retrieved_context_tokens_mean": 110.4,
+  "answer_path_tokens_mean": 125.8,
+  "miss_reasons": {
+    "hit": 10
+  }
+}

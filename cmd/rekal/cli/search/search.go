@@ -58,10 +58,15 @@ type Filters struct {
 	Explain bool
 
 	// Lineage, when non-nil, records observe-only scoring lineage and stage
-	// timings (NDJSON). Set from the global-only scoring_lineage config —
-	// never a CLI flag. Nil (the default) means zero cost: no timers, no
+	// timings (NDJSON). Set from scoring_lineage config (local `.rekal/` path
+	// when relative). Nil (the default) means zero cost: no timers, no
 	// events, ranking identical to a lineage-off run.
 	Lineage Lineage
+
+	// WeightsSource labels how the Weights passed to Run were chosen, for
+	// scoring-lineage query events. "cli" when recall --weights was set;
+	// empty means merged config/defaults (not recorded on the event).
+	WeightsSource string
 }
 
 // Layers exposes each retrieval signal's normalized [0,1] score for a
@@ -232,6 +237,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 			WeightsNormalized: LineageNormWeights{
 				BM25: wb, LSA: wl, Nomic: wn,
 			},
+			WeightsSource:   filters.WeightsSource,
 			EmbedderBackend: embedBackend,
 			EmbedderModel:   embedModel,
 		})

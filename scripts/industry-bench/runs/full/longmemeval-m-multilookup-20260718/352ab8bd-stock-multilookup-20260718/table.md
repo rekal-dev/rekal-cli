@@ -1,0 +1,13 @@
+# smoke 352ab8bd
+
+- questions: 1
+- route: stock
+- calibration: stock
+- evidence@5 (answerable): 1.00
+- evidence@10 (answerable): 1.00
+- retrieved_context_tokens mean: 779.0
+- answer_path_tokens mean: 822.0
+
+| qid | category | gate | ev@5 | ev@10 | rank | miss_reason | top_conf |
+|---|---|---|---:|---:|---:|---|---:|
+| 352ab8bd | single-session-assistant | STOCK | 1 | 1 | 0 | hit | 1 |

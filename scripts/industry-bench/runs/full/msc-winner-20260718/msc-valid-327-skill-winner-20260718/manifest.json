@@ -1,0 +1,15 @@
+{
+  "conversation_id": "msc-valid-327",
+  "system": "rekal-skill",
+  "calibration": "locomo-bm25-push.json",
+  "token_counter": "whitespace",
+  "n_questions": 9,
+  "evidence_at_5_rate": 1.0,
+  "evidence_at_10_rate": 1.0,
+  "evidence_hit_rate": 1.0,
+  "retrieved_context_tokens_mean": 8.666666666666666,
+  "answer_path_tokens_mean": 17.333333333333332,
+  "miss_reasons": {
+    "hit": 9
+  }
+}

@@ -16,6 +16,7 @@ const gettingStarted = `
 Workflow:
   rekal "keyword"                   Search sessions (BM25 + LSA + Nomic hybrid)
   rekal --file auth "token refresh" Filter by file path
+  rekal --weights '{"bm25":0.5}' q  Query-time weight overlay (no config write)
   rekal query --session <id>        Drill into a session (full turns)
   rekal query --session <id> --full Include tool calls and files
   rekal query "SELECT ..."          Raw SQL for edge cases
@@ -49,6 +50,7 @@ func NewRootCmd() *cobra.Command {
 		actorFilter  string
 		limitFlag    int
 		explainFlag  bool
+		weightsFlag  string
 	)
 
 	cmd := &cobra.Command{
@@ -98,7 +100,7 @@ func NewRootCmd() *cobra.Command {
 				Explain:       explainFlag,
 			}
 
-			return runRecall(cmd, gitRoot, filters)
+			return runRecall(cmd, gitRoot, filters, weightsFlag)
 		},
 	}
 
@@ -109,6 +111,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
+	cmd.Flags().StringVar(&weightsFlag, "weights", "", "Query-time weight JSON (same keys as config weights; overlays local/global config)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

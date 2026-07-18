@@ -77,6 +77,9 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 			if q["mode"] != "hybrid" || q["query"] != "auth" {
 				t.Fatalf("query mismatch: %+v", q)
 			}
+			if _, ok := q["weights_source"]; ok {
+				t.Fatalf("weights_source must be omitted without CLI overlay: %+v", q)
+			}
 			if _, ok := q["use_nomic"]; ok {
 				t.Fatal("use_nomic was removed; use result.semantic")
 			}
@@ -153,6 +156,41 @@ func TestLineage_EnvelopeAndEvents(t *testing.T) {
 	}
 	if lin.RunID() != runID {
 		t.Fatalf("RunID()=%q logged=%q", lin.RunID(), runID)
+	}
+}
+
+// TestLineage_WeightsSourceCLI records weights_source=cli when the agent
+// passed a query-time overlay (Filters.WeightsSource).
+func TestLineage_WeightsSourceCLI(t *testing.T) {
+	t.Parallel()
+	indexDB := seedLineageCorpus(t)
+
+	var buf bytes.Buffer
+	lin := NewNDJSONLineage(&buf, 5)
+	_, err := Run(indexDB, Filters{Query: "auth", Lineage: lin, WeightsSource: "cli"}, t.TempDir(), DefaultWeights(), stubEmbedder{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	lin.FlushResult(1)
+
+	var found bool
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var head struct {
+			Event         string `json:"event"`
+			WeightsSource string `json:"weights_source"`
+		}
+		if err := json.Unmarshal([]byte(line), &head); err != nil {
+			t.Fatal(err)
+		}
+		if head.Event == "query" {
+			found = true
+			if head.WeightsSource != "cli" {
+				t.Fatalf("weights_source=%q, want cli", head.WeightsSource)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no query event")
 	}
 }
 

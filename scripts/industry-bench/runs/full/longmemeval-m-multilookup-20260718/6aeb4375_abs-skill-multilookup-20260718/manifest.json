@@ -1,0 +1,16 @@
+{
+  "conversation_id": "6aeb4375_abs",
+  "system": "rekal-skill-multi",
+  "calibration": "longmemeval-m-tuned.json",
+  "token_counter": "whitespace",
+  "n_questions": 1,
+  "evidence_at_5_rate": 0.0,
+  "evidence_at_10_rate": 0.0,
+  "evidence_at_20_rate": 0.0,
+  "evidence_hit_rate": 0.0,
+  "retrieved_context_tokens_mean": 1015.0,
+  "answer_path_tokens_mean": 1047.0,
+  "miss_reasons": {
+    "abstention": 1
+  }
+}

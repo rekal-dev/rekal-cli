@@ -27,3 +27,6 @@
 
 # Build dependencies (llama.cpp)
 .deps/
+
+# Large regenerable benchmark data splits (exceed GitHub's 100MB file limit)
+scripts/industry-bench/calibration/split-*-conversations.jsonl

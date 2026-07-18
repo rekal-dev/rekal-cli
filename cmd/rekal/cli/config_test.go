@@ -92,7 +92,7 @@ func TestMergedConfig_GlobalWithLocalOverride(t *testing.T) {
 	}
 }
 
-func TestMergedConfig_ScoringLineageGlobalOnly(t *testing.T) {
+func TestMergedConfig_ScoringLineageLocalOverrides(t *testing.T) {
 	// Sets env, so not parallel.
 	gitRoot := t.TempDir()
 	if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
@@ -103,29 +103,29 @@ func TestMergedConfig_ScoringLineageGlobalOnly(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	writeCfgFile(t, filepath.Join(globalHome, "config.json"),
-		`{"scoring_lineage":{"enabled":true,"path":"lineage.jsonl","max_candidates":10}}`)
-	// Local tries to disable / override — must be ignored.
+		`{"scoring_lineage":{"enabled":true,"path":"global.ndjson","max_candidates":10}}`)
+	// Local disables / retargets — wholesale override into .rekal/.
 	writeCfgFile(t, configPath(gitRoot),
-		`{"scoring_lineage":{"enabled":false,"max_candidates":99}}`)
+		`{"scoring_lineage":{"enabled":true,"path":"scoring-lineage.ndjson","max_candidates":99}}`)
 
 	cfg, err := readMergedConfig(gitRoot)
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 	if cfg.ScoringLineage == nil || !cfg.ScoringLineage.Enabled {
-		t.Fatalf("scoring_lineage must come from global: %+v", cfg.ScoringLineage)
+		t.Fatalf("scoring_lineage missing: %+v", cfg.ScoringLineage)
 	}
-	if cfg.ScoringLineage.MaxCandidates != 10 {
-		t.Fatalf("local max_candidates must not override global, got %d", cfg.ScoringLineage.MaxCandidates)
+	if cfg.ScoringLineage.MaxCandidates != 99 {
+		t.Fatalf("local max_candidates lost: %d", cfg.ScoringLineage.MaxCandidates)
 	}
-	if cfg.ScoringLineage.Path != "lineage.jsonl" {
-		t.Fatalf("path = %q, want lineage.jsonl", cfg.ScoringLineage.Path)
+	if cfg.ScoringLineage.Path != "scoring-lineage.ndjson" {
+		t.Fatalf("path = %q, want scoring-lineage.ndjson", cfg.ScoringLineage.Path)
 	}
 
-	// writeConfig must never persist scoring_lineage into the repo file.
+	// writeConfig may persist scoring_lineage in the gitignored local file.
 	if err := writeConfig(gitRoot, Config{
 		LocalImport:    localPref{All: true},
-		ScoringLineage: &scoringLineageConfig{Enabled: true},
+		ScoringLineage: &scoringLineageConfig{Enabled: true, Path: "scoring-lineage.ndjson"},
 	}); err != nil {
 		t.Fatalf("writeConfig: %v", err)
 	}
@@ -133,16 +133,16 @@ func TestMergedConfig_ScoringLineageGlobalOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readConfig: %v", err)
 	}
-	if local.ScoringLineage != nil {
-		t.Fatalf("writeConfig must strip scoring_lineage, got %+v", local.ScoringLineage)
+	if local.ScoringLineage == nil || !local.ScoringLineage.Enabled {
+		t.Fatalf("writeConfig should keep scoring_lineage, got %+v", local.ScoringLineage)
 	}
 }
 
-func TestOpenLineage_RotationWritesNDJSON(t *testing.T) {
-	// Sets env, so not parallel.
-	globalHome := t.TempDir()
-	t.Setenv("REKAL_CONFIG_HOME", globalHome)
-	t.Setenv("XDG_CONFIG_HOME", "")
+func TestOpenLineage_WritesUnderRekalDir(t *testing.T) {
+	gitRoot := t.TempDir()
+	if err := os.MkdirAll(RekalDir(gitRoot), 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := &scoringLineageConfig{
 		Enabled:       true,
@@ -154,7 +154,7 @@ func TestOpenLineage_RotationWritesNDJSON(t *testing.T) {
 			MaxAgeDays:   1,
 		},
 	}
-	lin, closer, err := cfg.openLineage(io.Discard)
+	lin, closer, err := cfg.openLineage(io.Discard, gitRoot)
 	if err != nil {
 		t.Fatalf("openLineage: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestOpenLineage_RotationWritesNDJSON(t *testing.T) {
 	if closer != nil {
 		_ = closer.Close()
 	}
-	path := filepath.Join(globalHome, "scoring-lineage.ndjson")
+	path := filepath.Join(RekalDir(gitRoot), "scoring-lineage.ndjson")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read log: %v", err)
@@ -392,6 +392,60 @@ func TestConfigPath(t *testing.T) {
 }
 
 func fp(v float64) *float64 { return &v }
+
+func TestParseWeightsJSON(t *testing.T) {
+	t.Parallel()
+
+	ov, err := parseWeightsJSON("")
+	if err != nil || ov != nil {
+		t.Fatalf("empty: got %+v, %v", ov, err)
+	}
+	ov, err = parseWeightsJSON(`{"bm25":0.9,"facet_boost":0}`)
+	if err != nil || ov == nil || ov.BM25 == nil || *ov.BM25 != 0.9 || ov.FacetBoost == nil || *ov.FacetBoost != 0 {
+		t.Fatalf("partial: %+v, %v", ov, err)
+	}
+	if _, err := parseWeightsJSON(`{"bm25":0.5,"unknown":1}`); err == nil {
+		t.Fatal("unknown key must be rejected")
+	}
+	if _, err := parseWeightsJSON(`[1,2]`); err == nil {
+		t.Fatal("array must be rejected")
+	}
+	if _, err := parseWeightsJSON(`not-json`); err == nil {
+		t.Fatal("garbage must be rejected")
+	}
+}
+
+func TestResolveRecallWeights_CLIOverlaysConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{Weights: &weightsConfig{BM25: fp(0.5), LSA: fp(0.2)}}
+	cli, err := parseWeightsJSON(`{"bm25":0.1,"facet_boost":0}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := resolveRecallWeights(cfg, cli)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.BM25 != 0.1 {
+		t.Fatalf("CLI bm25=%v, want 0.1", w.BM25)
+	}
+	if w.LSA != 0.2 {
+		t.Fatalf("config lsa should remain: %v", w.LSA)
+	}
+	if w.FacetBoost != 0 {
+		t.Fatalf("CLI facet_boost=%v, want 0", w.FacetBoost)
+	}
+	if w.Semantic != search.DefaultWeights().Semantic {
+		t.Fatalf("unset semantic should stay default: %v", w.Semantic)
+	}
+
+	// No CLI → config only.
+	w, err = resolveRecallWeights(cfg, nil)
+	if err != nil || w.BM25 != 0.5 || w.LSA != 0.2 {
+		t.Fatalf("nil CLI: %+v, %v", w, err)
+	}
+}
 
 func TestWeightsConfig_Resolve(t *testing.T) {
 	t.Parallel()

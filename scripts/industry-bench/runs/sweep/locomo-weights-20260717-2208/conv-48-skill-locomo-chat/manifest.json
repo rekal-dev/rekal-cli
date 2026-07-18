@@ -1,0 +1,19 @@
+{
+  "conversation_id": "conv-48",
+  "system": "rekal-skill",
+  "calibration": "locomo-chat.json",
+  "token_counter": "whitespace",
+  "n_questions": 239,
+  "evidence_at_5_rate": 0.900523560209424,
+  "evidence_at_10_rate": 0.9109947643979057,
+  "evidence_hit_rate": 0.7196652719665272,
+  "retrieved_context_tokens_mean": 149.07112970711296,
+  "answer_path_tokens_mean": 179.56485355648536,
+  "miss_reasons": {
+    "abstention": 48,
+    "deep_rank_lt10": 2,
+    "deep_rank_lt5": 60,
+    "hit": 112,
+    "true_miss": 17
+  }
+}

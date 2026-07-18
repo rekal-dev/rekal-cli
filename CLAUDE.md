@@ -51,10 +51,12 @@ session discovery keep using the invoking worktree.
 
 ### Core CLI (`cmd/rekal/cli/`)
 
-- `root.go`: Root command (recall is the default) + command registration
+- `root.go`: Root command (recall is the default) + command registration;
+  recall filter flags plus `--weights` (query-time JSON overlay)
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
-  index DB, refresh the knowledge layer (watermark-gated), call the `search`
-  package, marshal JSON. The ranking engine itself lives in `search/`.
+  index DB, refresh the knowledge layer (watermark-gated), resolve weights
+  (config then optional `--weights`), call the `search` package, marshal
+  JSON. The ranking engine itself lives in `search/`.
 - `knowledge_index.go`: Knowledge-layer build/refresh — chunk the repo's
   tracked prose files at HEAD into `index.db` (`knowledge_chunks`), diffing
   stored git blob SHAs against `git ls-tree -r HEAD` so only changed files
@@ -80,20 +82,19 @@ session discovery keep using the invoking worktree.
 - `config.go`: Two-tier config, both gitignored/local-only (never committed,
   pushed, or synced) — local `.rekal/config.json` deep-merges over global
   `~/.config/rekal/config.json` (path honors `$REKAL_CONFIG_HOME` then
-  `$XDG_CONFIG_HOME`), precedence local → global → built-in defaults. Merge is
+  `$XDG_CONFIG_HOME`), precedence **CLI `--weights` →** local → global →
+  built-in defaults. Merge is
   per-key: `embedding` inherits wholesale, `weights` field-by-field,
-  `local_import` not inherited (per-repo), `scoring_lineage` **global-only**
-  (machine diagnostic switch; ignored from local, never written to the repo
-  file; default off — observe-only NDJSON of recall score lineage + stage
-  timings to stderr or a lumberjack-rotated local path; envelope
-  `ts`/`v`/`run_id`/`event` joins query→candidate→result). `readConfig` is
+  `local_import` not inherited (per-repo), `scoring_lineage` wholesale
+  (local overrides global when set; relative `path` → `.rekal/<file>`,
+  gitignored with the store). `readConfig` is
   local-only (the write path — the `--include*` flags read-modify-write it,
   so global values are never baked in); `readMergedConfig` is the
   consumption view (recall weights, index embedding, scoring lineage). Holds
   the cross-repo `local_import` preference,
   the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
   summary boost, subagent discount, facet boost — applied at query time, no
-  reindex), and
+  reindex; agents prefer `--weights '{...}'` over writing config), and
   the `embedding` section (OpenAI-compatible HTTP backend: endpoint/model/
   api_key with `$VAR` expansion and `api_key_env`; a Cohere Embed model under
   the `openai` provider auto-sends `input_type`)
@@ -142,7 +143,8 @@ session discovery keep using the invoking worktree.
   `--explain` enrichments (per-layer normalized scores + query-time
   related-session joins over `files_index`; default output unchanged
   without the flag), and optional scoring-lineage NDJSON (`lineage.go` —
-  global `scoring_lineage` config only; default off; schema v3: per-layer
+  `scoring_lineage` in local/global config; relative path →
+  `.rekal/scoring-lineage.ndjson`; default off; schema v3: per-layer
   raw/norm/contrib + stage `timings_ms` + candidate/returned `confidence`/`mass`
   + `result.knowledge` file hits with winning-chunk bm25/semantic;
   `result.semantic{used,backend,model}` names the real embedder —

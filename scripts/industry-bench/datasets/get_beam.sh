@@ -28,7 +28,8 @@ except ImportError:
 if tier == "10m":
     ds = load_dataset("Mohammadta/BEAM-10M", split="10M")
 elif tier == "128k":
-    ds = load_dataset("Mohammadta/BEAM", split="128K")
+    # HF config labels this tier 100K (context budget ~128k tokens).
+    ds = load_dataset("Mohammadta/BEAM", split="100K")
 elif tier == "500k":
     ds = load_dataset("Mohammadta/BEAM", split="500K")
 else:

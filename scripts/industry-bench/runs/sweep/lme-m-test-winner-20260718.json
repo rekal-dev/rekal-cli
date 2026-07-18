@@ -1,0 +1,20 @@
+{
+  "n": 376,
+  "limit": 20,
+  "profiles": {
+    "bm25-push": {
+      "ev@5": 0.9149,
+      "ev@10": 0.9468,
+      "ev@20": 0.9681,
+      "found@limit": 0.9681,
+      "ev@5_miss_by_cat": {
+        "single-session-user": 5,
+        "multi-session": 4,
+        "knowledge-update": 1,
+        "temporal-reasoning": 13,
+        "single-session-preference": 9
+      }
+    }
+  },
+  "winner": "bm25-push"
+}

@@ -6,5 +6,14 @@
     "MASS_MIN": 0,
     "KNOWLEDGE_MIN": 0.90
   },
-  "notes": "PROVISIONAL chat-distribution bars for smoke only — not pre-registered. MASS_MIN=0 disables the lexical floor (chat sessions score ~0.1–0.2 mass vs coding's 3.5+). WS-D must retune on LongMemEval-S dev split and freeze before any test-split run (04-procedures §prereg)."
+  "weights": {
+    "bm25": 0.30,
+    "lsa": 0.20,
+    "semantic": 0.50,
+    "steering_boost": 1.0,
+    "summary_boost": 1.0,
+    "subagent_downweight": 1.0,
+    "facet_boost": 0.1
+  },
+  "notes": "PROVISIONAL chat-distribution bars for smoke only — not pre-registered. MASS_MIN=0 disables the lexical floor (chat sessions score ~0.1–0.2 mass vs coding's 3.5+). Weights match calibrate-recall.py CHAT_WEIGHTS; shim passes them via rekal --weights. WS-D must retune on LongMemEval-S dev split and freeze before any test-split run (04-procedures §prereg)."
 }

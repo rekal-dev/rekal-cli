@@ -1,0 +1,19 @@
+{
+  "gate": {
+    "CONF_MIN": 0.55,
+    "CONF_SOFT": 0.5,
+    "GAP_MIN": 0.03,
+    "MASS_MIN": 0,
+    "KNOWLEDGE_MIN": 0.9
+  },
+  "weights": {
+    "steering_boost": 1.0,
+    "summary_boost": 1.0,
+    "subagent_downweight": 1.0,
+    "bm25": 0.2,
+    "lsa": 0.15,
+    "semantic": 0.65,
+    "facet_boost": 0.05
+  },
+  "notes": "LME-S dev sweep dev-semantic-push"
+}

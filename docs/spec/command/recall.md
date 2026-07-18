@@ -82,8 +82,9 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20 when unset; `0` = empty set; negative → error) |
 | `--explain` | Adds per-layer scores (`layers`: bm25/lsa/nomic/facet, normalized, pre-weight) and `related` (sessions sharing touched files, query-time join) to each result |
+| `--weights <json>` | Query-time weight overlay. Same keys as config `weights` (`bm25`, `lsa`, `semantic`/`nomic`, `steering_boost`, `summary_boost`, `subagent_downweight`, `facet_boost`). Field-by-field over local → global → defaults. Invalid JSON is an error; does not write config. |
 
-Multiple filters = AND.
+Multiple filters = AND. CLI `--weights` wins over config for keys present in the JSON.
 
 ---
 
@@ -190,39 +191,48 @@ rekal --commit a3f9b12 "JWT"
 rekal --author alice@example.com "refactor"
 rekal --file src/auth.go --actor human "auth"
 rekal "JWT" -n 10
+rekal --weights '{"bm25":0.5,"facet_boost":0}' "JWT"
+rekal --weights '{"lsa":0.25,"semantic":0.5}' --limit 10 "why squash merge"
 ```
 
 ---
 
-## Tuning (config.json)
+## Tuning (CLI + config.json)
 
-Recall reads config at query time from two tiers, highest-to-lowest:
-**local `.rekal/config.json` → global `~/.config/rekal/config.json` →
-built-in defaults.** The global file (path honors `$REKAL_CONFIG_HOME` then
-`$XDG_CONFIG_HOME`, else `~/.config/rekal/`) supplies machine-wide defaults so
-a backend or tuned weights can be set once for every repo. The merge is
-per-key: **`embedding` inherits wholesale** (a repo either uses the global
-backend or replaces the whole block), **`weights` merge field-by-field** (a
-repo can override just `bm25` and inherit the rest), and **`local_import` is
-not inherited** — cross-repo import intent stays per-repo. Both files are
-gitignored/local-only and never pushed or synced; the write path (`rekal
-index --include-all/--include/--no-local`) only ever touches the local file,
-so global values are never baked into a repo.
+**Precedence (highest wins):** `--weights` JSON → local `.rekal/config.json` →
+global `~/.config/rekal/config.json` → built-in defaults.
 
-- **`weights`** — layer mix (`bm25`/`lsa`/`nomic`, normalized ratios; an explicit `0` disables a layer), `steering_boost`, `summary_boost`, `subagent_downweight`, and `facet_boost` (additive facet-layer scale; default 0.3, `0` disables the layer and makes ranking byte-identical to the pre-facet engine). Applied per query; changing them never requires a reindex. Invalid values fall back to defaults with a warning. When no semantic vectors are available the nomic share falls back to LSA and the pair is renormalized (2-way fallback).
+`--weights` is the agent path: pass a profile for one query without writing
+any file. Same JSON object shape as the config `weights` section; only keys
+present in the flag override; unknown keys are rejected.
+
+Sticky machine/repo defaults still use config. Recall reads config at query
+time from two tiers: **local → global → built-in.** The global file (path
+honors `$REKAL_CONFIG_HOME` then `$XDG_CONFIG_HOME`, else `~/.config/rekal/`)
+supplies machine-wide defaults so a backend or tuned weights can be set once
+for every repo. The merge is per-key: **`embedding` inherits wholesale** (a
+repo either uses the global backend or replaces the whole block), **`weights`
+merge field-by-field** (a repo can override just `bm25` and inherit the
+rest), and **`local_import` is not inherited** — cross-repo import intent
+stays per-repo. Both files are gitignored/local-only and never pushed or
+synced; the write path (`rekal index --include-all/--include/--no-local`)
+only ever touches the local file, so global values are never baked into a
+repo.
+
+- **`weights` / `--weights`** — layer mix (`bm25`/`lsa`/`nomic`/`semantic`, normalized ratios; an explicit `0` disables a layer), `steering_boost`, `summary_boost`, `subagent_downweight`, and `facet_boost` (additive facet-layer scale; default 0.3, `0` disables the layer and makes ranking byte-identical to the pre-facet engine). Applied per query; changing them never requires a reindex. Invalid config values fall back to defaults with a warning; invalid `--weights` JSON is a hard error. When no semantic vectors are available the nomic share falls back to LSA and the pair is renormalized (2-way fallback).
 - **`embedding`** — when set, the recall query is embedded by the configured HTTP backend instead of the embedded nomic model. `provider` selects the wire protocol: `openai` (default) for any OpenAI-compatible `/embeddings` server (vLLM, Ollama, LM Studio, TEI, or a gateway), or `bedrock` for the Amazon Bedrock runtime (Cohere Embed models — `cohere.embed-english-v3`/`cohere.embed-multilingual-v3` — authenticated by a Bedrock API key as the bearer token, no SigV4). Under `openai`, a **Cohere Embed model** (model name contains `cohere`, e.g. served through a gateway in front of Bedrock) automatically gets Cohere's required `input_type` in the request body — `search_query` for the query, `search_document` for stored turns — so Cohere works over the plain `/embeddings` shape without text prefixes; other models omit it. For `bedrock`, `endpoint` is the runtime host (`https://bedrock-runtime.<region>.amazonaws.com`) and the same asymmetry rides `input_type` natively. The API key supports a real string (`api_key`), a `$VAR` reference inside `api_key`, or an explicit env var name (`api_key_env`, which wins when set and non-empty); absent key ⇒ no Authorization header. `endpoint` expands `$VAR` the same way. The vectors compared against are the ones the index was built with (keyed by model name), so a backend/model mismatch skips the semantic layer — falling back to 2-way scoring — rather than comparing incompatible vectors. Rebuild with `rekal index` after changing provider/model/endpoint.
 
 Failures anywhere in tuning/embedding degrade recall gracefully (fewer layers), never break it. A query embedder / index model mismatch (e.g. index built with Cohere HTTP embeddings but recall falling back to embedded nomic) is recorded in scoring-lineage `skipped.nomic` with the index's model list — it is never a silent empty skip. When `embedding` is configured but fails to resolve, recall does **not** fall back to embedded nomic (that was the mismatch footgun); fix the config or rebuild the index for the embedder you intend.
 
-### Scoring lineage (global-only diagnostics)
+### Scoring lineage (`.rekal/` contrib log)
 
 Observe-only NDJSON logging of each retrieval layer's contribution and
 stage timings. **Off by default** — when disabled, no timers run and
-ranking is byte-identical to a lineage-free build. **Global-only**: set it
-in `~/.config/rekal/config.json` (honors `$REKAL_CONFIG_HOME` /
-`$XDG_CONFIG_HOME`). A value in `.rekal/config.json` is ignored, and the
-write path never persists it into a repo file — diagnostics stay a
-machine-local developer switch.
+ranking is byte-identical to a lineage-free build. Configure in local
+`.rekal/config.json` and/or global `~/.config/rekal/config.json` (local
+wins wholesale when set). Relative `path` resolves under **this repo's
+`.rekal/`** (gitignored with the store — never pushed). Absolute paths
+are used as-is. Empty `path` → stderr.
 
 ```json
 {
@@ -243,7 +253,7 @@ machine-local developer switch.
 | Field | Default | Meaning |
 |-------|---------|---------|
 | `enabled` | `false` | Master switch |
-| `path` | empty → **stderr** | Append NDJSON here. Relative paths resolve under the global config dir; absolute paths are used as-is. Local file only — never a network sink. |
+| `path` | empty → **stderr** | Append NDJSON here. Relative → `.rekal/<path>`; absolute as-is. Local file only — never a network sink. |
 | `max_candidates` | `50` | Cap per-session `candidate` events (top of the pre-group ranked pool) |
 | `rotation` | 10 MB / 5 backups / 14 days / gzip | Size-based roller (lumberjack) when `path` is set. Ignored for stderr. |
 
@@ -257,8 +267,10 @@ Every line is one JSON object with a shared envelope:
 
 Each hybrid recall emits, in order:
 
-1. **`query`** (start) — query string, mode, filters, weights, intended
-   `embedder_backend` (`http` | `embedded`) and `embedder_model`.
+1. **`query`** (start) — query string, mode, filters, weights,
+   `weights_normalized`, optional `weights_source` (`cli` when
+   `--weights` was set), intended `embedder_backend` (`http` | `embedded`)
+   and `embedder_model`.
 2. **`candidate`** (mid, ≤ `max_candidates`) — per session: raw + normalized
    scores for bm25 / lsa / nomic / facet, weighted contributions, role boost
    on the winning turn, subagent discount, final hybrid `score`, plus absolute
@@ -273,6 +285,10 @@ Each hybrid recall emits, in order:
    which embedder did it; known only after search), `tokens`
    (`embed_query_chars`, `payload_bytes`), and skip reasons when a layer
    soft-failed.
+
+Together with `rekal --weights`, this is the calibrate feedback channel:
+propose → query-time weights → lineage contribs → re-diagnose. See
+[skill-adaptive-recall](../../design/skill-adaptive-recall.md).
 
 The hybrid weight / timing / skip key `nomic` is the historical name of the
 deep semantic *layer*, not the model. Prefer `semantic.model` /

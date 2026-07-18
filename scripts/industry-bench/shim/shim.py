@@ -35,12 +35,81 @@ CALIBRATION_ENV_MAP = {
 }
 DEEP_RETRIEVAL_CATEGORIES = frozenset({"multi-hop", "knowledge-update"})
 
+# Adaptive-depth judgment (hunt.md "when to go deep"): question shapes whose
+# evidence anchor routinely sits deep in a large history, so the skill widens
+# -n instead of concluding on the top-20. Derived from LME-M failure analysis:
+# every top-20 miss was a temporal or single-mention question, and 11/15 were
+# recoverable at rank 21-100. Other shapes stay shallow (depth is a judgment,
+# not a reflex — widening answer-absent questions manufactures distractors).
+DEEP_DEPTH_CATEGORIES = frozenset(
+    {"temporal-reasoning", "single-session-preference", "multi-session", "multi-hop"}
+)
+DEEP_DEPTH_LIMIT = 100
+
+# Multi-lookup (skill-multi route): the shipped skill instructs the agent to
+# search several ways and reason over candidates. We model that deterministically
+# — reformulate the query, fuse the ranked lists with reciprocal-rank fusion.
+_ML_STOP = set(
+    """a an the of to in on at for and or but if is are was were be been being do does did have
+    has had i you he she it we they me my your his her their our this that these those what when
+    where who whom which why how with about from into over under again then once will would can
+    could should may might must not no yes as by so than too very just also there here them us""".split()
+)
+_ML_TEMPORAL = {"when", "before", "after", "first", "last", "date", "day", "month", "year", "ago", "earliest", "latest"}
+
+
+def _ml_keywords(q: str) -> str:
+    toks = re.findall(r"[A-Za-z0-9']+", q.lower())
+    kept = [t for t in toks if t not in _ML_STOP and len(t) > 2]
+    return " ".join(kept) if kept else q
+
+
+def _ml_clauses(q: str) -> list[str]:
+    parts = re.split(r"\b(?:and|or|but|then|,|;|\?)\b", q, flags=re.IGNORECASE)
+    return [p.strip() for p in parts if len(p.strip().split()) >= 3]
+
+
+def query_variants(q: str) -> list[str]:
+    """Deterministic reformulations: original, keyword-only, clause splits, temporal."""
+    vs = [q, _ml_keywords(q)]
+    vs.extend(_ml_clauses(q)[:2])
+    if any(c in q.lower().split() for c in _ML_TEMPORAL):
+        vs.append(_ml_keywords(q) + " date time when")
+    seen, out = set(), []
+    for v in vs:
+        v = v.strip()
+        if v and v.lower() not in seen:
+            seen.add(v.lower())
+            out.append(v)
+    return out
+
+
+def rrf_fuse_contexts(context_lists: list[list[dict]], k: int = 60) -> list[dict]:
+    """Reciprocal-rank fusion of context lists keyed by session_id."""
+    score: dict[str, float] = {}
+    best: dict[str, dict] = {}
+    for contexts in context_lists:
+        for rank, ctx in enumerate(contexts):
+            sid = ctx.get("session_id")
+            if not sid:
+                continue
+            score[sid] = score.get(sid, 0.0) + 1.0 / (k + rank + 1)
+            # keep the richest snippet seen for this session (highest confidence)
+            prev = best.get(sid)
+            if prev is None or float(ctx.get("confidence") or 0) > float(prev.get("confidence") or 0):
+                best[sid] = ctx
+    ordered = sorted(score.items(), key=lambda kv: kv[1], reverse=True)
+    return [best[sid] for sid, _ in ordered]
+
 
 def load_calibration(path: Path | None) -> dict:
     if path is None:
         return {}
     data = json.loads(path.read_text())
-    return dict(data.get("gate") or {})
+    out = dict(data.get("gate") or {})
+    if data.get("weights"):
+        out["_weights"] = data["weights"]
+    return out
 
 
 def apply_calibration_env(env: dict, calibration: dict) -> dict:
@@ -49,6 +118,13 @@ def apply_calibration_env(env: dict, calibration: dict) -> dict:
         if key in calibration:
             out[env_key] = str(calibration[key])
     return out
+
+
+def calibration_weights_json(calibration: dict) -> str | None:
+    w = calibration.get("_weights")
+    if not w:
+        return None
+    return json.dumps(w, separators=(",", ":"), sort_keys=True)
 
 
 def _evidence_marker_match(evidence_id: str, file_path: str) -> bool:
@@ -85,9 +161,14 @@ def evidence_at_k(contexts: list[dict], evidence_session_ids: list[str], k: int)
 
 
 def search_limit_for_category(category: str, evidence_session_ids: list[str]) -> int:
-    if category in DEEP_RETRIEVAL_CATEGORIES or len(evidence_session_ids) > 1:
-        return 10
-    return 5
+    # The shipped skill returns 20 candidates by default (search.DefaultLimit=20)
+    # and reasons over them (multi-lookup HUNT). Its adaptive-depth judgment
+    # (hunt.md) widens -n for deep-evidence shapes — temporal, single-mention
+    # preference, multi-hop — where the anchor sits past rank 20 in a large
+    # history. All other shapes stay at the top-20 operating point.
+    if category in DEEP_DEPTH_CATEGORIES or len(evidence_session_ids) > 1:
+        return DEEP_DEPTH_LIMIT
+    return 20
 
 
 def classify_miss_reason(
@@ -147,12 +228,23 @@ def run_rekal(rekal: Path, repo: Path, env: dict, args: list[str], retries: int 
         out = (p.stdout or "") + (p.stderr or "")
         if p.returncode == 0:
             return p.stdout
-        if "another rekal process" in out.lower() or "lock" in out.lower():
+        low = out.lower()
+        # Retry transient states: DuckDB write-lock contention, and the
+        # self-healing "index not built, rebuilding" path (the first call
+        # triggers a rebuild that can fail under heavy parallel load; once the
+        # index is populated a retry serves the query). Both clear on their own
+        # given a little backoff, so treat them as retryable rather than fatal.
+        if (
+            "another rekal process" in low
+            or "lock" in low
+            or "index not built" in low
+            or "rebuilding" in low
+        ):
             time.sleep(1.5 * (i + 1))
             last = out
             continue
         raise RuntimeError(f"rekal {' '.join(args)} failed ({p.returncode}): {out[-2000:]}")
-    raise RuntimeError(f"rekal locked after retries: {last[-1000:] if last else ''}")
+    raise RuntimeError(f"rekal transient-failed after retries: {last[-1000:] if last else ''}")
 
 
 def _extract_json_object(raw: str) -> tuple[dict, str]:
@@ -220,7 +312,10 @@ def search(
         env = rekal_env(repo, None, rekal)
     gate_env = apply_calibration_env(env, calibration or {})
 
-    raw = run_rekal(rekal, repo, env, [query, "--limit", str(limit)])
+    args = [query, "--limit", str(limit)]
+    if wj := calibration_weights_json(calibration or {}):
+        args = ["--weights", wj, *args]
+    raw = run_rekal(rekal, repo, env, args)
     payload, body = _extract_json_object(raw)
 
     route_info = {"gate": "STOCK", "raw": "stock-route"}
@@ -284,6 +379,47 @@ def search(
         "retrieved_context_tokens": retrieved_tokens,
         "token_counter": "whitespace",
         "limit": limit,
+    }
+
+
+def search_multi(
+    rekal: Path,
+    repo: Path,
+    query: str,
+    limit: int = 20,
+    env: dict | None = None,
+    calibration: dict | None = None,
+) -> dict:
+    """Multi-lookup skill retrieval: reformulate, run each variant, RRF-fuse.
+
+    The gate/route decision comes from the original-query skill search (so
+    SILENCE/KNOWLEDGE semantics are unchanged); when it INJECTs, the injected
+    context set is the fused union across reformulations — modeling the skill's
+    'search several ways, reason over candidates' instruction.
+    """
+    if env is None:
+        env = rekal_env(repo, None, rekal)
+    variants = query_variants(query)
+    primary = search(rekal, repo, query, limit=limit, env=env, route="skill", calibration=calibration)
+    gate = ((primary.get("route") or {}).get("gate") or "").upper()
+    if gate != "INJECT":
+        # Not a confident episode — do not widen; preserve gate semantics.
+        return primary
+    context_lists = [primary.get("contexts") or []]
+    for v in variants[1:]:
+        vr = search(rekal, repo, v, limit=limit, env=env, route="stock", calibration=calibration)
+        context_lists.append(vr.get("contexts") or [])
+    fused = rrf_fuse_contexts(context_lists)
+    retrieved_tokens = sum(int(c.get("tokens") or 0) for c in fused)
+    return {
+        "query": query,
+        "contexts": fused,
+        "knowledge": [],
+        "route": {"gate": "INJECT", "raw": f"skill-multi variants={len(variants)}"},
+        "retrieved_context_tokens": retrieved_tokens,
+        "token_counter": "whitespace",
+        "limit": limit,
+        "variants": variants,
     }
 
 
@@ -360,16 +496,19 @@ def smoke_one(
     per_q = []
     for q in questions:
         limit = search_limit_for_category(q["category"], q["evidence_session_ids"])
-        sr = search(
-            rekal,
-            repo,
-            q["question"],
-            limit=limit,
-            env=env,
-            route=route,
-            calibration=calibration,
-        )
-        if route == "skill" and (q.get("category") != "abstention"):
+        if route == "skill-multi":
+            sr = search_multi(rekal, repo, q["question"], limit=limit, env=env, calibration=calibration)
+        else:
+            sr = search(
+                rekal,
+                repo,
+                q["question"],
+                limit=limit,
+                env=env,
+                route=route,
+                calibration=calibration,
+            )
+        if route in ("skill", "skill-multi") and (q.get("category") != "abstention"):
             gate = ((sr.get("route") or {}).get("gate") or "").upper()
             if gate in ("SILENCE", "KNOWLEDGE"):
                 # Benchmark QA should not over-silence non-abstention categories.
@@ -402,6 +541,7 @@ def smoke_one(
                 "evidence_in_top": evidence_at_k(contexts, ev_ids, 5),
                 "evidence_at_5": evidence_at_k(contexts, ev_ids, 5),
                 "evidence_at_10": evidence_at_k(contexts, ev_ids, 10),
+                "evidence_at_20": evidence_at_k(contexts, ev_ids, 20),
                 "evidence_rank": ev_rank,
                 "miss_reason": miss_reason,
                 "route_gate": gate_name,
@@ -424,6 +564,9 @@ def smoke_one(
         ),
         "evidence_at_10_rate": (
             sum(1 for r in answerable if r["evidence_at_10"]) / len(answerable) if answerable else 0.0
+        ),
+        "evidence_at_20_rate": (
+            sum(1 for r in answerable if r["evidence_at_20"]) / len(answerable) if answerable else 0.0
         ),
         "evidence_hit_rate": (
             sum(1 for r in per_q if r["evidence_in_top"]) / len(per_q) if per_q else 0.0
@@ -478,7 +621,7 @@ def main() -> None:
     p_search.add_argument("--query", required=True)
     p_search.add_argument("--rekal", default="rekal")
     p_search.add_argument("--limit", type=int, default=5)
-    p_search.add_argument("--route", choices=("stock", "skill"), default="stock")
+    p_search.add_argument("--route", choices=("stock", "skill", "skill-multi"), default="stock")
     p_search.add_argument("--calibration", type=Path, default=None,
                           help="WS-D gate overrides (e.g. calibration/chat-provisional.json)")
 
@@ -490,7 +633,7 @@ def main() -> None:
     p_smoke.add_argument("--rekal", default="rekal")
     p_smoke.add_argument("--limit-questions", type=int, default=0,
                          help="only first N questions (LoCoMo smoke)")
-    p_smoke.add_argument("--route", choices=("stock", "skill"), default="stock")
+    p_smoke.add_argument("--route", choices=("stock", "skill", "skill-multi"), default="stock")
     p_smoke.add_argument("--calibration", type=Path, default=None,
                          help="WS-D gate overrides (e.g. calibration/chat-provisional.json)")
 

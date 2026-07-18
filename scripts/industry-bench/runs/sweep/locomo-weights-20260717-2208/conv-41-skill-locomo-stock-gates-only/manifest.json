@@ -1,0 +1,19 @@
+{
+  "conversation_id": "conv-41",
+  "system": "rekal-skill",
+  "calibration": "locomo-stock-gates-only.json",
+  "token_counter": "whitespace",
+  "n_questions": 193,
+  "evidence_at_5_rate": 0.8421052631578947,
+  "evidence_at_10_rate": 0.875,
+  "evidence_hit_rate": 0.6632124352331606,
+  "retrieved_context_tokens_mean": 181.52331606217618,
+  "answer_path_tokens_mean": 213.39896373056996,
+  "miss_reasons": {
+    "abstention": 41,
+    "deep_rank_lt10": 5,
+    "deep_rank_lt5": 39,
+    "hit": 89,
+    "true_miss": 19
+  }
+}

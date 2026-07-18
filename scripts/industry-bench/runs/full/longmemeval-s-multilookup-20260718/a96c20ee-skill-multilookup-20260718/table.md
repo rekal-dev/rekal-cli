@@ -1,0 +1,13 @@
+# smoke a96c20ee
+
+- questions: 1
+- route: skill-multi
+- calibration: longmemeval-s-tuned.json
+- evidence@5 (answerable): 1.00
+- evidence@10 (answerable): 1.00
+- retrieved_context_tokens mean: 940.0
+- answer_path_tokens mean: 982.0
+
+| qid | category | gate | ev@5 | ev@10 | rank | miss_reason | top_conf |
+|---|---|---|---:|---:|---:|---|---:|
+| a96c20ee | multi-session | INJECT | 1 | 1 | 0 | hit | 0.95 |

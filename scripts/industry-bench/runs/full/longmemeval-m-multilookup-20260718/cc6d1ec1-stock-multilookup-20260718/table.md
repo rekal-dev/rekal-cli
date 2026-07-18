@@ -1,0 +1,13 @@
+# smoke cc6d1ec1
+
+- questions: 1
+- route: stock
+- calibration: stock
+- evidence@5 (answerable): 1.00
+- evidence@10 (answerable): 1.00
+- retrieved_context_tokens mean: 923.0
+- answer_path_tokens mean: 980.0
+
+| qid | category | gate | ev@5 | ev@10 | rank | miss_reason | top_conf |
+|---|---|---|---:|---:|---:|---|---:|
+| cc6d1ec1 | temporal-reasoning | STOCK | 1 | 1 | 0 | hit | 0.92 |

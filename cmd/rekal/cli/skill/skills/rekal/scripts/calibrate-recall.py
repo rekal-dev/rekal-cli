@@ -2,8 +2,10 @@
 """Propose (and optionally apply) local recall calibration.
 
 Agent-facing: diagnose miss patterns from smoke manifests or scoring lineage,
-emit a profile JSON (gates + weights), optionally write into the current
-repo's .rekal/config.json (weights only) and .rekal/calibration/.
+emit a profile JSON (gates + weights). Prefer printing --weights CLI JSON
+(--print-cli) so recall stays flexible per query with no config write.
+Optional --apply still writes .rekal/config.json weights + .rekal/calibration/
+for sticky local defaults.
 
 Does not modify data.db. Does not change shipped hunt-gate defaults.
 Gate overrides are emitted as REKAL_HUNT_* env suggestions.
@@ -69,6 +71,76 @@ MULTI_HOP_WEIGHTS = {
     "subagent_downweight": 0.8,
     "facet_boost": 0.2,
 }
+
+
+def summarize_lineage(path: Path) -> dict:
+    """Aggregate scoring-lineage NDJSON into contrib means + recent weights.
+
+    Joins query → candidate on run_id. Feeds choose_profile when smoke
+    manifests are absent: high lsa/nomic share → lean multi-hop/chat.
+    """
+    by_run: dict[str, dict] = {}
+    contrib_sum: Counter[str] = Counter()
+    contrib_n = 0
+    cli_runs = 0
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        rid = ev.get("run_id") or ""
+        event = ev.get("event")
+        if event == "query":
+            slot = by_run.setdefault(rid, {})
+            slot["weights"] = ev.get("weights")
+            slot["weights_normalized"] = ev.get("weights_normalized")
+            slot["weights_source"] = ev.get("weights_source")
+            slot["query"] = ev.get("query")
+            if ev.get("weights_source") == "cli":
+                cli_runs += 1
+        elif event == "candidate":
+            c = ev.get("contrib") or {}
+            if not c:
+                continue
+            for k, v in c.items():
+                try:
+                    contrib_sum[k] += float(v)
+                except (TypeError, ValueError):
+                    continue
+            contrib_n += 1
+    mean = {k: round(contrib_sum[k] / contrib_n, 4) for k in contrib_sum} if contrib_n else {}
+    # Proxy miss_reasons for choose_profile: if LSA/nomic dominate contrib,
+    # treat as deep-rank-ish chat/multi-hop pressure.
+    miss_reasons: dict[str, int] = {}
+    if mean:
+        lexical = mean.get("bm25", 0) + mean.get("facet", 0)
+        neural = mean.get("lsa", 0) + mean.get("nomic", 0)
+        if neural > lexical * 1.2:
+            miss_reasons["deep_rank_lt5"] = max(1, contrib_n // 4)
+        else:
+            miss_reasons["hit"] = max(1, contrib_n)
+    recent = [
+        {
+            "run_id": rid,
+            "query": slot.get("query"),
+            "weights_source": slot.get("weights_source"),
+            "weights": slot.get("weights"),
+        }
+        for rid, slot in list(by_run.items())[-20:]
+    ]
+    return {
+        "n_runs": len(by_run),
+        "n_candidates": contrib_n,
+        "cli_weight_runs": cli_runs,
+        "mean_contrib": mean,
+        "miss_reasons": miss_reasons,
+        "categories": {},
+        "n_questions": contrib_n,
+        "recent_queries": recent,
+        "source": str(path),
+    }
 
 
 def load_manifests(paths: list[Path]) -> list[dict]:
@@ -151,8 +223,9 @@ def build_proposal(profile: str, summary: dict, source: str) -> dict:
         "summary": summary,
         "source": source,
         "notes": (
-            "Proposal only. Apply with --apply to write local .rekal/config.json weights "
-            "and .rekal/calibration/active-profile.json. Export REKAL_HUNT_* for gates. "
+            "Proposal only. Prefer rekal --weights '<json>' per query (--print-cli). "
+            "Optional --apply writes local .rekal/config.json weights and "
+            ".rekal/calibration/active-profile.json. Export REKAL_HUNT_* for gates. "
             "Do not commit. Do not tune on a frozen test split."
         ),
     }
@@ -166,6 +239,11 @@ def env_exports(gates: dict) -> str:
     for k, v in gates.items():
         lines.append(f"export REKAL_HUNT_{k}={v}")
     return "\n".join(lines)
+
+
+def weights_cli_json(weights: dict) -> str:
+    """Compact JSON for rekal --weights (stable key order)."""
+    return json.dumps(weights, separators=(",", ":"), sort_keys=True)
 
 
 def apply_local(git_root: Path, proposal: dict) -> None:
@@ -196,22 +274,69 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--from-smoke", type=Path, nargs="*", default=[],
                     help="manifest.json / per_question.jsonl / run dirs")
+    ap.add_argument("--from-lineage", type=Path, default=None,
+                    help="scoring-lineage.ndjson (query weights + candidate contrib)")
     ap.add_argument("--profile", choices=("coding", "chat", "multi-hop", "auto"), default="auto")
-    ap.add_argument("--apply", action="store_true", help="write local .rekal/config.json weights")
+    ap.add_argument("--apply", action="store_true",
+                    help="optional: write sticky local .rekal/config.json weights")
     ap.add_argument("--git-root", type=Path, default=None)
     ap.add_argument("--print-env", action="store_true", help="print REKAL_HUNT_* exports")
+    ap.add_argument("--print-cli", action="store_true",
+                    help="print compact weights JSON for rekal --weights on stdout")
     args = ap.parse_args()
 
     rows = load_manifests(args.from_smoke) if args.from_smoke else []
     summary = summarize_misses(rows) if rows else {"n_questions": 0, "miss_reasons": {}, "categories": {}}
+    lineage_summary = None
+    if args.from_lineage:
+        lineage_summary = summarize_lineage(args.from_lineage)
+        # Prefer smoke miss_reasons when present; else use lineage proxy.
+        if not summary.get("miss_reasons"):
+            summary = {
+                "n_questions": lineage_summary.get("n_questions", 0),
+                "miss_reasons": lineage_summary.get("miss_reasons") or {},
+                "categories": {},
+                "lineage": {
+                    "n_runs": lineage_summary["n_runs"],
+                    "mean_contrib": lineage_summary["mean_contrib"],
+                    "cli_weight_runs": lineage_summary["cli_weight_runs"],
+                },
+            }
+        else:
+            summary["lineage"] = {
+                "n_runs": lineage_summary["n_runs"],
+                "mean_contrib": lineage_summary["mean_contrib"],
+                "cli_weight_runs": lineage_summary["cli_weight_runs"],
+            }
     profile = choose_profile(summary) if args.profile == "auto" else args.profile
-    source = ",".join(str(p) for p in args.from_smoke) if args.from_smoke else "defaults"
+    sources = []
+    if args.from_smoke:
+        sources.append(",".join(str(p) for p in args.from_smoke))
+    if args.from_lineage:
+        sources.append(f"lineage:{args.from_lineage}")
+    source = ",".join(sources) if sources else "defaults"
     proposal = build_proposal(profile, summary, source)
+    if lineage_summary:
+        proposal["lineage"] = {
+            "mean_contrib": lineage_summary["mean_contrib"],
+            "n_runs": lineage_summary["n_runs"],
+            "cli_weight_runs": lineage_summary["cli_weight_runs"],
+            "recent_queries": lineage_summary["recent_queries"][-5:],
+        }
 
-    print(json.dumps(proposal, indent=2))
+    if args.print_cli:
+        # stdout is only the compact JSON for shell: W=$(... --print-cli)
+        print(weights_cli_json(proposal["weights"]))
+    else:
+        print(json.dumps(proposal, indent=2))
     if args.print_env:
         print("\n# gate env (export before recall-route / hunt-gate):", file=sys.stderr)
         print(env_exports(proposal["gate"]), file=sys.stderr)
+        print("\n# recall CLI (preferred over --apply):", file=sys.stderr)
+        print(f"rekal --weights '{weights_cli_json(proposal['weights'])}' \"<q>\"", file=sys.stderr)
+    if args.print_cli and not args.print_env:
+        # still show proposal on stderr so diagnose stays visible
+        print(json.dumps(proposal, indent=2), file=sys.stderr)
 
     if args.apply:
         root = args.git_root or Path(os.environ.get("GIT_ROOT") or Path.cwd())

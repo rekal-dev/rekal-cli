@@ -1,0 +1,22 @@
+{
+  "conversation_id": "conv-41",
+  "system": "rekal-skill-multi",
+  "calibration": "locomo-bm25-push.json",
+  "token_counter": "whitespace",
+  "n_questions": 193,
+  "evidence_at_5_rate": 0.8486842105263158,
+  "evidence_at_10_rate": 0.9276315789473685,
+  "evidence_at_20_rate": 0.9802631578947368,
+  "evidence_hit_rate": 0.6683937823834197,
+  "retrieved_context_tokens_mean": 562.3523316062176,
+  "answer_path_tokens_mean": 593.3575129533679,
+  "miss_reasons": {
+    "abstention": 41,
+    "deep_rank_gte10": 7,
+    "deep_rank_lt10": 12,
+    "deep_rank_lt5": 40,
+    "gate_blocked": 2,
+    "hit": 89,
+    "true_miss": 2
+  }
+}

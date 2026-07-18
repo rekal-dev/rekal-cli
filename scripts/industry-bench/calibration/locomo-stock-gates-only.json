@@ -1,0 +1,11 @@
+{
+  "gate": {
+    "CONF_MIN": 0.55,
+    "CONF_SOFT": 0.5,
+    "GAP_MIN": 0.03,
+    "MASS_MIN": 0,
+    "KNOWLEDGE_MIN": 0.9
+  },
+  "weights": null,
+  "notes": "chat gates, default weights"
+}

@@ -1,0 +1,13 @@
+# smoke 031748ae
+
+- questions: 1
+- route: skill-multi
+- calibration: longmemeval-m-tuned.json
+- evidence@5 (answerable): 1.00
+- evidence@10 (answerable): 1.00
+- retrieved_context_tokens mean: 1000.0
+- answer_path_tokens mean: 1042.0
+
+| qid | category | gate | ev@5 | ev@10 | rank | miss_reason | top_conf |
+|---|---|---|---:|---:|---:|---|---:|
+| 031748ae | knowledge-update | INJECT | 1 | 1 | 0 | hit | 0.96 |

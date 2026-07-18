@@ -1,0 +1,366 @@
+{
+  "runs": [
+    {
+      "run": "conv-26-skill-multilookup-20260718",
+      "conversation_id": "conv-26",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 199,
+      "evidence_at_5_rate": 0.9,
+      "evidence_at_10_rate": 0.98,
+      "retrieved_context_tokens_mean": 454.1356783919598,
+      "miss_reasons": {
+        "abstention": 49,
+        "deep_rank_gte10": 3,
+        "deep_rank_lt10": 12,
+        "deep_rank_lt5": 57,
+        "hit": 78
+      }
+    },
+    {
+      "run": "conv-26-stock-multilookup-20260718",
+      "conversation_id": "conv-26",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 199,
+      "evidence_at_5_rate": 0.84,
+      "evidence_at_10_rate": 0.98,
+      "retrieved_context_tokens_mean": 445.79899497487435,
+      "miss_reasons": {
+        "abstention": 49,
+        "deep_rank_gte10": 3,
+        "deep_rank_lt10": 21,
+        "deep_rank_lt5": 57,
+        "hit": 69
+      }
+    },
+    {
+      "run": "conv-30-skill-multilookup-20260718",
+      "conversation_id": "conv-30",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 105,
+      "evidence_at_5_rate": 0.9629629629629629,
+      "evidence_at_10_rate": 0.9876543209876543,
+      "retrieved_context_tokens_mean": 476.6095238095238,
+      "miss_reasons": {
+        "abstention": 24,
+        "deep_rank_lt10": 2,
+        "deep_rank_lt5": 25,
+        "gate_blocked": 1,
+        "hit": 53
+      }
+    },
+    {
+      "run": "conv-30-stock-multilookup-20260718",
+      "conversation_id": "conv-30",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 105,
+      "evidence_at_5_rate": 0.9012345679012346,
+      "evidence_at_10_rate": 0.9753086419753086,
+      "retrieved_context_tokens_mean": 451.14285714285717,
+      "miss_reasons": {
+        "abstention": 24,
+        "deep_rank_gte10": 2,
+        "deep_rank_lt10": 6,
+        "deep_rank_lt5": 30,
+        "hit": 43
+      }
+    },
+    {
+      "run": "conv-41-skill-multilookup-20260718",
+      "conversation_id": "conv-41",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 193,
+      "evidence_at_5_rate": 0.8486842105263158,
+      "evidence_at_10_rate": 0.9276315789473685,
+      "retrieved_context_tokens_mean": 562.3523316062176,
+      "miss_reasons": {
+        "abstention": 41,
+        "deep_rank_gte10": 7,
+        "deep_rank_lt10": 12,
+        "deep_rank_lt5": 40,
+        "gate_blocked": 2,
+        "hit": 89,
+        "true_miss": 2
+      }
+    },
+    {
+      "run": "conv-41-stock-multilookup-20260718",
+      "conversation_id": "conv-41",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 193,
+      "evidence_at_5_rate": 0.8552631578947368,
+      "evidence_at_10_rate": 0.9276315789473685,
+      "retrieved_context_tokens_mean": 526.2746113989638,
+      "miss_reasons": {
+        "abstention": 41,
+        "deep_rank_gte10": 9,
+        "deep_rank_lt10": 11,
+        "deep_rank_lt5": 47,
+        "hit": 83,
+        "true_miss": 2
+      }
+    },
+    {
+      "run": "conv-42-skill-multilookup-20260718",
+      "conversation_id": "conv-42",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 260,
+      "evidence_at_5_rate": 0.9045226130653267,
+      "evidence_at_10_rate": 0.964824120603015,
+      "retrieved_context_tokens_mean": 521.9153846153846,
+      "miss_reasons": {
+        "abstention": 61,
+        "deep_rank_gte10": 5,
+        "deep_rank_lt10": 12,
+        "deep_rank_lt5": 71,
+        "gate_blocked": 1,
+        "hit": 109,
+        "true_miss": 1
+      }
+    },
+    {
+      "run": "conv-42-stock-multilookup-20260718",
+      "conversation_id": "conv-42",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 260,
+      "evidence_at_5_rate": 0.8793969849246231,
+      "evidence_at_10_rate": 0.9547738693467337,
+      "retrieved_context_tokens_mean": 493.8884615384615,
+      "miss_reasons": {
+        "abstention": 61,
+        "deep_rank_gte10": 8,
+        "deep_rank_lt10": 15,
+        "deep_rank_lt5": 82,
+        "hit": 93,
+        "true_miss": 1
+      }
+    },
+    {
+      "run": "conv-43-skill-multilookup-20260718",
+      "conversation_id": "conv-43",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 242,
+      "evidence_at_5_rate": 0.9382022471910112,
+      "evidence_at_10_rate": 0.9662921348314607,
+      "retrieved_context_tokens_mean": 576.8140495867768,
+      "miss_reasons": {
+        "abstention": 64,
+        "deep_rank_gte10": 5,
+        "deep_rank_lt10": 5,
+        "deep_rank_lt5": 30,
+        "hit": 137,
+        "true_miss": 1
+      }
+    },
+    {
+      "run": "conv-43-stock-multilookup-20260718",
+      "conversation_id": "conv-43",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 242,
+      "evidence_at_5_rate": 0.8707865168539326,
+      "evidence_at_10_rate": 0.9550561797752809,
+      "retrieved_context_tokens_mean": 549.6487603305785,
+      "miss_reasons": {
+        "abstention": 64,
+        "deep_rank_gte10": 6,
+        "deep_rank_lt10": 15,
+        "deep_rank_lt5": 55,
+        "hit": 100,
+        "true_miss": 2
+      }
+    },
+    {
+      "run": "conv-44-skill-multilookup-20260718",
+      "conversation_id": "conv-44",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 158,
+      "evidence_at_5_rate": 0.8455284552845529,
+      "evidence_at_10_rate": 0.9186991869918699,
+      "retrieved_context_tokens_mean": 572.4303797468355,
+      "miss_reasons": {
+        "abstention": 35,
+        "deep_rank_gte10": 5,
+        "deep_rank_lt10": 9,
+        "deep_rank_lt5": 35,
+        "gate_blocked": 2,
+        "hit": 69,
+        "true_miss": 3
+      }
+    },
+    {
+      "run": "conv-44-stock-multilookup-20260718",
+      "conversation_id": "conv-44",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 158,
+      "evidence_at_5_rate": 0.8536585365853658,
+      "evidence_at_10_rate": 0.9186991869918699,
+      "retrieved_context_tokens_mean": 551.7088607594936,
+      "miss_reasons": {
+        "abstention": 35,
+        "deep_rank_gte10": 6,
+        "deep_rank_lt10": 8,
+        "deep_rank_lt5": 44,
+        "hit": 61,
+        "true_miss": 4
+      }
+    },
+    {
+      "run": "conv-47-skill-multilookup-20260718",
+      "conversation_id": "conv-47",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 190,
+      "evidence_at_5_rate": 0.9,
+      "evidence_at_10_rate": 0.94,
+      "retrieved_context_tokens_mean": 497.36315789473684,
+      "miss_reasons": {
+        "abstention": 40,
+        "deep_rank_gte10": 5,
+        "deep_rank_lt10": 6,
+        "deep_rank_lt5": 40,
+        "hit": 95,
+        "true_miss": 4
+      }
+    },
+    {
+      "run": "conv-47-stock-multilookup-20260718",
+      "conversation_id": "conv-47",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 190,
+      "evidence_at_5_rate": 0.9066666666666666,
+      "evidence_at_10_rate": 0.9533333333333334,
+      "retrieved_context_tokens_mean": 460.67894736842106,
+      "miss_reasons": {
+        "abstention": 40,
+        "deep_rank_gte10": 3,
+        "deep_rank_lt10": 7,
+        "deep_rank_lt5": 45,
+        "hit": 91,
+        "true_miss": 4
+      }
+    },
+    {
+      "run": "conv-48-skill-multilookup-20260718",
+      "conversation_id": "conv-48",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 239,
+      "evidence_at_5_rate": 0.900523560209424,
+      "evidence_at_10_rate": 0.9319371727748691,
+      "retrieved_context_tokens_mean": 489.89539748953973,
+      "miss_reasons": {
+        "abstention": 48,
+        "deep_rank_gte10": 7,
+        "deep_rank_lt10": 6,
+        "deep_rank_lt5": 60,
+        "gate_blocked": 5,
+        "hit": 112,
+        "true_miss": 1
+      }
+    },
+    {
+      "run": "conv-48-stock-multilookup-20260718",
+      "conversation_id": "conv-48",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 239,
+      "evidence_at_5_rate": 0.9109947643979057,
+      "evidence_at_10_rate": 0.9528795811518325,
+      "retrieved_context_tokens_mean": 467.5271966527197,
+      "miss_reasons": {
+        "abstention": 48,
+        "deep_rank_gte10": 7,
+        "deep_rank_lt10": 8,
+        "deep_rank_lt5": 64,
+        "hit": 110,
+        "true_miss": 2
+      }
+    },
+    {
+      "run": "conv-49-skill-multilookup-20260718",
+      "conversation_id": "conv-49",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 196,
+      "evidence_at_5_rate": 0.8397435897435898,
+      "evidence_at_10_rate": 0.9230769230769231,
+      "retrieved_context_tokens_mean": 515.6989795918367,
+      "miss_reasons": {
+        "abstention": 40,
+        "deep_rank_gte10": 10,
+        "deep_rank_lt10": 13,
+        "deep_rank_lt5": 46,
+        "gate_blocked": 1,
+        "hit": 85,
+        "true_miss": 1
+      }
+    },
+    {
+      "run": "conv-49-stock-multilookup-20260718",
+      "conversation_id": "conv-49",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 196,
+      "evidence_at_5_rate": 0.8333333333333334,
+      "evidence_at_10_rate": 0.9166666666666666,
+      "retrieved_context_tokens_mean": 502.13775510204084,
+      "miss_reasons": {
+        "abstention": 40,
+        "deep_rank_gte10": 11,
+        "deep_rank_lt10": 13,
+        "deep_rank_lt5": 61,
+        "hit": 69,
+        "true_miss": 2
+      }
+    },
+    {
+      "run": "conv-50-skill-multilookup-20260718",
+      "conversation_id": "conv-50",
+      "system": "rekal-skill-multi",
+      "calibration": "locomo-bm25-push.json",
+      "n_questions": 204,
+      "evidence_at_5_rate": 0.8525641025641025,
+      "evidence_at_10_rate": 0.9294871794871795,
+      "retrieved_context_tokens_mean": 638.4313725490196,
+      "miss_reasons": {
+        "abstention": 48,
+        "deep_rank_gte10": 4,
+        "deep_rank_lt10": 12,
+        "deep_rank_lt5": 35,
+        "gate_blocked": 3,
+        "hit": 98,
+        "true_miss": 4
+      }
+    },
+    {
+      "run": "conv-50-stock-multilookup-20260718",
+      "conversation_id": "conv-50",
+      "system": "rekal-stock",
+      "calibration": "stock",
+      "n_questions": 204,
+      "evidence_at_5_rate": 0.8525641025641025,
+      "evidence_at_10_rate": 0.9423076923076923,
+      "retrieved_context_tokens_mean": 605.7303921568628,
+      "miss_reasons": {
+        "abstention": 48,
+        "deep_rank_gte10": 6,
+        "deep_rank_lt10": 14,
+        "deep_rank_lt5": 52,
+        "hit": 81,
+        "true_miss": 3
+      }
+    }
+  ]
+}

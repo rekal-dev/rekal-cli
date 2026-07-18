@@ -1,0 +1,44 @@
+{
+  "skill/locomo-lsa-push": {
+    "runs": 9,
+    "n_questions": 1744,
+    "evidence_at_5": 0.8533513094993068,
+    "evidence_at_10": 0.8747497393852122
+  },
+  "stock/no-cal": {
+    "runs": 18,
+    "n_questions": 3615,
+    "evidence_at_5": 0.8741896827045242,
+    "evidence_at_10": 0.8968241970385731
+  },
+  "skill/locomo-chat": {
+    "runs": 9,
+    "n_questions": 1726,
+    "evidence_at_5": 0.8608426674661581,
+    "evidence_at_10": 0.8848760216872394
+  },
+  "skill/locomo-semantic-push": {
+    "runs": 8,
+    "n_questions": 1530,
+    "evidence_at_5": 0.8523044286541772,
+    "evidence_at_10": 0.876064356644782
+  },
+  "skill/locomo-multi-hop": {
+    "runs": 9,
+    "n_questions": 1782,
+    "evidence_at_5": 0.8556927670628192,
+    "evidence_at_10": 0.8775142290713707
+  },
+  "skill/locomo-bm25-push": {
+    "runs": 9,
+    "n_questions": 1787,
+    "evidence_at_5": 0.8927131850412356,
+    "evidence_at_10": 0.9200724380031798
+  },
+  "skill/no-cal": {
+    "runs": 8,
+    "n_questions": 1688,
+    "evidence_at_5": 0.8732982032515492,
+    "evidence_at_10": 0.8971857743458117
+  }
+}

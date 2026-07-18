@@ -20,7 +20,7 @@ const LineageSchemaVersion = 3
 // Lineage records observe-only scoring lineage and stage timings for a
 // recall query. Nil means disabled — ranking stays byte-identical to a run
 // without lineage and no timing or event work runs. Wired from the
-// global-only scoring_lineage config (never a CLI flag), so stdout JSON
+// scoring_lineage config (relative path → `.rekal/`), so stdout JSON
 // stays agent-clean and the diagnostic stream never leaves the machine.
 //
 // One recall produces events sharing RunID(): query (start) → candidate*
@@ -153,8 +153,12 @@ type LineageQuery struct {
 	Filters           map[string]string  `json:"filters"`
 	Weights           LineageWeights     `json:"weights"`
 	WeightsNormalized LineageNormWeights `json:"weights_normalized"`
-	EmbedderBackend   string             `json:"embedder_backend,omitempty"` // "http" | "embedded"
-	EmbedderModel     string             `json:"embedder_model,omitempty"`
+	// WeightsSource is "cli" when the agent passed --weights this turn;
+	// omitted for config/default merges. Closes the calibrate loop: lineage
+	// shows which profile was active when contribs were logged.
+	WeightsSource   string `json:"weights_source,omitempty"`
+	EmbedderBackend string `json:"embedder_backend,omitempty"` // "http" | "embedded"
+	EmbedderModel   string `json:"embedder_model,omitempty"`
 }
 
 // LineageWeights is the configured weight snapshot (pre-normalization).

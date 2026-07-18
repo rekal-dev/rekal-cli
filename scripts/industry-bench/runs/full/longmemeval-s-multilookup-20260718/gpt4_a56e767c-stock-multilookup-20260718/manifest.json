@@ -1,0 +1,16 @@
+{
+  "conversation_id": "gpt4_a56e767c",
+  "system": "rekal-stock",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 1,
+  "evidence_at_5_rate": 1.0,
+  "evidence_at_10_rate": 1.0,
+  "evidence_at_20_rate": 1.0,
+  "evidence_hit_rate": 1.0,
+  "retrieved_context_tokens_mean": 653.0,
+  "answer_path_tokens_mean": 703.0,
+  "miss_reasons": {
+    "deep_rank_lt5": 1
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "conversation_id": "853b0a1d",
+  "system": "rekal-stock",
+  "calibration": "stock",
+  "token_counter": "whitespace",
+  "n_questions": 1,
+  "evidence_at_5_rate": 1.0,
+  "evidence_at_10_rate": 1.0,
+  "evidence_at_20_rate": 1.0,
+  "evidence_hit_rate": 1.0,
+  "retrieved_context_tokens_mean": 1007.0,
+  "answer_path_tokens_mean": 1065.0,
+  "miss_reasons": {
+    "hit": 1
+  }
+}

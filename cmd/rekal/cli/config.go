@@ -39,29 +39,28 @@ type Config struct {
 	Embedding *embeddingConfig `json:"embedding,omitempty"`
 
 	// ScoringLineage enables observe-only NDJSON logging of recall score
-	// lineage and stage timings. Global-only: mergeConfig takes it from
-	// ~/.config/rekal/config.json and ignores any local copy, so a repo's
-	// .rekal/config.json can never turn diagnostics on for the team. Default
-	// off — zero cost when absent/disabled.
+	// lineage and stage timings. Merged local-over-global like embedding;
+	// relative Path resolves under this repo's `.rekal/` so the calibrate
+	// loop keeps contribs next to calibration/ (gitignored, never pushed).
+	// Default off — zero cost when absent/disabled.
 	ScoringLineage *scoringLineageConfig `json:"scoring_lineage,omitempty"`
 }
 
 // empty reports whether the config carries no settings — used to remove the
-// file entirely rather than leave an empty {} behind. ScoringLineage is
-// excluded: it is global-only and must never keep a local config.json alive.
+// file entirely rather than leave an empty {} behind.
 func (c Config) empty() bool {
-	return !c.LocalImport.enabled() && c.Weights == nil && c.Embedding == nil
+	return !c.LocalImport.enabled() && c.Weights == nil && c.Embedding == nil && c.ScoringLineage == nil
 }
 
-// scoringLineageConfig is the JSON shape of the global-only recall diagnostic
-// switch. Default (absent / enabled:false) means no lineage, no timings.
+// scoringLineageConfig is the JSON shape of the recall diagnostic switch.
+// Default (absent / enabled:false) means no lineage, no timings.
 type scoringLineageConfig struct {
 	// Enabled turns lineage logging on. Default false.
 	Enabled bool `json:"enabled,omitempty"`
 	// Path is where NDJSON events are appended. Empty → stderr (so agents
 	// still parse stdout JSON cleanly). Relative paths resolve under the
-	// global config directory (~/.config/rekal/). Absolute paths are used
-	// as-is. Never a network destination — local machine only.
+	// repo's `.rekal/` directory. Absolute paths are used as-is. Never a
+	// network destination — local machine only.
 	Path string `json:"path,omitempty"`
 	// MaxCandidates caps per-session candidate events (top of the pre-group
 	// ranked pool). Default 50.
@@ -81,8 +80,9 @@ type scoringLineageRotation struct {
 }
 
 // openLineage builds a search.Lineage sink from the config, or nil when
-// disabled. The closer flushes/closes a file sink; stderr sinks need no close.
-func (c *scoringLineageConfig) openLineage(stderr io.Writer) (search.Lineage, io.Closer, error) {
+// disabled. Relative Path resolves under gitRoot's `.rekal/`. The closer
+// flushes/closes a file sink; stderr sinks need no close.
+func (c *scoringLineageConfig) openLineage(stderr io.Writer, gitRoot string) (search.Lineage, io.Closer, error) {
 	if c == nil || !c.Enabled {
 		return nil, nil, nil
 	}
@@ -91,11 +91,10 @@ func (c *scoringLineageConfig) openLineage(stderr io.Writer) (search.Lineage, io
 	if c.Path != "" {
 		path := c.Path
 		if !filepath.IsAbs(path) {
-			dir := filepath.Dir(globalConfigPath())
-			if dir == "" || dir == "." {
-				return nil, nil, errors.New("scoring_lineage.path is relative but global config dir is unresolved")
+			if gitRoot == "" {
+				return nil, nil, errors.New("scoring_lineage.path is relative but git root is unresolved")
 			}
-			path = filepath.Join(dir, path)
+			path = filepath.Join(RekalDir(gitRoot), path)
 		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return nil, nil, fmt.Errorf("scoring_lineage.path: %w", err)
@@ -155,7 +154,15 @@ type weightsConfig struct {
 // are ratios (normalized downstream); the boost/downweight multipliers must
 // be positive.
 func (wc *weightsConfig) resolve() (search.Weights, error) {
-	w := search.DefaultWeights()
+	return applyWeightsConfig(search.DefaultWeights(), wc)
+}
+
+// applyWeightsConfig overlays present fields of wc onto base and validates.
+// Used by config resolve (base = defaults) and by the recall --weights flag
+// (base = already-merged config), so CLI overrides are field-by-field — same
+// shape as .rekal/config.json "weights", never a full replace of unset keys.
+func applyWeightsConfig(base search.Weights, wc *weightsConfig) (search.Weights, error) {
+	w := base
 	if wc == nil {
 		return w, nil
 	}
@@ -184,7 +191,6 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 			return w, err
 		}
 	}
-	// When neither semantic nor nomic is set, the DefaultWeights value stands.
 	if err := set(&w.SteeringBoost, wc.SteeringBoost, "steering_boost", false); err != nil {
 		return w, err
 	}
@@ -201,6 +207,33 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 		return w, errors.New("weights: at least one of bm25/lsa/semantic must be > 0")
 	}
 	return w, nil
+}
+
+// parseWeightsJSON decodes a recall --weights JSON object into weightsConfig.
+// Same keys as config.json "weights". Empty string means no override.
+func parseWeightsJSON(raw string) (*weightsConfig, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var wc weightsConfig
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&wc); err != nil {
+		return nil, fmt.Errorf("rekal: --weights must be a JSON object with weight keys: %w", err)
+	}
+	return &wc, nil
+}
+
+// resolveRecallWeights loads merged config weights, then overlays optional
+// query-time --weights (already parsed). Precedence: CLI → local config →
+// global → defaults.
+func resolveRecallWeights(cfg Config, override *weightsConfig) (search.Weights, error) {
+	w, err := cfg.Weights.resolve()
+	if err != nil {
+		return w, err
+	}
+	return applyWeightsConfig(w, override)
 }
 
 // embeddingConfig is the JSON shape of the HTTP embedding backend settings.
@@ -402,10 +435,10 @@ func readMergedConfig(gitRoot string) (Config, error) {
 //   - local_import is NOT inherited — cross-repo import intent stays per-repo,
 //     so a global setting can never silently fold every machine's repos into a
 //     project (guardrail against surprise).
-//   - scoring_lineage is GLOBAL-ONLY — taken from the machine-wide file and
-//     never from .rekal/config.json, so diagnostics stay a developer machine
-//     switch and cannot be baked into a repo or turned on by a teammate's
-//     local file.
+//   - scoring_lineage merges wholesale like embedding — a repo can enable
+//     contrib logging under `.rekal/` (relative path) without changing the
+//     machine-wide default; local wins when set. The NDJSON file is
+//     gitignored with the rest of `.rekal/` and is never pushed.
 func mergeConfig(global, local Config) Config {
 	merged := Config{LocalImport: local.LocalImport}
 	merged.Embedding = global.Embedding
@@ -414,6 +447,9 @@ func mergeConfig(global, local Config) Config {
 	}
 	merged.Weights = mergeWeights(global.Weights, local.Weights)
 	merged.ScoringLineage = global.ScoringLineage
+	if local.ScoringLineage != nil {
+		merged.ScoringLineage = local.ScoringLineage
+	}
 	return merged
 }
 
@@ -456,10 +492,8 @@ func mergeWeights(global, local *weightsConfig) *weightsConfig {
 }
 
 // writeConfig persists the config to .rekal/config.json. An empty config
-// removes the file so a default setup leaves no residue. ScoringLineage is
-// stripped — it is global-only and must never land in the per-repo file.
+// removes the file so a default setup leaves no residue.
 func writeConfig(gitRoot string, c Config) error {
-	c.ScoringLineage = nil
 	if c.empty() {
 		err := os.Remove(configPath(gitRoot))
 		if errors.Is(err, os.ErrNotExist) {

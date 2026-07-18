@@ -1,0 +1,26 @@
+{
+  "gate": {
+    "CONF_MIN": 0.55,
+    "CONF_SOFT": 0.5,
+    "GAP_MIN": 0.03,
+    "MASS_MIN": 0,
+    "KNOWLEDGE_MIN": 0.9
+  },
+  "weights": {
+    "bm25": 0.55,
+    "lsa": 0.1,
+    "semantic": 0.35,
+    "steering_boost": 1.0,
+    "summary_boost": 1.0,
+    "subagent_downweight": 1.0,
+    "facet_boost": 0.05
+  },
+  "split": {
+    "dataset": "longmemeval-s",
+    "seed": 42,
+    "dev_ratio": 0.2,
+    "n_dev": 100,
+    "n_test": 400
+  },
+  "notes": "DEV-TUNED on 100-conv dev split (run lme-s-dev-20260717-2328): bm25-push won ev@5 0.9697 vs interim 0.9394. Frozen for test validation. Gate copied from interim longmemeval-s.json. Pre-registration: tuned on dev only."
+}

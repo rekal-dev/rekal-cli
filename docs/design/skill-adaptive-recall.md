@@ -10,8 +10,9 @@ Once we have labeled miss data (evidence@k, miss_reason, scoring lineage),
 the **agent** — not a human grid search — can:
 
 1. Diagnose *why* recall failed (gate vs rank vs true miss).
-2. Propose a **local** weight/gate profile for this repo or this session.
-3. Apply it to `.rekal/config.json` / env (gitignored) and re-query.
+2. Propose a **local** weight/gate profile for this question class.
+3. Apply it **per query** via `rekal --weights '{...}'` (preferred) or
+   sticky `.rekal/config.json` / env (gitignored) and re-query.
 4. Keep the ledger immutable — only query-time knobs move.
 
 That is a product story distinct from “we tuned defaults on a paper”:
@@ -25,8 +26,8 @@ trail of which profile was active.
 | Immutable? | Yes — `data.db` untouched; weights are query-time only. |
 | Thin on wire? | Profiles live in local config / `.rekal/calibration/` (gitignored). |
 | Secure / local? | No phone-home; agent runs scripts on-machine. |
-| Simple? | One skill path (`calibrate.md`); one script; opt-in `--apply`. |
-| Agent first? | Skill decides when to calibrate; human sees the JSON it wrote. |
+| Simple? | One skill path (`calibrate.md`); `--weights` per query; opt-in `--apply`. |
+| Agent first? | Skill decides when to calibrate; human sees the JSON / CLI it used. |
 
 **Not:** silent auto-tuning on every query (that would fight Simple and
 make recall non-reproducible). Calibration is an explicit skill move,
@@ -37,10 +38,35 @@ like MAP refresh.
 | Layer | Knobs | Where | Rebuild? |
 |---|---|---|---|
 | **Hunt gate** | `CONF_MIN`, `CONF_SOFT`, `GAP_MIN`, `MASS_MIN`, `KNOWLEDGE_MIN` | `hunt-gate.py` via `REKAL_HUNT_*` (env) today | No |
-| **Hybrid weights** | `bm25`, `lsa`, `semantic`, boosts, `facet_boost` | `.rekal/config.json` → `weights` | No (query-time) |
+| **Hybrid weights** | `bm25`, `lsa`, `semantic`, boosts, `facet_boost` | `rekal --weights '{...}'` (CLI wins) or `.rekal/config.json` → `weights` | No (query-time) |
 
 Industry-bench already proved env gate overrides. Weights already merge
-local over global. The missing piece is **agent-facing propose → apply**.
+local over global. CLI `--weights` makes the skill purely flexible without
+writing config. Sticky `--apply` remains optional.
+
+## Closed loop (lineage)
+
+```
+diagnose (miss / SILENCE)
+   → calibrate-recall.py propose profile
+   → rekal --weights '{...}' "<q>"     # no config write
+   → `.rekal/scoring-lineage.ndjson`   # query.weights + candidate.contrib
+   → next diagnose reads lineage
+```
+
+With `scoring_lineage.enabled` (local `.rekal/config.json` or global),
+every hybrid recall already logs into **`.rekal/`** when `path` is
+relative:
+
+1. **`query`** — effective `weights` / `weights_normalized`, and
+   `weights_source: "cli"` when `--weights` was set this turn.
+2. **`candidate`** — per-layer raw/norm and weighted **`contrib`**
+   (`bm25`/`lsa`/`nomic`/`facet`), confidence, mass.
+3. **`result`** — returned set + timings.
+
+That is the audit trail for “which profile was active and how layers
+paid.” No separate telemetry. Calibrate consumes smoke manifests and/or
+lineage (`--from-lineage`); it never rewrites `data.db`.
 
 ## Profiles (dynamic, not one global)
 
@@ -59,7 +85,7 @@ calibration session.
 ## Data inputs (once full-tier lands)
 
 1. `runs/full/**/per_question.jsonl` — `miss_reason`, `evidence_rank`, `route_gate`
-2. `~/.config/rekal/scoring-lineage.ndjson` — per-layer scores when enabled
+2. `.rekal/scoring-lineage.ndjson` — per-layer scores when enabled (relative path)
 3. Optional: official judge labels (later) as the objective instead of evidence@k
 
 Objective for MVP: maximize evidence@5 on a **held-out** slice; never tune
@@ -74,14 +100,13 @@ on the test split you report.
 | `SKILL.md` dispatch row | Analytical “recall feels wrong / calibrate” → calibrate.md |
 | `scripts/industry-bench/calibration/propose_from_smokes.py` | Thin wrapper over the same logic for bench runs |
 
-`--apply` writes only:
+`--print-cli` / `--apply` emit:
 
-- `.rekal/config.json` `weights` (local)
-- `.rekal/calibration/active-profile.json` (audit: profile name + sha of proposal)
+- stdout compact JSON for `rekal --weights '...'` (preferred; no file write)
+- optional sticky `.rekal/config.json` `weights` + `.rekal/calibration/`
+- Gate env vars printed for the agent to export in-process
 
-Gate env vars are printed for the agent to export in-process; we do **not**
-yet put hunt bars in config.json (optional follow-up PR — keeps core change
-small).
+Gate bars are not yet in config.json (optional follow-up).
 
 ## What we will not do
 

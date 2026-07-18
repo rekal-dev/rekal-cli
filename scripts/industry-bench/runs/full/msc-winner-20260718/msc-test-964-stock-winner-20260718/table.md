@@ -1,0 +1,22 @@
+# smoke msc-test-964
+
+- questions: 10
+- route: stock
+- calibration: stock
+- evidence@5 (answerable): 1.00
+- evidence@10 (answerable): 1.00
+- retrieved_context_tokens mean: 81.2
+- answer_path_tokens mean: 101.1
+
+| qid | category | gate | ev@5 | ev@10 | rank | miss_reason | top_conf |
+|---|---|---|---:|---:|---:|---|---:|
+| q1 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.48 |
+| q2 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.83 |
+| q3 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.71 |
+| q4 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.81 |
+| q5 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.53 |
+| q6 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.48 |
+| q7 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.65 |
+| q8 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.65 |
+| q9 | persona-fact | STOCK | 1 | 1 | 1 | deep_rank_lt5 | 0.79 |
+| q10 | persona-fact | STOCK | 1 | 1 | 0 | hit | 0.82 |

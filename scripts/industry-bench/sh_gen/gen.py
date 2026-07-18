@@ -165,7 +165,7 @@ def count(rekal, repo, env, sql):
     return int(nums[-1])
 
 
-def verify_conversation(conv, repo, env, rekal, expected):
+def verify_conversation(conv, repo, env, rekal, expected, fast=1):
     """Ingest-verification per 04-procedures §3 (adapted: captured_at is
     ingestion time by design — the benchmark time axis is turns.ts and the
     backdated commit dates)."""
@@ -200,8 +200,15 @@ def verify_conversation(conv, repo, env, rekal, expected):
         print(f"  {'ok ' if ok else 'FAIL'} {name}")
 
     # Commit backdating: git log dates must match benchmark dates.
+    # With --fast N, sessions are batched into one commit dated at the batch's
+    # last session, so only batch-boundary sessions produce a dated commit.
     log = run(["git", "log", "--format=%aI %s", "--reverse"], repo, env).stdout
-    for s in conv["sessions"]:
+    sessions = conv["sessions"]
+    step = max(fast, 1)
+    boundary_idx = set(range(step - 1, len(sessions), step)) | {len(sessions) - 1}
+    for n, s in enumerate(sessions):
+        if n not in boundary_idx:
+            continue
         ok = any(line.startswith(s["date"][:10]) and s["session_id"] in line for line in log.splitlines())
         if not ok:
             failures.append(f"commit for {s['session_id']} not dated {s['date'][:10]}")
@@ -252,7 +259,7 @@ def main():
         if args.index:
             run([str(rekal), "index"], repo, env)
         if args.verify:
-            failures = verify_conversation(conv, repo, env, rekal, expected)
+            failures = verify_conversation(conv, repo, env, rekal, expected, args.fast)
             all_failures.extend(f"{conv['conversation_id']}: {f}" for f in failures)
 
     if all_failures:

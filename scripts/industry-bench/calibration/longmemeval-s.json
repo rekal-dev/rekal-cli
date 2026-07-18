@@ -6,7 +6,15 @@
     "MASS_MIN": 0,
     "KNOWLEDGE_MIN": 0.90
   },
-  "weights": null,
+  "weights": {
+    "bm25": 0.30,
+    "lsa": 0.20,
+    "semantic": 0.50,
+    "steering_boost": 1.0,
+    "summary_boost": 1.0,
+    "subagent_downweight": 1.0,
+    "facet_boost": 0.1
+  },
   "split": {
     "dataset": "longmemeval-s",
     "seed": 42,

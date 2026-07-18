@@ -48,6 +48,43 @@ reformulation also comes back empty — one blank query is not absence. This
 multi-lookup loop is where recall moves from "top result" to "right result"
 (LoCoMo: single-shot 0.88 → multi-lookup 0.98 evidence-recall).
 
+### Reformulation is one lever; depth is the other — but going deep is a judgment
+
+The bigger the history, the deeper the right memory can sit: in a large corpus
+the evidence often lands past rank 20. But depth is not free. Every extra
+candidate is more tokens and, worse, more plausible-but-wrong distractors. On a
+question whose answer is *not* in the ledger, digging deeper manufactures false
+positives and breaks SILENCE. So decide *whether* to go deep before you do —
+that judgment is the skill, not the widening itself.
+
+**Go deeper only when a signal says the evidence exists but is mis-ranked:**
+
+- the gate was `INJECT` / a candidate looked confident, yet nothing you read
+  actually answers the question — the right memory is likely just lower;
+- scores are flat with small gaps (no decisive winner) — the top is not the last
+  word;
+- the question shape hides its anchor: **temporal** ("how long between X and Y",
+  "when did I first…") or a **single-mention preference / fact** stated once long
+  ago and easily outranked by topical chatter;
+- the history is large (many sessions) — more room for evidence to sit deep.
+
+```bash
+rekal -n 50  "<q>"   # first widening, when a signal above is present
+rekal -n 100 "<q>"   # temporal / single-mention, still not surfaced
+```
+
+**Stay shallow — and prefer SILENCE — when nothing points to buried evidence:**
+
+- reformulation *and* the first window both came back weak and flat — that is
+  absence, not depth; do not dig for a positive;
+- a strong, clear top hit already answers — stop.
+
+Depth recovers evidence that is mis-ranked; it does not create evidence that
+isn't there. Evidence for the payoff when the signal *is* present: on a
+large-haystack corpus 11 of 15 top-20 misses were already sitting at rank
+21-100 — recoverable by depth alone (evidence-recall 0.97 → 0.99, window 20 →
+100), all of them temporal or single-mention questions.
+
 ## 3. Drill the strongest, cheapest first
 
 When the top candidates' `confidence` values are within the gate's gap band,

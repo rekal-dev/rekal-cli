@@ -12,6 +12,87 @@ The same loop applies to LME-M/S, but this page is written for LoCoMo.
 
 ---
 
+## 0. Setup from scratch (new environment)
+
+Nothing from the original machine is portable — the ingested repos, the
+`/tmp` task files, and the run artifacts under `~/imb-*` all get rebuilt.
+Everything needed is in git; setup is deterministic (session/turn UUIDs are
+uuid5 of stable keys, commit dates come from the dataset), so a re-ingest
+reproduces the same history.
+
+```bash
+git clone <repo> && cd rekal-cli
+git checkout research/industry-bench
+mise run build
+export REKAL="$PWD/rekal"
+IB=scripts/industry-bench
+
+# 1. Download + normalize + verify (10 conv / 1,986 questions expected)
+bash    $IB/datasets/get_locomo.sh
+python3 $IB/datasets/normalize_locomo.py
+python3 $IB/datasets/verify_dataset.py locomo
+
+# 2. Ingest through the production pipeline: one synthetic git repo per
+#    conversation, commits backdated to session dates. --fast defaults to
+#    1 (contract mode), correct for LoCoMo. Minutes, not hours.
+python3 $IB/sh_gen/gen.py \
+  --input $IB/datasets/data/locomo-conversations.jsonl \
+  --out ~/imb-locomo --rekal "$REKAL" --index --verify
+```
+
+Sanity check: `cd ~/imb-locomo/conv-26/repo && "$REKAL" "LGBTQ support group"`
+should return session hits.
+
+**3. Build tasks/gold files** from the interchange format (each
+conversation's `questions[]` carries `question_id`, `category`, `question`,
+`answer`, `evidence_session_ids`). Exclude the 99 known-bad questions
+(`$IB/datasets/locomo-known-bad.jsonl`, keyed by `conversation_id` +
+`question_id`):
+
+```bash
+mkdir -p /tmp/locomo-local && python3 - <<'EOF'
+import json
+IB = "scripts/industry-bench"
+bad = {(r["conversation_id"], r["question_id"])
+       for r in map(json.loads, open(f"{IB}/datasets/locomo-known-bad.jsonl"))}
+tasks, gold = [], []
+for c in map(json.loads, open(f"{IB}/datasets/data/locomo-conversations.jsonl")):
+    for q in c["questions"]:
+        if (c["conversation_id"], q["question_id"]) in bad:
+            continue
+        qid = f'{c["conversation_id"]}:{q["question_id"]}'
+        tasks.append({"id": qid, "conv": c["conversation_id"],
+                      "category": q["category"], "question": q["question"]})
+        gold.append({"id": qid, "gold": q["answer"],
+                     "evidence": q["evidence_session_ids"]})
+with open("/tmp/locomo-local/tasks.jsonl", "w") as f:
+    f.writelines(json.dumps(t) + "\n" for t in tasks)
+with open("/tmp/locomo-local/gold.jsonl", "w") as f:
+    f.writelines(json.dumps(g) + "\n" for g in gold)
+print(len(tasks), "tasks")
+EOF
+```
+
+For a stratified dev sample, filter `tasks` by category before writing (§3.1).
+
+**4. Run** (local Claude must be installed and authed — `claude -p 'hi'`
+must answer):
+
+```bash
+python3 $IB/run_local_e2e.py \
+  --tasks /tmp/locomo-local/tasks.jsonl \
+  --gold  /tmp/locomo-local/gold.jsonl \
+  --repos-root ~/imb-locomo --out $IB/runs/<run-name> \
+  --model haiku --judge-model sonnet --prompt-style card
+```
+
+The runner checkpoints per question and pauses/resumes on token-window
+exhaustion; re-invoking with the same `--out` continues where it stopped.
+Category 5 (adversarial) gold is abstention — the normalized answers encode
+this, so the runner and judge handle it without special-casing.
+
+---
+
 ## 1. Where we are (measured, 2026-07-18)
 
 **Retrieval is not the problem.** Stock `rekal` with `bm25-push` weights on
@@ -230,5 +311,5 @@ brought to ~2.5–2.7k non-cached tokens/q on card runs.
 | Run artifacts (answers/judged, per-question usage) | `scripts/industry-bench/runs/locomo-*` |
 | Skill under iteration | `cmd/rekal/cli/skill/skills/rekal/` |
 | Profile gates / weights | `.../skills/rekal/scripts/calibrate-recall.py` |
-| Ingested LoCoMo repos | `~/imb-locomo/` (10 conv repos, indexed) |
+| Ingested LoCoMo repos | `~/imb-locomo/` (rebuilt from §0 in a new env) |
 | Known-bad question list (99) | `scripts/industry-bench/datasets/locomo-known-bad.jsonl` |

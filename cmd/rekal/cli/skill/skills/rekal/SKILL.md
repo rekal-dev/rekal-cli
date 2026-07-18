@@ -48,12 +48,14 @@ gate fails. No `INJECT` / `KNOWLEDGE` → stay silent on memory. Near-misses are
 |---|---|
 | Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/recall-route.py"` → on `KNOWLEDGE`, Read `path`@`lines`, **stop** |
 | Pointed past episode | same pipeline → on `INJECT`, `Read references/hunt.md` and drill; on `KNOWLEDGE`/`SILENCE`, stop |
+| Temporal / ordering / complete-set past | same pipeline; then hunt.md §2b time-axis + enumerate — SQL over `ts`, count, page |
 | Why / decision arc | `Read references/why.md` · gate gather with `scripts/why-trail-gate.py` |
 | Analytical patterns | `Read references/mine.md` |
 | File / line / commit archaeology | `Read references/provenance.md` |
 | Breadth / shape | `bash "$ROOT/scripts/map-fresh.sh"` then `Read references/map.md` |
 | Rules / libraries / census | `Read references/analytics.md` |
 | Publish `docs/wiki/` | `bash "$ROOT/scripts/wiki-branch-gate.sh"` then `Read references/wiki.md` |
+| Recall wrong / calibrate local profile | `Read references/calibrate.md` · `scripts/calibrate-recall.py` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
 
 One question, one substrate. Cite session / turn / commit with every memory claim.

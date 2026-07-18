@@ -1,0 +1,1 @@
+{"id": "conv-48:q12", "category": "open-domain", "status": "ok", "answer": "I DON'T KNOW \u2014 NOT IN MEMORY", "error": "", "usage": {"input_tokens": 34, "output_tokens": 840, "cache_read_tokens": 84481, "cache_creation_tokens": 9283, "total_cost_usd": 0.0312481, "num_turns": 5, "duration_ms": 13707}, "ts": "2026-07-18T09:29:09.196972+00:00"}

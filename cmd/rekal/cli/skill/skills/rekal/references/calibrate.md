@@ -8,7 +8,10 @@ Design: `docs/design/skill-adaptive-recall.md`.
 
 ## When
 
-- Industry-bench / chat haystack: deep ranks, low mass, skill ≈ stock.
+- Industry-bench / chat haystack: deep ranks, low mass, skill ≈ stock —
+  **or any personal-dialogue ledger**. The main skill should already have
+  selected `--profile chat` before HUNT; use this page to sticky-apply or
+  diagnose when coding bars still fire (`SILENCE below_mass`).
 - Coding repo: only after several clear false SILENCE / wrong-rank cases.
 - Never on a frozen **test** split you will report — tune on **dev** only.
 

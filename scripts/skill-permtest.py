@@ -24,7 +24,10 @@ Invariants
   I3  verdict is on line 1 and is one of INJECT / KNOWLEDGE / SILENCE
   I4  route.py never dies (exit 2) on real recall JSON
   I5  archetype laws:
-        junk        -> never INJECT (no confident episode)
+        junk        -> may INJECT (super-low floor: grey-band is a
+                       recommendation, agent judges conf=), but the emitted
+                       confidence must ORDER below every real-domain top=
+                       (separation by ordering, not by a tuned cut)
         thin        -> SILENCE
         real-domain -> not SILENCE (episode or knowledge answers)
   I6  determinism: same (query,flags) twice -> identical verdict (warm)
@@ -43,6 +46,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -139,11 +143,14 @@ def cell(query: str, flags: list[str]) -> dict | None:
     elif v == "SILENCE":
         check(rrc == 1, f"I2 exit {tag} v={v} rc={rrc}")
     check("SEMANTIC warming" not in rout, f"I8 warm-no-note {tag}")
+    top = None
     if v == "INJECT":
         check("top=" in rout and "conf=" in rout, f"I9 inject-emits-confidence {tag}")
+        m = re.search(r"top=([0-9.]+)", rout.splitlines()[0])
+        top = float(m.group(1)) if m else None
         if data.get("knowledge"):
             check("KNOWLEDGE" in rout, f"I10 inclusive-knowledge {tag}")
-    return {"verdict": v, "results": len(data.get("results") or []), "route_rc": rrc}
+    return {"verdict": v, "results": len(data.get("results") or []), "route_rc": rrc, "top": top}
 
 
 def _toks(s: str) -> int:
@@ -185,6 +192,8 @@ def token_report() -> None:
 def main() -> int:
     print("=== Matrix A: archetype × plain ===")
     verdicts: dict[str, list[str]] = {}
+    junk_tops: list[float] = []
+    real_tops: list[float] = []
     for arch, qs in ARCHETYPES.items():
         vs = []
         for q in qs:
@@ -192,15 +201,27 @@ def main() -> int:
             if r is None:
                 continue
             vs.append(r["verdict"])
-            # I5 archetype laws
-            if arch == "junk":
-                check(r["verdict"] != "INJECT", f'I5 junk-not-inject "{q}"')
+            # I5 archetype laws. Junk MAY inject (super-low recommendation
+            # floor); the separation claim is ordering, checked after the loop.
+            if arch == "junk" and r["top"] is not None:
+                junk_tops.append(r["top"])
+            if arch == "real-domain" and r["top"] is not None:
+                real_tops.append(r["top"])
             if arch == "thin":
                 check(r["verdict"] == "SILENCE", f'I5 thin-silence "{q!r}"')
             if arch == "real-domain":
                 check(r["verdict"] != "SILENCE", f'I5 real-not-silence "{q}"')
         verdicts[arch] = vs
         print(f"  {arch:12} -> {vs}")
+    # I5 separation-by-ordering: every junk top= must sit below every
+    # real-domain top=. No fixed cut — a relative property of the confidence
+    # signal on this corpus (real hits outrank junk grey-band).
+    if junk_tops and real_tops:
+        check(
+            max(junk_tops) < min(real_tops),
+            f"I5 junk-orders-below-real junk_max={max(junk_tops)} real_min={min(real_tops)}",
+        )
+        print(f"  separation: junk top= {min(junk_tops)}–{max(junk_tops)} < real top= {min(real_tops)}–{max(real_tops)}")
 
     print("=== Matrix B: real query × flags ===")
     base = "merged-only sharing export gate"

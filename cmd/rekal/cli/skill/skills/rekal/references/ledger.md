@@ -26,7 +26,7 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 
 | Route stdout | Action |
 |---|---|
-| `INJECT top=… gap=… N seed…` + rows (+ optional `KNOWLEDGE`) | Confident episode(s). Rows are seed context — `sid conf=… t<n> "snippet"`. Weigh `conf` if useful; drill `sid` at `t<n>`. A trailing `KNOWLEDGE` line means HEAD prose also matched — inclusive, not if/else. |
+| `INJECT top=… gap=… N seeds` + rows (+ optional `KNOWLEDGE`) | Confident episode(s). Rows are seed context — `sid conf=… t<n> "snippet"`, then `(+N more)`. Weigh `conf` if useful; drill `sid` at `t<n>`. A trailing `KNOWLEDGE` line means HEAD prose also matched — inclusive, not if/else. |
 | `KNOWLEDGE path=score …` | Knowledge half of a mixed report, or the only substrate when episodes are empty/near-zero. Judge the per-file score *distribution*: clear leader that falls off → Read at `lines` (`anchor`); flat near the noise floor → stay silent on prose. |
 | `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 

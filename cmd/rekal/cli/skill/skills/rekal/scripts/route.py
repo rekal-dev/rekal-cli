@@ -192,9 +192,11 @@ def print_digest(data: dict) -> None:
         turn_s = f" t{turn}" if turn is not None else ""
         conf = _f(r["confidence"]) if isinstance(r, dict) and "confidence" in r else 0.0
         print(f'  {r.get("session_id")} conf={conf:.2f}{turn_s} "{snip}"')
+    # Bare count — how to widen (reformulate / multi-search / -n) is taught by
+    # the skill, not re-printed on every call.
     more = len(results) - DIGEST_WINDOW
     if more > 0:
-        print(f"  (+{more} more — reformulate/multi-search or -n)")
+        print(f"  (+{more} more)")
 
 
 def print_knowledge(knowledge: list) -> bool:
@@ -232,16 +234,15 @@ def main() -> int:
         # loading, so these results are keyword+LSA only. Re-run with backoff
         # for full quality — the daemon warms in a few seconds.
         if warming:
-            print("SEMANTIC warming — keyword+LSA only; re-run for full quality (backoff 2s/4s/8s)")
+            print("SEMANTIC warming — keyword+LSA only; retry with backoff")
         return code
 
     if kind == "pass":
         shown = min(len(results), DIGEST_WINDOW)
         # Primary verdict on line 1; confidence available for optional weighing.
-        print(
-            f"INJECT top={top:.2f} gap={gap:.2f} {shown} seed candidates — "
-            f"drill <sid> at t<n>, reformulate for more"
-        )
+        # Data only — drilling / reformulating is taught by the skill, not
+        # re-printed per call.
+        print(f"INJECT top={top:.2f} gap={gap:.2f} {shown} seeds")
         print_digest(data)
         # Inclusive: mixed questions can need HEAD prose *and* an episode.
         # Only report knowledge above the super-low floor (junk marker omit).

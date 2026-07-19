@@ -26,10 +26,10 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 
 | Route stdout | Action |
 |---|---|
-| `INJECT … low_mass=false` | Confident episode — drill below. Knowledge docs may also exist; don't let them block. |
-| `INJECT … low_mass=true` | Confident but lexically thin — a dialogue-shaped hit. Real. Trust it or widen; don't discount it for low mass. |
-| `KNOWLEDGE …` | Episode below bars; from `knowledge[0]` Read `path` at `lines` (`anchor`). Don't drill weak sessions. |
-| `SILENCE …` | No confident episode and no knowledge. Say so. Don't pad with near-misses. |
+| `INJECT … mass=<high>` | Confident episode with lexical heft — drill below. Knowledge docs may also exist; don't let them block. |
+| `INJECT … mass=<low>` | Confident but lexically thin — a dialogue-shaped hit. Real. Trust it or widen; don't discount it for low mass. (mass is raw, judge it relative to the query.) |
+| `KNOWLEDGE score=<n> …` | Episode below the confidence bar. Judge the score: a real prose hit → Read `path` at `lines` (`anchor`); a low score near the noise floor → stay silent. Don't drill weak sessions. |
+| `SILENCE …` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a candidate digest — top hits with a trimmed
 snippet, the rest as `session_id(confidence)`. **Work from the digest.** It
@@ -38,10 +38,12 @@ re-read the raw recall only for a field the digest omits (`files`, `mass`). The
 same discipline scales with depth: a `-n 100` raw read costs ~8k tokens; piped
 through the route it stays a few hundred.
 
-`route.py` gates on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap ≥ 0.04),
-reports `mass` as the `low_mass` signal, and never silences a confident hit for
-low mass. Confident episode outranks a non-empty knowledge block. No label →
-SILENCE.
+`route.py` gates episodes on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap
+≥ 0.04 — a floor on saturating BM25, corpus-invariant by construction), reports
+raw `mass` verbatim (never bucketed, never a veto), and reports the knowledge
+`score` for you to judge (no fixed floor — the score's noise baseline drifts per
+repo). A confident episode outranks a non-empty knowledge block. No episode and
+no knowledge → SILENCE.
 
 ## One query is a guess — widen before you conclude
 

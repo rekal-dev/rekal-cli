@@ -52,8 +52,9 @@ The skill is how the agent meets Rekal. It must make the agent stronger, not sma
   - Function belongs in a script. A script does deterministic, mechanical work and hands back deterministic data for the agent's judgment to act on. It computes and reports; it does not decide. A rule the agent must remember and then perform is a script waiting to be written — this is how rule-accretion stops.
   - Knowledge belongs in rich prose, loaded on demand. It informs the agent's judgment. It never makes it.
   - Judgment belongs to the agent's reasoning. Weighing, interpreting, deciding under ambiguity stays with the agent — never frozen into a script, never frozen into a rule. Scripts surface signals; reasoning reads them.
+  - No tuned constant decides. A magic threshold that separates signal from noise — a score floor, a confidence cut, a corpus-calibrated number — is judgment frozen as a scalar. It fits the corpus it was measured on and misreads the next. A script may gate on a value the engine calibrates to be corpus-invariant by construction (a saturating transform is a property, not a fit); it may not gate on a number an author read off one dataset. When no invariant signal exists, the script reports the raw signal and the agent judges. The value changes per repo; the judgment does not belong in the file.
 - Every rule is an unwritten spec for a tool that doesn't exist yet. Close a gap by moving capability down to function, not by adding prose. The skill shrinks as it sharpens.
-- General, beholden to no single corpus. A tenet that can't be stated without naming a dataset is overfit.
+- General, beholden to no single corpus. A tenet that can't be stated without naming a dataset is overfit. A constant that can't be defended without naming the corpus it was tuned on is the same overfit, one layer down.
 - Dogfood. Ask Rekal before changing the skill. The reasoned answer returns to the ledger.
 
 ---
@@ -123,6 +124,8 @@ We don't optimize for human reading at the expense of agent consumption. Agent f
 We don't add a rule where a function would do. The skill.
 
 We don't put judgment in a script. The skill.
+
+We don't freeze a corpus-tuned constant in a skill script. A number read off one dataset overfits the next; gate only on a signal the engine calibrates to be corpus-invariant, else report the signal and let the agent judge. The skill.
 
 ---
 

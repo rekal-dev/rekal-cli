@@ -8,22 +8,36 @@ trimmed snippet, the rest as one-line id+confidence), so the agent never
 re-reads the raw recall JSON (which costs ~7x the tokens for the same decision).
 
 This script reports deterministic data for the agent's judgment; it does not
-decide the corpus or switch profiles. In particular, BM25 `mass` is reported
-as a `low_mass` signal — never used to silence a confident hit. A confident
-low-mass hit is a real dialogue-shaped match; whether to trust or widen is the
-agent's call. Junk is already rejected by the absolute confidence floor.
+decide the corpus or switch profiles. In particular, raw BM25 `mass` is reported
+verbatim — never bucketed on a tuned boundary, never used to silence a confident
+hit. Low mass is a lexically thin, dialogue-shaped match; whether to trust or
+widen is the agent's call. Junk is already rejected by the absolute confidence
+floor.
 
 Priority:
   1. Confident episode        -> INJECT (knowledge presence must not block it)
-  2. Else non-empty knowledge -> KNOWLEDGE (Read HEAD; don't inject weak episodes)
+  2. Else non-empty knowledge -> KNOWLEDGE score=<top> (Read HEAD if it's a real
+                                 prose hit — the agent judges by the score)
   3. Else                     -> SILENCE
 
-Gating uses absolute `confidence` — never max-normalized `score`, which tops out
-near 1.0 for junk queries too. A missing per-result `confidence` is treated as
-0.0: the engine emits `confidence`/`mass` with `omitempty`, so an all-offtopic
-set (every confidence 0.0) drops the field — that is noise, and it silences.
-Any real hit, even pure-semantic, carries confidence > 0. (Pre-confidence index
-DBs self-heal: recall auto-rebuilds the index on version change.)
+Two substrates, two gates — because only one has a corpus-invariant signal.
+
+Episodes gate on absolute `confidence` — never max-normalized `score`, which
+tops out near 1.0 for junk queries too. Confidence is saturating BM25
+(search/confidence.go): a bounded transform of the raw score, so its junk floor
+holds across corpora and a fixed `CONF_MIN` is a property, not a fit. A missing
+per-result `confidence` is treated as 0.0: the engine emits `confidence`/`mass`
+with `omitempty`, so an all-offtopic set (every confidence 0.0) drops the field
+— that is noise, and it silences. Any real hit, even pure-semantic, carries
+confidence > 0. (Pre-confidence index DBs self-heal: recall auto-rebuilds the
+index on version change.)
+
+Knowledge has no such invariant. Its `score` blends semantic cosine, whose junk
+baseline drifts with corpus and model, so no fixed floor generalizes (SOUL.md:
+no tuned constant decides). route.py therefore does not silence on a knowledge
+threshold — it reports the top knowledge score verbatim and lets the agent judge
+whether it is a real prose hit. Silence on the knowledge substrate is the
+agent's call; the script only reports absence (no knowledge at all -> SILENCE).
 
 Exit codes:
   0 — KNOWLEDGE or INJECT (act on stdout)
@@ -43,17 +57,26 @@ try:
 except (ImportError, AttributeError, ValueError):
     pass
 
-# Absolute confidence floor (see search/confidence.go saturating BM25).
-# Tuned so real domain queries (~0.85) clear and offtopic/junk (~0.48-0.63) do not.
+# Absolute confidence floor. Confidence is saturating BM25 (search/confidence.go)
+# — a bounded transform whose junk baseline is a property of the transform, not
+# of any one corpus, so this floor generalizes (real domain ~0.85, junk ~0.48-
+# 0.63 hold across corpora by construction; SOUL.md permits a gate on an
+# engine-calibrated invariant).
 CONF_MIN = 0.70
 # Soft path: near the hard floor with a clear gap to #2 — still above offtopic.
 CONF_SOFT = 0.68
 GAP_MIN = 0.04
-# "Low mass" boundary: raw BM25 mass below this is lexically thin (typical of
-# dialogue / semantic hits). REPORTED as a signal, never used to silence.
-LOW_MASS = 3.5
-# Knowledge fallback: absolute knowledge score must clear this.
-KNOWLEDGE_MIN = 0.40
+# Raw BM25 `mass` is reported verbatim, never bucketed on a fixed boundary: mass
+# is not corpus-invariant (it scales with corpus term stats and doc lengths), so
+# any "low mass" cut would be a tuned constant (SOUL.md: no tuned constant
+# decides). Low mass means a lexically thin, dialogue-shaped hit — the agent
+# reads the number and judges whether to trust or widen. Mass never silences.
+# No KNOWLEDGE floor. The knowledge `score` blends semantic cosine, whose junk
+# baseline drifts per corpus and model — a fixed floor overfits the corpus it
+# was measured on (SOUL.md: no tuned constant decides). The engine calibrates
+# episode `confidence` to be corpus-invariant (saturating BM25), so the episode
+# gate below stays; the knowledge score has no such invariant, so route.py
+# reports it verbatim and the agent judges whether it is a real prose hit.
 
 # Digest shape.
 DIGEST_SNIPPET_TOP = 3
@@ -67,14 +90,15 @@ def _f(v, default: float = 0.0) -> float:
         return default
 
 
-def episode_verdict(results: list) -> tuple[str, float, float, bool, str]:
-    """Gate on absolute confidence. Mass is reported, never a veto.
+def episode_verdict(results: list) -> tuple[str, float, float, float, str]:
+    """Gate on absolute confidence. Returns the top hit's raw mass, reported
+    verbatim — never a veto, never bucketed.
 
     Missing per-result confidence is 0.0 (omitempty drops zero-confidence hits),
     so an all-offtopic set silences. Score is never used to gate.
     """
     if not results:
-        return "empty", 0.0, 0.0, False, "no_results"
+        return "empty", 0.0, 0.0, 0.0, "no_results"
 
     scored: list[tuple[float, float]] = []
     for r in results:
@@ -88,23 +112,20 @@ def episode_verdict(results: list) -> tuple[str, float, float, bool, str]:
     top, mass = scored[0]
     gap = (scored[0][0] - scored[1][0]) if len(scored) > 1 else top
 
-    has_mass_field = any(isinstance(r, dict) and "mass" in r for r in results)
-    low_mass = has_mass_field and 0 < mass < LOW_MASS
-
     if top >= CONF_MIN:
-        return "pass", top, gap, low_mass, ""
+        return "pass", top, gap, mass, ""
     if top >= CONF_SOFT and gap >= GAP_MIN:
-        return "pass", top, gap, low_mass, ""
+        return "pass", top, gap, mass, ""
     if len(scored) == 1:
-        return "silence", top, gap, low_mass, "single_below_conf"
-    return "silence", top, gap, low_mass, "below_gate"
+        return "silence", top, gap, mass, "single_below_conf"
+    return "silence", top, gap, mass, "below_gate"
 
 
-def knowledge_ok(knowledge: list) -> bool:
-    if not knowledge:
-        return False
-    top = knowledge[0] if isinstance(knowledge[0], dict) else {}
-    return _f(top.get("score", 0)) >= KNOWLEDGE_MIN
+def knowledge_top_score(knowledge: list) -> float:
+    """Top knowledge score — reported as a signal, never gated on a fixed floor."""
+    if not knowledge or not isinstance(knowledge[0], dict):
+        return 0.0
+    return _f(knowledge[0].get("score", 0))
 
 
 def knowledge_paths(knowledge: list) -> str:
@@ -140,22 +161,23 @@ def main() -> int:
 
     results = data.get("results") or []
     knowledge = data.get("knowledge") or []
-    kind, top, gap, low_mass, reason = episode_verdict(results)
+    kind, top, gap, mass, reason = episode_verdict(results)
 
     if kind == "pass":
-        print(f"INJECT top={top:.4f} gap={gap:.4f} low_mass={'true' if low_mass else 'false'}")
+        print(f"INJECT top={top:.4f} gap={gap:.4f} mass={mass:.2f}")
         print_digest(data)
         return 0
 
-    if knowledge_ok(knowledge):
-        print(f"KNOWLEDGE{knowledge_paths(knowledge)}")
+    # Episode gate failed. Knowledge has no corpus-invariant floor, so report
+    # the top score as a signal and let the agent judge — don't silence on a
+    # tuned threshold (SOUL.md: no tuned constant decides).
+    if knowledge:
+        print(f"KNOWLEDGE score={knowledge_top_score(knowledge):.4f}{knowledge_paths(knowledge)}")
         return 0
 
+    # Nothing on either substrate — machine silence.
     if kind == "empty":
         print("SILENCE top=0 gap=0 reason=no_results")
-        return 1
-    if knowledge:
-        print(f"SILENCE top={top:.4f} gap={gap:.4f} reason=knowledge_below_floor")
         return 1
     print(f"SILENCE top={top:.4f} gap={gap:.4f} reason={reason or 'below_gate'}")
     return 1

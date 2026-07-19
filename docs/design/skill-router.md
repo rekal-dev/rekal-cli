@@ -61,21 +61,29 @@ Bars live in `route.py` — not route prose. Ranking still uses max-normalized
 ```mermaid
 flowchart LR
   r["rekal JSON"] --> rt["route.py"]
-  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT + digest<br/>even if knowledge present<br/>reports low_mass"]
-  rt -->|else + knowledge≥0.40| k["KNOWLEDGE — Read HEAD"]
+  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT + digest<br/>even if knowledge present<br/>reports raw mass"]
+  rt -->|else + knowledge present| k["KNOWLEDGE score=n<br/>agent judges the score"]
   rt -->|else| s["SILENCE"]
 ```
 
 `confidence` = `max(saturate(bm25), cosine) + 0.15·saturate(facet)` — never
 divided by the candidate-set max (junk queries also normalize `score` ≈ 1.0).
 Hard floor 0.70; soft path 0.68 with gap ≥ 0.04 (above offtopic ~0.55–0.63).
-Knowledge fallback requires absolute `knowledge[0].score` ≥ 0.40; knowledge is a
-**fallback** when the episode gate fails, never an unconditional override.
+This floor is permitted because it gates on saturating BM25 — a bounded
+transform whose junk baseline is corpus-invariant by construction, not a number
+read off one dataset (SOUL.md: no *tuned* constant decides).
 
-BM25 `mass` is reported as a `low_mass` boolean, never used to silence a
-confident hit: a confident low-mass hit is a real dialogue-shaped match, and the
-agent's reasoning decides to trust or widen. Junk is already rejected by the
-confidence floor, so no mass veto is needed.
+The knowledge `score` has no such invariant — it blends semantic cosine, whose
+junk baseline drifts per corpus and model — so route.py applies **no fixed
+knowledge floor**. It reports `knowledge[0].score` verbatim and the agent judges
+whether it's a real prose hit. Knowledge is a **fallback** when the episode gate
+fails, never an unconditional override; SILENCE is machine-only when there is
+neither a confident episode nor any knowledge.
+
+Raw BM25 `mass` is reported verbatim, never bucketed on a tuned boundary and
+never used to silence a confident hit: a confident low-mass hit is a real
+dialogue-shaped match, and the agent's reasoning decides to trust or widen. Junk
+is already rejected by the confidence floor, so no mass veto is needed.
 
 ## Other gates
 

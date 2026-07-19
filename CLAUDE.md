@@ -196,15 +196,19 @@ session discovery keep using the invoking worktree.
   demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin
   route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
   dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
-  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + digest on
-  absolute `confidence`, reports a `low_mass` signal instead of ever silencing
-  a confident hit; `map.sh` fresh|watermark; `wiki-gate.sh`), and `references/`
+  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + digest.
+  The episode gate is absolute `confidence` (saturating BM25 — corpus-invariant
+  by construction, so a fixed floor is permitted; SOUL.md bans only tuned
+  constants that decide). Raw `mass` and the knowledge `score` are reported
+  verbatim for the agent to judge — no tuned `low_mass`/`KNOWLEDGE_MIN` bucket
+  (both drift per corpus). `map.sh` fresh|watermark; `wiki-gate.sh`), and
+  `references/`
   (rich, on demand — `ledger.md` is the one page on reasoning over the past:
   recall/widen/depth-judgment, time-axis, enumeration, whose-fact/premise,
   analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
   `reference.md`). No corpus profiles or benchmark tuning ship — chat corpora
   route to the ledger by the general boundary (only-record-is-conversation) +
-  the `low_mass` signal; the calibrate/profile tooling lives on
+  the reported `mass` signal; the calibrate/profile tooling lives on
   `research/industry-bench`. `init` installs the whole tree (scripts 0755) and
   purges legacy `rekal-*` companion dirs; `clean` removes current + legacy.
   Adding a module = adding a file under `skills/rekal/`; tip must name it.

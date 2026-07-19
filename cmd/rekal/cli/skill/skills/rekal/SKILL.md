@@ -35,20 +35,27 @@ ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}
 
 grep for code that is · knowledge for prose that is · ledger for the why that was.
 
-## Silence is a machine event
+## Silence — machine for episodes, yours for knowledge
 
-Pipe recall through `route.py` — it gates on absolute `confidence`, not the
-max-normalized `score` that tops out near 1.0 for junk too. `INJECT` wins over a
-non-empty knowledge block; `KNOWLEDGE` is the fallback when the episode gate
-fails; no label → stay silent on memory. A confident `low_mass=true` hit is a
-real dialogue-shaped match — trust it or widen, don't abstain on it. Near-misses
-are noise.
+Pipe recall through `route.py`. It gates episodes on absolute `confidence`
+(saturating BM25, junk-robust across corpora), not the max-normalized `score`
+that tops out near 1.0 for junk too. `INJECT` wins over a non-empty knowledge
+block; a confident hit with low `mass` is a real dialogue-shaped match (mass is
+reported raw, not bucketed) — trust it or widen, don't abstain. Near-misses are
+noise; no `INJECT` and no knowledge → `SILENCE`.
+
+`KNOWLEDGE score=<n>` is not a verdict — it's a signal. The knowledge score has
+no corpus-invariant floor (it blends semantic cosine, whose junk baseline drifts
+per repo), so route.py reports it and **you** judge. A score near the top of what
+this repo returns is a real prose hit → Read it. A low score sitting near the
+noise floor is no hit → stay silent, don't Read. The number is data; the call is
+yours.
 
 ## Dispatch — one route, then stop
 
 | The question is… | Do |
 |---|---|
-| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE`, Read `path`@`lines`, **stop** |
+| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE`, judge the `score`; if it's a real hit, Read `path`@`lines`, **stop** |
 | Past episode / why / tried / rejected | same pipeline → on `INJECT`, `Read references/ledger.md` and drill |
 | Temporal, complete-set, analytical, decision-arc, provenance | `Read references/ledger.md` — decompose to SQL, enumerate, navigate by time; don't rank a set |
 | Breadth / structure | `bash "$ROOT/scripts/map.sh" fresh` then `Read references/map.md` |

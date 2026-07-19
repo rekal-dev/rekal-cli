@@ -119,17 +119,18 @@ func TestRouteScript(t *testing.T) {
 	t.Parallel()
 	path := writeScript(t, "scripts/route.py")
 
-	// Confident hit with healthy mass -> INJECT, low_mass=false.
+	// Confident hit with healthy mass -> INJECT, raw mass reported verbatim.
 	out, code := runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5.6,"score":0.99},{"confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`)
-	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "low_mass=false") {
-		t.Fatalf("want INJECT low_mass=false exit 0, got code=%d %s", code, out)
+	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "mass=5.60") {
+		t.Fatalf("want INJECT mass=5.60 exit 0, got code=%d %s", code, out)
 	}
 
-	// Confident but lexically thin (dialogue) -> INJECT low_mass=true, NOT silenced.
-	// This is the chat fix: mass is a signal, never a veto.
+	// Confident but lexically thin (dialogue) -> INJECT, low raw mass reported,
+	// NOT silenced. The chat fix: mass is a reported signal, never a veto and
+	// never bucketed on a tuned boundary (SOUL.md).
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":1.4,"score":0.99},{"confidence":0.3,"mass":1.0,"score":0.4}],"knowledge":[]}`)
-	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "low_mass=true") {
-		t.Fatalf("want INJECT low_mass=true exit 0 (chat hit not silenced), got code=%d %s", code, out)
+	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "mass=1.40") {
+		t.Fatalf("want INJECT mass=1.40 exit 0 (thin chat hit not silenced), got code=%d %s", code, out)
 	}
 
 	// Junk: high max-norm score, low absolute confidence -> SILENCE.
@@ -157,10 +158,11 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("missing-confidence offtopic set must SILENCE, got code=%d %s", code, out)
 	}
 
-	// Knowledge is a fallback when the episode gate fails -> KNOWLEDGE, exit 0.
+	// Knowledge is the fallback when the episode gate fails -> KNOWLEDGE, exit 0.
+	// The top score is reported verbatim as a signal (no tuned floor decides).
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
-	if code != 0 || !strings.Contains(out, "KNOWLEDGE") {
-		t.Fatalf("weak episode + knowledge should KNOWLEDGE exit 0, got code=%d %s", code, out)
+	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "score=0.7200") {
+		t.Fatalf("weak episode + knowledge should KNOWLEDGE score=0.7200 exit 0, got code=%d %s", code, out)
 	}
 	if strings.Contains(out, "INJECT") {
 		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
@@ -172,9 +174,16 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("strong episode + knowledge should INJECT, got code=%d %s", code, out)
 	}
 
-	// Weak absolute knowledge score must not route to KNOWLEDGE -> SILENCE.
+	// A low knowledge score is REPORTED, not silenced on a tuned floor: the score
+	// is a signal the agent judges. SOUL.md bans a corpus-tuned KNOWLEDGE floor.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
+	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "score=0.1200") {
+		t.Fatalf("low knowledge score must be reported (KNOWLEDGE score=0.1200), not silenced, got code=%d %s", code, out)
+	}
+
+	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
 	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("weak knowledge should SILENCE, got code=%d %s", code, out)
+		t.Fatalf("weak episode + no knowledge should SILENCE, got code=%d %s", code, out)
 	}
 }

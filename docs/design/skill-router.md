@@ -61,8 +61,8 @@ Bars live in `route.py` — not route prose. Ranking still uses max-normalized
 ```mermaid
 flowchart LR
   r["rekal JSON"] --> rt["route.py"]
-  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT top-20 seed<br/>sid t·n· snippet, no scores<br/>even if knowledge present"]
-  rt -->|else + knowledge present| k["KNOWLEDGE score=n<br/>agent judges the score"]
+  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT top=/gap= + top-20<br/>sid conf=· t·n· snippet<br/>+ KNOWLEDGE line if present"]
+  rt -->|else + knowledge present| k["KNOWLEDGE path=score<br/>agent judges the distribution"]
   rt -->|else| s["SILENCE"]
 ```
 
@@ -73,23 +73,20 @@ This floor is permitted because it gates on saturating BM25 — a bounded
 transform whose junk baseline is corpus-invariant by construction, not a number
 read off one dataset (SOUL.md: no *tuned* constant decides).
 
-The knowledge `score` has no such invariant — it blends semantic cosine, whose
-junk baseline drifts per corpus and model — so route.py applies **no fixed
-knowledge floor**. It reports `knowledge[0].score` verbatim and the agent judges
-whether it's a real prose hit. Knowledge is a **fallback** when the episode gate
-fails, never an unconditional override; SILENCE is machine-only when there is
-neither a confident episode nor any knowledge.
+Substrates are **inclusive**: a confident episode and a knowledge hit can both
+report (mixed convention + why questions). Line 1 stays the primary verdict;
+a trailing `KNOWLEDGE` line accompanies `INJECT` when prose also matched.
+Knowledge alone is the report when the episode gate fails. SILENCE is
+machine-only when neither substrate has signal.
 
-`mass` (BM25 lexical heft) is a gating input the script uses internally, never
-bucketed on a tuned boundary and never a veto: a confident low-mass hit is a real
-dialogue-shaped match and still injects. It is **not emitted** to the agent —
-scores are the script's, content is the agent's context. Junk is rejected by the
-confidence floor, so no mass veto is needed.
+The knowledge `score` has no corpus-invariant floor — it blends semantic cosine,
+whose junk baseline drifts — so route.py reports the per-file distribution and
+the agent judges. `mass` stays inside the script (never a veto, never emitted).
+`confidence` is emitted on the INJECT header (`top=`/`gap=`) and each seed row
+so the agent can weigh or drill selectively.
 
-On INJECT the digest is **content-first seed coverage**: the top-20 candidates
-each as `sid t<turn> "snippet"`, in rank order, with no per-candidate scores —
-wide enough to synthesize a multi-hop answer without drilling each, ~640 tokens
-vs ~18k raw, roughly constant in `-n`. Beyond 20: reformulate / multi-search.
+On INJECT the digest is seed coverage: top-20 as `sid conf=… t<turn> "snippet"`,
+roughly constant in `-n`. Beyond 20: reformulate / multi-search.
 
 ## Other gates
 

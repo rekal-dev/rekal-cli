@@ -39,34 +39,36 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 Pipe recall through `route.py`. It gates episodes on absolute `confidence`
 (saturating BM25, junk-robust across corpora), not the max-normalized `score`
-that tops out near 1.0 for junk too. **Scores are the script's — content is
-yours:** route.py decides with confidence/mass, then emits an `INJECT` of the
-top-20 candidates as `sid t<n> "snippet"` (no scores) — seed context to reason
-and synthesize over, in rank order. `INJECT` wins over a non-empty knowledge
-block; a lexically thin, dialogue-shaped hit still injects (thinness never
-vetoes it). Near-misses are noise; no `INJECT` and no knowledge → `SILENCE`.
+that tops out near 1.0 for junk too. Substrates are **inclusive**: a confident
+episode and a knowledge hit can both be real for a mixed question. Line 1 is
+the primary verdict (`INJECT` / `KNOWLEDGE` / `SILENCE`); when both fire you
+get `INJECT` plus a trailing `KNOWLEDGE` line. `INJECT` carries `top=`/`gap=`
+and each seed as `sid conf=… t<n> "snippet"` — weigh confidence if you want,
+drill from content otherwise. Mass stays inside the script (never a veto). A
+lexically thin dialogue hit still injects. Near-misses are noise; no episode
+and no knowledge → `SILENCE`.
 
-`KNOWLEDGE path=score …` is not a verdict — it's a signal. The knowledge score
-has no corpus-invariant floor (it blends semantic cosine, whose junk baseline
-drifts per repo), so route.py reports the per-file **distribution** and **you**
-judge it. Read the shape, not one number: a clear leader that then falls off
-(`x.md=0.93 y.md=0.60 …`) is a real prose hit → Read `x.md`. A flat cluster
-sitting together near the floor (`a.md=0.51 b.md=0.49 c.md=0.48`) is no hit →
-stay silent, don't Read. The numbers are data; the call is yours.
+`KNOWLEDGE path=score …` is a signal, not a floor. The knowledge score has no
+corpus-invariant cut (it blends semantic cosine, whose junk baseline drifts
+per repo), so route.py reports the per-file **distribution** and **you** judge
+it. Clear leader that falls off (`x.md=0.93 y.md=0.60 …`) → Read `x.md`. Flat
+cluster near the floor (`a.md=0.51 b.md=0.49 c.md=0.48`) → stay silent on
+prose. On a mixed `INJECT`+`KNOWLEDGE` output, combine both if the question
+needs HEAD prose *and* past intent.
 
-## Dispatch — one route, then stop
+## Dispatch — route, then act
 
 | The question is… | Do |
 |---|---|
-| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE`, judge the `path=score` distribution; Read the clear leader's `path`@`lines`, **stop** |
-| Past episode / why / tried / rejected | same pipeline → on `INJECT`, `Read references/ledger.md` and drill |
+| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE` (alone or after `INJECT`), judge the `path=score` distribution; Read the clear leader's `path`@`lines` |
+| Past episode / why / tried / rejected | same pipeline → on `INJECT`, `Read references/ledger.md` and drill; keep any trailing `KNOWLEDGE` if the mix needs it |
 | Temporal, complete-set, analytical, decision-arc, provenance | `Read references/ledger.md` — decompose to SQL, enumerate, navigate by time; don't rank a set |
 | Breadth / structure | `bash "$ROOT/scripts/map.sh" fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash "$ROOT/scripts/wiki-gate.sh"` then `Read references/wiki.md` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
 
-One question, one substrate. The route returns data; you decide the move. Cite
-session / turn / commit with every memory claim.
+The route returns data; you decide the move. Cite session / turn / commit with
+every memory claim.
 
 ## Semantic warming — retry, don't settle
 

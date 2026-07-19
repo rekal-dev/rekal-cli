@@ -54,17 +54,17 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 
 | Script | Role |
 |---|---|
-| `route.py` | Recall entry: INJECT / KNOWLEDGE / SILENCE. INJECT = top-20 seed context (`sid t<n> "snippet"`, no scores — scores gate inside the script). KNOWLEDGE = per-file `path=score` for the agent to judge. Episode gate on absolute confidence |
+| `route.py` | Recall entry: INJECT / KNOWLEDGE / SILENCE (inclusive). INJECT = `top=`/`gap=` + top-20 seeds (`sid conf=… t<n> "snippet"`); trailing `KNOWLEDGE` when prose also matched. KNOWLEDGE alone = per-file `path=score`. Episode gate on absolute confidence |
 | `map.sh fresh` / `map.sh watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
 | `wiki-gate.sh` | Refuse wiki on default branch |
 
 ```mermaid
 flowchart LR
   j["rekal JSON"] --> rr["route.py"]
-  rr -->|INJECT| i["ledger drill"]
+  rr -->|INJECT ± KNOWLEDGE| i["ledger drill + optional Read HEAD"]
   rr -->|KNOWLEDGE| k["Read HEAD"]
   rr -->|SILENCE| s["stop"]
 ```
 
-Confident episode → INJECT even when knowledge docs are present. Knowledge is
-the fallback when the episode gate fails.
+Substrates are inclusive: confident episode and knowledge can both report.
+Knowledge alone is the report when the episode gate fails.

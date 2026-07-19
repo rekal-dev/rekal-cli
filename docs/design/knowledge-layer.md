@@ -249,14 +249,13 @@ gains one row:
   (file hits at HEAD, provenance edges into sessions)
 - past-tense why / history / what-was-tried → ledger stratum (unchanged)
 
-A confident episode (`PASS_EPISODE` / `INJECT`) **outranks** a non-empty
-knowledge block — prose-heavy repos always return incidental docs, and those
-must not silence a clear session match. Knowledge is the **fallback** when
-the episode gate fails (`KNOWLEDGE` → Read the HEAD pointer; do not inject
-weak episodes). Gate bars use absolute `confidence` / `mass`, not
-max-normalized `score`. Full skill topology (tip → scripts → references):
-[`skill-router.md`](skill-router.md). MINE gains a knowledge dimension in its
-`scope × signal × role` decomposition.
+A confident episode (`INJECT`) is the **primary** line-1 verdict and must not
+be silenced by incidental docs — but knowledge is **inclusive**, not if/else:
+when both match, `route.py` emits `INJECT` plus a trailing `KNOWLEDGE` line so
+mixed questions (HEAD convention + past why) keep both signals. Knowledge alone
+is the report when the episode gate fails. Gate bars use absolute `confidence`
+(emitted on the digest); `mass` stays inside the script. Full skill topology:
+[`skill-router.md`](skill-router.md).
 
 ## Onboarding cost (measured)
 

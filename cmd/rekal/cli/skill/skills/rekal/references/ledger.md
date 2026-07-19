@@ -26,28 +26,24 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 
 | Route stdout | Action |
 |---|---|
-| `INJECT N seed candidates` + rows | Confident episode(s). The rows are seed context — `sid t<n> "snippet"` in rank order. Synthesize from them; drill `sid` at `t<n>` for the full turn. Knowledge docs may also exist; don't let them block. |
-| `KNOWLEDGE path=score …` | Episode below the confidence bar. Judge the per-file score *distribution*: a clear leader that falls off → Read that file at `lines` (`anchor`); a flat cluster near the noise floor → stay silent. Don't drill weak sessions. |
+| `INJECT top=… gap=… N seed…` + rows (+ optional `KNOWLEDGE`) | Confident episode(s). Rows are seed context — `sid conf=… t<n> "snippet"`. Weigh `conf` if useful; drill `sid` at `t<n>`. A trailing `KNOWLEDGE` line means HEAD prose also matched — inclusive, not if/else. |
+| `KNOWLEDGE path=score …` | Episode below the confidence bar (or the knowledge half of a mixed report). Judge the per-file score *distribution*: clear leader that falls off → Read at `lines` (`anchor`); flat near the noise floor → stay silent on prose. |
 | `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
-`session_id t<turn> "snippet"`, in rank order, **without scores** (confidence /
-mass gated the verdict inside the script; they are not your context — the
-content and the order are). **Work from the seed.** It carries enough to
-synthesize a multi-hop answer without drilling each, at a fraction of the raw
-JSON's tokens; drill `sid` at `t<turn>` for a full turn (or `--offset/--limit`
-to zoom to a turn ± its neighbours), and re-read raw recall only for a field the
-seed omits (`files`). If the top-20 isn't enough, **reformulate and
-multi-search** — a second, sharper query beats digging into one query's tail.
-The digest is **cost-bounded**: a `-n 100` read costs about the same through the
-route as a `-n 20` one (~640 tokens vs ~18k raw) — depth is free to ask for.
+`session_id conf=… t<turn> "snippet"`, in rank order. Confidence is the
+corpus-invariant signal (saturating BM25) so you can fetch/weigh it; mass
+stayed inside the script (never a veto). **Work from the seed.** It carries
+enough to synthesize a multi-hop answer without drilling each; drill `sid` at
+`t<turn>` for a full turn (or `--offset/--limit` to zoom), and re-read raw
+recall only for a field the seed omits (`files`). If the top-20 isn't enough,
+**reformulate and multi-search**. The digest is **cost-bounded**: a `-n 100`
+read costs about the same through the route as a `-n 20` one.
 
 `route.py` gates episodes on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap
-≥ 0.04 — a floor on saturating BM25, corpus-invariant by construction), reports
-raw `mass` verbatim (never bucketed, never a veto), and reports the knowledge
-`score` for you to judge (no fixed floor — the score's noise baseline drifts per
-repo). A confident episode outranks a non-empty knowledge block. No episode and
-no knowledge → SILENCE.
+≥ 0.04), emits that confidence on the header and each seed, and reports the
+knowledge `score` distribution for you to judge (no fixed floor). Both
+substrates can appear together when the question is mixed. Neither → SILENCE.
 
 ## One query is a guess — widen before you conclude
 

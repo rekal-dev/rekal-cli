@@ -26,24 +26,29 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 
 | Route stdout | Action |
 |---|---|
-| `INJECT top=… gap=… N seed…` + rows (+ optional `KNOWLEDGE`) | Confident episode(s). Rows are seed context — `sid conf=… t<n> "snippet"`. Weigh `conf` if useful; drill `sid` at `t<n>`. A trailing `KNOWLEDGE` line means HEAD prose also matched — inclusive, not if/else. |
-| `KNOWLEDGE path=score …` | Episode below the confidence bar (or the knowledge half of a mixed report). Judge the per-file score *distribution*: clear leader that falls off → Read at `lines` (`anchor`); flat near the noise floor → stay silent on prose. |
+| `INJECT top=… gap=… N seeds` + rows (+ optional `KNOWLEDGE`) | Confident episode(s). Rows are seed context — `sid conf=… t<n> "snippet"`, then `(+N more)`. Weigh `conf` if useful; drill `sid` at `t<n>`. A trailing `KNOWLEDGE` line means HEAD prose also matched — inclusive, not if/else. |
+| `KNOWLEDGE path=score …` | Knowledge half of a mixed report, or the only substrate when episodes are empty/near-zero. Judge the per-file score *distribution*: clear leader that falls off → Read at `lines` (`anchor`); flat near the noise floor → stay silent on prose. |
 | `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
-`session_id conf=… t<turn> "snippet"`, in rank order. Confidence is the
-corpus-invariant signal (saturating BM25) so you can fetch/weigh it; mass
-stayed inside the script (never a veto). **Work from the seed.** It carries
+`session_id conf=… t<turn> "snippet"`, in rank order. `confidence` =
+`max(saturate(bm25), cosine) + 0.15·saturate(facet)`; only the BM25 term is
+corpus-invariant, the cosine term drifts — which is why the floor is super-low
+and you weigh `conf=` yourself. Mass stays inside the script (never a veto).
+**Work from the seed.** It carries
 enough to synthesize a multi-hop answer without drilling each; drill `sid` at
 `t<turn>` for a full turn (or `--offset/--limit` to zoom), and re-read raw
 recall only for a field the seed omits (`files`). If the top-20 isn't enough,
 **reformulate and multi-search**. The digest is **cost-bounded**: a `-n 100`
 read costs about the same through the route as a `-n 20` one.
 
-`route.py` gates episodes on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap
-≥ 0.04), emits that confidence on the header and each seed, and reports the
-knowledge `score` distribution for you to judge (no fixed floor). Both
-substrates can appear together when the question is mixed. Neither → SILENCE.
+`route.py` labels are **recommendations**. It is biased toward more data than
+decision: a **super-low** episode floor on absolute `confidence` (≥ 0.25; soft
+≥ 0.20 with gap ≥ 0.02) so only empty / near-zero is machine-silenced, then
+`conf=` on the header and each seed for **you** to weigh. Knowledge is reported
+only above a matching super-low score floor (≥ 0.25); junk markers are omitted.
+Both substrates can appear together when the question is mixed. Neither →
+SILENCE. Drills and SQL always pipe through `view.py`.
 
 ## One query is a guess — widen before you conclude
 
@@ -91,42 +96,47 @@ evidence that is mis-ranked; it does not create evidence that isn't there.
 
 ## Complete-set questions: enumerate, don't rank
 
-"All", "every", "in what order", "which of the N" — and the quieter shapes whose
-gold is still a list: "what activities does X do", "what does X do besides Y",
-"who did X tell about Z". Ranked recall returns the loudest matches, not the full
-set, and a partial list is a wrong answer. Switch to SQL across *all* sessions:
+"All", "every", "in what order", "which of the N" — and quieter shapes whose
+answer is still a list. Ranked recall returns the loudest matches, not the full
+set; a **partial list is a wrong answer**. Switch to SQL across *all* sessions.
+Page until empty — do not stop because the first hits sound complete.
 
 ```bash
-rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'"
-# then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … until you've seen every row
+rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'" \
+  | python3 "$ROOT/scripts/view.py"
+# then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … | view.py until every row
 ```
 
+- **Page until empty.** Stop only when a further OFFSET returns nothing new.
 - **Count before you LIMIT.** An `ORDER BY ts LIMIT 20` you never paged is a
   silent truncation — the answer is often in the rows you cut.
 - **LIKE is stricter than search.** Reformulate SQL patterns too: synonyms and
   adjacent vocabulary, not just the words your first hits used.
-- **Enumerate by the entity, not the verbs.** "What does X do with the turtles"
-  — pattern on `%turtle%` and read *every* row; the item you'd never guess
-  ("give them a bath") only surfaces from the entity's own mention list.
+- **Enumerate by the entity, not the verbs.** Pattern on the thing named in
+  the question and read *every* row; items you'd never guess only surface from
+  the entity's own mention list.
 - **Check the set size.** If the question fixes N, don't answer until you can
   point at N distinct events, each verified in context.
+- **Report what the record names.** Omit nothing that is there; invent nothing
+  that isn't. Prefer the ledger's own labels over a tidied paraphrase.
 - **Non-verbal evidence counts.** Shared-media captions (`[shares a photo: …]`),
   links, quoted lists are premises — read them as part of the turn.
 - **Scan the uptake, not just the utterance.** In two-party questions the
-  cleanest evidence is often the reaction ("gonna try it", "thanks") while the
-  original line is keyword-sparse. Enumerate both sides.
-- **Instances vs classes.** "Which authors has X read" — turns name *titles*,
-  not authors. Enumerate the instances, then map each to the class the question
-  asks with world knowledge. Searching the class word alone misses every
-  instance that never says it.
+  cleanest evidence is often the reaction while the original line is
+  keyword-sparse. Enumerate both sides.
+- **Instances vs classes.** Turns often name instances; the question may ask
+  for the class. Enumerate instances from the ledger first, then map — searching
+  the class word alone misses every instance that never says it.
 
 ## Time questions navigate by time
 
 The ledger has a clock. Use it before you rank.
 
 ```bash
-rekal query "SELECT MIN(ts), MAX(ts), COUNT(DISTINCT session_id) FROM turns"
-rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>' AND '<to>' AND role='human' ORDER BY ts"
+rekal query "SELECT MIN(ts), MAX(ts), COUNT(DISTINCT session_id) FROM turns" \
+  | python3 "$ROOT/scripts/view.py"
+rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>' AND '<to>' AND role='human' ORDER BY ts" \
+  | python3 "$ROOT/scripts/view.py"
 ```
 
 - **Anchor first.** "A month ago", "the day before X" are relative — resolve the
@@ -140,7 +150,8 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   report of a trip to land in the *next* session, after it happened.
 - **Answer in event time, honest precision.** "Yesterday" said Oct 21 → *Oct 20*.
   "A few days ago" said Aug 19 → *a few days before Aug 19*. Don't flatten a
-  relative phrase to the mention date, and don't fake precision the record lacks.
+  relative phrase to the mention date, don't fake precision the record lacks,
+  and don't round a relative anchor into a vaguer gloss.
 - **Routine ≠ episode.** "I usually / around 10pm" is a habit; a question about
   one occasion needs the past-tense report of that occasion.
 - **One event in the window is not the answer** until you've scanned the whole
@@ -194,7 +205,7 @@ Reflection and pattern-mining need signal clusters, not one pointed episode.
 rekal query --index "SELECT session_id, turn_index, role, substr(content,1,400) FROM turns_ft \
   WHERE role = 'human_steering' \
   AND (content LIKE '%auth%' OR content LIKE '%token%') \
-  ORDER BY session_id, turn_index"
+  ORDER BY session_id, turn_index" | python3 "$ROOT/scripts/view.py"
 ```
 
 Modes: **reflect** (cluster recurring corrections into one durable rule),
@@ -214,7 +225,7 @@ rekal query --index "SELECT session_id, turn_index, role, substr(content,1,300) 
   WHERE (role = 'human_steering' OR content LIKE '%because%' OR content LIKE '%instead of%' \
          OR content LIKE '%constraint%' OR content LIKE '%rejected%' OR content LIKE '%decided%') \
   AND (content LIKE '%<topic-1>%' OR content LIKE '%<topic-2>%') \
-  ORDER BY session_id, turn_index"
+  ORDER BY session_id, turn_index" | python3 "$ROOT/scripts/view.py"
 ```
 
 A real arc needs a real trail: a couple of rows is not a rationale. When the
@@ -232,7 +243,7 @@ When the anchor is a specific file, function, line, or commit:
 git log --oneline -15 -- path/to/file.go
 git log --oneline -15 -L :FuncName:path.go       # follow a function
 rekal --commit <sha>                              # commit → sessions
-rekal query --session <id> --role human_steering  # session → intent
+rekal query --session <id> --role human_steering | python3 "$ROOT/scripts/view.py"
 ```
 
 Emit the chain: artifact → commit `<sha>` → session `<id>` → human intent
@@ -247,11 +258,12 @@ almost nothing and catches misreads (a routine mistaken for an episode, a
 discussed item mistaken for an owned one). Never `--full` by default:
 
 ```bash
-rekal query --session <id> --offset <snippet_turn_index - 2> --limit 5   # first move
-rekal query --session <id> --role summary        # if summary_turn_index present
-rekal query --session <id> --role human          # the user's own words
-rekal query --session <id> --role human_steering  # high-intent turns
-rekal query --session <id> --full                 # last resort — whole transcript
+# Always pipe drills through view.py — raw turns, not JSON chrome.
+rekal query --session <id> --offset <snippet_turn_index - 2> --limit 5 | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role summary                               | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role human                                 | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role human_steering                        | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --full                                       | python3 "$ROOT/scripts/view.py"  # last resort
 ```
 
 Fields: `session_id`, `score`, `confidence`, `mass`, `snippet`,

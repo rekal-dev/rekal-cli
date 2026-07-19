@@ -61,21 +61,22 @@ Bars live in `route.py` — not route prose. Ranking still uses max-normalized
 ```mermaid
 flowchart LR
   r["rekal JSON"] --> rt["route.py"]
-  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT top=/gap= + top-20<br/>sid conf=· t·n· snippet<br/>+ KNOWLEDGE line if present"]
+  rt -->|confidence≥0.25 (soft 0.20, gap≥0.02)| i["INJECT top=/gap= + top-20<br/>sid conf=· t·n· snippet<br/>+ KNOWLEDGE line if present"]
   rt -->|else + knowledge present| k["KNOWLEDGE path=score<br/>agent judges the distribution"]
   rt -->|else| s["SILENCE"]
 ```
 
 `confidence` = `max(saturate(bm25), cosine) + 0.15·saturate(facet)` — never
 divided by the candidate-set max (junk queries also normalize `score` ≈ 1.0).
-Hard floor 0.70; soft path 0.68 with gap ≥ 0.04 (above offtopic ~0.55–0.63).
-This floor is permitted because it gates on saturating BM25 — a bounded
-transform whose junk baseline is corpus-invariant by construction, not a number
-read off one dataset (SOUL.md: no *tuned* constant decides).
+**Super-low episode floor 0.25**; soft path 0.20 with gap ≥ 0.02. Matching
+**knowledge report floor 0.25** — omit junk marker scores. Labels are
+**recommendations** — biased toward more data than decision. Grey-band hits
+inject with `conf=` for the agent to weigh. Session/SQL drills pipe through
+`view.py` (raw turns / TSV), never raw JSON.
 
-Substrates are **inclusive**: a confident episode and a knowledge hit can both
-report (mixed convention + why questions). Line 1 stays the primary verdict;
-a trailing `KNOWLEDGE` line accompanies `INJECT` when prose also matched.
+Substrates are **inclusive**: an episode and a knowledge hit can both report
+(mixed convention + why questions). Line 1 stays the primary verdict; a
+trailing `KNOWLEDGE` line accompanies `INJECT` when prose also matched.
 Knowledge alone is the report when the episode gate fails. SILENCE is
 machine-only when neither substrate has signal.
 

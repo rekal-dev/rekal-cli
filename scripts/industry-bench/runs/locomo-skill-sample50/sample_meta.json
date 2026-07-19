@@ -1,0 +1,21 @@
+{
+  "n": 50,
+  "by_cat": {
+    "multi-hop": 16,
+    "open-domain": 4,
+    "single-hop": 18,
+    "temporal": 12
+  },
+  "convs": [
+    "conv-26",
+    "conv-30",
+    "conv-41",
+    "conv-42",
+    "conv-43",
+    "conv-44",
+    "conv-47",
+    "conv-48",
+    "conv-49",
+    "conv-50"
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "n": 40,
+  "overall": {
+    "n": 40,
+    "correct": 30,
+    "partial": 7,
+    "wrong": 3,
+    "acc_strict": 0.75,
+    "acc_soft": 0.838,
+    "tok_sum": 109350,
+    "tok_avg": 2733.8,
+    "drills_avg": 3.08
+  },
+  "by_cat": {
+    "multi-hop": {
+      "n": 13,
+      "correct": 8,
+      "partial": 3,
+      "wrong": 2,
+      "acc_strict": 0.615,
+      "acc_soft": 0.731,
+      "tok_sum": 51700,
+      "tok_avg": 3976.9,
+      "drills_avg": 5.15
+    },
+    "open-domain": {
+      "n": 3,
+      "correct": 3,
+      "partial": 0,
+      "wrong": 0,
+      "acc_strict": 1.0,
+      "acc_soft": 1.0,
+      "tok_sum": 8200,
+      "tok_avg": 2733.3,
+      "drills_avg": 3.0
+    },
+    "single-hop": {
+      "n": 14,
+      "correct": 12,
+      "partial": 2,
+      "wrong": 0,
+      "acc_strict": 0.857,
+      "acc_soft": 0.929,
+      "tok_sum": 25050,
+      "tok_avg": 1789.3,
+      "drills_avg": 1.71
+    },
+    "temporal": {
+      "n": 10,
+      "correct": 7,
+      "partial": 2,
+      "wrong": 1,
+      "acc_strict": 0.7,
+      "acc_soft": 0.8,
+      "tok_sum": 24400,
+      "tok_avg": 2440.0,
+      "drills_avg": 2.3
+    }
+  }
+}

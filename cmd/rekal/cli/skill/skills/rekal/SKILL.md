@@ -44,18 +44,19 @@ block; a confident hit with low `mass` is a real dialogue-shaped match (mass is
 reported raw, not bucketed) — trust it or widen, don't abstain. Near-misses are
 noise; no `INJECT` and no knowledge → `SILENCE`.
 
-`KNOWLEDGE score=<n>` is not a verdict — it's a signal. The knowledge score has
-no corpus-invariant floor (it blends semantic cosine, whose junk baseline drifts
-per repo), so route.py reports it and **you** judge. A score near the top of what
-this repo returns is a real prose hit → Read it. A low score sitting near the
-noise floor is no hit → stay silent, don't Read. The number is data; the call is
-yours.
+`KNOWLEDGE path=score …` is not a verdict — it's a signal. The knowledge score
+has no corpus-invariant floor (it blends semantic cosine, whose junk baseline
+drifts per repo), so route.py reports the per-file **distribution** and **you**
+judge it. Read the shape, not one number: a clear leader that then falls off
+(`x.md=0.93 y.md=0.60 …`) is a real prose hit → Read `x.md`. A flat cluster
+sitting together near the floor (`a.md=0.51 b.md=0.49 c.md=0.48`) is no hit →
+stay silent, don't Read. The numbers are data; the call is yours.
 
 ## Dispatch — one route, then stop
 
 | The question is… | Do |
 |---|---|
-| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE`, judge the `score`; if it's a real hit, Read `path`@`lines`, **stop** |
+| Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE`, judge the `path=score` distribution; Read the clear leader's `path`@`lines`, **stop** |
 | Past episode / why / tried / rejected | same pipeline → on `INJECT`, `Read references/ledger.md` and drill |
 | Temporal, complete-set, analytical, decision-arc, provenance | `Read references/ledger.md` — decompose to SQL, enumerate, navigate by time; don't rank a set |
 | Breadth / structure | `bash "$ROOT/scripts/map.sh" fresh` then `Read references/map.md` |

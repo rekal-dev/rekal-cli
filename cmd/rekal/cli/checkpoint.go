@@ -228,7 +228,7 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 					continue
 				}
 				switch tc.Tool {
-				case "Write", "Edit", "NotebookEdit":
+				case "Write", "Edit", "NotebookEdit", "StrReplace":
 				default:
 					continue
 				}

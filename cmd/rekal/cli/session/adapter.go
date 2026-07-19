@@ -2,7 +2,7 @@ package session
 
 // Adapter discovers and parses sessions for a specific AI agent.
 type Adapter interface {
-	// Name returns the agent identifier (e.g. "claude", "codex", "gemini", "opencode").
+	// Name returns the agent identifier (e.g. "claude", "cursor", "codex", "gemini", "opencode").
 	Name() string
 	// Discover returns session references for the given repo path.
 	Discover(repoPath string) ([]SessionRef, error)
@@ -26,6 +26,7 @@ type SessionRef struct {
 // Checkpoint iterates this list to discover sessions from all agents.
 var Adapters = []Adapter{
 	&ClaudeAdapter{},
+	&CursorAdapter{},
 	&CodexAdapter{},
 	&GeminiAdapter{},
 	&OpenCodeAdapter{},

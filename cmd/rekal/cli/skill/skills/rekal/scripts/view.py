@@ -49,6 +49,23 @@ def _load(raw: str):
     return rows
 
 
+# Role abbreviations — one letter where stable; keep rare roles readable.
+_ROLE_ABBR = {
+    "human": "h",
+    "assistant": "a",
+    "human_steering": "hs",
+    "summary": "sum",
+    "system": "sys",
+    "tool": "tool",
+}
+
+
+def _role_abbr(role: str) -> str:
+    if not role:
+        return ""
+    return _ROLE_ABBR.get(role, role)
+
+
 def view_session(data: dict) -> str:
     sid = data.get("session_id") or "?"
     turns = data.get("turns") or []
@@ -56,12 +73,13 @@ def view_session(data: dict) -> str:
         return f"{sid} (no turns)"
     idxs = [t.get("index") for t in turns if isinstance(t, dict) and t.get("index") is not None]
     span = f"t{min(idxs)}-{max(idxs)}" if idxs else f"{len(turns)} turns"
-    lines = [f"{sid} {span}"]
+    # Legend once — avoid repeating "human"/"assistant" on every line.
+    lines = [f"{sid} {span}  (h=human a=assistant hs=steering sum=summary)"]
     for t in turns:
         if not isinstance(t, dict):
             continue
         idx = t.get("index")
-        role = t.get("role") or ""
+        role = _role_abbr(t.get("role") or "")
         ts = (t.get("ts") or "").strip()
         content = (t.get("content") or "").rstrip()
         # Keep timestamp — agents need when, not just what.

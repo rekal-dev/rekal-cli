@@ -270,8 +270,8 @@ func TestViewScript(t *testing.T) {
 	  "captured_at":"2026-01-01T00:00:00Z",
 	  "total_turns":3,
 	  "turns":[
-	    {"index":1,"role":"human","content":"hello world","ts":"t1"},
-	    {"index":2,"role":"assistant","content":"hi there","ts":"t2"}
+	    {"index":1,"role":"human","content":"hello world","ts":"2023-05-08T10:00:00Z"},
+	    {"index":2,"role":"assistant","content":"hi there","ts":"2023-05-08T10:01:00Z"}
 	  ]
 	}`
 	out, code := runRoute(t, path, session)
@@ -281,8 +281,8 @@ func TestViewScript(t *testing.T) {
 	if strings.Contains(out, `"session_id"`) || strings.Contains(out, "captured_at") {
 		t.Fatalf("view must strip JSON chrome, got %s", out)
 	}
-	if !strings.Contains(out, "s1 t1-2") || !strings.Contains(out, "t1 human: hello world") {
-		t.Fatalf("want compact turns, got %s", out)
+	if !strings.Contains(out, "s1 t1-2") || !strings.Contains(out, "t1 2023-05-08T10:00:00Z human: hello world") {
+		t.Fatalf("want compact turns with timestamp, got %s", out)
 	}
 
 	rows := "{\"a\":1,\"b\":\"x\"}\n{\"a\":2,\"b\":\"y\"}\n"

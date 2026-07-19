@@ -62,8 +62,17 @@ def view_session(data: dict) -> str:
             continue
         idx = t.get("index")
         role = t.get("role") or ""
+        ts = (t.get("ts") or "").strip()
         content = (t.get("content") or "").rstrip()
-        prefix = f"t{idx} {role}".rstrip() if idx is not None else role
+        # Keep timestamp — agents need when, not just what.
+        head = []
+        if idx is not None:
+            head.append(f"t{idx}")
+        if ts:
+            head.append(ts)
+        if role:
+            head.append(role)
+        prefix = " ".join(head)
         lines.append(f"{prefix}: {content}" if prefix else content)
     # Optional --full extras, compacted.
     tools = data.get("tool_calls") or []

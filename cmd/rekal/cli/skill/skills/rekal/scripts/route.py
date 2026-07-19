@@ -18,9 +18,12 @@ Priority:
   2. Else non-empty knowledge -> KNOWLEDGE (Read HEAD; don't inject weak episodes)
   3. Else                     -> SILENCE
 
-Gating uses absolute `confidence` when present — not max-normalized `score`,
-which tops out near 1.0 for junk queries too. Legacy recalls without
-`confidence` keep the old score bars (top >= 0.9).
+Gating uses absolute `confidence` — never max-normalized `score`, which tops out
+near 1.0 for junk queries too. A missing per-result `confidence` is treated as
+0.0: the engine emits `confidence`/`mass` with `omitempty`, so an all-offtopic
+set (every confidence 0.0) drops the field — that is noise, and it silences.
+Any real hit, even pure-semantic, carries confidence > 0. (Pre-confidence index
+DBs self-heal: recall auto-rebuilds the index on version change.)
 
 Exit codes:
   0 — KNOWLEDGE or INJECT (act on stdout)
@@ -30,7 +33,15 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import signal
 import sys
+
+# Behave like a normal Unix tool when a reader closes the pipe early (e.g. the
+# digest is piped through `head`): die on SIGPIPE instead of tracing back.
+try:
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+except (ImportError, AttributeError, ValueError):
+    pass
 
 # Absolute confidence floor (see search/confidence.go saturating BM25).
 # Tuned so real domain queries (~0.85) clear and offtopic/junk (~0.48-0.63) do not.
@@ -43,8 +54,6 @@ GAP_MIN = 0.04
 LOW_MASS = 3.5
 # Knowledge fallback: absolute knowledge score must clear this.
 KNOWLEDGE_MIN = 0.40
-# Legacy (no confidence field): max-norm score bars from the pre-confidence gate.
-LEGACY_TOP_MIN = 0.9
 
 # Digest shape.
 DIGEST_SNIPPET_TOP = 3
@@ -58,22 +67,15 @@ def _f(v, default: float = 0.0) -> float:
         return default
 
 
-def has_confidence(results: list) -> bool:
-    return any(isinstance(r, dict) and "confidence" in r for r in results)
-
-
 def episode_verdict(results: list) -> tuple[str, float, float, bool, str]:
-    """Return (kind, top_signal, gap, low_mass, reason)."""
+    """Gate on absolute confidence. Mass is reported, never a veto.
+
+    Missing per-result confidence is 0.0 (omitempty drops zero-confidence hits),
+    so an all-offtopic set silences. Score is never used to gate.
+    """
     if not results:
         return "empty", 0.0, 0.0, False, "no_results"
-    if has_confidence(results):
-        return confidence_verdict(results)
-    kind, top, gap, reason = legacy_score_verdict(results)
-    return kind, top, gap, False, reason
 
-
-def confidence_verdict(results: list) -> tuple[str, float, float, bool, str]:
-    """Gate on absolute confidence. Mass is reported, never a veto."""
     scored: list[tuple[float, float]] = []
     for r in results:
         if not isinstance(r, dict):
@@ -96,23 +98,6 @@ def confidence_verdict(results: list) -> tuple[str, float, float, bool, str]:
     if len(scored) == 1:
         return "silence", top, gap, low_mass, "single_below_conf"
     return "silence", top, gap, low_mass, "below_gate"
-
-
-def legacy_score_verdict(results: list) -> tuple[str, float, float, str]:
-    """Pre-confidence recalls: score bars only (never apply CONF_* to score)."""
-    scores: list[float] = []
-    for r in results:
-        scores.append(_f(r.get("score", 0)) if isinstance(r, dict) else 0.0)
-    scores.sort(reverse=True)
-    top = scores[0]
-    gap = (scores[0] - scores[1]) if len(scores) > 1 else top
-    if len(scores) >= 2:
-        if top >= LEGACY_TOP_MIN or gap >= GAP_MIN:
-            return "pass", top, gap, ""
-        return "silence", top, gap, "below_gate"
-    if top >= LEGACY_TOP_MIN:
-        return "pass", top, gap, ""
-    return "silence", top, gap, "single_below_conf"
 
 
 def knowledge_ok(knowledge: list) -> bool:

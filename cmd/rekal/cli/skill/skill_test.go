@@ -150,6 +150,13 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("confidence set must not gate on score, got %s", out)
 	}
 
+	// Offtopic on a modern store: omitempty drops all-zero confidence, so no
+	// result carries a confidence key. Must SILENCE — not INJECT on score/gap.
+	out, code = runRoute(t, path, `{"results":[{"session_id":"x","score":0.65},{"session_id":"y","score":0.43}],"knowledge":[]}`)
+	if code == 0 || !strings.Contains(out, "SILENCE") {
+		t.Fatalf("missing-confidence offtopic set must SILENCE, got code=%d %s", code, out)
+	}
+
 	// Knowledge is a fallback when the episode gate fails -> KNOWLEDGE, exit 0.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
 	if code != 0 || !strings.Contains(out, "KNOWLEDGE") {

@@ -148,9 +148,8 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   report of a trip to land in the *next* session, after it happened.
 - **Answer in event time, honest precision.** "Yesterday" said Oct 21 → *Oct 20*.
   "A few days ago" said Aug 19 → *a few days before Aug 19*. Don't flatten a
-  relative phrase to the mention date, and don't fake precision the record lacks.
-  Prefer "last week before &lt;session-date&gt;" over a rounded gloss like
-  "early October" when that is all the speaker gave.
+  relative phrase to the mention date, don't fake precision the record lacks,
+  and don't round a relative anchor into a vaguer gloss.
 - **Routine ≠ episode.** "I usually / around 10pm" is a habit; a question about
   one occasion needs the past-tense report of that occasion.
 - **One event in the window is not the answer** until you've scanned the whole

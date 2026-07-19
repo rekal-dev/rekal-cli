@@ -1,0 +1,89 @@
+tasks=1888 workers=6 limit=20
+chat gates: CONF_MIN=0.25 CONF_SOFT=0.2 GAP_MIN=0.02
+  … 50/1888
+  … 100/1888
+  … 150/1888
+  … 200/1888
+  … 250/1888
+  … 300/1888
+  … 350/1888
+  … 400/1888
+  … 450/1888
+  … 500/1888
+  … 550/1888
+  … 600/1888
+  … 650/1888
+  … 700/1888
+  … 750/1888
+  … 800/1888
+  … 850/1888
+  … 900/1888
+  … 950/1888
+  … 1000/1888
+  … 1050/1888
+  … 1100/1888
+  … 1150/1888
+  … 1200/1888
+  … 1250/1888
+  … 1300/1888
+  … 1350/1888
+  … 1400/1888
+  … 1450/1888
+  … 1500/1888
+  … 1550/1888
+  … 1600/1888
+  … 1650/1888
+  … 1700/1888
+  … 1750/1888
+  … 1800/1888
+  … 1850/1888
+  … 1888/1888
+
+=== LoCoMo route summary ===
+  n: 1888
+  gates: {'INJECT': 1888}
+  pass: 1442
+  fail: 446
+  pass_rate: 0.7638
+  want_inject: 1442
+  want_inject_pass: 1442
+  want_inject_pass_rate: 1.0
+  want_silence: 446
+  want_silence_pass: 0
+  want_silence_pass_rate: 0.0
+  knowledge_as_fail: 0
+  errors: 0
+  inject: 1888
+  inject_with_inclusive_knowledge: 163
+  evidence@20_answerable: 1417
+  evidence@20_rate: 0.9854
+  evidence@20_among_inject: 1417
+  raw_tok_total: 6724255
+  route_tok_total: 1152961
+  token_saved_pct: 82.85
+  token_ratio_raw_over_route: 5.83
+  avg_raw_tok: 3561.6
+  avg_route_tok: 610.7
+  chat_calibration: scripts/industry-bench/calibration/skill-default.json
+  route: /Users/frank/projects/rekal/rekal-cli/cmd/rekal/cli/skill/skills/rekal/scripts/route.py
+  rule: want_silence→SILENCE; else→INJECT; KNOWLEDGE always fail
+
+=== want SILENCE but got other (max 15) ===
+  conv-26:q153 gate=INJECT cat=adversarial top_conf=0.71 q='What did Caroline realize after her charity race?'
+  conv-26:q154 gate=INJECT cat=adversarial top_conf=0.65 q="What are Melanie's plans for the summer with respect to"
+  conv-26:q155 gate=INJECT cat=adversarial top_conf=0.57 q='What type of individuals does the adoption agency Melan'
+  conv-26:q156 gate=INJECT cat=adversarial top_conf=0.71 q='Why did Melanie choose the adoption agency?'
+  conv-26:q157 gate=INJECT cat=adversarial top_conf=0.76 q='What is Melanie excited about in her adoption process?'
+  conv-26:q158 gate=INJECT cat=adversarial top_conf=0.72 q="What does Melanie's necklace symbolize?"
+  conv-26:q159 gate=INJECT cat=adversarial top_conf=0.7 q="What country is Melanie's grandma from?"
+  conv-26:q160 gate=INJECT cat=adversarial top_conf=0.63 q="What was grandma's gift to Melanie?"
+  conv-26:q161 gate=INJECT cat=adversarial top_conf=0.65 q="What was grandpa's gift to Caroline?"
+  conv-26:q162 gate=INJECT cat=adversarial top_conf=0.69 q="What is Caroline's hand-painted bowl a reminder of?"
+  conv-26:q163 gate=INJECT cat=adversarial top_conf=0.46 q='What did Caroline and her family do while camping?'
+  conv-26:q164 gate=INJECT cat=adversarial top_conf=0.71 q='What kind of counseling and mental health services is M'
+  conv-26:q165 gate=INJECT cat=adversarial top_conf=0.76 q='What kind of counseling workshop did Melanie attend rec'
+  conv-26:q166 gate=INJECT cat=adversarial top_conf=0.77 q='What motivated Melanie to pursue counseling?'
+  conv-26:q167 gate=INJECT cat=adversarial top_conf=0.74 q='What kind of place does Melanie want to create for peop'
+
+FAIL: 446/1888 mismatches
+wrote scripts/industry-bench/runs/locomo-route-lowfloor/route.jsonl

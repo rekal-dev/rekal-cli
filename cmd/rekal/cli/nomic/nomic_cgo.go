@@ -78,6 +78,18 @@ func cachedModelPath() (string, error) {
 		return cached, nil // already cached
 	}
 
+	// Serialize extraction across processes: without this, two daemons/embeds
+	// starting together both decompress the 140MB model into the same dir. The
+	// lock is best-effort — if it can't be taken we still extract safely via the
+	// temp-file+rename below, just possibly in duplicate.
+	if lock, ok, lerr := lockFile(filepath.Join(dir, "extract.lock"), true); lerr == nil && ok {
+		defer unlockFile(lock)
+		// Re-check: another process may have finished extracting while we waited.
+		if _, err := os.Stat(cached); err == nil {
+			return cached, nil
+		}
+	}
+
 	// Decompress to a temp file in the same dir, then atomic rename.
 	gz, err := gzip.NewReader(bytes.NewReader(modelGZ))
 	if err != nil {

@@ -181,6 +181,21 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("low knowledge score must be reported (KNOWLEDGE docs/x.md=0.12), not silenced, got code=%d %s", code, out)
 	}
 
+	// A retryable semantic-warming status adds a trailing note after the verdict
+	// (line 1 stays the verdict), telling the agent to re-run for full quality.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5,"score":1}],"knowledge":[],"semantic":{"status":"warming","retryable":true}}`)
+	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "SEMANTIC warming") {
+		t.Fatalf("warming status should add a SEMANTIC warming note, got code=%d %s", code, out)
+	}
+	if strings.SplitN(out, "\n", 2)[0] != "INJECT top=0.8200 gap=0.8200 mass=5.00" {
+		t.Fatalf("verdict must stay on line 1, got: %q", strings.SplitN(out, "\n", 2)[0])
+	}
+	// No semantic field (or not retryable) -> no note.
+	out, _ = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5,"score":1}],"knowledge":[]}`)
+	if strings.Contains(out, "SEMANTIC warming") {
+		t.Fatalf("no semantic field must not emit a warming note: %s", out)
+	}
+
 	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
 	if code == 0 || !strings.Contains(out, "SILENCE") {

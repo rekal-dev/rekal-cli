@@ -165,10 +165,22 @@ def main() -> int:
     knowledge = data.get("knowledge") or []
     kind, top, gap, mass, reason = episode_verdict(results)
 
+    sem = data.get("semantic")
+    warming = isinstance(sem, dict) and bool(sem.get("retryable"))
+
+    def done(code: int) -> int:
+        # Trailing note (kept after the verdict/digest so line 1 stays the
+        # verdict for tools that read it): the deep-semantic layer is still
+        # loading, so these results are keyword+LSA only. Re-run with backoff
+        # for full quality — the daemon warms in a few seconds.
+        if warming:
+            print("SEMANTIC warming — keyword+LSA only; re-run for full quality (backoff 2s/4s/8s)")
+        return code
+
     if kind == "pass":
         print(f"INJECT top={top:.4f} gap={gap:.4f} mass={mass:.2f}")
         print_digest(data)
-        return 0
+        return done(0)
 
     # Episode gate failed. Knowledge has no corpus-invariant floor, so report
     # the per-file score distribution as a signal and let the agent judge —
@@ -176,14 +188,14 @@ def main() -> int:
     if knowledge:
         hits = knowledge_hits(knowledge)
         print(f"KNOWLEDGE {hits}" if hits else "KNOWLEDGE")
-        return 0
+        return done(0)
 
     # Nothing on either substrate — machine silence.
     if kind == "empty":
         print("SILENCE top=0 gap=0 reason=no_results")
-        return 1
+        return done(1)
     print(f"SILENCE top={top:.4f} gap={gap:.4f} reason={reason or 'below_gate'}")
-    return 1
+    return done(1)
 
 
 if __name__ == "__main__":

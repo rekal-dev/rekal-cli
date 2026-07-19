@@ -30,6 +30,12 @@ Invariants
   I6  determinism: same (query,flags) twice -> identical verdict (warm)
   I7  -n 0 -> empty result set -> SILENCE ; -n -1 -> recall rejects (exit!=0)
   I8  daemon warm -> no `SEMANTIC warming` note
+
+Also logs (report-only, never gated) the route's TOKEN COST: raw recall JSON
+tokens vs route.py output tokens per case. The digest is why route.py exists —
+on this corpus it runs ~95% cheaper (≈15-21x on INJECT, ~100x on KNOWLEDGE).
+A pass/fail threshold would be a tuned constant (SOUL.md), so it's reported for
+the maintainer to read, not asserted.
 """
 from __future__ import annotations
 
@@ -134,6 +140,42 @@ def cell(query: str, flags: list[str]) -> dict | None:
     return {"verdict": v, "results": len(data.get("results") or []), "route_rc": rrc}
 
 
+def _toks(s: str) -> int:
+    """Token estimate: tiktoken if available, else the standard chars/4 approx.
+    The ratio raw:route is robust to the method (both are similar prose)."""
+    try:
+        import tiktoken
+
+        return len(tiktoken.get_encoding("cl100k_base").encode(s))
+    except Exception:
+        return max(1, round(len(s) / 4))
+
+
+def token_report() -> None:
+    """Log the route's token cost vs raw recall JSON — route.py's digest exists
+    to make the INJECT decision cheap. REPORTED, never gated: a pass/fail
+    threshold here would be a tuned constant (SOUL.md), and the ratio is
+    corpus-dependent. The agent/maintainer reads the numbers and judges."""
+    print("=== Token efficiency: raw recall JSON vs route.py output (report-only) ===")
+    cases = [
+        ("INJECT -n20", "merged-only sharing export gate", []),
+        ("INJECT -n100", "merged-only sharing export gate", ["-n", "100"]),
+        ("KNOWLEDGE junk", "how to tune a violin by ear", []),
+        ("SILENCE thin", " ", []),
+    ]
+    tr = to = 0
+    print(f"  {'case':16} {'raw_tok':>8} {'route_tok':>9} {'saved':>7} {'ratio':>6}")
+    for name, q, flags in cases:
+        _, out, _ = run([*flags, q])
+        _, rout = route(out)
+        rt, ot = _toks(out), _toks(rout)
+        tr += rt
+        to += ot
+        saved = 100 * (1 - ot / rt) if rt else 0
+        print(f"  {name:16} {rt:8d} {ot:9d} {saved:6.1f}% {rt / max(ot, 1):5.1f}x")
+    print(f"  {'TOTAL':16} {tr:8d} {to:9d} {100 * (1 - to / tr):6.1f}% {tr / max(to, 1):5.1f}x")
+
+
 def main() -> int:
     print("=== Matrix A: archetype × plain ===")
     verdicts: dict[str, list[str]] = {}
@@ -201,6 +243,8 @@ def main() -> int:
         p = subprocess.run(["rekal", "query", "--role", "human"], capture_output=True, text=True, timeout=30)
         check(p.returncode != 0, "I-drill role-requires-session rejected")
         print(f"  --role human (no --session) -> rc={p.returncode} (expect !=0)")
+
+    token_report()
 
     print(f"\n=== RESULT: {N - len(FAILS)}/{N} invariant checks passed ===")
     if FAILS:

@@ -209,18 +209,14 @@ session discovery keep using the invoking worktree.
   demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin
   route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
   dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
-  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + a cost-bounded
-  seed digest (top-20 candidates each as `sid t<n> "snippet"`, no scores —
-  content-first LoCoMo-style seed coverage; `confidence`/`mass` gate the verdict
-  inside the script but aren't emitted to the agent's context; reformulate or
-  `-n` for the rest, so an INJECT costs ~640 tokens vs ~18k raw at `-n 100`,
-  roughly constant in `-n`; the window is a display budget, not a gate).
-  The episode gate is absolute `confidence` (saturating BM25 — corpus-invariant
-  by construction, so a fixed floor is permitted; SOUL.md bans only tuned
-  constants that decide). Raw `mass` and the knowledge `score` are reported
-  verbatim for the agent to judge — no tuned `low_mass`/`KNOWLEDGE_MIN` bucket
-  (both drift per corpus). `map.sh` fresh|watermark; `wiki-gate.sh`), and
-  `references/`
+  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE, inclusive
+  substrates (INJECT may trail a `KNOWLEDGE` line when both match) + a
+  cost-bounded seed digest (top-20 as `sid conf=… t<n> "snippet"`; header
+  carries `top=`/`gap=`; mass stays inside; reformulate or `-n` for the rest;
+  the window is a display budget, not a gate). The episode gate is absolute
+  `confidence` (saturating BM25 — corpus-invariant by construction). Knowledge
+  `score` is reported for the agent to judge — no tuned floor. `map.sh`
+  fresh|watermark; `wiki-gate.sh`), and `references/`
   (rich, on demand — `ledger.md` is the one page on reasoning over the past:
   recall/widen/depth-judgment, time-axis, enumeration, whose-fact/premise,
   analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
@@ -387,3 +383,5 @@ No exclamation marks. No emoji. No "oops."
    git push origin v0.x.y
    ```
 3. Release workflow validates then publishes via GoReleaser
+
+Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code, `rekal` knowledge for present prose at HEAD, the ledger (`rekal` + gates) for past intent, the map for structure. <!-- managed by rekal -->

@@ -209,7 +209,10 @@ session discovery keep using the invoking worktree.
   demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin
   route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
   dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
-  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + digest.
+  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + a cost-bounded
+  digest (top-3 snippets + a capped `id(conf)` tail with a `(+N more)` count, so
+  an INJECT costs ~300 tokens vs ~18k raw at `-n 100` — ~98% saved, and roughly
+  constant in `-n`; tail cap is a display budget, not a gate).
   The episode gate is absolute `confidence` (saturating BM25 — corpus-invariant
   by construction, so a fixed floor is permitted; SOUL.md bans only tuned
   constants that decide). Raw `mass` and the knowledge `score` are reported

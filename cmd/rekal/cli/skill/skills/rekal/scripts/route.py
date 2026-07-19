@@ -79,9 +79,14 @@ GAP_MIN = 0.04
 # gate below stays; the knowledge score has no such invariant, so route.py
 # reports it verbatim and the agent judges whether it is a real prose hit.
 
-# Digest shape.
+# Digest shape. These are output BUDGETS (how much to print), not judgment
+# gates — they bound the digest's token cost without changing the verdict or the
+# ranking. The id(conf) tail dominates the digest at large -n (≈75% of tokens at
+# -n 100) yet the agent drills from the top, so the tail is capped and the
+# remainder summarized as a count (drill deeper via `query --session`/SQL).
 DIGEST_SNIPPET_TOP = 3
 DIGEST_SNIPPET_WORDS = 30
+DIGEST_TAIL_MAX = 12
 
 
 def _f(v, default: float = 0.0) -> float:
@@ -146,8 +151,12 @@ def print_digest(data: dict) -> None:
         print(f'  {i + 1}. {r.get("session_id")} conf={r.get("confidence")}{turn_s} "{snip}"')
     rest = results[DIGEST_SNIPPET_TOP:]
     if rest:
-        tail = " ".join(f'{r.get("session_id")}({r.get("confidence")})' for r in rest)
-        print(f"  {DIGEST_SNIPPET_TOP + 1}-{len(results)}: {tail}")
+        shown = rest[:DIGEST_TAIL_MAX]
+        tail = " ".join(f'{r.get("session_id")}({r.get("confidence")})' for r in shown)
+        more = len(rest) - len(shown)
+        suffix = f" (+{more} more, drill or -n to see them)" if more > 0 else ""
+        hi = DIGEST_SNIPPET_TOP + len(shown)
+        print(f"  {DIGEST_SNIPPET_TOP + 1}-{hi}: {tail}{suffix}")
 
 
 def main() -> int:

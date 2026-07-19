@@ -58,19 +58,23 @@ func runEmbed(w io.Writer, gitRoot string) error {
 	defer unlock()
 
 	// Construct the embedding backend once, before the bite loop ever takes the
-	// index write lock. For nomic this loads the model (~15s) here, lock-free,
-	// and every bite reuses this one client — so no bite reloads the model under
-	// the lock, and a concurrent recall (common right after init/sync) is never
-	// stuck behind a model load. nil is fine (unsupported platform): bites fall
-	// back to constructing their own, as before.
-	emb, err := semanticEmbedder(gitRoot)
+	// index write lock. For nomic this waits for the daemon to load the model
+	// (~15s) here, lock-free, and every bite reuses this one client — so no bite
+	// reloads the model under the lock, and a concurrent recall (common right
+	// after init/sync) is never stuck behind a model load.
+	emb, err := semanticEmbedder(gitRoot, true)
 	if err != nil {
-		fmt.Fprintf(w, "rekal: warning: embedding backend: %v\n", err)
-		emb = nil
+		// The daemon never came up (crash / incompatible build). Embedding is
+		// this command's only job, so stop cleanly rather than spin retrying —
+		// the keyword layer is already searchable; vectors fill on a later run.
+		fmt.Fprintf(w, "rekal: semantic backend unavailable (%v) — skipping vectors\n", err)
+		return nil
 	}
-	if emb != nil {
-		defer emb.Close()
+	if emb == nil {
+		// No semantic backend on this platform/config — nothing to embed.
+		return nil
 	}
+	defer emb.Close()
 
 	for pass := 1; ; pass++ {
 		more, err := embedBite(w, gitRoot, pass, emb)

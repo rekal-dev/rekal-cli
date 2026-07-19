@@ -302,8 +302,24 @@ func connectDaemon(gitRoot string) (*daemonClient, error) {
 // It does not wait for the daemon to become ready — callers should
 // fall back to in-process embedding and benefit from the daemon on
 // subsequent invocations.
+// spawnCooldown rate-limits daemon spawns. With the daemon-only client, a
+// caller that can't connect spawns a daemon on every miss; if the model can't
+// load (bad model / incompatible build) the daemon crashes on startup and the
+// next call would spawn another. The cooldown stops that from becoming a
+// process storm on a broken environment — one spawn attempt per window.
+const spawnCooldown = 15 * time.Second
+
 func spawnDaemon(gitRoot string) {
 	sock := socketPath(gitRoot)
+
+	// Rate-limit: skip if we spawned within the cooldown (a daemon is either
+	// warming up or repeatedly crashing — either way, don't pile on).
+	stamp := filepath.Join(filepath.Dir(sock), "spawn.stamp")
+	if fi, err := os.Stat(stamp); err == nil && time.Since(fi.ModTime()) < spawnCooldown {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(stamp), 0o755)                                      //nolint:errcheck
+	_ = os.WriteFile(stamp, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644) //nolint:errcheck
 
 	// Clean up stale socket/pid.
 	os.Remove(sock)             //nolint:errcheck

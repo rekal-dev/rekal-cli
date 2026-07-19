@@ -319,7 +319,13 @@ func (n nomicSessionEmbedder) Close() { n.c.Close() }
 // configured in .rekal/config.json, otherwise the embedded nomic model.
 // Returns (nil, nil) when no backend is available (unsupported platform, no
 // config) — the semantic layer is simply skipped.
-func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
+// semanticEmbedder picks the embedding backend. wait controls the nomic daemon:
+// a long-running batch job (`rekal embed`) passes true and blocks for the model
+// to load in the daemon; a best-effort per-commit caller (checkpoint) passes
+// false so a not-yet-warm daemon degrades immediately (vectors converge on the
+// next embed) rather than stalling the post-commit hook. The HTTP backend
+// ignores wait — it has no local model to load.
+func semanticEmbedder(gitRoot string, wait bool) (sessionEmbedder, error) {
 	cfg, err := readMergedConfig(gitRoot)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -334,7 +340,7 @@ func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
 	if !nomic.Supported() {
 		return nil, nil
 	}
-	client, err := nomic.NewClient(gitRoot)
+	client, err := nomic.NewClient(gitRoot, wait)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +365,9 @@ func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
 // loads once, off the index lock (see runEmbed).
 func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string, budget int, emb sessionEmbedder) (remaining bool, err error) {
 	if emb == nil {
-		emb, err = semanticEmbedder(gitRoot)
+		// Per-call construction (checkpoint): degrade fast if the daemon isn't
+		// warm — this commit's vectors converge on the next `rekal embed`.
+		emb, err = semanticEmbedder(gitRoot, false)
 		if err != nil || emb == nil {
 			return false, err
 		}

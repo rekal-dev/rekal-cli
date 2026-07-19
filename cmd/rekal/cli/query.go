@@ -269,6 +269,10 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		TotalTurns: total,
 		Offset:     offset,
 		Limit:      limit,
+		// Always an array, never null — a role filter that matches nothing
+		// (e.g. --role summary on a session with no summary) must still emit
+		// `"turns": []` so agents can iterate without a null guard.
+		Turns: []turnOutput{},
 
 		// Optional harness metadata; empty (and omitted from JSON) for
 		// agents without the concept.

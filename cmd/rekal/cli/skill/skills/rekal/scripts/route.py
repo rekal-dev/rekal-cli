@@ -86,7 +86,11 @@ GAP_MIN = 0.04
 # remainder summarized as a count (drill deeper via `query --session`/SQL).
 DIGEST_SNIPPET_TOP = 3
 DIGEST_SNIPPET_WORDS = 30
-DIGEST_TAIL_MAX = 12
+# Show a top-20 candidate window (3 snippets + 17 id/conf), matching the default
+# recall depth and the retrieval window benchmarks like LoCoMo report. Beyond 20
+# the agent reformulates / multi-searches (widen), or drills / raises -n — going
+# deeper into one query's tail rarely beats a second, sharper query.
+DIGEST_TAIL_MAX = 17
 
 
 def _f(v, default: float = 0.0) -> float:

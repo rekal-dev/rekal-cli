@@ -32,13 +32,14 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 | `SILENCE …` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a candidate digest — top hits with a trimmed
-snippet, then a capped `session_id(confidence)` tail with a `(+N more)` count.
-**Work from the digest.** It carries the ranking and the drill targets at a tiny
-fraction of the raw JSON's tokens; re-read the raw recall only for a field the
-digest omits (`files`, `mass`), and use `query --session`/`-n` to reach the
-`+N more`. The digest is **cost-bounded**: because the tail is capped, a `-n
-100` read costs about the same through the route as a `-n 20` one (~300 tokens
-vs ~18k raw) — depth is free to ask for.
+snippet, then a **top-20** `session_id(confidence)` window with a `(+N more)`
+count. **Work from the digest.** It carries the ranking and the drill targets at
+a tiny fraction of the raw JSON's tokens; re-read the raw recall only for a field
+the digest omits (`files`, `mass`). If the top-20 isn't enough, **reformulate
+and multi-search** (a second, sharper query beats digging into one query's tail)
+— or `query --session`/`-n` to reach the `+N more`. The digest is
+**cost-bounded**: a `-n 100` read costs about the same through the route as a
+`-n 20` one (~350 tokens vs ~18k raw) — depth is free to ask for.
 
 `route.py` gates episodes on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap
 ≥ 0.04 — a floor on saturating BM25, corpus-invariant by construction), reports

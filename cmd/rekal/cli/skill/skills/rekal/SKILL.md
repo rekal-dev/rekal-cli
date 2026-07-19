@@ -39,10 +39,12 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 Pipe recall through `route.py`. It gates episodes on absolute `confidence`
 (saturating BM25, junk-robust across corpora), not the max-normalized `score`
-that tops out near 1.0 for junk too. `INJECT` wins over a non-empty knowledge
-block; a confident hit with low `mass` is a real dialogue-shaped match (mass is
-reported raw, not bucketed) — trust it or widen, don't abstain. Near-misses are
-noise; no `INJECT` and no knowledge → `SILENCE`.
+that tops out near 1.0 for junk too. **Scores are the script's — content is
+yours:** route.py decides with confidence/mass, then emits an `INJECT` of the
+top-20 candidates as `sid t<n> "snippet"` (no scores) — seed context to reason
+and synthesize over, in rank order. `INJECT` wins over a non-empty knowledge
+block; a lexically thin, dialogue-shaped hit still injects (thinness never
+vetoes it). Near-misses are noise; no `INJECT` and no knowledge → `SILENCE`.
 
 `KNOWLEDGE path=score …` is not a verdict — it's a signal. The knowledge score
 has no corpus-invariant floor (it blends semantic cosine, whose junk baseline

@@ -61,7 +61,7 @@ Bars live in `route.py` — not route prose. Ranking still uses max-normalized
 ```mermaid
 flowchart LR
   r["rekal JSON"] --> rt["route.py"]
-  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT + digest<br/>even if knowledge present<br/>reports raw mass"]
+  rt -->|confidence≥0.70 (soft 0.68, gap≥0.04)| i["INJECT top-20 seed<br/>sid t·n· snippet, no scores<br/>even if knowledge present"]
   rt -->|else + knowledge present| k["KNOWLEDGE score=n<br/>agent judges the score"]
   rt -->|else| s["SILENCE"]
 ```
@@ -80,10 +80,16 @@ whether it's a real prose hit. Knowledge is a **fallback** when the episode gate
 fails, never an unconditional override; SILENCE is machine-only when there is
 neither a confident episode nor any knowledge.
 
-Raw BM25 `mass` is reported verbatim, never bucketed on a tuned boundary and
-never used to silence a confident hit: a confident low-mass hit is a real
-dialogue-shaped match, and the agent's reasoning decides to trust or widen. Junk
-is already rejected by the confidence floor, so no mass veto is needed.
+`mass` (BM25 lexical heft) is a gating input the script uses internally, never
+bucketed on a tuned boundary and never a veto: a confident low-mass hit is a real
+dialogue-shaped match and still injects. It is **not emitted** to the agent —
+scores are the script's, content is the agent's context. Junk is rejected by the
+confidence floor, so no mass veto is needed.
+
+On INJECT the digest is **content-first seed coverage**: the top-20 candidates
+each as `sid t<turn> "snippet"`, in rank order, with no per-candidate scores —
+wide enough to synthesize a multi-hop answer without drilling each, ~640 tokens
+vs ~18k raw, roughly constant in `-n`. Beyond 20: reformulate / multi-search.
 
 ## Other gates
 

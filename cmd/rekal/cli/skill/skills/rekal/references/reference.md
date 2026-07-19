@@ -54,7 +54,7 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 
 | Script | Role |
 |---|---|
-| `route.py` | Recall entry: INJECT / KNOWLEDGE / SILENCE + digest; episode gate on absolute confidence; reports raw `mass` and knowledge `score` for the agent to judge |
+| `route.py` | Recall entry: INJECT / KNOWLEDGE / SILENCE. INJECT = top-20 seed context (`sid t<n> "snippet"`, no scores — scores gate inside the script). KNOWLEDGE = per-file `path=score` for the agent to judge. Episode gate on absolute confidence |
 | `map.sh fresh` / `map.sh watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
 | `wiki-gate.sh` | Refuse wiki on default branch |
 

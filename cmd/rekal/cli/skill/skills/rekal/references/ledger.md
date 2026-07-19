@@ -26,20 +26,21 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 
 | Route stdout | Action |
 |---|---|
-| `INJECT … mass=<high>` | Confident episode with lexical heft — drill below. Knowledge docs may also exist; don't let them block. |
-| `INJECT … mass=<low>` | Confident but lexically thin — a dialogue-shaped hit. Real. Trust it or widen; don't discount it for low mass. (mass is raw, judge it relative to the query.) |
+| `INJECT N seed candidates` + rows | Confident episode(s). The rows are seed context — `sid t<n> "snippet"` in rank order. Synthesize from them; drill `sid` at `t<n>` for the full turn. Knowledge docs may also exist; don't let them block. |
 | `KNOWLEDGE path=score …` | Episode below the confidence bar. Judge the per-file score *distribution*: a clear leader that falls off → Read that file at `lines` (`anchor`); a flat cluster near the noise floor → stay silent. Don't drill weak sessions. |
-| `SILENCE …` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
+| `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
-On `INJECT` the route prints a candidate digest — top hits with a trimmed
-snippet, then a **top-20** `session_id(confidence)` window with a `(+N more)`
-count. **Work from the digest.** It carries the ranking and the drill targets at
-a tiny fraction of the raw JSON's tokens; re-read the raw recall only for a field
-the digest omits (`files`, `mass`). If the top-20 isn't enough, **reformulate
-and multi-search** (a second, sharper query beats digging into one query's tail)
-— or `query --session`/`-n` to reach the `+N more`. The digest is
-**cost-bounded**: a `-n 100` read costs about the same through the route as a
-`-n 20` one (~350 tokens vs ~18k raw) — depth is free to ask for.
+On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
+`session_id t<turn> "snippet"`, in rank order, **without scores** (confidence /
+mass gated the verdict inside the script; they are not your context — the
+content and the order are). **Work from the seed.** It carries enough to
+synthesize a multi-hop answer without drilling each, at a fraction of the raw
+JSON's tokens; drill `sid` at `t<turn>` for a full turn (or `--offset/--limit`
+to zoom to a turn ± its neighbours), and re-read raw recall only for a field the
+seed omits (`files`). If the top-20 isn't enough, **reformulate and
+multi-search** — a second, sharper query beats digging into one query's tail.
+The digest is **cost-bounded**: a `-n 100` read costs about the same through the
+route as a `-n 20` one (~640 tokens vs ~18k raw) — depth is free to ask for.
 
 `route.py` gates episodes on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap
 ≥ 0.04 — a floor on saturating BM25, corpus-invariant by construction), reports

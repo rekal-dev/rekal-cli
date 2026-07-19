@@ -210,10 +210,11 @@ session discovery keep using the invoking worktree.
   route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
   dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
   judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + a cost-bounded
-  digest (top-3 snippets + a top-20 `id(conf)` window with a `(+N more)` count —
-  reformulate/multi-search or `-n` for the rest, LoCoMo-style, so an INJECT
-  costs ~350 tokens vs ~18k raw at `-n 100` — ~98% saved, roughly constant in
-  `-n`; the window is a display budget, not a gate).
+  seed digest (top-20 candidates each as `sid t<n> "snippet"`, no scores —
+  content-first LoCoMo-style seed coverage; `confidence`/`mass` gate the verdict
+  inside the script but aren't emitted to the agent's context; reformulate or
+  `-n` for the rest, so an INJECT costs ~640 tokens vs ~18k raw at `-n 100`,
+  roughly constant in `-n`; the window is a display budget, not a gate).
   The episode gate is absolute `confidence` (saturating BM25 — corpus-invariant
   by construction, so a fixed floor is permitted; SOUL.md bans only tuned
   constants that decide). Raw `mass` and the knowledge `score` are reported

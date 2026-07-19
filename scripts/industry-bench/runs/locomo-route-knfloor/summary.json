@@ -1,0 +1,31 @@
+{
+  "n": 1888,
+  "gates": {
+    "INJECT": 1888
+  },
+  "pass": 1442,
+  "fail": 446,
+  "pass_rate": 0.7638,
+  "want_inject": 1442,
+  "want_inject_pass": 1442,
+  "want_inject_pass_rate": 1.0,
+  "want_silence": 446,
+  "want_silence_pass": 0,
+  "want_silence_pass_rate": 0.0,
+  "knowledge_as_fail": 0,
+  "errors": 0,
+  "inject": 1888,
+  "inject_with_inclusive_knowledge": 0,
+  "evidence@20_answerable": 1419,
+  "evidence@20_rate": 0.9868,
+  "evidence@20_among_inject": 1419,
+  "raw_tok_total": 6724070,
+  "route_tok_total": 1151505,
+  "token_saved_pct": 82.87,
+  "token_ratio_raw_over_route": 5.84,
+  "avg_raw_tok": 3561.5,
+  "avg_route_tok": 609.9,
+  "chat_calibration": "scripts/industry-bench/calibration/skill-default.json",
+  "route": "/Users/frank/projects/rekal/rekal-cli/cmd/rekal/cli/skill/skills/rekal/scripts/route.py",
+  "rule": "want_silence\u2192SILENCE; else\u2192INJECT; KNOWLEDGE always fail"
+}

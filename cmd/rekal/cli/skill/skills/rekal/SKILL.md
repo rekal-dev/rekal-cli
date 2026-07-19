@@ -4,8 +4,9 @@ description: >
   Use in a repo with Rekal initialized (.rekal/ exists). Rekal is memory of
   prior AI sessions — who changed what, why, and when. Before spending a token,
   decide WHERE the answer lives: TREE / KNOWLEDGE / LEDGER / MAP. Route to one
-  substrate, act, and stay silent when memory is not the tool. The scripts
-  return deterministic data; the judgment is yours.
+  substrate, act, and stay silent when memory is not the tool. Always pipe
+  rekal through a script (route.py / view.py) so you ingest compressed data;
+  the judgment is yours.
 ---
 
 # Rekal — which substrate answers this?
@@ -20,7 +21,7 @@ ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}
 |---|---|---|---|---|
 | Tree | current code | now | grep / read | what does X do, where is it |
 | Knowledge | current prose | now | `rekal` → `route.py` → Read HEAD | convention / what we know |
-| Ledger | session intent | past | `rekal` → `route.py`, then drill | why, tried, rejected |
+| Ledger | session intent | past | `rekal` → `route.py`, drill → `view.py` | why, tried, rejected |
 | Map | structure | — | `map.sh` + workflow | how is it built |
 
 ## Boundary
@@ -37,38 +38,55 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 ## Silence — machine for episodes, yours for knowledge
 
-Pipe recall through `route.py`. It gates episodes on absolute `confidence`
-(saturating BM25, junk-robust across corpora), not the max-normalized `score`
-that tops out near 1.0 for junk too. Substrates are **inclusive**: a confident
-episode and a knowledge hit can both be real for a mixed question. Line 1 is
-the primary verdict (`INJECT` / `KNOWLEDGE` / `SILENCE`); when both fire you
-get `INJECT` plus a trailing `KNOWLEDGE` line. `INJECT` carries `top=`/`gap=`
-and each seed as `sid conf=… t<n> "snippet"` — weigh confidence if you want,
-drill from content otherwise. Mass stays inside the script (never a veto). A
-lexically thin dialogue hit still injects. Near-misses are noise; no episode
-and no knowledge → `SILENCE`.
+Pipe recall through `route.py`. Treat its labels as a **recommendation**, not a
+final call: the router is intentionally biased toward **more data than
+decision**. It keeps a **super-low** floor on absolute `confidence` (saturating
+BM25) — only empty / near-zero is machine-silenced — and never gates on
+max-normalized `score` (junk tops out near 1.0 too). Substrates are
+**inclusive**: an episode and a knowledge hit can both be real for a mixed
+question. Line 1 is the primary label (`INJECT` / `KNOWLEDGE` / `SILENCE`);
+when both fire you get `INJECT` plus a trailing `KNOWLEDGE` line. `INJECT`
+carries `top=`/`gap=` and each seed as `sid conf=… t<n> "snippet"` — **you
+judge** from confidence + content. Mass stays inside the script (never a veto).
+A lexically thin dialogue hit still injects. No episode signal and no knowledge
+→ `SILENCE`.
 
-`KNOWLEDGE path=score …` is a signal, not a floor. The knowledge score has no
-corpus-invariant cut (it blends semantic cosine, whose junk baseline drifts
-per repo), so route.py reports the per-file **distribution** and **you** judge
-it. Clear leader that falls off (`x.md=0.93 y.md=0.60 …`) → Read `x.md`. Flat
-cluster near the floor (`a.md=0.51 b.md=0.49 c.md=0.48`) → stay silent on
-prose. On a mixed `INJECT`+`KNOWLEDGE` output, combine both if the question
-needs HEAD prose *and* past intent.
+`KNOWLEDGE path=score …` is reported only above a **super-low** floor (~0.25);
+junk marker scores are omitted. Above the floor, **you** judge the distribution:
+clear leader (`x.md=0.93 y.md=0.60 …`) → Read `x.md`; flat cluster → stay
+silent on prose. On a mixed `INJECT`+`KNOWLEDGE` output, combine both if needed.
+
+**Pipe every skill rekal** — never read raw JSON:
+- recall → `python3 "$ROOT/scripts/route.py"`
+- `query --session` / SQL → `python3 "$ROOT/scripts/view.py"`
 
 ## Dispatch — route, then act
 
 | The question is… | Do |
 |---|---|
 | Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE` (alone or after `INJECT`), judge the `path=score` distribution; Read the clear leader's `path`@`lines` |
-| Past episode / why / tried / rejected | same pipeline → on `INJECT`, `Read references/ledger.md` and drill; keep any trailing `KNOWLEDGE` if the mix needs it |
-| Temporal, complete-set, analytical, decision-arc, provenance | `Read references/ledger.md` — decompose to SQL, enumerate, navigate by time; don't rank a set |
+| Past episode / why / tried / rejected | same → on `INJECT`, `Read references/ledger.md`; drill with `rekal query --session … \| python3 "$ROOT/scripts/view.py"` |
+| Temporal, complete-set, analytical, decision-arc, provenance | `Read references/ledger.md` — SQL via `rekal query … \| python3 "$ROOT/scripts/view.py"`; don't rank a set |
 | Breadth / structure | `bash "$ROOT/scripts/map.sh" fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash "$ROOT/scripts/wiki-gate.sh"` then `Read references/wiki.md` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
 
 The route returns data; you decide the move. Cite session / turn / commit with
 every memory claim.
+
+## Judgment — agent, not the script
+
+Scripts recommend and compress. **You** judge (SOUL: judgment is not frozen
+into the skill).
+
+- **Only what the ledger holds.** Do not invent or pad. If the record is thin,
+  say so — or stay silent.
+- **A partial set is a wrong answer when the question asks for the set.**
+  Enumerate (SQL, page until empty); do not stop because the first hits sound
+  complete. Ranked recall is for pointed questions, not for "all / which / how
+  many / every beat of an arc."
+- **Keep the speaker's precision.** Relative time and attribution stay as the
+  record states them; don't round, force, or tidy away ambiguity.
 
 ## Semantic warming — retry, don't settle
 

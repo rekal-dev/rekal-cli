@@ -1,0 +1,76 @@
+[
+  {
+    "id": "conv-47:q56",
+    "conv": "conv-47",
+    "qid": "q56",
+    "category": "temporal",
+    "question": "When did John and his programming friends host an online programming competition?",
+    "answer": "Last week before 13 October 2022.",
+    "evidence": [
+      "s27"
+    ],
+    "prev_score": 0.0,
+    "prev_pred": "early October 2022"
+  },
+  {
+    "id": "conv-41:q125",
+    "conv": "conv-41",
+    "qid": "q125",
+    "category": "single-hop",
+    "question": "What kind of activities did Maria do at the picnic with her church friends?",
+    "answer": "played games like charades and a scavenger hunt",
+    "evidence": [
+      "s24"
+    ],
+    "prev_score": 0.5,
+    "prev_pred": "chilled under trees, played charades and a scavenger hunt, ate food"
+  },
+  {
+    "id": "conv-41:q58",
+    "conv": "conv-41",
+    "qid": "q58",
+    "category": "multi-hop",
+    "question": "What causes has John done events for?",
+    "answer": "Toy drive, Community food drive, veterans, domestic violence",
+    "evidence": [
+      "s3",
+      "s6",
+      "s29"
+    ],
+    "prev_score": 0.0,
+    "prev_pred": "veterans and their families; victims of domestic abuse; homeless people; kids in need"
+  },
+  {
+    "id": "conv-47:q39",
+    "conv": "conv-47",
+    "qid": "q39",
+    "category": "multi-hop",
+    "question": "What happened to John's job situation in 2022?",
+    "answer": "quit his IT Job, secured his dream job, aspires to become an eSports competition organizer",
+    "evidence": [
+      "s4",
+      "s18"
+    ],
+    "prev_score": 0.0,
+    "prev_pred": "He left his IT job after 3 years and got his dream job (starting ~July 2022); happy with the change and drawn to gaming tournament organizing"
+  },
+  {
+    "id": "conv-49:q8",
+    "conv": "conv-49",
+    "qid": "q8",
+    "category": "multi-hop",
+    "question": "What new hobbies did Sam consider trying?",
+    "answer": "Painting, kayaking, hiking, cooking, running",
+    "evidence": [
+      "s1",
+      "s2",
+      "s7",
+      "s10",
+      "s13",
+      "s20",
+      "s21"
+    ],
+    "prev_score": 0.5,
+    "prev_pred": "painting and kayaking"
+  }
+]

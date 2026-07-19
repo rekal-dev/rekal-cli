@@ -10,8 +10,9 @@ If `rekal` is missing: `export PATH="$HOME/.local/bin:$PATH"`.
 ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}"
 ```
 
-Scripts under `$ROOT/scripts/` are the gates. Prefer `python3` / `bash` so
-mode bits never matter.
+Scripts under `$ROOT/scripts/` compress every skill-facing rekal. Prefer
+`python3` / `bash` so mode bits never matter. **Never read raw JSON** — pipe
+recall through `route.py`, query/SQL/session through `view.py`.
 
 ## Root recall flags
 
@@ -38,8 +39,10 @@ smells solved elsewhere — don't widen unprompted.
 ## Raw SQL
 
 ```bash
-rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
-rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC"
+rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5" \
+  | python3 "$ROOT/scripts/view.py"
+rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC" \
+  | python3 "$ROOT/scripts/view.py"
 ```
 
 `rekal query --help` documents both DB schemas. `tool_calls.path` is the most
@@ -54,17 +57,17 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 
 | Script | Role |
 |---|---|
-| `route.py` | Recall entry: INJECT / KNOWLEDGE / SILENCE (inclusive). INJECT = `top=`/`gap=` + top-20 seeds (`sid conf=… t<n> "snippet"`); trailing `KNOWLEDGE` when prose also matched. KNOWLEDGE alone = per-file `path=score`. Episode gate on absolute confidence |
+| `route.py` | Recall → recommendation digest (INJECT / KNOWLEDGE / SILENCE). Super-low floors; agent judges `conf=` / `path=score` |
+| `view.py` | Query/SQL/session → raw turns or TSV rows (no JSON chrome) |
 | `map.sh fresh` / `map.sh watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
 | `wiki-gate.sh` | Refuse wiki on default branch |
 
 ```mermaid
 flowchart LR
-  j["rekal JSON"] --> rr["route.py"]
-  rr -->|INJECT ± KNOWLEDGE| i["ledger drill + optional Read HEAD"]
+  r["rekal recall"] --> rr["route.py"]
+  q["rekal query"] --> v["view.py"]
+  rr -->|INJECT ± KNOWLEDGE| i["view.py drill + optional Read HEAD"]
   rr -->|KNOWLEDGE| k["Read HEAD"]
   rr -->|SILENCE| s["stop"]
+  v --> a["agent reads compact text"]
 ```
-
-Substrates are inclusive: confident episode and knowledge can both report.
-Knowledge alone is the report when the episode gate fails.

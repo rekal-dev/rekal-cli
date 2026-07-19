@@ -1,0 +1,14 @@
+{
+  "gate": {
+    "CONF_MIN": 0.25,
+    "CONF_SOFT": 0.20,
+    "GAP_MIN": 0.02,
+    "MASS_MIN": 0,
+    "KNOWLEDGE_MIN": 0.25
+  },
+  "weights": {
+    "bm25": 0.3, "lsa": 0.2, "semantic": 0.5,
+    "steering_boost": 1.0, "summary_boost": 1.0,
+    "subagent_downweight": 1.0, "facet_boost": 0.1
+  }
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "conv-30:q56",
+    "conv": "conv-30",
+    "question": "What does Gina's tattoo symbolize?",
+    "answer": "Freedom and expressing herself through dance",
+    "category": "single-hop",
+    "prev_score": 0.5,
+    "prev_pred": "freedom \u2014 dancing without worrying what people think; a reminder to follow her passions and express herself"
+  },
+  {
+    "id": "conv-41:q125",
+    "conv": "conv-41",
+    "question": "What kind of activities did Maria do at the picnic with her church friends?",
+    "answer": "played games like charades and a scavenger hunt",
+    "category": "single-hop",
+    "prev_score": 0.5,
+    "prev_pred": "chilled under trees, played charades and a scavenger hunt, ate food"
+  },
+  {
+    "id": "conv-50:q7",
+    "conv": "conv-50",
+    "question": "Which types of cars does Dave like the most?",
+    "answer": "classic vintage cars",
+    "category": "multi-hop",
+    "prev_score": 0.5,
+    "prev_pred": "classic cars (classic muscle cars)"
+  },
+  {
+    "id": "conv-41:q58",
+    "conv": "conv-41",
+    "question": "What causes has John done events for?",
+    "answer": "Toy drive, Community food drive, veterans, domestic violence",
+    "category": "multi-hop",
+    "prev_score": 0.0,
+    "prev_pred": "veterans and their families; victims of domestic abuse; homeless people; kids in need"
+  },
+  {
+    "id": "conv-49:q29",
+    "conv": "conv-49",
+    "question": "What kind of writing does Sam do to relax and cope with his health issues?",
+    "answer": "journalling, creative writing",
+    "category": "multi-hop",
+    "prev_score": 0.5,
+    "prev_pred": "journal writing and creative writing"
+  },
+  {
+    "id": "conv-49:q8",
+    "conv": "conv-49",
+    "question": "What new hobbies did Sam consider trying?",
+    "answer": "Painting, kayaking, hiking, cooking, running",
+    "category": "multi-hop",
+    "prev_score": 0.5,
+    "prev_pred": "painting and kayaking"
+  },
+  {
+    "id": "conv-47:q39",
+    "conv": "conv-47",
+    "question": "What happened to John's job situation in 2022?",
+    "answer": "quit his IT Job, secured his dream job, aspires to become an eSports competition organizer",
+    "category": "multi-hop",
+    "prev_score": 0.0,
+    "prev_pred": "He left his IT job after 3 years and got his dream job (starting ~July 2022); happy with the change and drawn to gaming tournament organizing"
+  },
+  {
+    "id": "conv-48:q10",
+    "conv": "conv-48",
+    "question": "When did Deborah's father pass away?",
+    "answer": "January 25, 2023",
+    "category": "temporal",
+    "prev_score": 0.5,
+    "prev_pred": "2023-01-25"
+  },
+  {
+    "id": "conv-47:q15",
+    "conv": "conv-47",
+    "question": "When did James buy himself a new adventure book?",
+    "answer": "April 26, 2022",
+    "category": "temporal",
+    "prev_score": 0.5,
+    "prev_pred": "2022-04-26"
+  },
+  {
+    "id": "conv-47:q56",
+    "conv": "conv-47",
+    "question": "When did John and his programming friends host an online programming competition?",
+    "answer": "Last week before 13 October 2022.",
+    "category": "temporal",
+    "prev_score": 0.0,
+    "prev_pred": "early October 2022"
+  }
+]

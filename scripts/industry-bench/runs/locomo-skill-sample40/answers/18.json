@@ -1,0 +1,9 @@
+{
+  "id": "conv-49:q38",
+  "pred": "grilled salmon with vegetables; grilled chicken and veggie stir-fry; fruit bowls (incl. spinach/avocado/strawberry); Healthy Choice beef-and-vegetable meals; fruit-and-yogurt smoothie bowls",
+  "route": "INJECT",
+  "top_conf": 0.74,
+  "tok_est": 5200,
+  "drills": 8,
+  "notes": "multi-hop across evidence s3/s7/s8/s10/s11/s18: s7 cooking-class grilled salmon+veg after doc wake-up; s8 grilled chicken veggie stir-fry + spinach/avocado/strawberry; s10 Healthy Choice beef+veg; s11 fruit bowl; s18 WW smoothie/fruit-yogurt bowls (Sam's literal 'health scare'/gastritis is s14\u2192nutritious diet; meal kinds from later+earlier diet arc)"
+}

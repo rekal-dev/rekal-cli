@@ -34,6 +34,7 @@ func TestAll_UnifiedSkill(t *testing.T) {
 	wantFiles := []string{
 		"SKILL.md",
 		"scripts/route.py",
+		"scripts/view.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -49,6 +50,7 @@ func TestAll_UnifiedSkill(t *testing.T) {
 	// Tip must name the modules so progressive disclosure stays wired.
 	for _, needle := range []string{
 		"scripts/route.py",
+		"scripts/view.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -196,11 +198,14 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("strong episode + knowledge must also report KNOWLEDGE, got %s", out)
 	}
 
-	// A low knowledge score is REPORTED on the inclusive path, not silenced on a
-	// tuned floor: the score is a signal the agent judges (SOUL.md).
+	// Below the super-low knowledge report floor: omit the KNOWLEDGE line
+	// (junk marker noise) but still INJECT the episode.
 	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") || !strings.Contains(out, "docs/x.md=0.12") {
-		t.Fatalf("low knowledge score must be reported under INJECT, got code=%d %s", code, out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
+		t.Fatalf("episode should still INJECT, got code=%d %s", code, out)
+	}
+	if strings.Contains(out, "KNOWLEDGE") {
+		t.Fatalf("knowledge below report floor must be omitted, got %s", out)
 	}
 
 	// A retryable semantic-warming status adds a trailing note after the verdict
@@ -244,5 +249,45 @@ func TestRouteScript(t *testing.T) {
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.10,"mass":2.0,"score":0.95}],"knowledge":[]}`)
 	if code == 0 || !strings.Contains(out, "SILENCE") {
 		t.Fatalf("conf 0.10 + no knowledge should SILENCE, got code=%d %s", code, out)
+	}
+
+	// Knowledge alone below report floor (no episode) -> SILENCE, not KNOWLEDGE.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.10,"score":0.9}],"knowledge":[{"path":"CLAUDE.md","score":0.09}]}`)
+	if code == 0 || !strings.Contains(out, "SILENCE") {
+		t.Fatalf("junk knowledge alone should SILENCE, got code=%d %s", code, out)
+	}
+}
+
+func TestViewScript(t *testing.T) {
+	t.Parallel()
+	path := writeScript(t, "scripts/view.py")
+
+	session := `{
+	  "session_id":"s1",
+	  "author":"a@b.c",
+	  "actor":"human",
+	  "branch":"main",
+	  "captured_at":"2026-01-01T00:00:00Z",
+	  "total_turns":3,
+	  "turns":[
+	    {"index":1,"role":"human","content":"hello world","ts":"t1"},
+	    {"index":2,"role":"assistant","content":"hi there","ts":"t2"}
+	  ]
+	}`
+	out, code := runRoute(t, path, session)
+	if code != 0 {
+		t.Fatalf("view session exit: %d %s", code, out)
+	}
+	if strings.Contains(out, `"session_id"`) || strings.Contains(out, "captured_at") {
+		t.Fatalf("view must strip JSON chrome, got %s", out)
+	}
+	if !strings.Contains(out, "s1 t1-2") || !strings.Contains(out, "t1 human: hello world") {
+		t.Fatalf("want compact turns, got %s", out)
+	}
+
+	rows := "{\"a\":1,\"b\":\"x\"}\n{\"a\":2,\"b\":\"y\"}\n"
+	out, code = runRoute(t, path, rows)
+	if code != 0 || !strings.Contains(out, "a\tb") || !strings.Contains(out, "1\tx") {
+		t.Fatalf("want TSV rows, got code=%d %s", code, out)
 	}
 }

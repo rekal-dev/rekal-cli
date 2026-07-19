@@ -88,15 +88,16 @@ CONF_MIN = _env_float("REKAL_HUNT_CONF_MIN", 0.25)
 # Soft path: slightly below the hard floor with a clear gap to #2.
 CONF_SOFT = _env_float("REKAL_HUNT_CONF_SOFT", 0.20)
 GAP_MIN = _env_float("REKAL_HUNT_GAP_MIN", 0.02)
+# Super-low knowledge *report* floor. Below this, scores are mathematically
+# ignorable marker noise (LoCoMo CLAUDE.md ≈ 0.05–0.17) — omit the line to
+# save tokens. Above it, report the distribution for the agent to judge.
+# Not a "this is true" decision; just don't emit junk. Override via REKAL_HUNT_*.
+KNOWLEDGE_MIN = _env_float("REKAL_HUNT_KNOWLEDGE_MIN", 0.25)
 # Raw BM25 `mass` is reported verbatim, never bucketed on a fixed boundary: mass
 # is not corpus-invariant (it scales with corpus term stats and doc lengths), so
 # any "low mass" cut would be a tuned constant (SOUL.md: no tuned constant
 # decides). Low mass means a lexically thin, dialogue-shaped hit — the agent
 # reads the number and judges whether to trust or widen. Mass never silences.
-# No KNOWLEDGE floor. The knowledge `score` blends semantic cosine, whose junk
-# baseline drifts per corpus and model — a fixed floor overfits the corpus it
-# was measured on (SOUL.md: no tuned constant decides). route.py reports it
-# verbatim and the agent judges whether it is a real prose hit.
 
 # Digest shape. These are output BUDGETS (how much to print), not judgment
 # gates — they bound the digest's token cost without changing the verdict or the
@@ -150,16 +151,25 @@ def episode_verdict(results: list) -> tuple[str, float, float, float, str]:
     return "silence", top, gap, mass, "below_gate"
 
 
+def knowledge_reportable(knowledge: list) -> list:
+    """Knowledge entries at/above the super-low report floor, score-ordered."""
+    scored = []
+    for k in knowledge:
+        if not isinstance(k, dict) or not k.get("path"):
+            continue
+        sc = _f(k.get("score", 0))
+        if sc >= KNOWLEDGE_MIN:
+            scored.append((sc, k))
+    scored.sort(key=lambda x: -x[0])
+    return [k for _, k in scored]
+
+
 def knowledge_hits(knowledge: list, n: int = 5) -> str:
-    """Top knowledge files as `path=score`, score-ordered. The whole point is to
-    hand the agent the score *distribution*, not one number: a flat cluster near
-    the noise floor (e.g. 0.51 0.49 0.48) is no real hit; a clear leader that
-    then falls off (0.93 0.92 0.60) is a real prose hit. That reference point is
-    what the agent judges against — no fixed floor decides (SOUL.md)."""
+    """Top knowledge files as `path=score`. Agent judges the distribution
+    (clear leader vs flat cluster). Entries below KNOWLEDGE_MIN are omitted."""
     out = []
-    for k in knowledge[:n]:
-        if isinstance(k, dict) and k.get("path"):
-            out.append(f'{k["path"]}={_f(k.get("score", 0)):.2f}')
+    for k in knowledge_reportable(knowledge)[:n]:
+        out.append(f'{k["path"]}={_f(k.get("score", 0)):.2f}')
     return " ".join(out)
 
 
@@ -181,10 +191,13 @@ def print_digest(data: dict) -> None:
         print(f"  (+{more} more — reformulate/multi-search or -n)")
 
 
-def print_knowledge(knowledge: list) -> None:
-    """Emit the knowledge score distribution — never gated on a fixed floor."""
+def print_knowledge(knowledge: list) -> bool:
+    """Emit knowledge distribution when above the report floor. Returns True if emitted."""
     hits = knowledge_hits(knowledge)
-    print(f"KNOWLEDGE {hits}" if hits else "KNOWLEDGE")
+    if not hits:
+        return False
+    print(f"KNOWLEDGE {hits}")
+    return True
 
 
 def main() -> int:
@@ -225,15 +238,13 @@ def main() -> int:
         )
         print_digest(data)
         # Inclusive: mixed questions can need HEAD prose *and* an episode.
-        if knowledge:
-            print_knowledge(knowledge)
+        # Only report knowledge above the super-low floor (junk marker omit).
+        print_knowledge(knowledge)
         return done(0)
 
-    # Episode gate failed. Knowledge has no corpus-invariant floor, so report
-    # the per-file score distribution as a signal and let the agent judge —
-    # don't silence on a tuned threshold (SOUL.md: no tuned constant decides).
-    if knowledge:
-        print_knowledge(knowledge)
+    # Episode below floor. Report knowledge only when above the report floor;
+    # otherwise machine silence (near-zero prose score is not a substrate).
+    if print_knowledge(knowledge):
         return done(0)
 
     # Nothing on either substrate — machine silence. The reason is diagnostic;

@@ -43,9 +43,10 @@ read costs about the same through the route as a `-n 20` one.
 `route.py` labels are **recommendations**. It is biased toward more data than
 decision: a **super-low** episode floor on absolute `confidence` (≥ 0.25; soft
 ≥ 0.20 with gap ≥ 0.02) so only empty / near-zero is machine-silenced, then
-`conf=` on the header and each seed for **you** to weigh. Knowledge `score` is
-reported for you to judge (no fixed floor). Both substrates can appear together
-when the question is mixed. Neither → SILENCE.
+`conf=` on the header and each seed for **you** to weigh. Knowledge is reported
+only above a matching super-low score floor (≥ 0.25); junk markers are omitted.
+Both substrates can appear together when the question is mixed. Neither →
+SILENCE. Drills and SQL always pipe through `view.py`.
 
 ## One query is a guess — widen before you conclude
 
@@ -99,8 +100,9 @@ gold is still a list: "what activities does X do", "what does X do besides Y",
 set, and a partial list is a wrong answer. Switch to SQL across *all* sessions:
 
 ```bash
-rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'"
-# then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … until you've seen every row
+rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'" \
+  | python3 "$ROOT/scripts/view.py"
+# then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … | view.py until every row
 ```
 
 - **Count before you LIMIT.** An `ORDER BY ts LIMIT 20` you never paged is a
@@ -127,8 +129,10 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
 The ledger has a clock. Use it before you rank.
 
 ```bash
-rekal query "SELECT MIN(ts), MAX(ts), COUNT(DISTINCT session_id) FROM turns"
-rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>' AND '<to>' AND role='human' ORDER BY ts"
+rekal query "SELECT MIN(ts), MAX(ts), COUNT(DISTINCT session_id) FROM turns" \
+  | python3 "$ROOT/scripts/view.py"
+rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>' AND '<to>' AND role='human' ORDER BY ts" \
+  | python3 "$ROOT/scripts/view.py"
 ```
 
 - **Anchor first.** "A month ago", "the day before X" are relative — resolve the
@@ -196,7 +200,7 @@ Reflection and pattern-mining need signal clusters, not one pointed episode.
 rekal query --index "SELECT session_id, turn_index, role, substr(content,1,400) FROM turns_ft \
   WHERE role = 'human_steering' \
   AND (content LIKE '%auth%' OR content LIKE '%token%') \
-  ORDER BY session_id, turn_index"
+  ORDER BY session_id, turn_index" | python3 "$ROOT/scripts/view.py"
 ```
 
 Modes: **reflect** (cluster recurring corrections into one durable rule),
@@ -216,7 +220,7 @@ rekal query --index "SELECT session_id, turn_index, role, substr(content,1,300) 
   WHERE (role = 'human_steering' OR content LIKE '%because%' OR content LIKE '%instead of%' \
          OR content LIKE '%constraint%' OR content LIKE '%rejected%' OR content LIKE '%decided%') \
   AND (content LIKE '%<topic-1>%' OR content LIKE '%<topic-2>%') \
-  ORDER BY session_id, turn_index"
+  ORDER BY session_id, turn_index" | python3 "$ROOT/scripts/view.py"
 ```
 
 A real arc needs a real trail: a couple of rows is not a rationale. When the
@@ -234,7 +238,7 @@ When the anchor is a specific file, function, line, or commit:
 git log --oneline -15 -- path/to/file.go
 git log --oneline -15 -L :FuncName:path.go       # follow a function
 rekal --commit <sha>                              # commit → sessions
-rekal query --session <id> --role human_steering  # session → intent
+rekal query --session <id> --role human_steering | python3 "$ROOT/scripts/view.py"
 ```
 
 Emit the chain: artifact → commit `<sha>` → session `<id>` → human intent
@@ -249,11 +253,12 @@ almost nothing and catches misreads (a routine mistaken for an episode, a
 discussed item mistaken for an owned one). Never `--full` by default:
 
 ```bash
-rekal query --session <id> --offset <snippet_turn_index - 2> --limit 5   # first move
-rekal query --session <id> --role summary        # if summary_turn_index present
-rekal query --session <id> --role human          # the user's own words
-rekal query --session <id> --role human_steering  # high-intent turns
-rekal query --session <id> --full                 # last resort — whole transcript
+# Always pipe drills through view.py — raw turns, not JSON chrome.
+rekal query --session <id> --offset <snippet_turn_index - 2> --limit 5 | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role summary                               | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role human                                 | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role human_steering                        | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --full                                       | python3 "$ROOT/scripts/view.py"  # last resort
 ```
 
 Fields: `session_id`, `score`, `confidence`, `mass`, `snippet`,

@@ -94,12 +94,10 @@ evidence that is mis-ranked; it does not create evidence that isn't there.
 
 ## Complete-set questions: enumerate, don't rank
 
-"All", "every", "in what order", "which of the N" — and the quieter shapes whose
-gold is still a list: "what activities does X do", "what does X do besides Y",
-"who did X tell about Z", "what causes / events / hobbies / goals". Ranked
-recall returns the loudest matches, not the full set, and a **partial list is a
-wrong answer**. Switch to SQL across *all* sessions. **Do not answer from the
-first two drills.**
+"All", "every", "in what order", "which of the N" — and quieter shapes whose
+answer is still a list. Ranked recall returns the loudest matches, not the full
+set; a **partial list is a wrong answer**. Switch to SQL across *all* sessions.
+Page until empty — do not stop because the first hits sound complete.
 
 ```bash
 rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'" \
@@ -107,30 +105,26 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
 # then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … | view.py until every row
 ```
 
-- **Page until empty.** Stop only when a further OFFSET returns nothing new —
-  not when you already have "enough" items to sound complete.
+- **Page until empty.** Stop only when a further OFFSET returns nothing new.
 - **Count before you LIMIT.** An `ORDER BY ts LIMIT 20` you never paged is a
   silent truncation — the answer is often in the rows you cut.
 - **LIKE is stricter than search.** Reformulate SQL patterns too: synonyms and
   adjacent vocabulary, not just the words your first hits used.
-- **Enumerate by the entity, not the verbs.** "What does X do with the turtles"
-  — pattern on `%turtle%` and read *every* row; the item you'd never guess
-  ("give them a bath") only surfaces from the entity's own mention list.
+- **Enumerate by the entity, not the verbs.** Pattern on the thing named in
+  the question and read *every* row; items you'd never guess only surface from
+  the entity's own mention list.
 - **Check the set size.** If the question fixes N, don't answer until you can
   point at N distinct events, each verified in context.
-- **Name what was asked.** Event/cause questions want the *event names* in the
-  record (toy drive, food drive), not only the beneficiary class. Job/goal arcs
-  need every beat the ledger states (left X, got Y, aspires Z) — omit nothing
-  that is there; invent nothing that isn't.
+- **Report what the record names.** Omit nothing that is there; invent nothing
+  that isn't. Prefer the ledger's own labels over a tidied paraphrase.
 - **Non-verbal evidence counts.** Shared-media captions (`[shares a photo: …]`),
   links, quoted lists are premises — read them as part of the turn.
 - **Scan the uptake, not just the utterance.** In two-party questions the
-  cleanest evidence is often the reaction ("gonna try it", "thanks") while the
-  original line is keyword-sparse. Enumerate both sides.
-- **Instances vs classes.** "Which authors has X read" — turns name *titles*,
-  not authors. Enumerate the instances, then map each to the class the question
-  asks with world knowledge. Searching the class word alone misses every
-  instance that never says it.
+  cleanest evidence is often the reaction while the original line is
+  keyword-sparse. Enumerate both sides.
+- **Instances vs classes.** Turns often name instances; the question may ask
+  for the class. Enumerate instances from the ledger first, then map — searching
+  the class word alone misses every instance that never says it.
 
 ## Time questions navigate by time
 

@@ -74,23 +74,19 @@ silent on prose. On a mixed `INJECT`+`KNOWLEDGE` output, combine both if needed.
 The route returns data; you decide the move. Cite session / turn / commit with
 every memory claim.
 
-## Judgment — SOUL-aligned (agent, not the script)
+## Judgment — agent, not the script
 
-Scripts recommend and compress. **You** judge. Keep it general:
+Scripts recommend and compress. **You** judge (SOUL: judgment is not frozen
+into the skill).
 
-- **Only what the ledger holds.** Do not invent, pad, or borrow world knowledge
-  when the record is thin — say what is there, or stay silent.
-- **Lists and arcs are complete-sets.** "What/which/how many/besides/goals/events"
-  → enumerate across *all* sessions (SQL + page until empty). The first two
-  hits are not the answer. Stop only when further pages add nothing new.
-- **Name the thing the question asked.** Causes → event names; hobbies → each
-  distinct activity; job arcs → every beat (left X, got Y, aspires Z) that the
-  record actually states.
-- **Time stays anchored.** Prefer the relative form the speaker used plus the
-  session date ("last week before 2022-10-13"), not a rounded gloss
-  ("early October"), unless the record itself gives a calendar day.
-- **Attribute carefully.** Who did it, with whom, where — if the drill
-  contradicts the question's framing, say so; don't force a fit.
+- **Only what the ledger holds.** Do not invent or pad. If the record is thin,
+  say so — or stay silent.
+- **A partial set is a wrong answer when the question asks for the set.**
+  Enumerate (SQL, page until empty); do not stop because the first hits sound
+  complete. Ranked recall is for pointed questions, not for "all / which / how
+  many / every beat of an arc."
+- **Keep the speaker's precision.** Relative time and attribution stay as the
+  record states them; don't round, force, or tidy away ambiguity.
 
 ## Semantic warming — retry, don't settle
 

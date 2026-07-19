@@ -196,6 +196,20 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("no semantic field must not emit a warming note: %s", out)
 	}
 
+	// Tail cap: with many results the digest caps the id(conf) tail (top-3 get
+	// snippets, next DIGEST_TAIL_MAX=12 listed) and summarizes the remainder as
+	// a count, so the INJECT digest stays cost-bounded regardless of -n.
+	big := `{"results":[{"session_id":"top","confidence":0.82,"mass":5,"score":1}` +
+		strings.Repeat(`,{"session_id":"x","confidence":0.5,"mass":1,"score":1}`, 19) +
+		`],"knowledge":[]}`
+	out, code = runRoute(t, path, big)
+	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "(+5 more") {
+		t.Fatalf("digest should cap the tail and show (+5 more), got: %s", out)
+	}
+	if strings.Count(out, "0.5)") > 13 { // 12 shown tail + at most the header area
+		t.Fatalf("tail not capped — too many entries printed: %s", out)
+	}
+
 	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
 	if code == 0 || !strings.Contains(out, "SILENCE") {

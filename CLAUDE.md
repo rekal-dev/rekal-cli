@@ -211,8 +211,10 @@ session discovery keep using the invoking worktree.
   substrates (INJECT may trail a `KNOWLEDGE` line when both match) + a
   cost-bounded seed digest (top-20 as `sid conf=… t<n> "snippet"`; header
   carries `top=`/`gap=`; mass stays inside; reformulate or `-n` for the rest;
-  the window is a display budget, not a gate). The episode gate is absolute
-  `confidence` (saturating BM25 — corpus-invariant by construction). Knowledge
+  the window is a display budget, not a gate). The episode gate is a super-low
+  floor on absolute `confidence` = `max(saturate(bm25), cosine) +
+  0.15·saturate(facet)` — only the BM25 term is corpus-invariant, so the floor
+  stays low and the agent weighs the emitted `conf=`. Knowledge
   `score` is reported for the agent to judge — no tuned floor. `map.sh`
   fresh|watermark; `wiki-gate.sh`), and `references/`
   (rich, on demand — `ledger.md` is the one page on reasoning over the past:
@@ -287,11 +289,15 @@ mise run build         # Build binary with version from git tag
 mise run build:all     # Build for all platforms (snapshot)
 ```
 
-**Cloud agents / fresh containers:** building from a clean clone has two traps —
-llama.cpp HEAD won't link (pin tag `b8157`) and the nomic model ships as a
-git-LFS pointer (`git lfs pull` or recall silently drops to BM25+LSA). Follow
-[`docs/cloud-agent-setup.md`](docs/cloud-agent-setup.md) before building or
-judging recall quality; don't repeat the setup mistakes.
+**Cloud agents / fresh containers:** the cold-start is build → init → sync →
+verify, and it has three traps — llama.cpp HEAD won't link (pin tag `b8157`),
+the nomic model ships as a git-LFS pointer (`git lfs pull` or recall silently
+drops to BM25+LSA), and the installed `.claude/skills/rekal/` copy goes stale
+after a rebuild (re-run `rekal init` to refresh it; data is untouched). Follow
+[`docs/cloud-agent-setup.md`](docs/cloud-agent-setup.md) — it has the exact
+steps, the data-sync sequence (`rekal init` + `rekal sync`), the
+semantic-layer verification, and the no-mise dev-loop fallbacks. Don't repeat
+the setup mistakes, and never judge recall quality before the verify step.
 
 ### Before Every Commit
 

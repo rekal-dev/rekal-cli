@@ -68,10 +68,11 @@ flowchart LR
 
 `confidence` = `max(saturate(bm25), cosine) + 0.15·saturate(facet)` — never
 divided by the candidate-set max (junk queries also normalize `score` ≈ 1.0).
-**Super-low floor 0.25**; soft path 0.20 with gap ≥ 0.02. Labels are
-**recommendations** — the router is biased toward more data than decision.
-Only empty / near-zero confidence is an obvious machine silence. Grey-band hits
-inject with `conf=` for the agent to weigh (SOUL.md: no tuned constant decides).
+**Super-low episode floor 0.25**; soft path 0.20 with gap ≥ 0.02. Matching
+**knowledge report floor 0.25** — omit junk marker scores. Labels are
+**recommendations** — biased toward more data than decision. Grey-band hits
+inject with `conf=` for the agent to weigh. Session/SQL drills pipe through
+`view.py` (raw turns / TSV), never raw JSON.
 
 Substrates are **inclusive**: an episode and a knowledge hit can both report
 (mixed convention + why questions). Line 1 stays the primary verdict; a

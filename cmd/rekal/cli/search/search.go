@@ -919,7 +919,11 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder
 		if !nomic.Supported() {
 			return out, semanticSkipReason(indexDB, "")
 		}
-		client, cerr := nomic.NewClient(gitRoot)
+		// Recall is interactive and must never crash: use the daemon without
+		// waiting. If it isn't up yet, degrade to keyword/LSA this call (the
+		// daemon warms in the background for next time). Model-load crashes are
+		// isolated to the daemon process, so they never reach recall.
+		client, cerr := nomic.NewClient(gitRoot, false)
 		if cerr != nil {
 			return out, cerr
 		}

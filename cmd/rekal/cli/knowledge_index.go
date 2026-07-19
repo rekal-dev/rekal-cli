@@ -180,7 +180,8 @@ func embedKnowledgeChunks(w io.Writer, indexDB *sql.DB, gitRoot string, budget i
 	if len(missing) > 0 {
 		if emb == nil {
 			var cerr error
-			emb, cerr = semanticEmbedder(gitRoot)
+			// Per-call construction (checkpoint): degrade fast, don't stall.
+			emb, cerr = semanticEmbedder(gitRoot, false)
 			if cerr != nil || emb == nil {
 				// Backend unavailable — still store whatever the cache supplied.
 				if serr := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); serr != nil {

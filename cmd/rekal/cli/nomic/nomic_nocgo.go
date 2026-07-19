@@ -49,7 +49,7 @@ func (e *Embedder) EmbedSessions(_ map[string]string) (map[string][]float64, err
 type Client struct{}
 
 // NewClient returns ErrNotSupported on unsupported platforms.
-func NewClient(_ string) (*Client, error) {
+func NewClient(_ string, _ bool) (*Client, error) {
 	return nil, ErrNotSupported
 }
 

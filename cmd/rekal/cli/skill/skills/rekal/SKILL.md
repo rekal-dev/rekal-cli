@@ -65,3 +65,13 @@ stay silent, don't Read. The numbers are data; the call is yours.
 
 One question, one substrate. The route returns data; you decide the move. Cite
 session / turn / commit with every memory claim.
+
+## Semantic warming — retry, don't settle
+
+A `SEMANTIC warming` note means the deep-semantic layer's model daemon is still
+loading (first recall after `init`/`sync`). The results you got are keyword +
+LSA only — usable, but not the full ranking. If the answer matters, **re-run the
+same recall with exponential backoff** (2s, 4s, 8s) until the note is gone; the
+daemon warms in a few seconds and the retry carries semantic scoring. If it's
+still warming after ~three tries, proceed with what you have — the keyword layer
+already stands on its own.

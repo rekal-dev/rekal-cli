@@ -2,6 +2,7 @@ package search
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -177,6 +178,28 @@ type Output struct {
 	Filters   map[string]string `json:"filters"`
 	Mode      string            `json:"mode"`
 	Total     int               `json:"total"`
+	// Semantic is present only when the deep-semantic layer did not contribute
+	// but a retry would help — i.e. the nomic daemon is still loading the model.
+	// These results are keyword+LSA only; a follow-up recall in a few seconds
+	// includes semantic scoring. Omitted (nil) when semantic ran or is simply
+	// unavailable (nothing to retry for).
+	Semantic *SemanticStatus `json:"semantic,omitempty"`
+}
+
+// SemanticStatus tells the caller the deep-semantic layer is warming up and the
+// recall is worth retrying with backoff for full quality.
+type SemanticStatus struct {
+	Status    string `json:"status"`    // "warming"
+	Retryable bool   `json:"retryable"` // true
+}
+
+// semanticWarming returns a retryable status iff the nomic daemon is still
+// loading the model (ErrDaemonNotReady); otherwise nil (nothing to retry for).
+func semanticWarming(err error) *SemanticStatus {
+	if errors.Is(err, nomic.ErrDaemonNotReady) {
+		return &SemanticStatus{Status: "warming", Retryable: true}
+	}
+	return nil
 }
 
 // bm25Hit represents a BM25 match from the FTS index.
@@ -189,7 +212,7 @@ type bm25Hit struct {
 	score     float64
 }
 
-func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w Weights, qe QueryEmbedder) ([]Result, []KnowledgeHit, error) {
+func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w Weights, qe QueryEmbedder) ([]Result, []KnowledgeHit, *SemanticStatus, error) {
 	lin := filters.Lineage
 	on := lineageOn(lin)
 	var timings map[string]int64
@@ -248,7 +271,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	bm25Hits, err := bm25Search(indexDB, filters.Query)
 	stage("bm25", tBM25)
 	if err != nil {
-		return nil, nil, fmt.Errorf("bm25 search: %w", err)
+		return nil, nil, nil, fmt.Errorf("bm25 search: %w", err)
 	}
 
 	// Step 2: LSA search.
@@ -492,7 +515,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 	results, err := buildResults(indexDB, scoredResults, filters, candidatePool)
 	stage("build", tBuild)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Fold subagent/workflow hits under their trunk conversation — one
@@ -555,7 +578,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		})
 	}
 
-	return grouped, knowledge, nil
+	return grouped, knowledge, semanticWarming(nomicErr), nil
 }
 
 // candidateLineage is the per-session math snapshot retained only when
@@ -1616,6 +1639,7 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 
 	var results []Result
 	var knowledge []KnowledgeHit
+	var semStatus *SemanticStatus
 	var err error
 	mode := "filter"
 
@@ -1628,7 +1652,7 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 	case MeaningfulQuery(q):
 		mode = "hybrid"
 		filters.Query = q
-		results, knowledge, err = hybridSearch(indexDB, filters, limit, gitRoot, w, qe)
+		results, knowledge, semStatus, err = hybridSearch(indexDB, filters, limit, gitRoot, w, qe)
 	default:
 		results, err = filterSearch(indexDB, filters, limit)
 	}
@@ -1652,7 +1676,8 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 			"commit": filters.Commit,
 			"author": filters.Author,
 		},
-		Mode:  mode,
-		Total: len(results),
+		Mode:     mode,
+		Total:    len(results),
+		Semantic: semStatus,
 	}, nil
 }

@@ -86,20 +86,44 @@ func readMsg(conn net.Conn, v interface{}) error {
 	return json.Unmarshal(buf, v)
 }
 
-// RunDaemon runs the nomic embedding daemon. It loads the model once, listens
-// on a Unix socket, and exits after idleTimeout of inactivity.
+// RunDaemon runs the nomic embedding daemon. It takes a single-flight lock,
+// loads the model, THEN opens the socket, and exits after idleTimeout of
+// inactivity. The ordering matters: a connectable socket therefore always means
+// a ready daemon, and the lock means exactly one daemon serves a store — so
+// concurrent recall/embed calls can't spawn a swarm of daemons racing to
+// re-listen and reload the model (the crash that made recall flaky).
 func RunDaemon(gitRoot string) error {
-	_, err := nomicDir(gitRoot)
+	dir, err := nomicDir(gitRoot)
 	if err != nil {
 		return err
 	}
 
+	// Single-flight: if another daemon already holds the lock, exit cleanly —
+	// the running one owns the socket. Held for this process's whole lifetime.
+	lock, ok, err := lockFile(filepath.Join(dir, "daemon.lock"), false)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil // another daemon is serving this store
+	}
+	defer unlockFile(lock)
+
 	sock := socketPath(gitRoot)
 	pid := pidPath(gitRoot)
 
-	// Clean up stale socket.
-	os.Remove(sock) //nolint:errcheck
+	// Load the model BEFORE opening the socket. Clients probe for the socket to
+	// decide readiness; if it appeared first they could connect mid-load and
+	// hang or race a crash. Load under the lock so no other daemon loads too.
+	embedder, err := NewEmbedder()
+	if err != nil {
+		return fmt.Errorf("nomic daemon: load model: %w", err)
+	}
+	defer embedder.Close()
 
+	// Now that the model is ready, publish the socket (clearing any stale one
+	// left by a crashed predecessor).
+	os.Remove(sock) //nolint:errcheck
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		return fmt.Errorf("nomic daemon: listen: %w", err)
@@ -108,17 +132,9 @@ func RunDaemon(gitRoot string) error {
 	defer os.Remove(sock) //nolint:errcheck
 	defer os.Remove(pid)  //nolint:errcheck
 
-	// Write PID file.
 	if err := os.WriteFile(pid, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		return fmt.Errorf("nomic daemon: write pid: %w", err)
 	}
-
-	// Load model.
-	embedder, err := NewEmbedder()
-	if err != nil {
-		return fmt.Errorf("nomic daemon: load model: %w", err)
-	}
-	defer embedder.Close()
 
 	var mu sync.Mutex
 	idle := time.NewTimer(idleTimeout)
@@ -321,9 +337,9 @@ func spawnDaemon(gitRoot string) {
 	_ = os.MkdirAll(filepath.Dir(stamp), 0o755)                                      //nolint:errcheck
 	_ = os.WriteFile(stamp, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644) //nolint:errcheck
 
-	// Clean up stale socket/pid.
-	os.Remove(sock)             //nolint:errcheck
-	os.Remove(pidPath(gitRoot)) //nolint:errcheck
+	// Note: stale socket/pid cleanup is the daemon's job now — it happens after
+	// the daemon takes the single-flight lock, so we never delete a socket a
+	// live (or loading) daemon owns.
 
 	exe, err := os.Executable()
 	if err != nil {

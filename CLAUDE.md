@@ -137,7 +137,10 @@ session discovery keep using the invoking worktree.
   query-projection cache (`projection.go`), absolute `confidence` + raw
   BM25 `mass` for silence gates (`confidence.go`; ranking still uses
   max-normalized `score`), thin-query rejection (empty/whitespace/single-char
-  → empty hybrid, no knowledge), the per-result
+  → empty hybrid, no knowledge), the top-level `semantic`
+  `{status:"warming",retryable:true}` field (present only while the nomic daemon
+  loads the model — recall degraded to keyword+LSA; the agent re-runs with
+  backoff for full quality, taught by `SKILL.md`), the per-result
   `summary_turn_index` pointer (latest compaction-summary turn — pointer,
   never the 10-17KB payload; drill with `--role summary`), the
   `--explain` enrichments (per-layer normalized scores + query-time
@@ -192,7 +195,15 @@ session discovery keep using the invoking worktree.
   and `bedrock` (Amazon Bedrock runtime, Cohere Embed models, bearer API key,
   no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
-- `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
+- `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags).
+  Model loading is isolated in a **single-flight daemon** (`daemon.lock` flock,
+  one per store) that loads the model **before** opening its socket — so a
+  connectable socket means "ready", and a native model-load crash kills the
+  disposable daemon, never the caller. `NewClient(gitRoot, wait)`: recall passes
+  `wait=false` (degrade to keyword/LSA now, daemon warms for next call);
+  `rekal embed` passes `wait=true` (block for the model, bounded). Cache
+  extraction is flock-serialized; spawns are cooldown-rate-limited. This is the
+  fix for the concurrent-recall model-load crash
 - `skill/`: One Claude Code skill, redesigned from `SOUL.md`'s "The skill"
   tenets around three homes — **function → script, knowledge → rich prose on
   demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin

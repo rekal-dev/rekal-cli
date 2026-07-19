@@ -74,8 +74,10 @@ The nomic embedding package uses CGO bindings to llama.cpp. On supported platfor
 # macOS: brew install cmake
 # Linux: apt install cmake build-essential
 
-# Clone llama.cpp into .deps/
-git clone --depth 1 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
+# Clone llama.cpp into .deps/ — PIN the tag CI uses. llama.cpp HEAD has
+# relocated/renamed the `common` static lib, which breaks the `-lcommon` link
+# in nomic_cgo.go. Tag b8157 builds libcommon.a where the CGO flags expect it.
+git clone --depth 1 --branch b8157 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
 
 # Build static libraries
 cd .deps/llama.cpp

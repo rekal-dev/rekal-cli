@@ -1,6 +1,6 @@
 {
   "status": "TRANSCRIBED_PENDING_VERIFICATION",
-  "note": "Anonymized aggregate record of the consolidated multi-corpus retrieval + mechanism + answer-sufficiency runs cited by docs/research/paper/rekal-paper.typ. Values were transcribed from the operator-held consolidated run record; every cell must be proofread against that record before submission (see paper/README.md). Corpora are identified by workload class only. No session content, corpus identity, or private path appears here.",
+  "note": "Anonymized aggregate record of the consolidated multi-corpus retrieval + mechanism + answer-sufficiency runs cited by docs/research/paper/rekal-paper.typ (arXiv:2607.14390). Values were transcribed from the operator-held consolidated run record; every cell must be proofread against that record (see paper/README.md). Corpora are identified by workload class only. No session content, corpus identity, or private path appears here.",
   "corpora": {
     "A": {
       "workload": "documentation/knowledge base",

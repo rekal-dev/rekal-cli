@@ -32,12 +32,13 @@ bench's ablation analysis trivial and gives skills a native zoom edge.
 When recall returns multiple sessions touching the same files with steering
 turns, order/annotate by recency so "the later decision" is visible
 (`superseded_candidate: true` on older hits in the same file-cluster). Query-
-time only, derived from existing facets. The `rekal-distill` skill then says
+time only, derived from existing facets. Analytics distill
+(`references/analytics.md`) then says
 it explicitly in the decision library.
 *Effort: small-medium. Source: BeliefShift; bench task T5 measures it.*
 
 ## R4 — Formalize the reflect → rules loop (LLM-Wiki's Error Book, EDV)
-`rekal-reflect` already mines `human_steering` into rules. Two upgrades:
+Analytics reflect (`references/analytics.md`) already mines `human_steering` into rules. Two upgrades:
 (a) a conventional output home (`docs/agent-rules.md` or a CLAUDE.md section)
 so rules are load-bearing, and (b) an EDV-style admission rule *documented in
 the skill*: promote a rule only when observed ≥3× across sessions (already
@@ -49,14 +50,14 @@ never distill a rule from dead-end-only evidence).
 Recall results from branches that never merged should carry
 `merged: false` (computable via the existing gate helpers) so agents/skills
 can present them as boundary knowledge ("tried, didn't land"), never as
-endorsed practice. The boundary library (rekal-distill) gets its signal from
+endorsed practice. The boundary library in `references/analytics.md` gets its signal from
 the engine instead of inferring it.
 *Effort: medium (plumb gitx ancestry check into recall path; cache it).
 Source: EDV; bench task T3 measures the payoff.*
 
 ## R6 — Skill self-improvement from own usage traces (AutoMem)
 Rekal's corpus contains sessions where the agent *used* rekal. Periodically
-census those (rekal-census scope: `cmd_prefix LIKE 'rekal%'`), find where the
+census those (analytics census scope: `cmd_prefix LIKE 'rekal%'`), find where the
 agent flailed (repeated searches, wrong drills), and revise the skill texts.
 Manual at first; the AutoMem loop (LLM proposes skill edits, accepted on
 bench wins) later.
@@ -77,8 +78,8 @@ maintained scripts — decision after v0 results. Publishing the harness is
 what makes the benchmark a community artifact (and RekalBench citable).
 *Effort: medium. Source: 03 §6.*
 
-## R11 — Committed wiki materialization (rekal-wiki skill; L3 stays bench-gated)
-Shipped as a skill, not engine: `rekal-wiki` discovers topic clusters from
+## R11 — Committed wiki materialization (`references/wiki.md`; L3 stays bench-gated)
+Shipped as a skill module, not engine: wiki (`references/wiki.md`) discovers topic clusters from
 file co-occurrence at generation time, assembles each topic from its
 sessions (compaction summaries → intent → steering, cheapest first, with a
 dirty-commit rule: noise subjects like "update" are cited by SHA but never

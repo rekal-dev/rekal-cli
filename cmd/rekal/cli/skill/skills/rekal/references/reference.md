@@ -54,17 +54,14 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 
 | Script | Role |
 |---|---|
-| `recall-route.py` | Tip entry: KNOWLEDGE / INJECT / SILENCE |
-| `hunt-gate.py` | Episode bars (used by recall-route) |
-| `why-trail-gate.py` | WHY gather size |
-| `map-fresh.sh` | Map watermark vs HEAD |
-| `map-write-watermark.sh` | Write/refresh watermark (+ stub) |
-| `wiki-branch-gate.sh` | Refuse wiki on default branch |
+| `route.py` | Recall entry: INJECT / KNOWLEDGE / SILENCE + digest; episode gate on absolute confidence; reports raw `mass` and knowledge `score` for the agent to judge |
+| `map.sh fresh` / `map.sh watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
+| `wiki-gate.sh` | Refuse wiki on default branch |
 
 ```mermaid
 flowchart LR
-  j["rekal JSON"] --> rr["recall-route"]
-  rr -->|INJECT| i["hunt drill"]
+  j["rekal JSON"] --> rr["route.py"]
+  rr -->|INJECT| i["ledger drill"]
   rr -->|KNOWLEDGE| k["Read HEAD"]
   rr -->|SILENCE| s["stop"]
 ```

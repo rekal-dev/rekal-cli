@@ -33,18 +33,11 @@ func TestAll_UnifiedSkill(t *testing.T) {
 
 	wantFiles := []string{
 		"SKILL.md",
-		"scripts/hunt-gate.py",
-		"scripts/recall-route.py",
-		"scripts/why-trail-gate.py",
-		"scripts/map-fresh.sh",
-		"scripts/map-write-watermark.sh",
-		"scripts/wiki-branch-gate.sh",
-		"references/hunt.md",
-		"references/why.md",
-		"references/mine.md",
+		"scripts/route.py",
+		"scripts/map.sh",
+		"scripts/wiki-gate.sh",
+		"references/ledger.md",
 		"references/map.md",
-		"references/provenance.md",
-		"references/analytics.md",
 		"references/wiki.md",
 		"references/reference.md",
 	}
@@ -55,12 +48,12 @@ func TestAll_UnifiedSkill(t *testing.T) {
 	}
 	// Tip must name the modules so progressive disclosure stays wired.
 	for _, needle := range []string{
-		"scripts/recall-route.py",
-		"scripts/why-trail-gate.py",
-		"scripts/map-fresh.sh",
-		"scripts/wiki-branch-gate.sh",
-		"references/hunt.md",
-		"references/analytics.md",
+		"scripts/route.py",
+		"scripts/map.sh",
+		"scripts/wiki-gate.sh",
+		"references/ledger.md",
+		"references/map.md",
+		"references/reference.md",
 	} {
 		if !strings.Contains(s.Content, needle) {
 			t.Errorf("SKILL.md tip must mention %s", needle)
@@ -75,10 +68,10 @@ func TestAll_UnifiedSkill(t *testing.T) {
 
 func TestIsScript(t *testing.T) {
 	t.Parallel()
-	if !IsScript("scripts/hunt-gate.py") {
+	if !IsScript("scripts/route.py") {
 		t.Fatal("scripts/ should be executable")
 	}
-	if IsScript("references/hunt.md") {
+	if IsScript("references/ledger.md") {
 		t.Fatal("references/ should not be marked script")
 	}
 }
@@ -90,7 +83,6 @@ func writeScript(t *testing.T, rel string) string {
 		t.Fatalf("missing %s", rel)
 	}
 	dir := t.TempDir()
-	// Preserve sibling scripts when recall-route needs hunt-gate next door.
 	if err := os.MkdirAll(filepath.Join(dir, "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -106,163 +98,92 @@ func writeScript(t *testing.T, rel string) string {
 	return filepath.Join(dir, rel)
 }
 
-func TestHuntGateScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/hunt-gate.py")
-
-	passJSON := `{"results":[{"confidence":0.82,"mass":5.6,"score":0.99},{"confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`
+// run feeds JSON to route.py and returns combined output + exit code.
+func runRoute(t *testing.T, path, stdin string) (string, int) {
+	t.Helper()
 	cmd := exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(passJSON)
+	cmd.Stdin = strings.NewReader(stdin)
 	out, err := cmd.CombinedOutput()
+	code := 0
 	if err != nil {
-		t.Fatalf("PASS_EPISODE case failed: %v (%s)", err, out)
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else {
+			t.Fatalf("run route.py: %v (%s)", err, out)
+		}
 	}
-	if !strings.Contains(string(out), "PASS_EPISODE") {
-		t.Fatalf("want PASS_EPISODE, got %s", out)
+	return string(out), code
+}
+
+func TestRouteScript(t *testing.T) {
+	t.Parallel()
+	path := writeScript(t, "scripts/route.py")
+
+	// Confident hit with healthy mass -> INJECT, raw mass reported verbatim.
+	out, code := runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5.6,"score":0.99},{"confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`)
+	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "mass=5.60") {
+		t.Fatalf("want INJECT mass=5.60 exit 0, got code=%d %s", code, out)
 	}
 
-	// Junk: high max-normalized score, low absolute confidence + weak mass.
-	junkJSON := `{"results":[{"confidence":0.48,"mass":2.59,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(junkJSON)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("junk should SILENCE, got %s", out)
-	}
-	if !strings.Contains(string(out), "SILENCE") {
-		t.Fatalf("want SILENCE, got %s", out)
+	// Confident but lexically thin (dialogue) -> INJECT, low raw mass reported,
+	// NOT silenced. The chat fix: mass is a reported signal, never a veto and
+	// never bucketed on a tuned boundary (SOUL.md).
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":1.4,"score":0.99},{"confidence":0.3,"mass":1.0,"score":0.4}],"knowledge":[]}`)
+	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "mass=1.40") {
+		t.Fatalf("want INJECT mass=1.40 exit 0 (thin chat hit not silenced), got code=%d %s", code, out)
 	}
 
-	// BUG 11: offtopic confidence (~0.63) must not soft-pass even with strong mass + gap.
-	offtopicJSON := `{"results":[{"confidence":0.63,"mass":4.0,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(offtopicJSON)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("offtopic conf 0.63 should SILENCE, got %s", out)
+	// Junk: high max-norm score, low absolute confidence -> SILENCE.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.48,"mass":2.59,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`)
+	if code == 0 || !strings.Contains(out, "SILENCE") {
+		t.Fatalf("junk should SILENCE, got code=%d %s", code, out)
 	}
-	if !strings.Contains(string(out), "SILENCE") {
-		t.Fatalf("want SILENCE for offtopic, got %s", out)
+
+	// Offtopic confidence (~0.63) must not soft-pass even with strong mass + gap.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.63,"mass":4.0,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`)
+	if code == 0 || !strings.Contains(out, "SILENCE") {
+		t.Fatalf("offtopic conf 0.63 should SILENCE, got code=%d %s", code, out)
 	}
 
 	// With confidence present, never fall back to max-norm score for gating.
-	scoreOnlyMixed := `{"results":[{"confidence":0.5,"score":1.19},{"score":0.95}],"knowledge":[]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(scoreOnlyMixed)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.5,"score":1.19},{"score":0.95}],"knowledge":[]}`)
+	if code == 0 {
 		t.Fatalf("confidence set must not gate on score, got %s", out)
 	}
 
-	silenceJSON := `{"results":[{"confidence":0.5,"score":0.5},{"confidence":0.49,"score":0.49}],"knowledge":[]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(silenceJSON)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("SILENCE case should exit non-zero, got %s", out)
+	// Offtopic on a modern store: omitempty drops all-zero confidence, so no
+	// result carries a confidence key. Must SILENCE — not INJECT on score/gap.
+	out, code = runRoute(t, path, `{"results":[{"session_id":"x","score":0.65},{"session_id":"y","score":0.43}],"knowledge":[]}`)
+	if code == 0 || !strings.Contains(out, "SILENCE") {
+		t.Fatalf("missing-confidence offtopic set must SILENCE, got code=%d %s", code, out)
 	}
 
-	// Confident episode wins even when knowledge docs are present.
-	strongPlusKnow := `{"results":[{"confidence":0.8,"mass":5.0,"score":1.08},{"confidence":0.3,"score":0.5}],"knowledge":[{"path":"docs/x.md"}]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(strongPlusKnow)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("strong episode + knowledge should PASS_EPISODE: %v (%s)", err, out)
+	// Knowledge is the fallback when the episode gate fails -> KNOWLEDGE, exit 0.
+	// The top score is reported verbatim as a signal (no tuned floor decides).
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
+	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "score=0.7200") {
+		t.Fatalf("weak episode + knowledge should KNOWLEDGE score=0.7200 exit 0, got code=%d %s", code, out)
 	}
-	if !strings.Contains(string(out), "PASS_EPISODE") {
-		t.Fatalf("want PASS_EPISODE, got %s", out)
-	}
-
-	// Knowledge is only a fallback when the episode gate fails.
-	weakPlusKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(weakPlusKnow)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("weak episode + knowledge should exit 3, got ok: %s", out)
-	}
-	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 3 {
-		t.Fatalf("want exit 3, got %v (%s)", err, out)
-	}
-	if !strings.Contains(string(out), "ROUTE_KNOWLEDGE") {
-		t.Fatalf("want ROUTE_KNOWLEDGE, got %s", out)
-	}
-
-	// BUG 14: weak absolute knowledge score must not ROUTE_KNOWLEDGE.
-	weakKnow := `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(weakKnow)
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("weak knowledge should SILENCE, got %s", out)
-	}
-	if !strings.Contains(string(out), "SILENCE") {
-		t.Fatalf("want SILENCE for weak knowledge, got %s", out)
-	}
-}
-
-func TestRecallRouteScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/recall-route.py")
-
-	knowJSON := `{"results":[{"score":0.4}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`
-	cmd := exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(knowJSON)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("KNOWLEDGE should exit 0: %v (%s)", err, out)
-	}
-	if !strings.Contains(string(out), "KNOWLEDGE") {
-		t.Fatalf("want KNOWLEDGE, got %s", out)
-	}
-	if strings.Contains(string(out), "INJECT") {
+	if strings.Contains(out, "INJECT") {
 		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
 	}
 
-	injectJSON := `{"results":[{"confidence":0.8,"mass":5.5,"score":0.95},{"confidence":0.4,"score":0.5}],"knowledge":[]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(injectJSON)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("INJECT should exit 0: %v (%s)", err, out)
-	}
-	if !strings.Contains(string(out), "INJECT") {
-		t.Fatalf("want INJECT, got %s", out)
+	// Confident episode wins even when knowledge docs are present.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.85,"mass":6.0,"score":1.08},{"confidence":0.4,"score":0.5}],"knowledge":[{"path":"docs/a.md"},{"path":"docs/b.md"}]}`)
+	if code != 0 || !strings.Contains(out, "INJECT") {
+		t.Fatalf("strong episode + knowledge should INJECT, got code=%d %s", code, out)
 	}
 
-	// PKYC-class bug: confident session must INJECT despite prose hits.
-	bothJSON := `{"results":[{"confidence":0.85,"mass":6.0,"score":1.08},{"confidence":0.4,"score":0.5}],"knowledge":[{"path":"docs/a.md"},{"path":"docs/b.md"}]}`
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(bothJSON)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("strong episode + knowledge should INJECT: %v (%s)", err, out)
-	}
-	if !strings.Contains(string(out), "INJECT") {
-		t.Fatalf("want INJECT, got %s", out)
-	}
-}
-
-func TestWhyTrailGateScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/why-trail-gate.py")
-
-	rows := strings.Repeat("session\t1\thuman\tbecause\n", 12)
-	cmd := exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(rows)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("PASS expected: %v (%s)", err, out)
+	// A low knowledge score is REPORTED, not silenced on a tuned floor: the score
+	// is a signal the agent judges. SOUL.md bans a corpus-tuned KNOWLEDGE floor.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
+	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "score=0.1200") {
+		t.Fatalf("low knowledge score must be reported (KNOWLEDGE score=0.1200), not silenced, got code=%d %s", code, out)
 	}
 
-	cmd = exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader("one\ntwo\n")
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("under_gathered should fail, got %s", out)
-	}
-	if !strings.Contains(string(out), "under_gathered") {
-		t.Fatalf("want under_gathered, got %s", out)
+	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
+	if code == 0 || !strings.Contains(out, "SILENCE") {
+		t.Fatalf("weak episode + no knowledge should SILENCE, got code=%d %s", code, out)
 	}
 }

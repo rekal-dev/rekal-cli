@@ -28,7 +28,7 @@ Choose the 2–3 repos with the deepest history (the ~500-session repo first).
 In each:
 
 ```bash
-rekal version              # ensure ≥ the release with skills/census (v0.4.0+)
+rekal version              # ensure a binary with the unified rekal skill (analytics census in references/)
 rekal index                # fresh index from data.db
 ```
 

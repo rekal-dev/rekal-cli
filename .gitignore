@@ -13,6 +13,10 @@
 /coverage.html
 /vendor/
 
+# Python bytecode (skill scripts under skills/rekal/scripts/)
+__pycache__/
+*.pyc
+
 # IDE and OS
 .idea/
 .vscode/

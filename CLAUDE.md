@@ -67,7 +67,7 @@ session discovery keep using the invoking worktree.
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
-  skill suite, and one marker-tagged CLAUDE.md sentence (the whole DX:
+  skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence (the whole DX:
   init, done; `clean` removes the line, refresh replaces it in place)
 - `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
@@ -193,13 +193,25 @@ session discovery keep using the invoking worktree.
   no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
-- `skill/`: One Claude Code skill with progressive disclosure.
-  `skills/rekal/` embeds `SKILL.md` (thin tip: triage + boundary + silence +
-  dispatch), `scripts/` (deterministic gates — `recall-route.py` /
-  `hunt-gate.py`, `why-trail-gate.py`, `map-fresh.sh` /
-  `map-write-watermark.sh`, `wiki-branch-gate.sh`), and `references/`
-  (hunt/why/mine/map/provenance/analytics/wiki/reference — loaded only when
-  the tip dispatches). `init` installs the whole tree (scripts 0755) and
+- `skill/`: One Claude Code skill, redesigned from `SOUL.md`'s "The skill"
+  tenets around three homes — **function → script, knowledge → rich prose on
+  demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin
+  route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
+  dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
+  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + digest.
+  The episode gate is absolute `confidence` (saturating BM25 — corpus-invariant
+  by construction, so a fixed floor is permitted; SOUL.md bans only tuned
+  constants that decide). Raw `mass` and the knowledge `score` are reported
+  verbatim for the agent to judge — no tuned `low_mass`/`KNOWLEDGE_MIN` bucket
+  (both drift per corpus). `map.sh` fresh|watermark; `wiki-gate.sh`), and
+  `references/`
+  (rich, on demand — `ledger.md` is the one page on reasoning over the past:
+  recall/widen/depth-judgment, time-axis, enumeration, whose-fact/premise,
+  analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
+  `reference.md`). No corpus profiles or benchmark tuning ship — chat corpora
+  route to the ledger by the general boundary (only-record-is-conversation) +
+  the reported `mass` signal; the calibrate/profile tooling lives on
+  `research/industry-bench`. `init` installs the whole tree (scripts 0755) and
   purges legacy `rekal-*` companion dirs; `clean` removes current + legacy.
   Adding a module = adding a file under `skills/rekal/`; tip must name it.
   Topology diagrams: `docs/design/skill-router.md`.
@@ -219,13 +231,13 @@ session discovery keep using the invoking worktree.
   the multi-repo-at-scale + Rekal-usage/effectiveness eval strategy
   (`06-eval-strategy.md`), the working-backwards flagship-paper restructure —
   git-bound memory, tool + skill + router, answer-sufficiency per token
-  (`07-paper-restructure.md`), and `paper/` (Typst source + PDF of the unified
+  (`07-paper-restructure.md`), and `paper/` (Typst + PDF + LaTeX of the
   flagship "Why Git Is the Memory Solution for the Agentic Development
-  Lifecycle"; supersedes v1 "The Commit Is the Label" in git history;
+  Lifecycle", accepted as [arXiv:2607.14390](https://arxiv.org/abs/2607.14390);
+  supersedes v1 "The Commit Is the Label" in git history;
   single-corpus values from `runs/single-corpus/manifest.json`, multi-corpus
   and sufficiency values from `runs/consolidated/manifest.json` —
-  anonymized by workload class, status TRANSCRIBED_PENDING_VERIFICATION
-  against the operator-held source record). The
+  anonymized by workload class). The
   runnable harness lives in `scripts/bench/` (corpus card, T1–T3 + T4
   multi-hop label mining, T5 candidate miner, query generation with leakage
   filter + multi-hop validation, system runner incl. weight ablations +
@@ -264,6 +276,12 @@ mise run lint          # Lint check (gofmt + golangci-lint)
 mise run build         # Build binary with version from git tag
 mise run build:all     # Build for all platforms (snapshot)
 ```
+
+**Cloud agents / fresh containers:** building from a clean clone has two traps —
+llama.cpp HEAD won't link (pin tag `b8157`) and the nomic model ships as a
+git-LFS pointer (`git lfs pull` or recall silently drops to BM25+LSA). Follow
+[`docs/cloud-agent-setup.md`](docs/cloud-agent-setup.md) before building or
+judging recall quality; don't repeat the setup mistakes.
 
 ### Before Every Commit
 

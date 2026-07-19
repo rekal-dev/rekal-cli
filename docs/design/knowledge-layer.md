@@ -204,7 +204,7 @@ The knowledge layer completes a graph Rekal already stores the edges for —
 - **Nodes:** files/chunks (knowledge), sessions (episodes), commits (time).
 - **Edges:** session→file (`files_index`, "this session touched this file"),
   session→commit (`git_sha`), file↔file (co-occurrence through shared
-  sessions — the same signal `rekal-wiki` clusters on), chunk→file→directory
+  sessions — the same signal `references/wiki.md` clusters on), chunk→file→directory
   (containment, free from paths).
 
 Every edge is deterministic, local, and re-derivable on index rebuild — no
@@ -218,9 +218,10 @@ machinery:
   subject matter has heavy ledger activity *after* the file's last commit
   ("twelve sessions about token refresh since `docs/auth.md` last changed")
   are behind the ledger. Computable from watermarks and `files_index` alone;
-  feeds `rekal-wiki`/`rekal-reflect` as proposed PRs, where review is the
+  feeds wiki / ledger-reflect (`references/wiki.md`,
+  `references/ledger.md`) as proposed PRs, where review is the
   admission gate.
-- **Wiki clustering** (`rekal-wiki`) gains file-node anchors instead of
+- **Wiki clustering** (`references/wiki.md`) gains file-node anchors instead of
   reconstructing co-occurrence from sessions alone.
 
 ## The zoom ladder
@@ -248,11 +249,14 @@ gains one row:
   (file hits at HEAD, provenance edges into sessions)
 - past-tense why / history / what-was-tried → ledger stratum (unchanged)
 
-A non-empty knowledge block **routes to HEAD prose** (`KNOWLEDGE`) — it does
-not clear the episode inject gate. HEAD outranks sessions by sending the
-agent to Read the pointer, not by injecting weak episodes. Full skill
-topology (tip → scripts → references): [`skill-router.md`](skill-router.md).
-MINE gains a knowledge dimension in its `scope × signal × role` decomposition.
+A confident episode (`PASS_EPISODE` / `INJECT`) **outranks** a non-empty
+knowledge block — prose-heavy repos always return incidental docs, and those
+must not silence a clear session match. Knowledge is the **fallback** when
+the episode gate fails (`KNOWLEDGE` → Read the HEAD pointer; do not inject
+weak episodes). Gate bars use absolute `confidence` / `mass`, not
+max-normalized `score`. Full skill topology (tip → scripts → references):
+[`skill-router.md`](skill-router.md). MINE gains a knowledge dimension in its
+`scope × signal × role` decomposition.
 
 ## Onboarding cost (measured)
 
@@ -325,8 +329,8 @@ memory; files at HEAD are what you know, the ledger is why.*
    in recall JSON with `files_index` session joins. `sessions` block
    byte-identical without the layer.
 5. Skills: router (`rekal`) triage row for the knowledge stratum; HUNT
-   confidence rule; MINE knowledge dimension. `rekal-wiki`/consolidation
-   debt as a follow-up.
+   confidence rule; MINE knowledge dimension. Wiki / consolidation debt
+   (`references/wiki.md`) as a follow-up.
 6. Bench: RekalBench task set for knowledge queries ("what is our convention
    for X") before tuning any weights; the layer's contribution measured, not
    assumed.

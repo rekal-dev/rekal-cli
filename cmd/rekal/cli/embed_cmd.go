@@ -14,11 +14,13 @@ import (
 )
 
 // sessionEmbedBudget caps how many *uncached* session vectors one embed bite
-// will request from the model. Cache hits are free and do not count. Matches
-// the knowledge-chunk budget order of magnitude so one background pass
-// releases the DuckDB write lock between bites (recall/checkpoint can
-// interleave) without stalling a large Cohere/HTTP corpus for minutes.
-const sessionEmbedBudget = 256
+// will request from the model. Cache hits are free and do not count. Kept small
+// so a bite holds the DuckDB write lock only briefly: on the embedded CPU-nomic
+// path each vector costs tens of ms, so a large bite would pin the lock for
+// minutes and a concurrent recall (common right after init/sync) would wait out
+// a whole bite. A small bite bounds that wait to a couple of seconds; recall's
+// open path retries across the between-bite yield (see db.open, embedYield).
+const sessionEmbedBudget = 16
 
 func newEmbedCmd() *cobra.Command {
 	return &cobra.Command{
@@ -55,8 +57,23 @@ func runEmbed(w io.Writer, gitRoot string) error {
 	}
 	defer unlock()
 
+	// Construct the embedding backend once, before the bite loop ever takes the
+	// index write lock. For nomic this loads the model (~15s) here, lock-free,
+	// and every bite reuses this one client — so no bite reloads the model under
+	// the lock, and a concurrent recall (common right after init/sync) is never
+	// stuck behind a model load. nil is fine (unsupported platform): bites fall
+	// back to constructing their own, as before.
+	emb, err := semanticEmbedder(gitRoot)
+	if err != nil {
+		fmt.Fprintf(w, "rekal: warning: embedding backend: %v\n", err)
+		emb = nil
+	}
+	if emb != nil {
+		defer emb.Close()
+	}
+
 	for pass := 1; ; pass++ {
-		more, err := embedBite(w, gitRoot, pass)
+		more, err := embedBite(w, gitRoot, pass, emb)
 		if err != nil {
 			return err
 		}
@@ -64,14 +81,22 @@ func runEmbed(w io.Writer, gitRoot string) error {
 			fmt.Fprintln(w, "rekal: semantic embeddings up to date")
 			return nil
 		}
-		// Brief yield so a waiting recall/checkpoint can grab the lock.
-		time.Sleep(50 * time.Millisecond)
+		// Yield the lock between bites, longer than a reader's max open-retry
+		// interval (db.openLockRetryMax) so a waiting recall/checkpoint reliably
+		// wins this window instead of racing the next bite's re-acquire.
+		time.Sleep(embedYield)
 	}
 }
 
+// embedYield is the gap between bites during which the index write lock is free.
+// It exceeds db.openLockRetryMax so a retrying reader is guaranteed at least one
+// open attempt while the lock is released.
+const embedYield = 300 * time.Millisecond
+
 // embedBite runs one budgeted session + knowledge embed pass. more is true
-// when either layer still has uncached work remaining after this bite.
-func embedBite(w io.Writer, gitRoot string, pass int) (more bool, err error) {
+// when either layer still has uncached work remaining after this bite. emb is
+// the shared embedder from runEmbed (nil to construct per-layer as a fallback).
+func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more bool, err error) {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return false, err
@@ -92,7 +117,7 @@ func embedBite(w io.Writer, gitRoot string, pass int) (more bool, err error) {
 
 	sessionMore := false
 	if len(sessionContent) > 0 {
-		remaining, err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot, sessionEmbedBudget)
+		remaining, err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot, sessionEmbedBudget, emb)
 		if err != nil {
 			fmt.Fprintf(w, "rekal: warning: session embeddings pass %d: %v\n", pass, err)
 		} else {
@@ -100,7 +125,7 @@ func embedBite(w io.Writer, gitRoot string, pass int) (more bool, err error) {
 		}
 	}
 
-	if err := embedKnowledgeChunks(w, indexDB, gitRoot, knowledgeEmbedBudget); err != nil {
+	if err := embedKnowledgeChunks(w, indexDB, gitRoot, knowledgeEmbedBudget, emb); err != nil {
 		fmt.Fprintf(w, "rekal: warning: knowledge embeddings pass %d: %v\n", pass, err)
 	}
 	// Ask whether knowledge still has missing vectors under the intended model.

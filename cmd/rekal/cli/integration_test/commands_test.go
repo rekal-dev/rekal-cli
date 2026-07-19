@@ -216,7 +216,7 @@ func TestInit_ReinitRefreshesSkills(t *testing.T) {
 	env.Init()
 
 	base := filepath.Join(".claude", "skills", "rekal", "SKILL.md")
-	script := filepath.Join(".claude", "skills", "rekal", "scripts", "hunt-gate.py")
+	script := filepath.Join(".claude", "skills", "rekal", "scripts", "route.py")
 	if !env.FileExists(base) {
 		t.Fatalf("base skill missing after init: %s", base)
 	}

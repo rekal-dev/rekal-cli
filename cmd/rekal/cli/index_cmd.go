@@ -353,12 +353,18 @@ func semanticEmbedder(gitRoot string) (sessionEmbedder, error) {
 //
 // A content-hash-keyed cache (.rekal/embed-cache.db) makes rebuilds cheap.
 // Callers treat this whole function as non-fatal.
-func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string, budget int) (remaining bool, err error) {
-	emb, err := semanticEmbedder(gitRoot)
-	if err != nil || emb == nil {
-		return false, err
+//
+// If emb is nil this constructs (and closes) an embedder for the call; callers
+// that run many passes pass a shared, already-loaded embedder so the model
+// loads once, off the index lock (see runEmbed).
+func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string, budget int, emb sessionEmbedder) (remaining bool, err error) {
+	if emb == nil {
+		emb, err = semanticEmbedder(gitRoot)
+		if err != nil || emb == nil {
+			return false, err
+		}
+		defer emb.Close()
 	}
-	defer emb.Close()
 	model := emb.ModelName()
 
 	existing, err := db.QueryEmbeddings(indexDB, model)

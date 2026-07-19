@@ -10,7 +10,7 @@ ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}
 ## Freshness first
 
 ```bash
-bash "$ROOT/scripts/map-fresh.sh"
+bash "$ROOT/scripts/map.sh" fresh
 ```
 
 | Result | Action |
@@ -20,7 +20,7 @@ bash "$ROOT/scripts/map-fresh.sh"
 | MISSING | Build (below), then watermark. |
 
 ```bash
-bash "$ROOT/scripts/map-write-watermark.sh"   # after any edit / stub create
+bash "$ROOT/scripts/map.sh" watermark   # after any edit / stub create
 ```
 
 Watermark line 1: `<!-- rekal-map <branch> <HEAD-sha> -->` — written only by
@@ -34,7 +34,7 @@ the script. If diff > ~50 files or boundaries moved → full rebuild.
 4. Per subsystem: 1–3 load-bearing files; purpose; what breaks if deleted.
 5. Trace edges that cross subsystems.
 6. Optional: `rekal --explain "<subsystem>"` for memory hooks.
-7. Emit ≤12 lines/subsystem, ≤150 lines total; run `map-write-watermark.sh`.
+7. Emit ≤12 lines/subsystem, ≤150 lines total; run `map.sh watermark`.
 
 ```markdown
 <!-- rekal-map <branch> <HEAD-sha> -->

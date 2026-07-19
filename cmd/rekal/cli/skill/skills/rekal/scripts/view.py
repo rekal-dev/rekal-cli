@@ -66,6 +66,33 @@ def _role_abbr(role: str) -> str:
     return _ROLE_ABBR.get(role, role)
 
 
+def _split_ts(ts: str) -> tuple[str, str]:
+    """Split into (date, time) for shortening. Handles `YYYY-MM-DD HH:MM…` and ISO `T`."""
+    ts = ts.strip()
+    if "T" in ts and " " not in ts.split("T", 1)[0]:
+        date, _, rest = ts.partition("T")
+        return date, rest
+    if " " in ts:
+        date, _, rest = ts.partition(" ")
+        return date, rest
+    return ts, ""
+
+
+def _short_ts(ts: str, prev_ts: str) -> str:
+    """Omit repeated date (or whole stamp) when same as the previous turn."""
+    if not ts:
+        return ""
+    if not prev_ts:
+        return ts
+    if ts == prev_ts:
+        return "…"
+    date, time = _split_ts(ts)
+    prev_date, _ = _split_ts(prev_ts)
+    if date and time and date == prev_date:
+        return f"…{time}"
+    return ts
+
+
 def view_session(data: dict) -> str:
     sid = data.get("session_id") or "?"
     turns = data.get("turns") or []
@@ -75,14 +102,18 @@ def view_session(data: dict) -> str:
     span = f"t{min(idxs)}-{max(idxs)}" if idxs else f"{len(turns)} turns"
     # Legend once — avoid repeating "human"/"assistant" on every line.
     lines = [f"{sid} {span}  (h=human a=assistant hs=steering sum=summary)"]
+    prev_ts = ""
     for t in turns:
         if not isinstance(t, dict):
             continue
         idx = t.get("index")
         role = _role_abbr(t.get("role") or "")
-        ts = (t.get("ts") or "").strip()
+        ts_raw = (t.get("ts") or "").strip()
+        ts = _short_ts(ts_raw, prev_ts)
+        if ts_raw:
+            prev_ts = ts_raw
         content = (t.get("content") or "").rstrip()
-        # Keep timestamp — agents need when, not just what.
+        # Keep timestamp — agents need when, not just what. Same-date → …time.
         head = []
         if idx is not None:
             head.append(f"t{idx}")

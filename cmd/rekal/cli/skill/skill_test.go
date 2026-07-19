@@ -284,8 +284,12 @@ func TestViewScript(t *testing.T) {
 	if !strings.Contains(out, "s1 t1-2") || !strings.Contains(out, "h=human a=assistant") {
 		t.Fatalf("want compact header with role legend, got %s", out)
 	}
-	if !strings.Contains(out, "t1 2023-05-08T10:00:00Z h: hello world") || !strings.Contains(out, "t2 2023-05-08T10:01:00Z a: hi there") {
-		t.Fatalf("want abbreviated roles h/a with timestamp, got %s", out)
+	if !strings.Contains(out, "t1 2023-05-08T10:00:00Z h: hello world") {
+		t.Fatalf("want first turn full timestamp, got %s", out)
+	}
+	// Same date as previous → shorten to …time (no repeated date).
+	if !strings.Contains(out, "t2 …10:01:00Z a: hi there") {
+		t.Fatalf("want same-date timestamp shortened with …, got %s", out)
 	}
 
 	rows := "{\"a\":1,\"b\":\"x\"}\n{\"a\":2,\"b\":\"y\"}\n"

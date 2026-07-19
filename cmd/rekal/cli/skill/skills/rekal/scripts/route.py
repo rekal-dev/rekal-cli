@@ -30,15 +30,20 @@ Priority (inclusive):
 Two substrates, one report — because mixed answers are real.
 
 Episodes gate on absolute `confidence` — never max-normalized `score`, which
-tops out near 1.0 for junk queries too. Confidence is saturating BM25
-(search/confidence.go). A missing per-result `confidence` is treated as 0.0:
-the engine emits `confidence`/`mass` with `omitempty`, so an all-offtopic set
-(every confidence 0.0) drops the field — that is noise, and it silences. Any
-real hit, even pure-semantic, carries confidence > 0. (Pre-confidence index
-DBs self-heal: recall auto-rebuilds the index on version change.)
+tops out near 1.0 for junk queries too. Confidence is
+`max(saturate(bm25), cosine) + 0.15*saturate(facet)` (search/confidence.go):
+only the saturating-BM25 term is corpus-invariant by construction; the raw
+cosine term's junk baseline drifts with model and corpus. So the floor is NOT
+a fully corpus-invariant gate — that is exactly why it is kept *super-low* and
+the real decision is handed to the agent via emitted `conf=` (SOUL.md: report
+the signal, don't freeze a tuned bar). A missing per-result `confidence` is
+treated as 0.0: the engine emits `confidence`/`mass` with `omitempty`, so an
+all-offtopic set (every confidence 0.0) drops the field — that is noise, and it
+silences. Any real hit, even pure-semantic, carries confidence > 0.
+(Pre-confidence index DBs self-heal: recall auto-rebuilds on version change.)
 
 The shipped floor is deliberately low: dialogue-shaped hits often land well
-below the old 0.70 coding bar while still carrying real evidence. Grey-band
+below a coding-corpus bar while still carrying real evidence. Grey-band
 confidence is reported for the agent to weigh; only empty / near-zero is an
 obvious machine silence.
 
@@ -82,16 +87,18 @@ def _env_float(name: str, default: float) -> float:
 
 # Super-low episode floor. Only empty / near-zero confidence is an obvious
 # machine silence; grey-band hits inject with `conf=` for the agent to weigh
-# (SOUL.md: suggest, don't freeze a high tuned bar). Override via REKAL_HUNT_*
-# for industry-bench harnesses.
+# (SOUL.md: suggest, don't freeze a high tuned bar). The REKAL_HUNT_* env knobs
+# are a general escape hatch for operators who want a different floor, not a
+# shipped corpus profile — the default is one honest bar, corpus-agnostic.
 CONF_MIN = _env_float("REKAL_HUNT_CONF_MIN", 0.25)
 # Soft path: slightly below the hard floor with a clear gap to #2.
 CONF_SOFT = _env_float("REKAL_HUNT_CONF_SOFT", 0.20)
 GAP_MIN = _env_float("REKAL_HUNT_GAP_MIN", 0.02)
-# Super-low knowledge *report* floor. Below this, scores are mathematically
-# ignorable marker noise (LoCoMo CLAUDE.md ≈ 0.05–0.17) — omit the line to
-# save tokens. Above it, report the distribution for the agent to judge.
-# Not a "this is true" decision; just don't emit junk. Override via REKAL_HUNT_*.
+# Super-low knowledge *report* floor. Below this, prose scores are near-zero
+# marker noise — omit the line to save tokens. Above it, report the whole
+# distribution for the agent to judge. This is not a "this is true" decision;
+# it only drops noise below the display threshold. The agent still decides
+# whether any reported prose hit is real. Override via REKAL_HUNT_*.
 KNOWLEDGE_MIN = _env_float("REKAL_HUNT_KNOWLEDGE_MIN", 0.25)
 # Raw BM25 `mass` is reported verbatim, never bucketed on a fixed boundary: mass
 # is not corpus-invariant (it scales with corpus term stats and doc lengths), so
@@ -101,13 +108,12 @@ KNOWLEDGE_MIN = _env_float("REKAL_HUNT_KNOWLEDGE_MIN", 0.25)
 
 # Digest shape. These are output BUDGETS (how much to print), not judgment
 # gates — they bound the digest's token cost without changing the verdict or the
-# ranking. The id(conf) tail dominates the digest at large -n (≈75% of tokens at
-# -n 100) yet the agent drills from the top, so the tail is capped and the
-# remainder summarized as a count (drill deeper via `query --session`/SQL).
-# Seed-coverage window: inject the top-N candidates each WITH a snippet, so the
-# agent has enough context to synthesize a (multi-hop) answer without drilling
-# every session — LoCoMo-style top-K retrieval. Beyond N the agent reformulates
-# / multi-searches (a sharper second query beats one query's tail) or raises -n.
+# ranking. Seed-coverage window: inject the top-N candidates each WITH a snippet,
+# so the agent has enough context to synthesize a (multi-hop) answer without
+# drilling every session — a top-K retrieval seed. The remainder beyond the
+# window is summarized as a count, since the agent works from the top and drills
+# deeper via `query --session`/SQL. Beyond N the agent reformulates /
+# multi-searches (a sharper second query beats one query's tail) or raises -n.
 DIGEST_WINDOW = 20
 # Per-candidate snippet length, trimmed so 20 snippets stay cheap.
 DIGEST_SNIPPET_WORDS = 15

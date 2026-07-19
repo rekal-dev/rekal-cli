@@ -31,9 +31,11 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 | `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
-`session_id conf=… t<turn> "snippet"`, in rank order. Confidence is the
-corpus-invariant signal (saturating BM25) so you can fetch/weigh it; mass
-stayed inside the script (never a veto). **Work from the seed.** It carries
+`session_id conf=… t<turn> "snippet"`, in rank order. `confidence` =
+`max(saturate(bm25), cosine) + 0.15·saturate(facet)`; only the BM25 term is
+corpus-invariant, the cosine term drifts — which is why the floor is super-low
+and you weigh `conf=` yourself. Mass stays inside the script (never a veto).
+**Work from the seed.** It carries
 enough to synthesize a multi-hop answer without drilling each; drill `sid` at
 `t<turn>` for a full turn (or `--offset/--limit` to zoom), and re-read raw
 recall only for a field the seed omits (`files`). If the top-20 isn't enough,

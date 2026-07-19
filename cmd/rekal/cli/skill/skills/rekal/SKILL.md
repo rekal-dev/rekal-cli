@@ -40,9 +40,11 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 Pipe recall through `route.py`. Treat its labels as a **recommendation**, not a
 final call: the router is intentionally biased toward **more data than
-decision**. It keeps a **super-low** floor on absolute `confidence` (saturating
-BM25) — only empty / near-zero is machine-silenced — and never gates on
-max-normalized `score` (junk tops out near 1.0 too). Substrates are
+decision**. It keeps a **super-low** floor on absolute `confidence`
+(`max(saturate(bm25), cosine)+0.15·saturate(facet)` — only the BM25 term is
+corpus-invariant, so the floor stays low and you weigh `conf=`) — only empty /
+near-zero is machine-silenced — and never gates on max-normalized `score` (junk
+tops out near 1.0 too). Substrates are
 **inclusive**: an episode and a knowledge hit can both be real for a mixed
 question. Line 1 is the primary label (`INJECT` / `KNOWLEDGE` / `SILENCE`);
 when both fire you get `INJECT` plus a trailing `KNOWLEDGE` line. `INJECT`

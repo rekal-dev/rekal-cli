@@ -30,6 +30,8 @@ Invariants
   I6  determinism: same (query,flags) twice -> identical verdict (warm)
   I7  -n 0 -> empty result set -> SILENCE ; -n -1 -> recall rejects (exit!=0)
   I8  daemon warm -> no `SEMANTIC warming` note
+  I9  INJECT emits confidence: header `top=` and per-seed `conf=`
+  I10 inclusive knowledge: INJECT + non-empty recall.knowledge -> trailing KNOWLEDGE
 
 Also logs (report-only, never gated) the route's TOKEN COST: raw recall JSON
 tokens vs route.py output tokens per case. The digest is why route.py exists —
@@ -137,6 +139,10 @@ def cell(query: str, flags: list[str]) -> dict | None:
     elif v == "SILENCE":
         check(rrc == 1, f"I2 exit {tag} v={v} rc={rrc}")
     check("SEMANTIC warming" not in rout, f"I8 warm-no-note {tag}")
+    if v == "INJECT":
+        check("top=" in rout and "conf=" in rout, f"I9 inject-emits-confidence {tag}")
+        if data.get("knowledge"):
+            check("KNOWLEDGE" in rout, f"I10 inclusive-knowledge {tag}")
     return {"verdict": v, "results": len(data.get("results") or []), "route_rc": rrc}
 
 
@@ -218,8 +224,12 @@ def main() -> int:
             print(f'  "{q[:28]:28}" -> {a["verdict"]} == {b["verdict"]}')
 
     print("=== Matrix D: drill route × --role (query --session) ===")
-    # Pick a real session with the most turns to drill.
-    rc, out, _ = run(["query", "SELECT id FROM sessions ORDER BY captured_at DESC LIMIT 1"])
+    # Pick a real session that actually has turns (empty/corrupt rows break drill).
+    rc, out, _ = run([
+        "query",
+        "SELECT id FROM sessions WHERE (SELECT count(*) FROM turns t WHERE t.session_id = sessions.id) > 0 "
+        "ORDER BY captured_at DESC LIMIT 1",
+    ])
     sid = ""
     try:
         sid = json.loads(out.splitlines()[0])["id"] if out.strip() else ""

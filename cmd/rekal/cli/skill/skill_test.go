@@ -119,11 +119,17 @@ func TestRouteScript(t *testing.T) {
 	t.Parallel()
 	path := writeScript(t, "scripts/route.py")
 
-	// Confident hit -> INJECT. Scores are the script's gating inputs, not emitted
-	// to the agent's context (content-first), so the output carries no mass/conf.
-	out, code := runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5.6,"score":0.99},{"confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") || strings.Contains(out, "mass=") || strings.Contains(out, "conf=") {
-		t.Fatalf("want INJECT exit 0 with no scores in output, got code=%d %s", code, out)
+	// Confident hit -> INJECT. Confidence is emitted (header top=/gap= and per-row
+	// conf=) so the agent can weigh seeds; mass stays inside the script.
+	out, code := runRoute(t, path, `{"results":[{"session_id":"s1","confidence":0.82,"mass":5.6,"score":0.99},{"session_id":"s2","confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`)
+	if code != 0 || !strings.HasPrefix(out, "INJECT top=0.82 gap=0.42 ") {
+		t.Fatalf("want INJECT top/gap header exit 0, got code=%d %s", code, out)
+	}
+	if strings.Contains(out, "mass=") {
+		t.Fatalf("mass must stay inside the script, got %s", out)
+	}
+	if !strings.Contains(out, "s1 conf=0.82") {
+		t.Fatalf("want per-seed confidence, got %s", out)
 	}
 
 	// Confident but lexically thin (dialogue) -> still INJECT, NOT silenced.
@@ -168,10 +174,14 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
 	}
 
-	// Confident episode wins even when knowledge docs are present.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.85,"mass":6.0,"score":1.08},{"confidence":0.4,"score":0.5}],"knowledge":[{"path":"docs/a.md"},{"path":"docs/b.md"}]}`)
-	if code != 0 || !strings.Contains(out, "INJECT") {
-		t.Fatalf("strong episode + knowledge should INJECT, got code=%d %s", code, out)
+	// Inclusive: strong episode + knowledge emits INJECT (line 1) and a KNOWLEDGE
+	// line — mixed questions can need both substrates.
+	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.85,"mass":6.0,"score":1.08},{"confidence":0.4,"score":0.5}],"knowledge":[{"path":"docs/a.md","score":0.91},{"path":"docs/b.md","score":0.55}]}`)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
+		t.Fatalf("strong episode + knowledge should INJECT on line 1, got code=%d %s", code, out)
+	}
+	if !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/a.md=0.91") {
+		t.Fatalf("strong episode + knowledge must also report KNOWLEDGE, got %s", out)
 	}
 
 	// A low knowledge score is REPORTED, not silenced on a tuned floor: the score
@@ -196,9 +206,8 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("no semantic field must not emit a warming note: %s", out)
 	}
 
-	// Seed window: the digest shows up to DIGEST_WINDOW=20 candidates each with a
-	// snippet (no scores), then summarizes the rest as "(+N more)", so an INJECT
-	// stays cost-bounded regardless of -n. 30 results -> 20 shown + "(+10 more".
+	// Seed window: digest shows up to DIGEST_WINDOW=20 candidates each with
+	// conf= + snippet, then "(+N more)". 30 results -> 20 shown + "(+10 more".
 	big := `{"results":[{"session_id":"top","confidence":0.82,"mass":5,"score":1,"snippet":"hello world"}` +
 		strings.Repeat(`,{"session_id":"x","confidence":0.5,"mass":1,"score":1,"snippet":"filler text"}`, 29) +
 		`],"knowledge":[]}`
@@ -206,8 +215,8 @@ func TestRouteScript(t *testing.T) {
 	if code != 0 || !strings.HasPrefix(out, "INJECT ") || !strings.Contains(out, "(+10 more") {
 		t.Fatalf("digest should show a 20-candidate seed window and (+10 more), got: %s", out)
 	}
-	if strings.Contains(out, "conf=") || strings.Contains(out, "(0.5)") {
-		t.Fatalf("seed digest must not print per-candidate scores: %s", out)
+	if !strings.Contains(out, "top conf=0.82") || !strings.Contains(out, "x conf=0.50") {
+		t.Fatalf("seed digest must print per-candidate confidence, got: %s", out)
 	}
 	if n := strings.Count(out, "\"filler text\""); n > 20 { // capped at the window
 		t.Fatalf("seed window not capped at 20, printed %d snippets: %s", n, out)

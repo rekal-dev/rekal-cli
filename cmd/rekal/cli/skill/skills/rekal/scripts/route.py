@@ -1,30 +1,32 @@
 #!/usr/bin/env python3
-"""Route a rekal recall JSON: knowledge vs episode inject vs silence.
+"""Route a rekal recall JSON: knowledge and/or episode inject vs silence.
 
 The single entry after `rekal "<q>"`. Reads recall stdout JSON on stdin (or a
-file path arg), gates on absolute `confidence`, and prints one agent-facing
-label plus — on INJECT — a content-first seed digest: the top-DIGEST_WINDOW
-candidates each as `sid t<turn> "snippet"`, in rank order, so the agent has
-enough context to synthesize a (multi-hop) answer without drilling each, at a
-fraction of the raw recall JSON's tokens.
+file path arg), gates episodes on absolute `confidence`, and prints agent-facing
+labels plus — on INJECT — a seed digest: the top-DIGEST_WINDOW candidates each
+as `sid conf=… t<turn> "snippet"`, in rank order, so the agent has enough
+context to synthesize a (multi-hop) answer without drilling each, at a fraction
+of the raw recall JSON's tokens.
 
-Scores are for the SCRIPT, content is for the CONTEXT. `confidence`/`gap`/`mass`
-are the gating inputs this script uses to DECIDE the verdict; they are not
-emitted to the agent's context (no per-candidate conf, no header scores) — the
-agent reasons over the content and the rank order and drills `sid` at `t<turn>`.
-The one exception is the knowledge `score` distribution, which the script
-deliberately does NOT gate on, so it IS emitted for the agent to judge. Low mass
-(a lexically thin, dialogue-shaped hit) never vetoes an inject — it gated
-nothing. Junk is rejected by the absolute confidence floor.
+Substrates are inclusive, not if/else. A confident episode and a knowledge hit
+can both be real for a mixed question (convention at HEAD *and* why we chose
+it). The script reports every substrate that has signal; the agent judges how
+to combine them. Line 1 stays the primary verdict (`INJECT` / `KNOWLEDGE` /
+`SILENCE`) for tools that read only the first line.
 
-Priority:
-  1. Confident episode        -> INJECT (knowledge presence must not block it)
-  2. Else non-empty knowledge -> KNOWLEDGE path=score ... (Read HEAD if a file
-                                 is a real prose hit — the agent judges the
-                                 per-file score distribution, not one number)
-  3. Else                     -> SILENCE
+`confidence` is emitted on the INJECT header (`top=` / `gap=`) and per seed
+row so the agent can weigh or drill selectively — it is a corpus-invariant
+signal (saturating BM25), not a tuned constant. `mass` stays inside the script
+(never a veto, never emitted). Knowledge `score` is still not gated — reported
+verbatim for the agent to judge. Junk episodes are rejected by the absolute
+confidence floor.
 
-Two substrates, two gates — because only one has a corpus-invariant signal.
+Priority (inclusive):
+  1. Confident episode -> INJECT digest (+ KNOWLEDGE line when knowledge present)
+  2. Else knowledge    -> KNOWLEDGE path=score ...
+  3. Else              -> SILENCE
+
+Two substrates, one report — because mixed answers are real.
 
 Episodes gate on absolute `confidence` — never max-normalized `score`, which
 tops out near 1.0 for junk queries too. Confidence is saturating BM25
@@ -148,22 +150,27 @@ def knowledge_hits(knowledge: list, n: int = 5) -> str:
 
 
 def print_digest(data: dict) -> None:
-    """Seed context: every candidate in the window as `sid t<turn> "snippet"`, in
-    rank order. No per-candidate scores — `confidence`/`mass` are the SCRIPT's
-    gating signals (route.py already used them to decide INJECT); they are noise
-    in the agent's context. The agent reasons over the content and the rank
-    order, and drills `sid` at `t<turn>` for the full turn. Wide enough (top-20)
-    to seed a multi-hop answer without drilling each candidate."""
+    """Seed context: every candidate in the window as
+    `sid conf=… t<turn> "snippet"`, in rank order. Confidence is the
+    corpus-invariant signal the agent may weigh; mass stays inside the script.
+    Wide enough (top-20) to seed a multi-hop answer without drilling each."""
     results = data.get("results") or []
     for r in results[:DIGEST_WINDOW]:
         words = (r.get("snippet") or "").split()
         snip = " ".join(words[:DIGEST_SNIPPET_WORDS]) + ("…" if len(words) > DIGEST_SNIPPET_WORDS else "")
         turn = r.get("snippet_turn_index")
         turn_s = f" t{turn}" if turn is not None else ""
-        print(f'  {r.get("session_id")}{turn_s} "{snip}"')
+        conf = _f(r["confidence"]) if isinstance(r, dict) and "confidence" in r else 0.0
+        print(f'  {r.get("session_id")} conf={conf:.2f}{turn_s} "{snip}"')
     more = len(results) - DIGEST_WINDOW
     if more > 0:
         print(f"  (+{more} more — reformulate/multi-search or -n)")
+
+
+def print_knowledge(knowledge: list) -> None:
+    """Emit the knowledge score distribution — never gated on a fixed floor."""
+    hits = knowledge_hits(knowledge)
+    print(f"KNOWLEDGE {hits}" if hits else "KNOWLEDGE")
 
 
 def main() -> int:
@@ -179,9 +186,9 @@ def main() -> int:
 
     results = data.get("results") or []
     knowledge = data.get("knowledge") or []
-    # top/gap/mass are the script's gating inputs — used to decide `kind`, not
-    # emitted to the agent's context (SOUL.md agent-first: content, not scores).
-    kind, _, _, _, reason = episode_verdict(results)
+    # top/gap decide the episode verdict; confidence is also emitted so the
+    # agent can weigh seeds. mass stays inside (never a veto).
+    kind, top, gap, _, reason = episode_verdict(results)
 
     sem = data.get("semantic")
     warming = isinstance(sem, dict) and bool(sem.get("retryable"))
@@ -197,18 +204,22 @@ def main() -> int:
 
     if kind == "pass":
         shown = min(len(results), DIGEST_WINDOW)
-        # Verdict only — the gating scores (top/gap/mass) did their job inside
-        # the script and are not the agent's context. Content follows.
-        print(f"INJECT {shown} seed candidates — drill <sid> at t<n>, reformulate for more")
+        # Primary verdict on line 1; confidence available for optional weighing.
+        print(
+            f"INJECT top={top:.2f} gap={gap:.2f} {shown} seed candidates — "
+            f"drill <sid> at t<n>, reformulate for more"
+        )
         print_digest(data)
+        # Inclusive: mixed questions can need HEAD prose *and* an episode.
+        if knowledge:
+            print_knowledge(knowledge)
         return done(0)
 
     # Episode gate failed. Knowledge has no corpus-invariant floor, so report
     # the per-file score distribution as a signal and let the agent judge —
     # don't silence on a tuned threshold (SOUL.md: no tuned constant decides).
     if knowledge:
-        hits = knowledge_hits(knowledge)
-        print(f"KNOWLEDGE {hits}" if hits else "KNOWLEDGE")
+        print_knowledge(knowledge)
         return done(0)
 
     # Nothing on either substrate — machine silence. The reason is diagnostic;

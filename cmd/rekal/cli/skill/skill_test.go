@@ -103,6 +103,17 @@ func runRoute(t *testing.T, path, stdin string) (string, int) {
 	t.Helper()
 	cmd := exec.Command("python3", path)
 	cmd.Stdin = strings.NewReader(stdin)
+	// Drop harness overrides so shipped defaults are what we assert (ambient
+	// REKAL_HUNT_* from industry-bench shells must not leak into unit tests).
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		if strings.HasPrefix(e, "REKAL_HUNT_") {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	cmd.Env = filtered
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if err != nil {
@@ -139,22 +150,24 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("want INJECT exit 0 (thin chat hit not silenced), got code=%d %s", code, out)
 	}
 
-	// Junk: high max-norm score, low absolute confidence -> SILENCE.
+	// Grey-band confidence (old "junk" / dialogue range) injects with conf=
+	// for the agent to weigh — the script suggests, it does not hard-veto.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.48,"mass":2.59,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`)
-	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("junk should SILENCE, got code=%d %s", code, out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT top=0.48 ") {
+		t.Fatalf("grey-band conf should INJECT (suggest), got code=%d %s", code, out)
 	}
 
-	// Offtopic confidence (~0.63) must not soft-pass even with strong mass + gap.
+	// Mid confidence with gap still injects under the low floor.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.63,"mass":4.0,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`)
-	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("offtopic conf 0.63 should SILENCE, got code=%d %s", code, out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
+		t.Fatalf("conf 0.63 should INJECT under low floor, got code=%d %s", code, out)
 	}
 
-	// With confidence present, never fall back to max-norm score for gating.
+	// With confidence present, gate on confidence — never max-norm score alone.
+	// 0.5 clears the low floor; missing-confidence offtopic (below) still silences.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.5,"score":1.19},{"score":0.95}],"knowledge":[]}`)
-	if code == 0 {
-		t.Fatalf("confidence set must not gate on score, got %s", out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT top=0.50 ") {
+		t.Fatalf("confidence-present hit should INJECT on conf, got code=%d %s", code, out)
 	}
 
 	// Offtopic on a modern store: omitempty drops all-zero confidence, so no
@@ -164,14 +177,13 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("missing-confidence offtopic set must SILENCE, got code=%d %s", code, out)
 	}
 
-	// Knowledge is the fallback when the episode gate fails -> KNOWLEDGE, exit 0.
-	// Per-file path=score distribution is reported verbatim (no tuned floor).
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
-	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/x.md=0.72") {
-		t.Fatalf("weak episode + knowledge should KNOWLEDGE docs/x.md=0.72 exit 0, got code=%d %s", code, out)
+	// Low episode floor + knowledge: inclusive INJECT with trailing KNOWLEDGE.
+	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
+		t.Fatalf("episode above low floor + knowledge should INJECT, got code=%d %s", code, out)
 	}
-	if strings.Contains(out, "INJECT") {
-		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
+	if !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/x.md=0.72") {
+		t.Fatalf("want trailing KNOWLEDGE docs/x.md=0.72, got %s", out)
 	}
 
 	// Inclusive: strong episode + knowledge emits INJECT (line 1) and a KNOWLEDGE
@@ -184,11 +196,11 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("strong episode + knowledge must also report KNOWLEDGE, got %s", out)
 	}
 
-	// A low knowledge score is REPORTED, not silenced on a tuned floor: the score
-	// is a signal the agent judges. SOUL.md bans a corpus-tuned KNOWLEDGE floor.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
-	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/x.md=0.12") {
-		t.Fatalf("low knowledge score must be reported (KNOWLEDGE docs/x.md=0.12), not silenced, got code=%d %s", code, out)
+	// A low knowledge score is REPORTED on the inclusive path, not silenced on a
+	// tuned floor: the score is a signal the agent judges (SOUL.md).
+	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") || !strings.Contains(out, "docs/x.md=0.12") {
+		t.Fatalf("low knowledge score must be reported under INJECT, got code=%d %s", code, out)
 	}
 
 	// A retryable semantic-warming status adds a trailing note after the verdict
@@ -222,9 +234,15 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("seed window not capped at 20, printed %d snippets: %s", n, out)
 	}
 
-	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
+	// Episode above the low floor + no knowledge -> INJECT (agent weighs conf=).
+	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
+		t.Fatalf("conf 0.40 should INJECT under low floor, got code=%d %s", code, out)
+	}
+
+	// Truly below the super-low floor + no knowledge -> machine SILENCE.
+	out, code = runRoute(t, path, `{"results":[{"confidence":0.10,"mass":2.0,"score":0.95}],"knowledge":[]}`)
 	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("weak episode + no knowledge should SILENCE, got code=%d %s", code, out)
+		t.Fatalf("conf 0.10 + no knowledge should SILENCE, got code=%d %s", code, out)
 	}
 }

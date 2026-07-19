@@ -2,41 +2,45 @@
 """Route a rekal recall JSON: knowledge and/or episode inject vs silence.
 
 The single entry after `rekal "<q>"`. Reads recall stdout JSON on stdin (or a
-file path arg), gates episodes on absolute `confidence`, and prints agent-facing
-labels plus — on INJECT — a seed digest: the top-DIGEST_WINDOW candidates each
-as `sid conf=… t<turn> "snippet"`, in rank order, so the agent has enough
-context to synthesize a (multi-hop) answer without drilling each, at a fraction
-of the raw recall JSON's tokens.
+file path arg), applies a *super-low* episode floor so only empty/near-zero
+confidence is machine-silenced, and prints agent-facing labels plus — on
+INJECT — a seed digest: the top-DIGEST_WINDOW candidates each as
+`sid conf=… t<turn> "snippet"`, in rank order, so the agent has enough context
+to synthesize a (multi-hop) answer without drilling each, at a fraction of the
+raw recall JSON's tokens.
 
-Substrates are inclusive, not if/else. A confident episode and a knowledge hit
-can both be real for a mixed question (convention at HEAD *and* why we chose
-it). The script reports every substrate that has signal; the agent judges how
-to combine them. Line 1 stays the primary verdict (`INJECT` / `KNOWLEDGE` /
+Substrates are inclusive, not if/else. An episode hit and a knowledge hit can
+both be real for a mixed question (convention at HEAD *and* why we chose it).
+The script reports every substrate that has signal; the agent judges how to
+combine them. Line 1 stays the primary verdict (`INJECT` / `KNOWLEDGE` /
 `SILENCE`) for tools that read only the first line.
 
-`confidence` is emitted on the INJECT header (`top=` / `gap=`) and per seed
-row so the agent can weigh or drill selectively — it is a corpus-invariant
-signal (saturating BM25), not a tuned constant. `mass` stays inside the script
-(never a veto, never emitted). Knowledge `score` is still not gated — reported
-verbatim for the agent to judge. Junk episodes are rejected by the absolute
-confidence floor.
+Labels are recommendations. The router is biased toward more data than
+decision: emit `confidence` on the INJECT header (`top=` / `gap=`) and per
+seed so the agent can weigh or drill — do not freeze a high corpus-shaped bar
+(SOUL.md: no tuned constant decides). `mass` stays inside the script (never a
+veto, never emitted). Knowledge `score` is not gated — reported verbatim for
+the agent to judge.
 
 Priority (inclusive):
-  1. Confident episode -> INJECT digest (+ KNOWLEDGE line when knowledge present)
-  2. Else knowledge    -> KNOWLEDGE path=score ...
-  3. Else              -> SILENCE
+  1. Episode above the low floor -> INJECT digest (+ KNOWLEDGE line when knowledge present)
+  2. Else knowledge               -> KNOWLEDGE path=score ...
+  3. Else                         -> SILENCE
 
 Two substrates, one report — because mixed answers are real.
 
 Episodes gate on absolute `confidence` — never max-normalized `score`, which
 tops out near 1.0 for junk queries too. Confidence is saturating BM25
-(search/confidence.go): a bounded transform of the raw score, so its junk floor
-holds across corpora and a fixed `CONF_MIN` is a property, not a fit. A missing
-per-result `confidence` is treated as 0.0: the engine emits `confidence`/`mass`
-with `omitempty`, so an all-offtopic set (every confidence 0.0) drops the field
-— that is noise, and it silences. Any real hit, even pure-semantic, carries
-confidence > 0. (Pre-confidence index DBs self-heal: recall auto-rebuilds the
-index on version change.)
+(search/confidence.go). A missing per-result `confidence` is treated as 0.0:
+the engine emits `confidence`/`mass` with `omitempty`, so an all-offtopic set
+(every confidence 0.0) drops the field — that is noise, and it silences. Any
+real hit, even pure-semantic, carries confidence > 0. (Pre-confidence index
+DBs self-heal: recall auto-rebuilds the index on version change.)
+
+The shipped floor is deliberately low: dialogue-shaped hits often land well
+below the old 0.70 coding bar while still carrying real evidence. Grey-band
+confidence is reported for the agent to weigh; only empty / near-zero is an
+obvious machine silence.
 
 Knowledge has no such invariant. Its `score` blends semantic cosine, whose junk
 baseline drifts with corpus and model, so no fixed floor generalizes (SOUL.md:
@@ -53,6 +57,7 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import os
 import signal
 import sys
 
@@ -63,15 +68,26 @@ try:
 except (ImportError, AttributeError, ValueError):
     pass
 
-# Absolute confidence floor. Confidence is saturating BM25 (search/confidence.go)
-# — a bounded transform whose junk baseline is a property of the transform, not
-# of any one corpus, so this floor generalizes (real domain ~0.85, junk ~0.48-
-# 0.63 hold across corpora by construction; SOUL.md permits a gate on an
-# engine-calibrated invariant).
-CONF_MIN = 0.70
-# Soft path: near the hard floor with a clear gap to #2 — still above offtopic.
-CONF_SOFT = 0.68
-GAP_MIN = 0.04
+
+def _env_float(name: str, default: float) -> float:
+    """Optional harness override (REKAL_HUNT_*). Defaults are the shipped bars."""
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+# Super-low episode floor. Only empty / near-zero confidence is an obvious
+# machine silence; grey-band hits inject with `conf=` for the agent to weigh
+# (SOUL.md: suggest, don't freeze a high tuned bar). Override via REKAL_HUNT_*
+# for industry-bench harnesses.
+CONF_MIN = _env_float("REKAL_HUNT_CONF_MIN", 0.25)
+# Soft path: slightly below the hard floor with a clear gap to #2.
+CONF_SOFT = _env_float("REKAL_HUNT_CONF_SOFT", 0.20)
+GAP_MIN = _env_float("REKAL_HUNT_GAP_MIN", 0.02)
 # Raw BM25 `mass` is reported verbatim, never bucketed on a fixed boundary: mass
 # is not corpus-invariant (it scales with corpus term stats and doc lengths), so
 # any "low mass" cut would be a tuned constant (SOUL.md: no tuned constant
@@ -79,10 +95,8 @@ GAP_MIN = 0.04
 # reads the number and judges whether to trust or widen. Mass never silences.
 # No KNOWLEDGE floor. The knowledge `score` blends semantic cosine, whose junk
 # baseline drifts per corpus and model — a fixed floor overfits the corpus it
-# was measured on (SOUL.md: no tuned constant decides). The engine calibrates
-# episode `confidence` to be corpus-invariant (saturating BM25), so the episode
-# gate below stays; the knowledge score has no such invariant, so route.py
-# reports it verbatim and the agent judges whether it is a real prose hit.
+# was measured on (SOUL.md: no tuned constant decides). route.py reports it
+# verbatim and the agent judges whether it is a real prose hit.
 
 # Digest shape. These are output BUDGETS (how much to print), not judgment
 # gates — they bound the digest's token cost without changing the verdict or the
@@ -152,7 +166,7 @@ def knowledge_hits(knowledge: list, n: int = 5) -> str:
 def print_digest(data: dict) -> None:
     """Seed context: every candidate in the window as
     `sid conf=… t<turn> "snippet"`, in rank order. Confidence is the
-    corpus-invariant signal the agent may weigh; mass stays inside the script.
+    signal the agent may weigh; mass stays inside the script.
     Wide enough (top-20) to seed a multi-hop answer without drilling each."""
     results = data.get("results") or []
     for r in results[:DIGEST_WINDOW]:
@@ -223,10 +237,7 @@ def main() -> int:
         return done(0)
 
     # Nothing on either substrate — machine silence. The reason is diagnostic;
-    # the gating scores stay inside the script.
-    if kind == "empty":
-        print("SILENCE reason=no_results")
-        return done(1)
+    # the agent may still reformulate.
     print(f"SILENCE reason={reason or 'below_gate'}")
     return done(1)
 

@@ -27,7 +27,7 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 | Route stdout | Action |
 |---|---|
 | `INJECT top=… gap=… N seed…` + rows (+ optional `KNOWLEDGE`) | Confident episode(s). Rows are seed context — `sid conf=… t<n> "snippet"`. Weigh `conf` if useful; drill `sid` at `t<n>`. A trailing `KNOWLEDGE` line means HEAD prose also matched — inclusive, not if/else. |
-| `KNOWLEDGE path=score …` | Episode below the confidence bar (or the knowledge half of a mixed report). Judge the per-file score *distribution*: clear leader that falls off → Read at `lines` (`anchor`); flat near the noise floor → stay silent on prose. |
+| `KNOWLEDGE path=score …` | Knowledge half of a mixed report, or the only substrate when episodes are empty/near-zero. Judge the per-file score *distribution*: clear leader that falls off → Read at `lines` (`anchor`); flat near the noise floor → stay silent on prose. |
 | `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
@@ -40,10 +40,12 @@ recall only for a field the seed omits (`files`). If the top-20 isn't enough,
 **reformulate and multi-search**. The digest is **cost-bounded**: a `-n 100`
 read costs about the same through the route as a `-n 20` one.
 
-`route.py` gates episodes on absolute `confidence` (≥ 0.70; soft ≥ 0.68 with gap
-≥ 0.04), emits that confidence on the header and each seed, and reports the
-knowledge `score` distribution for you to judge (no fixed floor). Both
-substrates can appear together when the question is mixed. Neither → SILENCE.
+`route.py` labels are **recommendations**. It is biased toward more data than
+decision: a **super-low** episode floor on absolute `confidence` (≥ 0.25; soft
+≥ 0.20 with gap ≥ 0.02) so only empty / near-zero is machine-silenced, then
+`conf=` on the header and each seed for **you** to weigh. Knowledge `score` is
+reported for you to judge (no fixed floor). Both substrates can appear together
+when the question is mixed. Neither → SILENCE.
 
 ## One query is a guess — widen before you conclude
 

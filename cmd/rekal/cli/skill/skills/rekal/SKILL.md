@@ -37,16 +37,18 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 ## Silence — machine for episodes, yours for knowledge
 
-Pipe recall through `route.py`. It gates episodes on absolute `confidence`
-(saturating BM25, junk-robust across corpora), not the max-normalized `score`
-that tops out near 1.0 for junk too. Substrates are **inclusive**: a confident
-episode and a knowledge hit can both be real for a mixed question. Line 1 is
-the primary verdict (`INJECT` / `KNOWLEDGE` / `SILENCE`); when both fire you
-get `INJECT` plus a trailing `KNOWLEDGE` line. `INJECT` carries `top=`/`gap=`
-and each seed as `sid conf=… t<n> "snippet"` — weigh confidence if you want,
-drill from content otherwise. Mass stays inside the script (never a veto). A
-lexically thin dialogue hit still injects. Near-misses are noise; no episode
-and no knowledge → `SILENCE`.
+Pipe recall through `route.py`. Treat its labels as a **recommendation**, not a
+final call: the router is intentionally biased toward **more data than
+decision**. It keeps a **super-low** floor on absolute `confidence` (saturating
+BM25) — only empty / near-zero is machine-silenced — and never gates on
+max-normalized `score` (junk tops out near 1.0 too). Substrates are
+**inclusive**: an episode and a knowledge hit can both be real for a mixed
+question. Line 1 is the primary label (`INJECT` / `KNOWLEDGE` / `SILENCE`);
+when both fire you get `INJECT` plus a trailing `KNOWLEDGE` line. `INJECT`
+carries `top=`/`gap=` and each seed as `sid conf=… t<n> "snippet"` — **you
+judge** from confidence + content. Mass stays inside the script (never a veto).
+A lexically thin dialogue hit still injects. No episode signal and no knowledge
+→ `SILENCE`.
 
 `KNOWLEDGE path=score …` is a signal, not a floor. The knowledge score has no
 corpus-invariant cut (it blends semantic cosine, whose junk baseline drifts

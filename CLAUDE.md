@@ -191,13 +191,21 @@ session discovery keep using the invoking worktree.
   no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
 - `lsa/`: Latent Semantic Analysis embeddings
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags)
-- `skill/`: One Claude Code skill with progressive disclosure.
-  `skills/rekal/` embeds `SKILL.md` (thin tip: triage + boundary + silence +
-  dispatch), `scripts/` (deterministic gates — `recall-route.py` /
-  `hunt-gate.py`, `why-trail-gate.py`, `map-fresh.sh` /
-  `map-write-watermark.sh`, `wiki-branch-gate.sh`), and `references/`
-  (hunt/why/mine/map/provenance/analytics/wiki/reference — loaded only when
-  the tip dispatches). `init` installs the whole tree (scripts 0755) and
+- `skill/`: One Claude Code skill, redesigned from `SOUL.md`'s "The skill"
+  tenets around three homes — **function → script, knowledge → rich prose on
+  demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin
+  route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
+  dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
+  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE + digest on
+  absolute `confidence`, reports a `low_mass` signal instead of ever silencing
+  a confident hit; `map.sh` fresh|watermark; `wiki-gate.sh`), and `references/`
+  (rich, on demand — `ledger.md` is the one page on reasoning over the past:
+  recall/widen/depth-judgment, time-axis, enumeration, whose-fact/premise,
+  analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
+  `reference.md`). No corpus profiles or benchmark tuning ship — chat corpora
+  route to the ledger by the general boundary (only-record-is-conversation) +
+  the `low_mass` signal; the calibrate/profile tooling lives on
+  `research/industry-bench`. `init` installs the whole tree (scripts 0755) and
   purges legacy `rekal-*` companion dirs; `clean` removes current + legacy.
   Adding a module = adding a file under `skills/rekal/`; tip must name it.
   Topology diagrams: `docs/design/skill-router.md`.

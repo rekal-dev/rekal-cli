@@ -6,7 +6,7 @@ Browseable topic pages from the ledger's correlations — not a file crawl.
 
 ```bash
 ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}"
-bash "$ROOT/scripts/wiki-branch-gate.sh"
+bash "$ROOT/scripts/wiki-gate.sh"
 ```
 
 Exit 1 on the default branch → create a feature branch first. Merge is the

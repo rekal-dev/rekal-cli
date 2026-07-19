@@ -218,8 +218,8 @@ machinery:
   subject matter has heavy ledger activity *after* the file's last commit
   ("twelve sessions about token refresh since `docs/auth.md` last changed")
   are behind the ledger. Computable from watermarks and `files_index` alone;
-  feeds wiki / analytics-reflect (`references/wiki.md`,
-  `references/analytics.md`) as proposed PRs, where review is the
+  feeds wiki / ledger-reflect (`references/wiki.md`,
+  `references/ledger.md`) as proposed PRs, where review is the
   admission gate.
 - **Wiki clustering** (`references/wiki.md`) gains file-node anchors instead of
   reconstructing co-occurrence from sessions alone.

@@ -268,30 +268,29 @@ Design detail: [`docs/design/skill-router.md`](docs/design/skill-router.md).
 
 ```mermaid
 flowchart TB
-    tip["SKILL.md tip<br/>always loaded"]
+    tip["SKILL.md route<br/>always loaded, thin"]
     tip --> triage{"Which substrate?"}
     triage -->|Tree now| grep["grep / read HEAD"]
-    triage -->|Knowledge / pointed past| route["recall-route.py"]
-    triage -->|Map| mapf["map-fresh.sh → map.md"]
-    triage -->|Why · mine · …| ref["Read one references/*.md"]
+    triage -->|Knowledge / ledger| route["route.py"]
+    triage -->|Map| mapf["map.sh fresh → map.md"]
+    triage -->|past reasoning| ref["Read references/ledger.md"]
     route -->|KNOWLEDGE| readk["Read pointer — stop"]
-    route -->|INJECT| hunt["hunt.md → drill"]
+    route -->|INJECT| drill["ledger.md → drill"]
     route -->|SILENCE| quiet["No memory inject"]
 ```
 
-| Layer | What |
+| Home | What |
 |-------|------|
-| **Tip** (`SKILL.md`) | Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **map** / **ledger** (past). Silence when memory is the wrong tool. |
-| **Scripts** | Gates, not prose: `recall-route.py` (KNOWLEDGE/INJECT/SILENCE), `why-trail-gate.py`, `map-fresh.sh` + `map-write-watermark.sh`, `wiki-branch-gate.sh`. |
-| **References** | hunt · why · mine · map · provenance · analytics (reflect/distill/census) · wiki · flags/SQL — `Read` one file and stop. |
+| **Route** (`SKILL.md`) | Thin. Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **ledger** (past) / **map**. Trusts reasoning; silence when memory is the wrong tool. |
+| **Function** (`scripts/`) | Deterministic data for judgment: `route.py` (INJECT/KNOWLEDGE/SILENCE + digest, reports a `low_mass` signal), `map.sh` (fresh/watermark), `wiki-gate.sh`. |
+| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · map · wiki · flags/SQL. `Read` one and stop. |
 
 ```mermaid
 flowchart LR
-    j["rekal JSON"] --> rr["recall-route.py"]
-    rr --> hg["hunt-gate.py"]
-    hg -->|confident episode| i["INJECT<br/>even if knowledge present"]
-    hg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
-    hg -->|else| s["SILENCE"]
+    j["rekal JSON"] --> rt["route.py"]
+    rt -->|confident episode| i["INJECT + digest<br/>even if knowledge present<br/>reports low_mass"]
+    rt -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
+    rt -->|else| s["SILENCE"]
 ```
 
 Skills are versioned with the binary. After you upgrade, run `rekal init` once

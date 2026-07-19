@@ -74,6 +74,24 @@ silent on prose. On a mixed `INJECT`+`KNOWLEDGE` output, combine both if needed.
 The route returns data; you decide the move. Cite session / turn / commit with
 every memory claim.
 
+## Judgment — SOUL-aligned (agent, not the script)
+
+Scripts recommend and compress. **You** judge. Keep it general:
+
+- **Only what the ledger holds.** Do not invent, pad, or borrow world knowledge
+  when the record is thin — say what is there, or stay silent.
+- **Lists and arcs are complete-sets.** "What/which/how many/besides/goals/events"
+  → enumerate across *all* sessions (SQL + page until empty). The first two
+  hits are not the answer. Stop only when further pages add nothing new.
+- **Name the thing the question asked.** Causes → event names; hobbies → each
+  distinct activity; job arcs → every beat (left X, got Y, aspires Z) that the
+  record actually states.
+- **Time stays anchored.** Prefer the relative form the speaker used plus the
+  session date ("last week before 2022-10-13"), not a rounded gloss
+  ("early October"), unless the record itself gives a calendar day.
+- **Attribute carefully.** Who did it, with whom, where — if the drill
+  contradicts the question's framing, say so; don't force a fit.
+
 ## Semantic warming — retry, don't settle
 
 A `SEMANTIC warming` note means the deep-semantic layer's model daemon is still

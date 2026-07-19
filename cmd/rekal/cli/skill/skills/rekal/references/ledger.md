@@ -96,8 +96,10 @@ evidence that is mis-ranked; it does not create evidence that isn't there.
 
 "All", "every", "in what order", "which of the N" — and the quieter shapes whose
 gold is still a list: "what activities does X do", "what does X do besides Y",
-"who did X tell about Z". Ranked recall returns the loudest matches, not the full
-set, and a partial list is a wrong answer. Switch to SQL across *all* sessions:
+"who did X tell about Z", "what causes / events / hobbies / goals". Ranked
+recall returns the loudest matches, not the full set, and a **partial list is a
+wrong answer**. Switch to SQL across *all* sessions. **Do not answer from the
+first two drills.**
 
 ```bash
 rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'" \
@@ -105,6 +107,8 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
 # then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … | view.py until every row
 ```
 
+- **Page until empty.** Stop only when a further OFFSET returns nothing new —
+  not when you already have "enough" items to sound complete.
 - **Count before you LIMIT.** An `ORDER BY ts LIMIT 20` you never paged is a
   silent truncation — the answer is often in the rows you cut.
 - **LIKE is stricter than search.** Reformulate SQL patterns too: synonyms and
@@ -114,6 +118,10 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
   ("give them a bath") only surfaces from the entity's own mention list.
 - **Check the set size.** If the question fixes N, don't answer until you can
   point at N distinct events, each verified in context.
+- **Name what was asked.** Event/cause questions want the *event names* in the
+  record (toy drive, food drive), not only the beneficiary class. Job/goal arcs
+  need every beat the ledger states (left X, got Y, aspires Z) — omit nothing
+  that is there; invent nothing that isn't.
 - **Non-verbal evidence counts.** Shared-media captions (`[shares a photo: …]`),
   links, quoted lists are premises — read them as part of the turn.
 - **Scan the uptake, not just the utterance.** In two-party questions the
@@ -147,6 +155,8 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
 - **Answer in event time, honest precision.** "Yesterday" said Oct 21 → *Oct 20*.
   "A few days ago" said Aug 19 → *a few days before Aug 19*. Don't flatten a
   relative phrase to the mention date, and don't fake precision the record lacks.
+  Prefer "last week before &lt;session-date&gt;" over a rounded gloss like
+  "early October" when that is all the speaker gave.
 - **Routine ≠ episode.** "I usually / around 10pm" is a habit; a question about
   one occasion needs the past-tense report of that occasion.
 - **One event in the window is not the answer** until you've scanned the whole

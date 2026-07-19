@@ -271,6 +271,12 @@ mise run build         # Build binary with version from git tag
 mise run build:all     # Build for all platforms (snapshot)
 ```
 
+**Cloud agents / fresh containers:** building from a clean clone has two traps —
+llama.cpp HEAD won't link (pin tag `b8157`) and the nomic model ships as a
+git-LFS pointer (`git lfs pull` or recall silently drops to BM25+LSA). Follow
+[`docs/cloud-agent-setup.md`](docs/cloud-agent-setup.md) before building or
+judging recall quality; don't repeat the setup mistakes.
+
 ### Before Every Commit
 
 ```bash

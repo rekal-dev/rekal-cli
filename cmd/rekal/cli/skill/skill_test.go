@@ -159,10 +159,10 @@ func TestRouteScript(t *testing.T) {
 	}
 
 	// Knowledge is the fallback when the episode gate fails -> KNOWLEDGE, exit 0.
-	// The top score is reported verbatim as a signal (no tuned floor decides).
+	// Per-file path=score distribution is reported verbatim (no tuned floor).
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
-	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "score=0.7200") {
-		t.Fatalf("weak episode + knowledge should KNOWLEDGE score=0.7200 exit 0, got code=%d %s", code, out)
+	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/x.md=0.72") {
+		t.Fatalf("weak episode + knowledge should KNOWLEDGE docs/x.md=0.72 exit 0, got code=%d %s", code, out)
 	}
 	if strings.Contains(out, "INJECT") {
 		t.Fatalf("weak episode + knowledge must not INJECT: %s", out)
@@ -177,8 +177,8 @@ func TestRouteScript(t *testing.T) {
 	// A low knowledge score is REPORTED, not silenced on a tuned floor: the score
 	// is a signal the agent judges. SOUL.md bans a corpus-tuned KNOWLEDGE floor.
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
-	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "score=0.1200") {
-		t.Fatalf("low knowledge score must be reported (KNOWLEDGE score=0.1200), not silenced, got code=%d %s", code, out)
+	if code != 0 || !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/x.md=0.12") {
+		t.Fatalf("low knowledge score must be reported (KNOWLEDGE docs/x.md=0.12), not silenced, got code=%d %s", code, out)
 	}
 
 	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.

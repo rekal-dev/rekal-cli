@@ -28,7 +28,7 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 |---|---|
 | `INJECT … mass=<high>` | Confident episode with lexical heft — drill below. Knowledge docs may also exist; don't let them block. |
 | `INJECT … mass=<low>` | Confident but lexically thin — a dialogue-shaped hit. Real. Trust it or widen; don't discount it for low mass. (mass is raw, judge it relative to the query.) |
-| `KNOWLEDGE score=<n> …` | Episode below the confidence bar. Judge the score: a real prose hit → Read `path` at `lines` (`anchor`); a low score near the noise floor → stay silent. Don't drill weak sessions. |
+| `KNOWLEDGE path=score …` | Episode below the confidence bar. Judge the per-file score *distribution*: a clear leader that falls off → Read that file at `lines` (`anchor`); a flat cluster near the noise floor → stay silent. Don't drill weak sessions. |
 | `SILENCE …` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a candidate digest — top hits with a trimmed

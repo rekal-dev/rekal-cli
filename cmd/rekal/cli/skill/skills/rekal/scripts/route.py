@@ -16,8 +16,9 @@ floor.
 
 Priority:
   1. Confident episode        -> INJECT (knowledge presence must not block it)
-  2. Else non-empty knowledge -> KNOWLEDGE score=<top> (Read HEAD if it's a real
-                                 prose hit — the agent judges by the score)
+  2. Else non-empty knowledge -> KNOWLEDGE path=score ... (Read HEAD if a file
+                                 is a real prose hit — the agent judges the
+                                 per-file score distribution, not one number)
   3. Else                     -> SILENCE
 
 Two substrates, two gates — because only one has a corpus-invariant signal.
@@ -121,16 +122,17 @@ def episode_verdict(results: list) -> tuple[str, float, float, float, str]:
     return "silence", top, gap, mass, "below_gate"
 
 
-def knowledge_top_score(knowledge: list) -> float:
-    """Top knowledge score — reported as a signal, never gated on a fixed floor."""
-    if not knowledge or not isinstance(knowledge[0], dict):
-        return 0.0
-    return _f(knowledge[0].get("score", 0))
-
-
-def knowledge_paths(knowledge: list) -> str:
-    paths = [str(k["path"]) for k in knowledge[:5] if isinstance(k, dict) and k.get("path")]
-    return (" " + " ".join(paths)) if paths else ""
+def knowledge_hits(knowledge: list, n: int = 5) -> str:
+    """Top knowledge files as `path=score`, score-ordered. The whole point is to
+    hand the agent the score *distribution*, not one number: a flat cluster near
+    the noise floor (e.g. 0.51 0.49 0.48) is no real hit; a clear leader that
+    then falls off (0.93 0.92 0.60) is a real prose hit. That reference point is
+    what the agent judges against — no fixed floor decides (SOUL.md)."""
+    out = []
+    for k in knowledge[:n]:
+        if isinstance(k, dict) and k.get("path"):
+            out.append(f'{k["path"]}={_f(k.get("score", 0)):.2f}')
+    return " ".join(out)
 
 
 def print_digest(data: dict) -> None:
@@ -169,10 +171,11 @@ def main() -> int:
         return 0
 
     # Episode gate failed. Knowledge has no corpus-invariant floor, so report
-    # the top score as a signal and let the agent judge — don't silence on a
-    # tuned threshold (SOUL.md: no tuned constant decides).
+    # the per-file score distribution as a signal and let the agent judge —
+    # don't silence on a tuned threshold (SOUL.md: no tuned constant decides).
     if knowledge:
-        print(f"KNOWLEDGE score={knowledge_top_score(knowledge):.4f}{knowledge_paths(knowledge)}")
+        hits = knowledge_hits(knowledge)
+        print(f"KNOWLEDGE {hits}" if hits else "KNOWLEDGE")
         return 0
 
     # Nothing on either substrate — machine silence.

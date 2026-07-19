@@ -121,8 +121,10 @@ func refreshKnowledge(w io.Writer, indexDB *sql.DB, gitRoot string) error {
 // knowledgeEmbedBudget caps how many chunks one budgeted embedding pass will
 // embed (post-commit hook and each bite of `rekal embed`). A giant prose
 // import converges across bites/commits; un-embedded chunks stay
-// keyword-findable (the two-speed contract).
-const knowledgeEmbedBudget = 256
+// keyword-findable (the two-speed contract). Kept small (like
+// sessionEmbedBudget) to bound how long one bite pins the index write lock, so
+// a concurrent recall waits out at most a short bite — see db.open's retry.
+const knowledgeEmbedBudget = 16
 
 // embedKnowledgeChunks builds semantic vectors for knowledge chunks that
 // don't have one yet, through the same content-hash-keyed embedding cache the
@@ -135,7 +137,11 @@ const knowledgeEmbedBudget = 256
 // Not called at recall time: recall latency stays pure read. Vectors are
 // built by `rekal embed` (background after index/sync, or by hand) and the
 // post-commit hook (budgeted).
-func embedKnowledgeChunks(w io.Writer, indexDB *sql.DB, gitRoot string, budget int) error {
+//
+// If emb is nil this constructs (and closes) an embedder for the call; the
+// background embed loop passes a shared, already-loaded one so the model loads
+// once, off the index lock (see runEmbed).
+func embedKnowledgeChunks(w io.Writer, indexDB *sql.DB, gitRoot string, budget int, emb sessionEmbedder) error {
 	model := intendedEmbedModel(gitRoot)
 	if model == "" {
 		return nil // no semantic backend on this platform/config — keyword-only
@@ -172,15 +178,18 @@ func embedKnowledgeChunks(w io.Writer, indexDB *sql.DB, gitRoot string, budget i
 
 	embedded := 0
 	if len(missing) > 0 {
-		emb, err := semanticEmbedder(gitRoot)
-		if err != nil || emb == nil {
-			// Backend unavailable — still store whatever the cache supplied.
-			if serr := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); serr != nil {
-				return serr
+		if emb == nil {
+			var cerr error
+			emb, cerr = semanticEmbedder(gitRoot)
+			if cerr != nil || emb == nil {
+				// Backend unavailable — still store whatever the cache supplied.
+				if serr := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); serr != nil {
+					return serr
+				}
+				return cerr
 			}
-			return err
+			defer emb.Close()
 		}
-		defer emb.Close()
 		fresh, err := emb.EmbedSessions(missing) // keys are content hashes
 		if err != nil {
 			if serr := db.StoreKnowledgeEmbeddings(indexDB, vectors, model); serr != nil {

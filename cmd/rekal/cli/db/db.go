@@ -5,10 +5,28 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 
 	_ "github.com/marcboeker/go-duckdb"
+)
+
+// DuckDB is single-writer per file: while a background `rekal embed` bite holds
+// the index write lock, any other rekal process opening the same file gets a
+// lock-conflict error. Rather than hard-fail (a user running recall right after
+// `init`/`sync` would just see an error), the open path waits out a bite. Embed
+// holds the lock only for a short, bounded bite and yields between bites (see
+// embed_cmd.go), so a reader polling here wins a yield window within one bite.
+const (
+	// Budget covers the worst realistic hold: the first background-embed bite
+	// after a cold start, where the nomic daemon loads the model (~15s) while
+	// holding the lock. Steady-state bites are far shorter (see embed_cmd.go),
+	// so a reader normally waits well under a second. A genuinely wedged writer
+	// still surfaces the clear error after this budget rather than hanging.
+	openLockRetryBudget = 30 * time.Second
+	openLockRetryMin    = 50 * time.Millisecond
+	openLockRetryMax    = 200 * time.Millisecond
 )
 
 // StoreDir returns the .rekal store directory for gitRoot, resolved to the
@@ -42,15 +60,40 @@ func OpenIndexAt(path string) (*sql.DB, error) {
 }
 
 func open(path string) (*sql.DB, error) {
-	db, err := sql.Open("duckdb", path)
-	if err != nil {
-		return nil, wrapOpenError(path, err)
+	deadline := time.Now().Add(openLockRetryBudget)
+	wait := openLockRetryMin
+	for {
+		// The single-writer lock conflict can surface either at sql.Open (the
+		// go-duckdb connector opens the file eagerly) or at Ping — handle both
+		// through one retry path.
+		db, err := sql.Open("duckdb", path)
+		if err == nil {
+			if err = db.Ping(); err == nil {
+				return db, nil
+			}
+			db.Close()
+		}
+		// Only a lock conflict is worth waiting out, and only until the budget
+		// runs out; anything else (corruption, disk full) fails immediately.
+		if !isLockConflict(err) || !time.Now().Before(deadline) {
+			return nil, wrapOpenError(path, err)
+		}
+		time.Sleep(wait)
+		if wait *= 2; wait > openLockRetryMax {
+			wait = openLockRetryMax
+		}
 	}
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, wrapOpenError(path, err)
+}
+
+// isLockConflict reports whether err is DuckDB's single-writer lock conflict —
+// another rekal process already has the file open read-write.
+func isLockConflict(err error) bool {
+	if err == nil {
+		return false
 	}
-	return db, nil
+	msg := err.Error()
+	return strings.Contains(msg, "Could not set lock on file") ||
+		strings.Contains(msg, "Conflicting lock is held")
 }
 
 // wrapOpenError translates a DuckDB open/ping failure into a clear message.
@@ -62,8 +105,7 @@ func open(path string) (*sql.DB, error) {
 // passes through unchanged rather than risk misinterpreting a genuinely
 // different failure (corrupt file, disk full, ...) as a lock conflict.
 func wrapOpenError(path string, err error) error {
-	msg := err.Error()
-	if strings.Contains(msg, "Could not set lock on file") || strings.Contains(msg, "Conflicting lock is held") {
+	if isLockConflict(err) {
 		return fmt.Errorf("rekal: another rekal process is already using %s — wait for it to finish and try again: %w", path, err)
 	}
 	return fmt.Errorf("open database %s: %w", path, err)

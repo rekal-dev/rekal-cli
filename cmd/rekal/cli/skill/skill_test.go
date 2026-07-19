@@ -119,18 +119,18 @@ func TestRouteScript(t *testing.T) {
 	t.Parallel()
 	path := writeScript(t, "scripts/route.py")
 
-	// Confident hit with healthy mass -> INJECT, raw mass reported verbatim.
+	// Confident hit -> INJECT. Scores are the script's gating inputs, not emitted
+	// to the agent's context (content-first), so the output carries no mass/conf.
 	out, code := runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5.6,"score":0.99},{"confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`)
-	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "mass=5.60") {
-		t.Fatalf("want INJECT mass=5.60 exit 0, got code=%d %s", code, out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") || strings.Contains(out, "mass=") || strings.Contains(out, "conf=") {
+		t.Fatalf("want INJECT exit 0 with no scores in output, got code=%d %s", code, out)
 	}
 
-	// Confident but lexically thin (dialogue) -> INJECT, low raw mass reported,
-	// NOT silenced. The chat fix: mass is a reported signal, never a veto and
-	// never bucketed on a tuned boundary (SOUL.md).
+	// Confident but lexically thin (dialogue) -> still INJECT, NOT silenced.
+	// The chat fix: low mass is never a veto (it gated nothing, and isn't emitted).
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":1.4,"score":0.99},{"confidence":0.3,"mass":1.0,"score":0.4}],"knowledge":[]}`)
-	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "mass=1.40") {
-		t.Fatalf("want INJECT mass=1.40 exit 0 (thin chat hit not silenced), got code=%d %s", code, out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
+		t.Fatalf("want INJECT exit 0 (thin chat hit not silenced), got code=%d %s", code, out)
 	}
 
 	// Junk: high max-norm score, low absolute confidence -> SILENCE.
@@ -187,7 +187,7 @@ func TestRouteScript(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "SEMANTIC warming") {
 		t.Fatalf("warming status should add a SEMANTIC warming note, got code=%d %s", code, out)
 	}
-	if strings.SplitN(out, "\n", 2)[0] != "INJECT top=0.8200 gap=0.8200 mass=5.00" {
+	if !strings.HasPrefix(strings.SplitN(out, "\n", 2)[0], "INJECT ") {
 		t.Fatalf("verdict must stay on line 1, got: %q", strings.SplitN(out, "\n", 2)[0])
 	}
 	// No semantic field (or not retryable) -> no note.
@@ -196,19 +196,21 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("no semantic field must not emit a warming note: %s", out)
 	}
 
-	// Tail cap: the digest shows a top-20 window (top-3 snippets + up to
-	// DIGEST_TAIL_MAX=17 id/conf) and summarizes the rest as a count, so the
-	// INJECT digest stays cost-bounded regardless of -n. 30 results -> 27 in the
-	// tail -> 17 shown + "(+10 more)".
-	big := `{"results":[{"session_id":"top","confidence":0.82,"mass":5,"score":1}` +
-		strings.Repeat(`,{"session_id":"x","confidence":0.5,"mass":1,"score":1}`, 29) +
+	// Seed window: the digest shows up to DIGEST_WINDOW=20 candidates each with a
+	// snippet (no scores), then summarizes the rest as "(+N more)", so an INJECT
+	// stays cost-bounded regardless of -n. 30 results -> 20 shown + "(+10 more".
+	big := `{"results":[{"session_id":"top","confidence":0.82,"mass":5,"score":1,"snippet":"hello world"}` +
+		strings.Repeat(`,{"session_id":"x","confidence":0.5,"mass":1,"score":1,"snippet":"filler text"}`, 29) +
 		`],"knowledge":[]}`
 	out, code = runRoute(t, path, big)
-	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "(+10 more") {
-		t.Fatalf("digest should cap the tail at 20 and show (+10 more), got: %s", out)
+	if code != 0 || !strings.HasPrefix(out, "INJECT ") || !strings.Contains(out, "(+10 more") {
+		t.Fatalf("digest should show a 20-candidate seed window and (+10 more), got: %s", out)
 	}
-	if strings.Count(out, "0.5)") > 18 { // 17 shown tail entries, cap
-		t.Fatalf("tail not capped at top-20 — too many entries printed: %s", out)
+	if strings.Contains(out, "conf=") || strings.Contains(out, "(0.5)") {
+		t.Fatalf("seed digest must not print per-candidate scores: %s", out)
+	}
+	if n := strings.Count(out, "\"filler text\""); n > 20 { // capped at the window
+		t.Fatalf("seed window not capped at 20, printed %d snippets: %s", n, out)
 	}
 
 	// Episode gate fails AND no knowledge at all -> machine SILENCE, exit 1.

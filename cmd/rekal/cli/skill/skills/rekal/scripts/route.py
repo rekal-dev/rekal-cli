@@ -3,16 +3,19 @@
 
 The single entry after `rekal "<q>"`. Reads recall stdout JSON on stdin (or a
 file path arg), gates on absolute `confidence`, and prints one agent-facing
-label plus — on INJECT — a compact candidate digest (top candidates with a
-trimmed snippet, the rest as one-line id+confidence), so the agent never
-re-reads the raw recall JSON (which costs ~7x the tokens for the same decision).
+label plus — on INJECT — a content-first seed digest: the top-DIGEST_WINDOW
+candidates each as `sid t<turn> "snippet"`, in rank order, so the agent has
+enough context to synthesize a (multi-hop) answer without drilling each, at a
+fraction of the raw recall JSON's tokens.
 
-This script reports deterministic data for the agent's judgment; it does not
-decide the corpus or switch profiles. In particular, raw BM25 `mass` is reported
-verbatim — never bucketed on a tuned boundary, never used to silence a confident
-hit. Low mass is a lexically thin, dialogue-shaped match; whether to trust or
-widen is the agent's call. Junk is already rejected by the absolute confidence
-floor.
+Scores are for the SCRIPT, content is for the CONTEXT. `confidence`/`gap`/`mass`
+are the gating inputs this script uses to DECIDE the verdict; they are not
+emitted to the agent's context (no per-candidate conf, no header scores) — the
+agent reasons over the content and the rank order and drills `sid` at `t<turn>`.
+The one exception is the knowledge `score` distribution, which the script
+deliberately does NOT gate on, so it IS emitted for the agent to judge. Low mass
+(a lexically thin, dialogue-shaped hit) never vetoes an inject — it gated
+nothing. Junk is rejected by the absolute confidence floor.
 
 Priority:
   1. Confident episode        -> INJECT (knowledge presence must not block it)
@@ -84,13 +87,13 @@ GAP_MIN = 0.04
 # ranking. The id(conf) tail dominates the digest at large -n (≈75% of tokens at
 # -n 100) yet the agent drills from the top, so the tail is capped and the
 # remainder summarized as a count (drill deeper via `query --session`/SQL).
-DIGEST_SNIPPET_TOP = 3
-DIGEST_SNIPPET_WORDS = 30
-# Show a top-20 candidate window (3 snippets + 17 id/conf), matching the default
-# recall depth and the retrieval window benchmarks like LoCoMo report. Beyond 20
-# the agent reformulates / multi-searches (widen), or drills / raises -n — going
-# deeper into one query's tail rarely beats a second, sharper query.
-DIGEST_TAIL_MAX = 17
+# Seed-coverage window: inject the top-N candidates each WITH a snippet, so the
+# agent has enough context to synthesize a (multi-hop) answer without drilling
+# every session — LoCoMo-style top-K retrieval. Beyond N the agent reformulates
+# / multi-searches (a sharper second query beats one query's tail) or raises -n.
+DIGEST_WINDOW = 20
+# Per-candidate snippet length, trimmed so 20 snippets stay cheap.
+DIGEST_SNIPPET_WORDS = 15
 
 
 def _f(v, default: float = 0.0) -> float:
@@ -145,22 +148,22 @@ def knowledge_hits(knowledge: list, n: int = 5) -> str:
 
 
 def print_digest(data: dict) -> None:
-    """Compact candidate view: enough to pick a drill target, nothing more."""
+    """Seed context: every candidate in the window as `sid t<turn> "snippet"`, in
+    rank order. No per-candidate scores — `confidence`/`mass` are the SCRIPT's
+    gating signals (route.py already used them to decide INJECT); they are noise
+    in the agent's context. The agent reasons over the content and the rank
+    order, and drills `sid` at `t<turn>` for the full turn. Wide enough (top-20)
+    to seed a multi-hop answer without drilling each candidate."""
     results = data.get("results") or []
-    for i, r in enumerate(results[:DIGEST_SNIPPET_TOP]):
+    for r in results[:DIGEST_WINDOW]:
         words = (r.get("snippet") or "").split()
         snip = " ".join(words[:DIGEST_SNIPPET_WORDS]) + ("…" if len(words) > DIGEST_SNIPPET_WORDS else "")
         turn = r.get("snippet_turn_index")
         turn_s = f" t{turn}" if turn is not None else ""
-        print(f'  {i + 1}. {r.get("session_id")} conf={r.get("confidence")}{turn_s} "{snip}"')
-    rest = results[DIGEST_SNIPPET_TOP:]
-    if rest:
-        shown = rest[:DIGEST_TAIL_MAX]
-        tail = " ".join(f'{r.get("session_id")}({r.get("confidence")})' for r in shown)
-        more = len(rest) - len(shown)
-        suffix = f" (+{more} more, drill or -n to see them)" if more > 0 else ""
-        hi = DIGEST_SNIPPET_TOP + len(shown)
-        print(f"  {DIGEST_SNIPPET_TOP + 1}-{hi}: {tail}{suffix}")
+        print(f'  {r.get("session_id")}{turn_s} "{snip}"')
+    more = len(results) - DIGEST_WINDOW
+    if more > 0:
+        print(f"  (+{more} more — reformulate/multi-search or -n)")
 
 
 def main() -> int:
@@ -171,12 +174,14 @@ def main() -> int:
         raw = open(sys.argv[1], encoding="utf-8").read() if len(sys.argv) == 2 else sys.stdin.read()
         data = json.loads(raw)
     except (OSError, json.JSONDecodeError) as e:
-        print(f"SILENCE top=0 gap=0 reason=parse_error:{e}", file=sys.stderr)
+        print(f"SILENCE reason=parse_error:{e}", file=sys.stderr)
         return 2
 
     results = data.get("results") or []
     knowledge = data.get("knowledge") or []
-    kind, top, gap, mass, reason = episode_verdict(results)
+    # top/gap/mass are the script's gating inputs — used to decide `kind`, not
+    # emitted to the agent's context (SOUL.md agent-first: content, not scores).
+    kind, _, _, _, reason = episode_verdict(results)
 
     sem = data.get("semantic")
     warming = isinstance(sem, dict) and bool(sem.get("retryable"))
@@ -191,7 +196,10 @@ def main() -> int:
         return code
 
     if kind == "pass":
-        print(f"INJECT top={top:.4f} gap={gap:.4f} mass={mass:.2f}")
+        shown = min(len(results), DIGEST_WINDOW)
+        # Verdict only — the gating scores (top/gap/mass) did their job inside
+        # the script and are not the agent's context. Content follows.
+        print(f"INJECT {shown} seed candidates — drill <sid> at t<n>, reformulate for more")
         print_digest(data)
         return done(0)
 
@@ -203,11 +211,12 @@ def main() -> int:
         print(f"KNOWLEDGE {hits}" if hits else "KNOWLEDGE")
         return done(0)
 
-    # Nothing on either substrate — machine silence.
+    # Nothing on either substrate — machine silence. The reason is diagnostic;
+    # the gating scores stay inside the script.
     if kind == "empty":
-        print("SILENCE top=0 gap=0 reason=no_results")
+        print("SILENCE reason=no_results")
         return done(1)
-    print(f"SILENCE top={top:.4f} gap={gap:.4f} reason={reason or 'below_gate'}")
+    print(f"SILENCE reason={reason or 'below_gate'}")
     return done(1)
 
 

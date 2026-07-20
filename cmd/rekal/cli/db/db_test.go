@@ -222,48 +222,15 @@ func TestWrapOpenError_OtherErrorsPassThrough(t *testing.T) {
 
 // TestWrapOpenError_UnreadableStorage matches the pre-push failure mode
 // ("Failed to deserialize: field id mismatch, expected: 100, got: 5201")
-// and points the user at `rekal repair`.
+// and points at clean+init.
 func TestWrapOpenError_UnreadableStorage(t *testing.T) {
 	t.Parallel()
 
 	raw := fmt.Errorf(`database/sql/driver: could not connect to database: duckdb error: Serialization Error: Failed to deserialize: field id mismatch, expected: 100, got: 5201`)
 	got := wrapOpenError("/repo/.rekal/data.db", raw)
 	msg := got.Error()
-	if !strings.Contains(msg, "unreadable") || !strings.Contains(msg, "rekal repair") {
-		t.Errorf("wrapOpenError = %q, want unreadable + rekal repair", msg)
-	}
-	if !IsUnreadableStorage(raw) {
-		t.Error("IsUnreadableStorage should match field id mismatch")
-	}
-}
-
-func TestQuarantineDB_RenamesFileAndWAL(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "data.db")
-	if err := os.WriteFile(path, []byte("not-a-duckdb"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path+".wal", []byte("wal"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	dest, err := QuarantineDB(path)
-	if err != nil {
-		t.Fatalf("QuarantineDB: %v", err)
-	}
-	if dest == "" || !strings.Contains(dest, ".corrupt-") {
-		t.Fatalf("dest = %q, want *.corrupt-*", dest)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("original path should be gone, stat err=%v", err)
-	}
-	if _, err := os.Stat(dest); err != nil {
-		t.Errorf("quarantine dest missing: %v", err)
-	}
-	if _, err := os.Stat(dest + ".wal"); err != nil {
-		t.Errorf("quarantine wal missing: %v", err)
+	if !strings.Contains(msg, "unreadable") || !strings.Contains(msg, "rekal clean && rekal init") {
+		t.Errorf("wrapOpenError = %q, want unreadable + clean && init", msg)
 	}
 }
 

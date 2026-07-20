@@ -10,7 +10,7 @@ where it left off. Safe to kill/relaunch at any time — done ids are skipped.
 Usage:
   python3 run_local_e2e.py --tasks tasks.jsonl --gold gold.jsonl \
       --repos-root ~/imb-lme-m/flat --out runs/local-e2e-<tag> \
-      [--model haiku] [--judge-model haiku] [--phase both|answer|judge]
+      [--model <m>] [--judge-model <m>] [--phase both|answer|judge]
 
 Tasks jsonl: {"id","conv","question","category"} per line.
 Gold jsonl:  {"id","gold",...} per line (never shown to the answerer).
@@ -48,9 +48,13 @@ def log(msg: str) -> None:
 
 
 def clean_env() -> dict:
-    env = {k: v for k, v in os.environ.items()
-           if not (k.startswith("ANTHROPIC") or k == "CLAUDE_CONFIG_DIR")}
-    return env
+    """Drop only what interferes with a local `claude -p`: a foreign config
+    dir and forced model overrides. Gateway vars (ANTHROPIC_BASE_URL,
+    ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, HTTPS_PROXY, …) are KEPT — a
+    proxied claude cannot reach its endpoint without them, and stripping the
+    whole ANTHROPIC* namespace made every proxied run fail as 'error'."""
+    drop = {"CLAUDE_CONFIG_DIR", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"}
+    return {k: v for k, v in os.environ.items() if k not in drop}
 
 
 def run_claude(prompt: str, cwd: str, model: str, timeout: int, agentic: bool) -> tuple[str, str, dict]:
@@ -59,7 +63,9 @@ def run_claude(prompt: str, cwd: str, model: str, timeout: int, agentic: bool) -
     usage: {"input_tokens","output_tokens","cache_read_tokens","cache_creation_tokens",
             "total_cost_usd","num_turns","duration_ms"} — zeros when unavailable.
     """
-    cmd = [CLAUDE, "-p", "--model", model, "--output-format", "json"]
+    # --model omitted when empty: the claude CLI (or the gateway) picks its
+    # configured default — required on single-model gateway endpoints.
+    cmd = [CLAUDE, "-p"] + (["--model", model] if model else []) + ["--output-format", "json"]
     if agentic:
         cmd += ["--dangerously-skip-permissions", "--allowed-tools", "Bash,Read,Grep,Glob"]
     empty_usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0,
@@ -178,8 +184,10 @@ def main() -> int:
     ap.add_argument("--gold", required=True)
     ap.add_argument("--repos-root", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--model", default="haiku")
-    ap.add_argument("--judge-model", default="haiku")
+    ap.add_argument("--model", default="",
+                    help="executor model; omit to use the claude CLI's configured default")
+    ap.add_argument("--judge-model", default="",
+                    help="judge model; omit to use the claude CLI's configured default")
     ap.add_argument("--phase", choices=("both", "answer", "judge"), default="both")
     ap.add_argument("--prompt-style", choices=("skill-files", "card"), default="card",
                     help="card = compact inlined skill (better for small models)")

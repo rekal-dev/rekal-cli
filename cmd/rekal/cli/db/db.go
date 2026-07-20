@@ -69,6 +69,12 @@ func open(path string) (*sql.DB, error) {
 		db, err := sql.Open("duckdb", path)
 		if err == nil {
 			if err = db.Ping(); err == nil {
+				// DuckDB + go-duckdb are not safe with database/sql's default
+				// multi-connection pool: concurrent pooled conns race on WAL
+				// auto-checkpoint and can FATAL/SIGSEGV inside CGO (see
+				// duckdb/duckdb-go#127). Cap the pool to one connection.
+				db.SetMaxOpenConns(1)
+				db.SetMaxIdleConns(1)
 				return db, nil
 			}
 			db.Close()

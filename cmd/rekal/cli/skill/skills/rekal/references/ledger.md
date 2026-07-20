@@ -13,6 +13,28 @@ Recall answers "which episode matches this phrase?"; SQL answers "what does the
 whole record say?" Pick before you spend a token. Cite session / turn / commit
 with every claim.
 
+## Runbook — shape → first move → watch for
+
+Pick the row before improvising. Each shape has one first move; the sections
+below carry the depth when the first move isn't enough.
+
+| Question shape | First move | Watch for |
+|---|---|---|
+| Pointed episode — why / what did X say | recall → `route.py`; drill top seed at `t<n>` | premise mismatch; near-miss entity in the answer |
+| Complete-set — all / every / how many / which of N | `find.py "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
+| Temporal — when / before / after / how long | recall, then SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
+| Whose-fact — my / I / their | drill to the assertion turn ("my X is", "I bought") | discussed / suggested ≠ owned |
+| False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |
+| Decision arc — why did this evolve | steering/`because` SQL gather (below) | thin trail synthesized into fiction |
+| Reflection / pattern / census | decompose to SQL (below); never `route.py` | ranking when the ask is exhaustive |
+
+**Stopping rule.** Stop when the answer is grounded in drilled turns you can
+cite. If two further moves add no new evidence, report what you have — or the
+gap — instead of searching on: extra moves past that point manufacture
+plausible-but-wrong distractors. And grep of the tree never answers a ledger
+question; if you catch yourself grepping code for a past-tense fact, come back
+to the table.
+
 ## The recall pipeline
 
 ```bash
@@ -31,7 +53,8 @@ rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
 | `SILENCE reason=…` | No confident episode and no knowledge at all. Say so. Don't pad with near-misses. |
 
 On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
-`session_id conf=… t<turn> "snippet"`, in rank order. `confidence` =
+`sid conf=… t<turn> "snippet"`, in rank order (`sid` is the short handle;
+`session_id` ULID stays in the raw JSON). `confidence` =
 `max(saturate(bm25), cosine) + 0.15·saturate(facet)`; only the BM25 term is
 corpus-invariant, the cosine term drifts — which is why the floor is super-low
 and you weigh `conf=` yourself. Mass stays inside the script (never a veto).
@@ -259,14 +282,16 @@ discussed item mistaken for an owned one). Never `--full` by default:
 
 ```bash
 # Always pipe drills through view.py — raw turns, not JSON chrome.
-rekal query --session <id> --offset <snippet_turn_index - 2> --limit 5 | python3 "$ROOT/scripts/view.py"
-rekal query --session <id> --role summary                               | python3 "$ROOT/scripts/view.py"
-rekal query --session <id> --role human                                 | python3 "$ROOT/scripts/view.py"
-rekal query --session <id> --role human_steering                        | python3 "$ROOT/scripts/view.py"
-rekal query --session <id> --full                                       | python3 "$ROOT/scripts/view.py"  # last resort
+# Prefer the short handle from the digest (s3); ULID still works.
+rekal query --session <sid|ulid> --offset <snippet_turn_index - 2> --limit 5 | python3 "$ROOT/scripts/view.py"
+rekal query --session <sid|ulid> --role summary                               | python3 "$ROOT/scripts/view.py"
+rekal query --session <sid|ulid> --role human                                 | python3 "$ROOT/scripts/view.py"
+rekal query --session <sid|ulid> --role human_steering                        | python3 "$ROOT/scripts/view.py"
+rekal query --session <sid|ulid> --full                                       | python3 "$ROOT/scripts/view.py"  # last resort
 ```
 
-Fields: `session_id`, `score`, `confidence`, `mass`, `snippet`,
+Fields: `sid` (short handle — prefer for digests/drills), `session_id` (ULID),
+`score`, `confidence`, `mass`, `snippet`,
 `snippet_turn_index`, `snippet_role` (`human_steering` = high intent),
 `summary_turn_index`, `children`, `origin` (cross-repo — not this repo's
 conventions).

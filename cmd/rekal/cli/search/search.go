@@ -87,12 +87,18 @@ type Layers struct {
 // precomputed graph. Present only under --explain.
 type Related struct {
 	SessionID   string `json:"session_id"`
+	Sid         string `json:"sid,omitempty"`
 	SharedFiles int    `json:"shared_files"`
 }
 
 // Result is a single search result for JSON output.
 type Result struct {
 	SessionID string `json:"session_id"`
+	// Sid is the query-time short handle (s1, s2, …) derived from
+	// index.db via ROW_NUMBER() OVER (ORDER BY session_id). Agents should
+	// prefer it for digests and `rekal query --session sN`; SessionID
+	// remains the canonical ULID. Omitted when the index has no facet row.
+	Sid string `json:"sid,omitempty"`
 	// Score is the max-normalized hybrid rank score — good for ordering
 	// within a result set, not for absolute confidence (junk queries also
 	// top out near 1.0). Gate silence on Confidence instead.
@@ -123,7 +129,7 @@ type Result struct {
 	// latest subsumes the rest. It is a pointer, not a payload: the summary
 	// itself is 10-17KB and inlining it would spend tokens before anyone
 	// knows it's wanted. The drill is one command:
-	// rekal query --session <id> --role summary. Absent when the session
+	// rekal query --session <sid|ulid> --role summary. Absent when the session
 	// has no summary turn.
 	SummaryTurnIdx *int `json:"summary_turn_index,omitempty"`
 
@@ -656,15 +662,29 @@ func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error)
 	if err != nil {
 		return nil, fmt.Errorf("filter query: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
 
-	var results []Result
+	// Drain facets before any follow-up queries. db.open caps the pool at one
+	// connection (DuckDB/go-duckdb WAL safety); nesting Query/QueryRow while
+	// these rows still hold that connection deadlocks.
+	var facets []sessionFacetRow
 	for rows.Next() {
 		var sf sessionFacetRow
 		if err := sf.scan(rows); err != nil {
+			_ = rows.Close()
 			return nil, fmt.Errorf("scan facet: %w", err)
 		}
+		facets = append(facets, sf)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
+	results := make([]Result, 0, len(facets))
+	for _, sf := range facets {
 		files, _ := querySessionFiles(indexDB, sf.sessionID)
 		snippet, turnIdx, role := firstTurnSnippet(indexDB, sf.sessionID)
 
@@ -677,7 +697,7 @@ func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error)
 			Session:        sf.detail(files),
 		})
 	}
-	return results, rows.Err()
+	return results, nil
 }
 
 // sessionFacetCols is the column list matching sessionFacetRow.scan. The
@@ -1666,6 +1686,8 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 		attachRelated(indexDB, results)
 	}
 
+	attachShortIDs(indexDB, results)
+
 	return Output{
 		Knowledge: knowledge,
 		Results:   results,
@@ -1680,4 +1702,27 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 		Total:    len(results),
 		Semantic: semStatus,
 	}, nil
+}
+
+// attachShortIDs stamps Sid on every result (and children / related) from
+// a single index-wide map. Non-fatal: a missing/empty map leaves Sid blank
+// and agents fall back to session_id.
+func attachShortIDs(indexDB *sql.DB, results []Result) {
+	m, err := db.LoadSessionSIDMap(indexDB)
+	if err != nil || m == nil {
+		return
+	}
+	var walk func([]Result)
+	walk = func(rs []Result) {
+		for i := range rs {
+			rs[i].Sid = m.SID(rs[i].SessionID)
+			for j := range rs[i].Related {
+				rs[i].Related[j].Sid = m.SID(rs[i].Related[j].SessionID)
+			}
+			if len(rs[i].Children) > 0 {
+				walk(rs[i].Children)
+			}
+		}
+	}
+	walk(results)
 }

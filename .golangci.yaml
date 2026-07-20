@@ -21,4 +21,4 @@ linters:
         - (*database/sql.DB).Close
         - (*os.File).Close
 run:
-  timeout: 5m
+  timeout: 10m

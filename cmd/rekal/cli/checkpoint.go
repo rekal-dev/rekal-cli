@@ -48,12 +48,19 @@ func runCheckpoint(cmd *cobra.Command, gitRoot string) error {
 // doCheckpoint captures the current session after a commit.
 // Extracted so sync can call it without a cobra.Command.
 func doCheckpoint(gitRoot string, w io.Writer) error {
-	// Open data DB.
+	// Open data DB. Closed explicitly before index work (below) so
+	// PopulateIndexIncremental's migrate/ATTACH does not open a second
+	// connection to the same DuckDB file — a known go-duckdb SIGSEGV hazard.
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open data DB: %w", err)
 	}
-	defer dataDB.Close()
+	dataOpen := true
+	defer func() {
+		if dataOpen {
+			_ = dataDB.Close()
+		}
+	}()
 
 	// Run forward-only migrations for existing DBs.
 	if err := db.MigrateDataSchema(dataDB); err != nil {
@@ -301,6 +308,14 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			return fmt.Errorf("insert checkpoint_session: %w", err)
 		}
 	}
+
+	// Release the write handle before index population re-opens/ATTACHes
+	// data.db. Two live connections to one DuckDB file in-process can
+	// SIGSEGV in CGO (observed in export QueryTurns after checkpoint).
+	if err := dataDB.Close(); err != nil {
+		return fmt.Errorf("close data DB: %w", err)
+	}
+	dataOpen = false
 
 	// Incrementally update the index for newly captured sessions.
 	if err := updateIndexIncremental(gitRoot, sessionIDs, trunkOnlySessionIDs, checkpointID, w); err != nil {

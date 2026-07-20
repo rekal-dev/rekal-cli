@@ -1,11 +1,13 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -26,6 +28,92 @@ func TestOpenData_CreateAndPing(t *testing.T) {
 
 	if err := db.Ping(); err != nil {
 		t.Fatalf("Ping: %v", err)
+	}
+}
+
+// TestOpen_SingleConnectionPool documents the go-duckdb requirement that
+// each *sql.DB use at most one native connection — MaxOpenConns > 1 races
+// on WAL auto-checkpoint and can SIGSEGV inside duckdb_pending_prepared.
+func TestOpen_SingleConnectionPool(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer dataDB.Close()
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close()
+
+	for name, d := range map[string]*sql.DB{"data": dataDB, "index": indexDB} {
+		if got := d.Stats().MaxOpenConnections; got != 1 {
+			t.Errorf("%s MaxOpenConnections = %d, want 1", name, got)
+		}
+	}
+}
+
+// TestOpen_ConcurrentQueriesSerialize exercises the single-connection pool
+// under parallel readers/writers. Without MaxOpenConns(1) this pattern is
+// how go-duckdb hits WAL-checkpoint FATAL/SIGSEGV; with the cap, database/sql
+// serializes and the workload must complete cleanly.
+func TestOpen_ConcurrentQueriesSerialize(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close()
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+	if err := InsertSession(d, "s1", "", "hash-s1", "human", "", "dev@example.com", "main", "2026-07-18T00:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession: %v", err)
+	}
+	if err := InsertTurn(d, "t1", "s1", 0, "human", "hello", "2026-07-18T00:00:00Z"); err != nil {
+		t.Fatalf("InsertTurn: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 16)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				turns, err := QueryTurns(d, "s1")
+				if err != nil {
+					errCh <- err
+					return
+				}
+				if len(turns) != 1 {
+					errCh <- fmt.Errorf("QueryTurns len=%d, want 1", len(turns))
+					return
+				}
+				if _, err := d.Exec(`UPDATE sessions SET branch = 'main' WHERE id = 's1'`); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatal(err)
 	}
 }
 
@@ -129,6 +217,20 @@ func TestWrapOpenError_OtherErrorsPassThrough(t *testing.T) {
 	got := wrapOpenError("/tmp/data.db", raw)
 	if strings.Contains(got.Error(), "another rekal process") {
 		t.Errorf("wrapOpenError misclassified a non-lock error as a lock conflict: %q", got.Error())
+	}
+}
+
+// TestWrapOpenError_UnreadableStorage matches the pre-push failure mode
+// ("Failed to deserialize: field id mismatch, expected: 100, got: 5201")
+// and points at clean+init.
+func TestWrapOpenError_UnreadableStorage(t *testing.T) {
+	t.Parallel()
+
+	raw := fmt.Errorf(`database/sql/driver: could not connect to database: duckdb error: Serialization Error: Failed to deserialize: field id mismatch, expected: 100, got: 5201`)
+	got := wrapOpenError("/repo/.rekal/data.db", raw)
+	msg := got.Error()
+	if !strings.Contains(msg, "unreadable") || !strings.Contains(msg, "rekal clean && rekal init") {
+		t.Errorf("wrapOpenError = %q, want unreadable + clean && init", msg)
 	}
 }
 

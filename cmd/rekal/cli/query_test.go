@@ -104,6 +104,9 @@ func TestSessionDrilldown_RemoteSessionFromIndex(t *testing.T) {
 	if got.SessionID != sessionID {
 		t.Errorf("session_id = %q, want %q", got.SessionID, sessionID)
 	}
+	if got.Sid != "s1" {
+		t.Errorf("sid = %q, want s1", got.Sid)
+	}
 	if got.Author != "greg@example.com" {
 		t.Errorf("author = %q, want greg@example.com", got.Author)
 	}
@@ -121,6 +124,19 @@ func TestSessionDrilldown_RemoteSessionFromIndex(t *testing.T) {
 	}
 	if len(got.Files) != 1 || got.Files[0] != "cmd/rekal/cli/sync.go" {
 		t.Errorf("unexpected files: %+v", got.Files)
+	}
+
+	// Short handle must resolve to the same session.
+	out.Reset()
+	if err := runSessionDrilldown(cmd, root, "s1", false, 0, 0, ""); err != nil {
+		t.Fatalf("runSessionDrilldown (short handle): %v", err)
+	}
+	var viaShort sessionOutput
+	if err := json.Unmarshal([]byte(out.String()), &viaShort); err != nil {
+		t.Fatalf("unmarshal short-handle output: %v", err)
+	}
+	if viaShort.SessionID != sessionID || viaShort.Sid != "s1" || len(viaShort.Turns) != 2 {
+		t.Errorf("short-handle drill = %+v, want session %s sid=s1 with 2 turns", viaShort, sessionID)
 	}
 }
 

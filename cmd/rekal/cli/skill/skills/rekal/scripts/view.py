@@ -5,8 +5,8 @@ Every skill-facing `rekal query` should pipe here. Recall stays on `route.py`
 (gate + digest). This script strips JSON chrome from session drills and SQL
 rows so the agent reads dialogue / values, not structure.
 
-  rekal query --session <id> --offset N --limit 5 | python3 view.py
-  rekal query --session <id> --full                 | python3 view.py
+  rekal query --session <sid|ulid> --offset N --limit 5 | python3 view.py
+  rekal query --session <sid|ulid> --full                 | python3 view.py
   rekal query "SELECT …"                            | python3 view.py
   rekal query --index "SELECT …"                    | python3 view.py
 
@@ -94,7 +94,8 @@ def _short_ts(ts: str, prev_ts: str) -> str:
 
 
 def view_session(data: dict) -> str:
-    sid = data.get("session_id") or "?"
+    # Prefer query-time short handle (s3); ULID remains in JSON as session_id.
+    sid = data.get("sid") or data.get("session_id") or "?"
     turns = data.get("turns") or []
     if not turns:
         return f"{sid} (no turns)"

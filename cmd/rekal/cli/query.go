@@ -129,7 +129,7 @@ INDEX DB SCHEMA (.rekal/index.db):
 	}
 
 	cmd.Flags().BoolVar(&useIndex, "index", false, "Run SQL against the index DB instead of the data DB")
-	cmd.Flags().StringVar(&sessionID, "session", "", "Show session conversation by ID")
+	cmd.Flags().StringVar(&sessionID, "session", "", "Show session conversation by short handle (s3) or ULID")
 	cmd.Flags().BoolVar(&full, "full", false, "Include tool calls and files in session output")
 	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
@@ -139,7 +139,9 @@ INDEX DB SCHEMA (.rekal/index.db):
 
 // sessionOutput is the JSON structure for session drill-down.
 type sessionOutput struct {
-	SessionID  string `json:"session_id"`
+	SessionID string `json:"session_id"`
+	// Sid is the query-time short handle (sN) when resolvable from index.db.
+	Sid        string `json:"sid,omitempty"`
 	Author     string `json:"author"`
 	Actor      string `json:"actor"`
 	Branch     string `json:"branch"`
@@ -211,7 +213,33 @@ var indexDrilldownSource = drilldownSource{
 	children:  db.QueryChildSessionIDsFromIndex,
 }
 
-func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full bool, offset, limit int, role string) error {
+func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, offset, limit int, role string) error {
+	// Open index once: resolve sN→ULID, emit sid on output, and fall back
+	// for teammate sessions that exist only in index.db.
+	var indexDB *sql.DB
+	var sidMap *db.SessionSIDMap
+	if d, err := db.OpenIndex(gitRoot); err == nil {
+		indexDB = d
+		defer indexDB.Close()
+		if err := db.MigrateIndexSchema(indexDB); err != nil {
+			return fmt.Errorf("migrate index db: %w", err)
+		}
+		if m, err := db.LoadSessionSIDMap(indexDB); err == nil {
+			sidMap = m
+		}
+	} else if db.IsShortSessionHandle(handle) {
+		return fmt.Errorf("short session handle %q needs index.db — run 'rekal index'", handle)
+	}
+
+	sessionID, err := sidMap.Resolve(handle)
+	if err != nil {
+		return err
+	}
+	shortSid := sidMap.SID(sessionID)
+	if shortSid == "" && db.IsShortSessionHandle(handle) {
+		shortSid = handle
+	}
+
 	dataDB, err := db.OpenData(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open data db: %w", err)
@@ -226,29 +254,22 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, sessionID string, full boo
 
 	session, dataErr := db.QuerySession(dataDB, sessionID)
 	if dataErr == nil {
-		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role)
+		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid)
 	}
 
 	// Not in the data DB — fall back to the index DB, where teammate
 	// sessions from `rekal sync` live.
-	indexDB, err := db.OpenIndex(gitRoot)
-	if err != nil {
+	if indexDB == nil {
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
-	defer indexDB.Close()
-
-	if err := db.MigrateIndexSchema(indexDB); err != nil {
-		return fmt.Errorf("migrate index db: %w", err)
-	}
-
 	session, err = db.QuerySessionFromIndex(indexDB, sessionID)
 	if err != nil {
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
-	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role)
+	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid)
 }
 
-func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role string) error {
+func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string) error {
 	sessionID := session.ID
 
 	turns, total, err := src.turns(d, sessionID, db.TurnPageOptions{
@@ -262,6 +283,7 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 
 	output := sessionOutput{
 		SessionID:  session.ID,
+		Sid:        shortSid,
 		Author:     session.Email,
 		Actor:      session.ActorType,
 		Branch:     session.Branch,

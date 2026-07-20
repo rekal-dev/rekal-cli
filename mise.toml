@@ -37,7 +37,9 @@ if [ -n "$unformatted" ]; then
   echo "$unformatted"
   exit 1
 fi
-golangci-lint run --timeout=5m ./...
+# Release validate runs lint after a full race suite + llama build; 5m
+# was timing out on package load (context deadline exceeded).
+golangci-lint run --timeout=10m ./...
 """
 
 [tasks.build]

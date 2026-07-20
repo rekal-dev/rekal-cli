@@ -26,10 +26,13 @@ jobs:
             -DLLAMA_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release -j$(nproc) --target llama --target ggml --target common
-      - name: Tests
-        run: mise run test:ci
+      # Lint before the race suite so golangci-lint still has a warm, lightly
+      # loaded runner — after test:ci, package load has been hitting the
+      # previous 5m deadline on ubuntu-latest.
       - name: Lint
         run: mise run lint
+      - name: Tests
+        run: mise run test:ci
 
   build:
     needs: validate

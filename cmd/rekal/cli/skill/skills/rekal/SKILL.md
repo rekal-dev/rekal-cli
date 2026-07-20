@@ -40,7 +40,12 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 
 **Pipe every skill rekal** — never read raw JSON:
 - recall → `python3 "$ROOT/scripts/route.py"`
-- `query --session` / SQL → `python3 "$ROOT/scripts/view.py"`
+- `query --session` / SQL → `python3 "$ROOT/scripts/view.py"` (pipe with `2>&1`
+  so engine errors surface — an error is not an empty set)
+- every mention of a term → `python3 "$ROOT/scripts/find.py" "<term>" [role]`
+
+`init` also puts `rekal-route` / `rekal-view` / `rekal-find` on PATH
+(`~/.local/bin`) — same scripts, no `$ROOT` boilerplate: `rekal "<q>" | rekal-route`.
 
 `route.py` labels are recommendations, biased toward more data than decision:
 only empty / near-zero absolute `confidence` is machine-silenced (never
@@ -64,7 +69,8 @@ inclusive — line 1 is the primary label; `INJECT` may carry a trailing
 |---|---|
 | Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE` (alone or after `INJECT`), Read the clear leader's `path`@`lines` |
 | Past episode / why / tried / rejected | same → on `INJECT`, `Read references/ledger.md`; drill with `rekal query --session … \| python3 "$ROOT/scripts/view.py"` |
-| Temporal, complete-set, analytical, decision-arc, provenance | `Read references/ledger.md` — SQL via `rekal query … \| python3 "$ROOT/scripts/view.py"`; don't rank a set |
+| All / every / how many mentions of a thing | `python3 "$ROOT/scripts/find.py" "<term>"` — complete sweep in time order; then drill and judge (class-mapping, set size) |
+| Temporal, analytical, decision-arc, provenance | `Read references/ledger.md` — SQL via `rekal query … \| python3 "$ROOT/scripts/view.py"`; don't rank a set |
 | Breadth / structure | `bash "$ROOT/scripts/map.sh" fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash "$ROOT/scripts/wiki-gate.sh"` then `Read references/wiki.md` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
@@ -81,6 +87,12 @@ every memory claim.
   not "all / which / how many / every beat of an arc."
 - **Keep the speaker's precision.** Relative time and attribution stay as the
   record states them; don't round, force, or tidy away ambiguity.
+- **A false premise has no answer.** When the question asserts something the
+  record contradicts or never says, say that — never fabricate the asserted
+  fact, and never silently answer a corrected question nobody asked.
+- **Drill the hit before concluding absence.** A recalled seed you haven't
+  drilled outranks any amount of tree-grepping; grep never answers a ledger
+  question, and an empty stub greps forever.
 
 ## Semantic warming
 

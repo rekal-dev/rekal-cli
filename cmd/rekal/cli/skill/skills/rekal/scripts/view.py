@@ -194,12 +194,24 @@ def main() -> int:
     try:
         raw = open(sys.argv[1], encoding="utf-8").read() if len(sys.argv) == 2 else sys.stdin.read()
         data = _load(raw)
-    except (OSError, json.JSONDecodeError) as e:
+    except OSError as e:
+        print(f"view: parse_error:{e}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as e:
+        # Non-JSON input is usually the engine's own error text (`rekal query
+        # … 2>&1`): a wrong column name, a Binder error. Forward it verbatim —
+        # an error is NOT an empty result set, and reading it as "no data"
+        # turns a typo into a wrongful absence.
+        if raw.strip() and not raw.lstrip().startswith(("{", "[")):
+            sys.stderr.write(raw if raw.endswith("\n") else raw + "\n")
+            return 2
         print(f"view: parse_error:{e}", file=sys.stderr)
         return 2
 
     if data is None:
-        print("(empty)")
+        # Empty stdin ≠ verified empty set: the rekal command may have failed
+        # with its error on stderr. Re-run with 2>&1 before concluding absence.
+        print("(no input — if you expected rows, re-run the rekal command with 2>&1: an engine error is not an empty set)")
         return 1
 
     # Mis-piped recall JSON — don't silently dump structure; point at route.py.

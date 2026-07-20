@@ -13,6 +13,28 @@ Recall answers "which episode matches this phrase?"; SQL answers "what does the
 whole record say?" Pick before you spend a token. Cite session / turn / commit
 with every claim.
 
+## Runbook — shape → first move → watch for
+
+Pick the row before improvising. Each shape has one first move; the sections
+below carry the depth when the first move isn't enough.
+
+| Question shape | First move | Watch for |
+|---|---|---|
+| Pointed episode — why / what did X say | recall → `route.py`; drill top seed at `t<n>` | premise mismatch; near-miss entity in the answer |
+| Complete-set — all / every / how many / which of N | `find.py "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
+| Temporal — when / before / after / how long | recall, then SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
+| Whose-fact — my / I / their | drill to the assertion turn ("my X is", "I bought") | discussed / suggested ≠ owned |
+| False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |
+| Decision arc — why did this evolve | steering/`because` SQL gather (below) | thin trail synthesized into fiction |
+| Reflection / pattern / census | decompose to SQL (below); never `route.py` | ranking when the ask is exhaustive |
+
+**Stopping rule.** Stop when the answer is grounded in drilled turns you can
+cite. If two further moves add no new evidence, report what you have — or the
+gap — instead of searching on: extra moves past that point manufacture
+plausible-but-wrong distractors. And grep of the tree never answers a ledger
+question; if you catch yourself grepping code for a past-tense fact, come back
+to the table.
+
 ## The recall pipeline
 
 ```bash

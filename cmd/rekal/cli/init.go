@@ -38,6 +38,7 @@ Creates:
   pre-push hook      Runs 'rekal push' before each push
   orphan branch      rekal/<email> for wire format storage
   agent skill        .claude/skills/rekal/ (tip + scripts/ + references/)
+  PATH wrappers      rekal-route / rekal-view / rekal-find in ~/.local/bin
   CLAUDE.md line     One marker-tagged sentence pointing agents at the skill
 
 If the remote already has data on your rekal branch, it is fetched and
@@ -133,6 +134,7 @@ binary to pick up new or changed skills.`,
 			if err := installSkill(gitRoot); err != nil {
 				return fmt.Errorf("install skill: %w", err)
 			}
+			installPathWrappers(cmd.ErrOrStderr())
 
 			// One sentence into CLAUDE.md so the skill actually gets used —
 			// the whole dev-experience surface for most users: init, done.
@@ -270,6 +272,7 @@ func refreshManaged(gitRoot string, errOut io.Writer) error {
 	if err := installSkill(gitRoot); err != nil {
 		return fmt.Errorf("refresh skills: %w", err)
 	}
+	installPathWrappers(errOut)
 	if err := ensureClaudeMDLine(gitRoot); err != nil {
 		return fmt.Errorf("update CLAUDE.md: %w", err)
 	}

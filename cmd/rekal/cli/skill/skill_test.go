@@ -35,6 +35,7 @@ func TestAll_UnifiedSkill(t *testing.T) {
 		"SKILL.md",
 		"scripts/route.py",
 		"scripts/view.py",
+		"scripts/find.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -51,6 +52,7 @@ func TestAll_UnifiedSkill(t *testing.T) {
 	for _, needle := range []string{
 		"scripts/route.py",
 		"scripts/view.py",
+		"scripts/find.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -302,5 +304,71 @@ func TestViewScript(t *testing.T) {
 	out, code = runRoute(t, path, rows)
 	if code != 0 || !strings.Contains(out, "a\tb") || !strings.Contains(out, "1\tx") {
 		t.Fatalf("want TSV rows, got code=%d %s", code, out)
+	}
+
+	// Engine error text on stdin (2>&1) is forwarded verbatim, exit 2 — never
+	// swallowed as an empty set (wrongful absence).
+	out, code = runRoute(t, path, `rekal: Binder Error: Referenced column "notacol" not found`)
+	if code != 2 || !strings.Contains(out, "Binder Error") {
+		t.Fatalf("want engine error forwarded exit 2, got code=%d %s", code, out)
+	}
+}
+
+// TestFindScript drives find.py against a stub rekal (REKAL_BIN) so the
+// enumeration sweep is tested without a real store.
+func TestFindScript(t *testing.T) {
+	t.Parallel()
+	path := writeScript(t, "scripts/find.py")
+
+	stub := filepath.Join(t.TempDir(), "rekal-stub")
+	rowsOut := `{"session_id":"01ABC","turn_index":3,"ts":"2023-05-08 10:00:00","role":"human","content":"I adopted a turtle named Fred"}
+{"session_id":"01DEF","turn_index":9,"ts":"2023-06-01 11:00:00","role":"assistant","content":"the turtle tank was cleaned"}`
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\ncat <<'EOF'\n"+rowsOut+"\nEOF\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	runFind := func(bin string, args ...string) (string, int) {
+		t.Helper()
+		cmd := exec.Command("python3", append([]string{path}, args...)...)
+		cmd.Env = append(os.Environ(), "REKAL_BIN="+bin)
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				code = ee.ExitCode()
+			} else {
+				t.Fatalf("run find.py: %v (%s)", err, out)
+			}
+		}
+		return string(out), code
+	}
+
+	// Complete sweep: every mention, one line each, plus the total.
+	out, code := runFind(stub, "turtle")
+	if code != 0 {
+		t.Fatalf("find exit %d: %s", code, out)
+	}
+	for _, want := range []string{"01ABC t3", "01DEF t9", "total 2 mentions in 2 sessions"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("find output missing %q: %s", want, out)
+		}
+	}
+
+	// Engine failure is forwarded, never an empty set.
+	bad := filepath.Join(t.TempDir(), "rekal-bad")
+	if err := os.WriteFile(bad, []byte("#!/bin/sh\necho 'rekal: Binder Error: column x' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, code = runFind(bad, "turtle")
+	if code != 2 || !strings.Contains(out, "Binder Error") {
+		t.Fatalf("want forwarded engine error exit 2, got code=%d %s", code, out)
+	}
+
+	// No args → usage, exit 2. Unknown role → exit 2.
+	if _, code = runFind(stub); code != 2 {
+		t.Fatalf("no-arg find should exit 2, got %d", code)
+	}
+	if _, code = runFind(stub, "turtle", "notarole"); code != 2 {
+		t.Fatalf("bad role should exit 2, got %d", code)
 	}
 }

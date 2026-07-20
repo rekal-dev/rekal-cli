@@ -22,6 +22,8 @@ Removes:
   post-commit hook   Only if it contains the rekal marker
   pre-push hook      Only if it contains the rekal marker
   agent skill        .claude/skills/rekal/ (+ legacy rekal-* dirs)
+  PATH wrappers      rekal-route / rekal-view / rekal-find in ~/.local/bin
+                     (only files carrying the rekal marker)
   CLAUDE.md line     Only the marker-tagged sentence injected by 'rekal init'
 
 Run 'rekal init' to reinitialize after cleaning.`,
@@ -54,6 +56,7 @@ func runClean(gitRoot string) error {
 	removeHook(filepath.Join(gitRoot, ".git", "hooks", "post-commit"))
 	removeHook(filepath.Join(gitRoot, ".git", "hooks", "pre-push"))
 	removeSkill(gitRoot)
+	removePathWrappers()
 	removeClaudeMDLine(gitRoot)
 	return nil
 }

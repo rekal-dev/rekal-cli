@@ -220,6 +220,20 @@ func TestWrapOpenError_OtherErrorsPassThrough(t *testing.T) {
 	}
 }
 
+// TestWrapOpenError_UnreadableStorage matches the pre-push failure mode
+// ("Failed to deserialize: field id mismatch, expected: 100, got: 5201")
+// and points at clean+init.
+func TestWrapOpenError_UnreadableStorage(t *testing.T) {
+	t.Parallel()
+
+	raw := fmt.Errorf(`database/sql/driver: could not connect to database: duckdb error: Serialization Error: Failed to deserialize: field id mismatch, expected: 100, got: 5201`)
+	got := wrapOpenError("/repo/.rekal/data.db", raw)
+	msg := got.Error()
+	if !strings.Contains(msg, "unreadable") || !strings.Contains(msg, "rekal clean && rekal init") {
+		t.Errorf("wrapOpenError = %q, want unreadable + clean && init", msg)
+	}
+}
+
 // TestQuerySessionContentByIDs_ZeroTurnSession: a session with tool calls but
 // no turns aggregates to NULL — the batch must skip it, not error out (it
 // used to fail the whole incremental index update).

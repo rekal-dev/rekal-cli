@@ -114,7 +114,24 @@ func wrapOpenError(path string, err error) error {
 	if isLockConflict(err) {
 		return fmt.Errorf("rekal: another rekal process is already using %s — wait for it to finish and try again: %w", path, err)
 	}
+	if isUnreadableStorage(err) {
+		return fmt.Errorf("rekal: %s is unreadable (DuckDB storage corruption or incompatible binary format) — run `rekal clean && rekal init` to rebuild the local store from your rekal orphan branch: %w", path, err)
+	}
 	return fmt.Errorf("open database %s: %w", path, err)
+}
+
+// isUnreadableStorage reports DuckDB binary deserialize failures — typically
+// a truncated/corrupted file (e.g. killed mid-write, multi-connection WAL
+// races before MaxOpenConns(1), cloud-synced store) or a file written by a
+// newer DuckDB than this binary embeds.
+func isUnreadableStorage(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Failed to deserialize") ||
+		strings.Contains(msg, "Serialization Error") ||
+		strings.Contains(msg, "field id mismatch")
 }
 
 // SessionExistsByHash reports whether a session with the given content hash

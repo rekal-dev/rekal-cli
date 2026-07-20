@@ -145,6 +145,12 @@ func TestRouteScript(t *testing.T) {
 		t.Fatalf("want per-seed confidence, got %s", out)
 	}
 
+	// Prefer query-time sid over the full ULID in the digest.
+	out, code = runRoute(t, path, `{"results":[{"session_id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","sid":"s3","confidence":0.9,"mass":5,"score":1}],"knowledge":[]}`)
+	if code != 0 || !strings.Contains(out, "s3 conf=0.90") || strings.Contains(out, "01ARZ3NDEKTSV4RRFFQ69G5FAV") {
+		t.Fatalf("want digest to prefer sid, got code=%d %s", code, out)
+	}
+
 	// Confident but lexically thin (dialogue) -> still INJECT, NOT silenced.
 	// The chat fix: low mass is never a veto (it gated nothing, and isn't emitted).
 	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":1.4,"score":0.99},{"confidence":0.3,"mass":1.0,"score":0.4}],"knowledge":[]}`)

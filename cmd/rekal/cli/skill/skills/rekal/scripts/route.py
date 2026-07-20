@@ -191,7 +191,9 @@ def print_digest(data: dict) -> None:
         turn = r.get("snippet_turn_index")
         turn_s = f" t{turn}" if turn is not None else ""
         conf = _f(r["confidence"]) if isinstance(r, dict) and "confidence" in r else 0.0
-        print(f'  {r.get("session_id")} conf={conf:.2f}{turn_s} "{snip}"')
+        # Prefer query-time short handle (s3); fall back to ULID.
+        sid = r.get("sid") or r.get("session_id")
+        print(f'  {sid} conf={conf:.2f}{turn_s} "{snip}"')
     # Bare count — how to widen (reformulate / multi-search / -n) is taught by
     # the skill, not re-printed on every call.
     more = len(results) - DIGEST_WINDOW

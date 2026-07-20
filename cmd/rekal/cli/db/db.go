@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -114,7 +115,46 @@ func wrapOpenError(path string, err error) error {
 	if isLockConflict(err) {
 		return fmt.Errorf("rekal: another rekal process is already using %s — wait for it to finish and try again: %w", path, err)
 	}
+	if IsUnreadableStorage(err) {
+		return fmt.Errorf("rekal: %s is unreadable (DuckDB storage corruption or incompatible binary format) — run `rekal repair` to quarantine it and rebuild from your rekal orphan branch: %w", path, err)
+	}
 	return fmt.Errorf("open database %s: %w", path, err)
+}
+
+// IsUnreadableStorage reports DuckDB binary deserialize failures — typically
+// a truncated/corrupted file (e.g. killed mid-write, multi-connection WAL
+// races before MaxOpenConns(1), cloud-synced store) or a file written by a
+// newer DuckDB than this binary embeds. The file cannot be opened in place;
+// recovery is quarantine + rebuild (`rekal repair`).
+func IsUnreadableStorage(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Failed to deserialize") ||
+		strings.Contains(msg, "Serialization Error") ||
+		strings.Contains(msg, "field id mismatch")
+}
+
+// QuarantineDB renames path (and its .wal sibling if present) to
+// path.corrupt-<utc-stamp> so a fresh DuckDB file can be created at path.
+// Returns the quarantine destination, or ("", nil) when path did not exist.
+func QuarantineDB(path string) (string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	dest := fmt.Sprintf("%s.corrupt-%s", path, time.Now().UTC().Format("20060102T150405Z"))
+	if err := os.Rename(path, dest); err != nil {
+		return "", fmt.Errorf("quarantine %s: %w", path, err)
+	}
+	wal := path + ".wal"
+	if _, err := os.Stat(wal); err == nil {
+		_ = os.Rename(wal, dest+".wal")
+	}
+	return dest, nil
 }
 
 // SessionExistsByHash reports whether a session with the given content hash

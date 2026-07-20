@@ -650,15 +650,29 @@ func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error)
 	if err != nil {
 		return nil, fmt.Errorf("filter query: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
 
-	var results []Result
+	// Drain facets before any follow-up queries. db.open caps the pool at one
+	// connection (DuckDB/go-duckdb WAL safety); nesting Query/QueryRow while
+	// these rows still hold that connection deadlocks.
+	var facets []sessionFacetRow
 	for rows.Next() {
 		var sf sessionFacetRow
 		if err := sf.scan(rows); err != nil {
+			_ = rows.Close()
 			return nil, fmt.Errorf("scan facet: %w", err)
 		}
+		facets = append(facets, sf)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
+	results := make([]Result, 0, len(facets))
+	for _, sf := range facets {
 		files, _ := querySessionFiles(indexDB, sf.sessionID)
 		snippet, turnIdx, role := firstTurnSnippet(indexDB, sf.sessionID)
 
@@ -671,7 +685,7 @@ func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error)
 			Session:        sf.detail(files),
 		})
 	}
-	return results, rows.Err()
+	return results, nil
 }
 
 // sessionFacetCols is the column list matching sessionFacetRow.scan. The

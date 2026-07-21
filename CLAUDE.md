@@ -68,8 +68,9 @@ session discovery keep using the invoking worktree.
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), PATH wrappers (`wrappers.go`:
-  `rekal-route`/`rekal-view`/`rekal-find` shims in `~/.local/bin`, marker-tagged,
-  resolve the invoking repo's installed skill at run time), and one
+  `rekal-route`/`rekal-view`/`rekal-find`/`rekal-seek`/`rekal-when` shims in
+  `~/.local/bin`, marker-tagged, resolve the invoking repo's installed skill at
+  run time), and one
   marker-tagged CLAUDE.md sentence (the whole DX:
   init, done; `clean` removes the line, refresh replaces it in place)
 - `clean.go`: Remove Rekal setup — completely, no residue (incl. the marker-tagged
@@ -224,7 +225,11 @@ session discovery keep using the invoking worktree.
   `score` is reported for the agent to judge — no tuned floor. `view.py`
   drill/SQL compressor (forwards engine errors verbatim — an error is not an
   empty set); `find.py` term→all-mentions enumeration sweep (complete, time
-  order, no hand-SQL; `REKAL_BIN` override for tests); `map.sh`
+  order, no hand-SQL; `REKAL_BIN` override for tests); `seek.py` multi-framing
+  recall RRF-fused (k=60, literature-standard, never gates) into one route.py
+  digest with `conf`=max-per-session — the ledger's "widen across phrasings"
+  move as a function; `when.py` relative→absolute date resolver (pure calendar,
+  honest window for vague phrases, no store); `map.sh`
   fresh|watermark; `wiki-gate.sh`), and `references/`
   (rich, on demand — `ledger.md` is the one page on reasoning over the past:
   recall/widen/depth-judgment, time-axis, enumeration, whose-fact/premise,

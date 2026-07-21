@@ -43,9 +43,12 @@ grep for code that is · knowledge for prose that is · ledger for the why that 
 - `query --session` / SQL → `python3 "$ROOT/scripts/view.py"` (pipe with `2>&1`
   so engine errors surface — an error is not an empty set)
 - every mention of a term → `python3 "$ROOT/scripts/find.py" "<term>" [role]`
+- widen a weak recall across phrasings → `python3 "$ROOT/scripts/seek.py" "<f1>" "<f2>" …`
+- resolve a relative date → `python3 "$ROOT/scripts/when.py" <anchor> "<phrase>"`
 
-`init` also puts `rekal-route` / `rekal-view` / `rekal-find` on PATH
-(`~/.local/bin`) — same scripts, no `$ROOT` boilerplate: `rekal "<q>" | rekal-route`.
+`init` also puts `rekal-route` / `rekal-view` / `rekal-find` / `rekal-seek` /
+`rekal-when` on PATH (`~/.local/bin`) — same scripts, no `$ROOT` boilerplate:
+`rekal "<q>" | rekal-route`.
 
 `route.py` labels are recommendations, biased toward more data than decision:
 only empty / near-zero absolute `confidence` is machine-silenced (never
@@ -54,14 +57,16 @@ inclusive — line 1 is the primary label; `INJECT` may carry a trailing
 `KNOWLEDGE` line for a mixed question. You judge from confidence + content.
 
 - `INJECT top=… gap=… N seeds` + rows `sid conf=… t<n> "snippet"` — seed
-  context in rank order. Weigh `conf=`; drill `sid` at `t<n>` for detail;
-  reformulate / multi-search when the window isn't enough. A lexically thin
+  context in rank order. Weigh `conf=`; drill `sid` at `t<n>` for detail. When
+  the window isn't enough, **widen with `rekal-seek "<f1>" "<f2>" …`** (several
+  phrasings, RRF-fused into one seed) before concluding. A lexically thin
   dialogue hit still injects.
 - `KNOWLEDGE path=score …` — judge the distribution: clear leader → Read its
   `path` at HEAD; flat cluster → stay silent on prose. Near-zero scores are
   omitted, not judged.
-- `SILENCE reason=…` — nothing on either substrate. Say so; don't pad with
-  near-misses. You may still reformulate.
+- `SILENCE reason=…` — nothing on either substrate. **Widen once with
+  `rekal-seek` before concluding** — one phrasing is a guess, and a partial
+  seed is not absence. Then say so; don't pad with near-misses.
 
 ## Dispatch — route, then act
 
@@ -70,6 +75,8 @@ inclusive — line 1 is the primary label; `INJECT` may carry a trailing
 | Present prose / convention | `rekal "<q>" \| python3 "$ROOT/scripts/route.py"` → on `KNOWLEDGE` (alone or after `INJECT`), Read the clear leader's `path`@`lines` |
 | Past episode / why / tried / rejected | same → on `INJECT`, `Read references/ledger.md`; drill with `rekal query --session … \| python3 "$ROOT/scripts/view.py"` |
 | All / every / how many mentions of a thing | `python3 "$ROOT/scripts/find.py" "<term>"` — complete sweep in time order; then drill and judge (class-mapping, set size) |
+| Weak recall, one phrasing wasn't enough | `python3 "$ROOT/scripts/seek.py" "<f1>" "<f2>" …` — RRF-fuse several framings into one seed |
+| Relative "when" (last Saturday, a month ago) | `python3 "$ROOT/scripts/when.py" <anchor-date> "<phrase>"` — event time from the mention date, honest window for vague phrases |
 | Temporal, analytical, decision-arc, provenance | `Read references/ledger.md` — SQL via `rekal query … \| python3 "$ROOT/scripts/view.py"`; don't rank a set |
 | Breadth / structure | `bash "$ROOT/scripts/map.sh" fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash "$ROOT/scripts/wiki-gate.sh"` then `Read references/wiki.md` |

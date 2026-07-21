@@ -67,6 +67,11 @@ func All() []Skill {
 			if rel == "" || rel == "SKILL.md" {
 				return nil
 			}
+			// Never ship Python byte-compile artifacts even if a dev run
+			// left them in the source tree (embed globs everything).
+			if strings.Contains(rel, "__pycache__") || strings.HasSuffix(rel, ".pyc") {
+				return nil
+			}
 			data, err := skillsFS.ReadFile(p)
 			if err != nil {
 				return err

@@ -20,20 +20,21 @@ below carry the depth when the first move isn't enough.
 
 | Question shape | First move | Watch for |
 |---|---|---|
-| Pointed episode — why / what did X say | recall → `route.py`; drill top seed at `t<n>` | premise mismatch; near-miss entity in the answer |
+| Pointed episode — why / what did X say | recall → `route.py`; drill top seed at `t<n>`; weak? `seek.py` several framings | premise mismatch; near-miss entity in the answer |
 | Complete-set — all / every / how many / which of N | `find.py "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
-| Temporal — when / before / after / how long | recall, then SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
+| Temporal — when / before / after / how long | `when.py <anchor> "<phrase>"` for the date, SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
 | Whose-fact — my / I / their | drill to the assertion turn ("my X is", "I bought") | discussed / suggested ≠ owned |
 | False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |
 | Decision arc — why did this evolve | steering/`because` SQL gather (below) | thin trail synthesized into fiction |
 | Reflection / pattern / census | decompose to SQL (below); never `route.py` | ranking when the ask is exhaustive |
 
 **Stopping rule.** Stop when the answer is grounded in drilled turns you can
-cite. If two further moves add no new evidence, report what you have — or the
-gap — instead of searching on: extra moves past that point manufacture
-plausible-but-wrong distractors. And grep of the tree never answers a ledger
-question; if you catch yourself grepping code for a past-tense fact, come back
-to the table.
+cite. Before concluding SILENCE, `seek.py` one widening across real alternative
+framings — a partial seed is not absence. But if that fuse and two further
+moves add no new evidence, report what you have — or the gap — instead of
+searching on: extra moves past that point manufacture plausible-but-wrong
+distractors. And grep of the tree never answers a ledger question; if you catch
+yourself grepping code for a past-tense fact, come back to the table.
 
 ## The recall pipeline
 
@@ -80,16 +81,22 @@ with. Evidence routinely lands at rank 5–9, not rank 1 — `rekal` returns 20
 candidates (`-n` to change), so read past the first before you judge. A single
 phrasing is one lookup; a confident answer survives more than one.
 
-| Reformulation | When | Example |
-|---|---|---|
-| keyword-only (drop question words) | always — cheap second look | `rekal "token refresh expiry"` |
-| split a compound question | "X and Y", multi-hop | query each clause, then join |
-| temporal emphasis | "when / before / after / first / last" | add the date/era, or `--file` for that period |
-| entity / path anchor | you know a file or a name | `rekal --file src/auth/ "<q>"` |
+**Widening is a function — supply the framings, let the script fuse.**
 
-Take the union across phrasings: a session that surfaces under two different
-queries is almost always the answer. Only conclude SILENCE after a
-reformulation also comes back empty — one blank query is not absence.
+```bash
+rekal-seek "token refresh expiry" "JWT session timeout" "logout invalidate"
+```
+
+`seek.py` runs recall once per framing and RRF-fuses the candidate lists into
+one ranked seed (route.py digest, `conf=` per session is that session's
+strongest framing). A session that surfaces under two framings rises to the
+top — that convergence is the signal. **You** pick the framings; the fuse is
+mechanical. Good framings to hand it: the keyword-only form (drop the question
+words), each clause of a compound/multi-hop question, an entity or path anchor
+you already know, and a synonym set for the same idea.
+
+Only conclude SILENCE after a `seek` across real alternatives also comes back
+weak — **a partial seed is not absence**, and one blank phrasing never was.
 
 ### Depth is a judgment, not a reflex
 
@@ -170,11 +177,21 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   events are the candidates — check the edge, not just the interior.
 - **Event time ≠ mention time.** A turn's `ts` is when it was *said*. "Last
   month I…" shifts the event. Date the event, not the mention — and expect the
-  report of a trip to land in the *next* session, after it happened.
+  report of a trip to land in the *next* session, after it happened. Resolve
+  the shift with the calendar, not mental math:
+
+  ```bash
+  rekal-when 2023-05-25 "last Saturday"   # -> 2023-05-20 (Saturday)
+  rekal-when 2023-08-19 "a few days ago"  # -> 2023-08-16..2023-08-18 (approx)
+  ```
+
+  `when.py` takes the mention's date as the anchor and returns the absolute
+  date — or an honest window for a vague phrase. Deterministic; you pick the
+  anchor and judge the result.
 - **Answer in event time, honest precision.** "Yesterday" said Oct 21 → *Oct 20*.
-  "A few days ago" said Aug 19 → *a few days before Aug 19*. Don't flatten a
-  relative phrase to the mention date, don't fake precision the record lacks,
-  and don't round a relative anchor into a vaguer gloss.
+  "A few days ago" said Aug 19 → *a few days before Aug 19* (`when.py` returns
+  the window). Don't flatten a relative phrase to the mention date, don't fake
+  precision the record lacks, and don't round a relative anchor into a vaguer gloss.
 - **Routine ≠ episode.** "I usually / around 10pm" is a habit; a question about
   one occasion needs the past-tense report of that occasion.
 - **One event in the window is not the answer** until you've scanned the whole

@@ -36,6 +36,8 @@ func TestAll_UnifiedSkill(t *testing.T) {
 		"scripts/route.py",
 		"scripts/view.py",
 		"scripts/find.py",
+		"scripts/seek.py",
+		"scripts/when.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -53,6 +55,8 @@ func TestAll_UnifiedSkill(t *testing.T) {
 		"scripts/route.py",
 		"scripts/view.py",
 		"scripts/find.py",
+		"scripts/seek.py",
+		"scripts/when.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -370,5 +374,122 @@ func TestFindScript(t *testing.T) {
 	}
 	if _, code = runFind(stub, "turtle", "notarole"); code != 2 {
 		t.Fatalf("bad role should exit 2, got %d", code)
+	}
+}
+
+// TestSeekScript drives seek.py against a stub rekal that returns different
+// overlapping candidate lists per framing, so RRF fusion and max-per-session
+// confidence are exercised without a real store.
+func TestSeekScript(t *testing.T) {
+	t.Parallel()
+	path := writeScript(t, "scripts/seek.py")
+
+	// Framing "token" ranks s1>s2; framing "JWT" ranks s2>s3 with a higher s2
+	// confidence. RRF must lift s2 to the top (it appears in both lists) and
+	// its reported conf must be the max (0.8), not the first-seen (0.5).
+	stub := filepath.Join(t.TempDir(), "rekal-seek-stub")
+	script := "#!/bin/sh\ncase \"$1\" in\n" +
+		"*token*) echo '{\"results\":[{\"session_id\":\"01A\",\"sid\":\"s1\",\"confidence\":0.7,\"snippet\":\"token refresh\",\"snippet_turn_index\":4},{\"session_id\":\"01B\",\"sid\":\"s2\",\"confidence\":0.5,\"snippet\":\"jwt expiry\",\"snippet_turn_index\":9}]}' ;;\n" +
+		"*JWT*) echo '{\"results\":[{\"session_id\":\"01B\",\"sid\":\"s2\",\"confidence\":0.8,\"snippet\":\"jwt expiry deep\",\"snippet_turn_index\":9},{\"session_id\":\"01C\",\"sid\":\"s3\",\"confidence\":0.4,\"snippet\":\"session timeout\",\"snippet_turn_index\":2}]}' ;;\n" +
+		"esac\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	runSeek := func(bin string, args ...string) (string, int) {
+		t.Helper()
+		cmd := exec.Command("python3", append([]string{path}, args...)...)
+		cmd.Env = append(os.Environ(), "REKAL_BIN="+bin)
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				code = ee.ExitCode()
+			} else {
+				t.Fatalf("run seek.py: %v (%s)", err, out)
+			}
+		}
+		return string(out), code
+	}
+
+	out, code := runSeek(stub, "token refresh", "JWT expiry")
+	if code != 0 {
+		t.Fatalf("seek exit %d: %s", code, out)
+	}
+	if !strings.HasPrefix(out, "SEEK top=0.80 3 fused seeds (2 framings, RRF)") {
+		t.Fatalf("want fused SEEK header, got: %s", out)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	// s2 fused from both framings must rank first, at its MAX confidence.
+	if !strings.Contains(lines[1], "s2 conf=0.80") {
+		t.Fatalf("s2 should top the fused list at max conf, got: %s", out)
+	}
+	if !strings.Contains(out, "s1 conf=0.70") || !strings.Contains(out, "s3 conf=0.40") {
+		t.Fatalf("all fused sessions must appear, got: %s", out)
+	}
+
+	// No framing → usage, exit 2.
+	if _, code = runSeek(stub); code != 2 {
+		t.Fatalf("no-arg seek should exit 2, got %d", code)
+	}
+
+	// Engine failure is forwarded, never a silent empty fusion.
+	bad := filepath.Join(t.TempDir(), "rekal-seek-bad")
+	if err := os.WriteFile(bad, []byte("#!/bin/sh\necho 'rekal: boom' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, code = runSeek(bad, "anything"); code != 2 || !strings.Contains(out, "boom") {
+		t.Fatalf("want forwarded recall error exit 2, got code=%d %s", code, out)
+	}
+}
+
+// TestWhenScript verifies the deterministic relative-date resolver — the
+// verify case from the plan plus the main phrase families.
+func TestWhenScript(t *testing.T) {
+	t.Parallel()
+	path := writeScript(t, "scripts/when.py")
+
+	runWhen := func(args ...string) (string, int) {
+		t.Helper()
+		cmd := exec.Command("python3", append([]string{path}, args...)...)
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				code = ee.ExitCode()
+			} else {
+				t.Fatalf("run when.py: %v (%s)", err, out)
+			}
+		}
+		return strings.TrimSpace(string(out)), code
+	}
+
+	cases := []struct{ anchor, phrase, want string }{
+		{"2023-05-25", "last Saturday", "2023-05-20 (Saturday)"}, // the verify case
+		{"2023-05-25", "yesterday", "2023-05-24 (Wednesday)"},
+		{"2023-05-25", "three weeks ago", "2023-05-04 (Thursday)"},
+		{"2023-05-25", "2 days ago", "2023-05-23 (Tuesday)"},
+		{"2023-05-25", "next Friday", "2023-05-26 (Friday)"},
+		{"2023-05-25", "last month", "2023-04-01..2023-04-30 (month)"},
+		{"2023-05-25", "a few days ago", "2023-05-22..2023-05-24 (approx)"},
+		{"2023-01-01", "last year", "2022-01-01..2022-12-31 (year)"},
+	}
+	for _, c := range cases {
+		out, code := runWhen(c.anchor, c.phrase)
+		if code != 0 || out != c.want {
+			t.Fatalf("when %s %q = %q (code %d), want %q", c.anchor, c.phrase, out, code, c.want)
+		}
+	}
+
+	// Unrecognized phrase → exit 1 (say so, don't guess).
+	if _, code := runWhen("2023-05-25", "sometime in the future maybe"); code != 1 {
+		t.Fatalf("unrecognized phrase should exit 1, got %d", code)
+	}
+	// Bad anchor / arg count → exit 2.
+	if _, code := runWhen("not-a-date", "yesterday"); code != 2 {
+		t.Fatalf("bad anchor should exit 2, got %d", code)
+	}
+	if _, code := runWhen("2023-05-25"); code != 2 {
+		t.Fatalf("missing phrase should exit 2, got %d", code)
 	}
 }

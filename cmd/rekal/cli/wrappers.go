@@ -15,7 +15,7 @@ const wrapperMarker = "installed by rekal init"
 
 // wrapperScripts are the skill scripts that get a PATH shim. One shim per
 // script, named rekal-<script>.
-var wrapperScripts = []string{"route", "view", "find"}
+var wrapperScripts = []string{"route", "view", "find", "seek", "when"}
 
 // installPathWrappers writes rekal-route / rekal-view / rekal-find into
 // ~/.local/bin. Each shim resolves the *current repo's* installed skill at

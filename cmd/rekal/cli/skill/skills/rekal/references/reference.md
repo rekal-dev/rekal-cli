@@ -13,9 +13,10 @@ ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}
 Scripts under `$ROOT/scripts/` compress every skill-facing rekal. Prefer
 `python3` / `bash` so mode bits never matter. **Never read raw JSON** — pipe
 recall through `route.py`, query/SQL/session through `view.py`, term sweeps
-through `find.py`. `rekal init` also installs `rekal-route` / `rekal-view` /
-`rekal-find` into `~/.local/bin` — the same scripts without the `$ROOT`
-boilerplate (`rekal clean` removes them).
+through `find.py`, multi-framing widening through `seek.py`, relative dates
+through `when.py`. `rekal init` also installs `rekal-route` / `rekal-view` /
+`rekal-find` / `rekal-seek` / `rekal-when` into `~/.local/bin` — the same
+scripts without the `$ROOT` boilerplate (`rekal clean` removes them).
 
 ## Root recall flags
 
@@ -70,6 +71,8 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 | `route.py` | Recall → recommendation digest (INJECT / KNOWLEDGE / SILENCE). Super-low floors; agent judges `conf=` / `path=score` |
 | `view.py` | Query/SQL/session → raw turns or TSV rows (no JSON chrome); forwards engine errors verbatim |
 | `find.py "<term>" [role]` | Every ledger mention of a term, time order, complete — enumeration without hand-SQL |
+| `seek.py "<f1>" "<f2>" …` | Multi-framing recall, RRF-fused into one route.py digest — widen a weak single-phrasing recall |
+| `when.py <anchor> "<phrase>"` | Relative phrase → absolute date (or honest window); pure calendar, no store |
 | `map.sh fresh` / `map.sh watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
 | `wiki-gate.sh` | Refuse wiki on default branch |
 

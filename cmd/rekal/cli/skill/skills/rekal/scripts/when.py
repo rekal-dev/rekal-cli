@@ -8,9 +8,10 @@ phrase was *said*. Event time ≠ mention time: read the mention's `ts`, pass
 its date as the anchor, and this returns when the event actually was, without
 error-prone mental date math.
 
-  rekal-when 2023-05-25 "last Saturday"    -> 2023-05-20 (Saturday)
+  rekal-when 2023-05-25 "last Saturday"     -> 2023-05-20 (Saturday)
   rekal-when 2023-05-25 "yesterday"         -> 2023-05-24 (Wednesday)
-  rekal-when 2023-05-25 "a few days ago"    -> 2023-05-22..2023-05-24 (approx)
+  rekal-when 2023-08-14 "last night"        -> 2023-08-13 (Sunday)
+  rekal-when 2023-11-22 "a few days before" -> 2023-11-17..2023-11-21 (approx)
 
 Pure function: no store, no network, no tuned constant — only the calendar.
 The agent picks the anchor and judges the result; the script does the
@@ -98,16 +99,24 @@ def resolve(a: date, phrase: str) -> str | None:
         "the day before yesterday": a - timedelta(days=2),
         "day after tomorrow": a + timedelta(days=2),
         "the day after tomorrow": a + timedelta(days=2),
+        # Parts of a day resolve to a whole date: last night is the previous
+        # day; this morning/afternoon/evening/tonight are the anchor day.
+        "last night": a - timedelta(days=1),
+        "this morning": a,
+        "this afternoon": a,
+        "this evening": a,
     }
     if p in fixed:
         return fmt(fixed[p])
 
-    # Fuzzy windows — honest ranges, never fake a single day.
+    # Fuzzy windows — honest ranges, never fake a single day. "ago" and its
+    # synonyms (before / earlier / prior — as in "a few days before Nov 22")
+    # all mean "subtract from the anchor".
     fuzzy = {
-        r"^(a few|several) days? ago$": (a - timedelta(days=3), a - timedelta(days=1)),
-        r"^(a )?couple( of)? days? ago$": (a - timedelta(days=3), a - timedelta(days=1)),
+        r"^(a few|several) days? (ago|before|earlier|prior)$": (a - timedelta(days=5), a - timedelta(days=1)),
+        r"^(a )?couple( of)? days? (ago|before|earlier|prior)$": (a - timedelta(days=3), a - timedelta(days=1)),
         r"^(recently|the other day|a while ago)$": (a - timedelta(days=7), a - timedelta(days=1)),
-        r"^(a few|several) weeks? ago$": (a - timedelta(days=28), a - timedelta(days=14)),
+        r"^(a few|several) weeks? (ago|before|earlier|prior)$": (a - timedelta(days=28), a - timedelta(days=14)),
     }
     for pat, (lo, hi) in fuzzy.items():
         if re.match(pat, p):

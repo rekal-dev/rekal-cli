@@ -181,8 +181,9 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   the shift with the calendar, not mental math:
 
   ```bash
-  rekal-when 2023-05-25 "last Saturday"   # -> 2023-05-20 (Saturday)
-  rekal-when 2023-08-19 "a few days ago"  # -> 2023-08-16..2023-08-18 (approx)
+  rekal-when 2023-05-25 "last Saturday"    # -> 2023-05-20 (Saturday)
+  rekal-when 2023-08-14 "last night"       # -> 2023-08-13 (Sunday)
+  rekal-when 2023-11-22 "a few days before" # -> 2023-11-17..2023-11-21 (approx)
   ```
 
   `when.py` takes the mention's date as the anchor and returns the absolute

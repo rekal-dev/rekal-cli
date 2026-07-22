@@ -42,3 +42,8 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: 'v2.8.0'
+          # The real lint gate is `mise run lint` above; this step only adds
+          # inline annotations. Skip `config verify` — it downloads a JSON
+          # schema from golangci-lint.run at runtime and flakes on network
+          # timeouts (context deadline exceeded).
+          verify: false

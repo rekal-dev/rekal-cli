@@ -141,6 +141,10 @@ func NewRootCmd() *cobra.Command {
 
 	queryCmd := newQueryCmd()
 	queryCmd.GroupID = "advanced"
+	findCmd := newFindCmd()
+	findCmd.GroupID = "advanced"
+	whenCmd := newWhenCmd()
+	whenCmd.GroupID = "advanced"
 	indexCmd := newIndexCmd()
 	indexCmd.GroupID = "advanced"
 	embedCmd := newEmbedCmd()
@@ -148,7 +152,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.AddCommand(initCmd, cleanCmd, versionCmd)
 	cmd.AddCommand(checkpointCmd, pushCmd, syncCmd, logCmd)
-	cmd.AddCommand(queryCmd, indexCmd, embedCmd)
+	cmd.AddCommand(queryCmd, findCmd, whenCmd, indexCmd, embedCmd)
 	cmd.AddCommand(nomic.NewDaemonCmd())
 
 	return cmd

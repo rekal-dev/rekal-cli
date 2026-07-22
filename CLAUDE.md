@@ -111,6 +111,13 @@ session discovery keep using the invoking worktree.
   shorthand; `--sql`/positional/`--session` mutually exclusive) + session drill;
   `--json` compact output. `--help` carries the full queryable schema (all
   tables + columns; FTS-internal/state tables noted as ignore)
+- `find.go`: `rekal find "<term>" [role]` — complete, time-ordered enumeration
+  sweep over `turns` (every mention, no ranking). In-binary port of the skill's
+  `find.py`, byte-identical output; part of the script→command migration
+  (`docs/design/skill-into-command.md`)
+- `when.go`: `rekal when <YYYY-MM-DD> "<phrase>"` — pure-calendar relative→
+  absolute date resolver (honest window for vague phrases). In-binary port of
+  the skill's `when.py`, byte-identical; no store/preconditions
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +

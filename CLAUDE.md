@@ -54,7 +54,11 @@ session discovery keep using the invoking worktree.
 - `root.go`: Root command (recall is the default) + command registration
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
   index DB, refresh the knowledge layer (watermark-gated), call the `search`
-  package, marshal JSON. The ranking engine itself lives in `search/`.
+  package, output JSON (`--json` compact) or the seed digest (`--digest`). The
+  ranking engine itself lives in `search/`. Multi-framing recall: each `--also`
+  value is another phrasing; each is recalled and RRF-fused (`fuseFramings`,
+  k=60, conf=max-per-session) into one seed — the folded seek.py. No `--also`
+  is byte-identical to a single search.
 - `knowledge_index.go`: Knowledge-layer build/refresh — chunk the repo's
   tracked prose files at HEAD into `index.db` (`knowledge_chunks`), diffing
   stored git blob SHAs against `git ls-tree -r HEAD` so only changed files

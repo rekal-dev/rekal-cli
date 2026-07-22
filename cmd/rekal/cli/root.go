@@ -53,6 +53,7 @@ func NewRootCmd() *cobra.Command {
 		explainFlag  bool
 		jsonFlag     bool
 		digestFlag   bool
+		alsoFlags    []string
 	)
 
 	cmd := &cobra.Command{
@@ -107,7 +108,7 @@ func NewRootCmd() *cobra.Command {
 				fmt.Fprintln(cmd.ErrOrStderr(), err)
 				return NewSilentError(err)
 			}
-			return runRecall(cmd, gitRoot, filters, jsonFlag, digestFlag)
+			return runRecall(cmd, gitRoot, filters, alsoFlags, jsonFlag, digestFlag)
 		},
 	}
 
@@ -120,6 +121,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact structured JSON output (for machine consumers; stable across the coming text default)")
 	cmd.Flags().BoolVar(&digestFlag, "digest", false, "Agent-facing seed digest text (INJECT/KNOWLEDGE/SILENCE + conf=); the in-binary route.py")
+	cmd.Flags().StringArrayVar(&alsoFlags, "also", nil, "Additional framing(s) of the same question; recall each and RRF-fuse into one seed (repeatable)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

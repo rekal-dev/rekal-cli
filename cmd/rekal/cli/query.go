@@ -18,6 +18,7 @@ func newQueryCmd() *cobra.Command {
 		offset    int
 		limit     int
 		role      string
+		jsonFlag  bool
 	)
 
 	cmd := &cobra.Command{
@@ -131,7 +132,7 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 			}
 
 			if sessionID != "" {
-				return runSessionDrilldown(cmd, gitRoot, sessionID, full, offset, limit, role)
+				return runSessionDrilldown(cmd, gitRoot, sessionID, full, offset, limit, role, jsonFlag)
 			}
 
 			if len(args) == 0 {
@@ -148,6 +149,7 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
 	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human, assistant, human_steering, or summary (requires --session)")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact single-line JSON for session drill (SQL rows are already NDJSON)")
 	return cmd
 }
 
@@ -227,7 +229,7 @@ var indexDrilldownSource = drilldownSource{
 	children:  db.QueryChildSessionIDsFromIndex,
 }
 
-func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, offset, limit int, role string) error {
+func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, offset, limit int, role string, jsonCompact bool) error {
 	// Open index once: resolve sN→ULID, emit sid on output, and fall back
 	// for teammate sessions that exist only in index.db.
 	var indexDB *sql.DB
@@ -268,7 +270,7 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 
 	session, dataErr := db.QuerySession(dataDB, sessionID)
 	if dataErr == nil {
-		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid)
+		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 	}
 
 	// Not in the data DB — fall back to the index DB, where teammate
@@ -280,10 +282,10 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 	if err != nil {
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
-	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid)
+	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 }
 
-func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string) error {
+func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string, jsonCompact bool) error {
 	sessionID := session.ID
 
 	turns, total, err := src.turns(d, sessionID, db.TurnPageOptions{
@@ -360,7 +362,12 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		output.Files = files
 	}
 
-	data, err := json.MarshalIndent(output, "", "  ")
+	var data []byte
+	if jsonCompact {
+		data, err = json.Marshal(output)
+	} else {
+		data, err = json.MarshalIndent(output, "", "  ")
+	}
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}

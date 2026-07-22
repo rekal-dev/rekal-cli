@@ -13,7 +13,13 @@ import (
 // runRecall opens (and, if empty, rebuilds) the index DB, runs the search, and
 // prints the result as JSON. The ranking/grouping engine lives in the search
 // package; this function is the command-side orchestration around it.
-func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error {
+//
+// jsonCompact selects compact single-line JSON (for machine consumers) over the
+// default pretty output. It is the stable structured-output opt-in for when the
+// default recall output becomes a compact text digest
+// (docs/design/skill-into-command.md §2.0) — machine consumers adopt --json now
+// and are unaffected by that flip.
+func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonCompact bool) error {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
@@ -104,7 +110,12 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters) error
 		return err
 	}
 
-	data, err := json.MarshalIndent(out, "", "  ")
+	var data []byte
+	if jsonCompact {
+		data, err = json.Marshal(out)
+	} else {
+		data, err = json.MarshalIndent(out, "", "  ")
+	}
 	if err != nil {
 		return fmt.Errorf("marshal output: %w", err)
 	}

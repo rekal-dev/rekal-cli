@@ -51,6 +51,7 @@ func NewRootCmd() *cobra.Command {
 		actorFilter  string
 		limitFlag    int
 		explainFlag  bool
+		jsonFlag     bool
 	)
 
 	cmd := &cobra.Command{
@@ -100,7 +101,7 @@ func NewRootCmd() *cobra.Command {
 				Explain:       explainFlag,
 			}
 
-			return runRecall(cmd, gitRoot, filters)
+			return runRecall(cmd, gitRoot, filters, jsonFlag)
 		},
 	}
 
@@ -111,6 +112,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact structured JSON output (for machine consumers; stable across the coming text default)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

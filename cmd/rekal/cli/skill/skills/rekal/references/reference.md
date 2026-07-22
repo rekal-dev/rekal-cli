@@ -28,6 +28,7 @@ scripts without the `$ROOT` boilerplate (`rekal clean` removes them).
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default 20; `0` = empty set; negative rejected) |
 | `--explain` | Adds `layers` + `related` (file-sharing sessions) |
+| `--json` | Compact single-line JSON (machine consumers). You normally pipe recall through `route.py` instead, which reads the default output. |
 
 ## Cross-repo local import (index-only, never pushed)
 

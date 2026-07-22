@@ -82,6 +82,7 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20 when unset; `0` = empty set; negative → error) |
 | `--explain` | Adds per-layer scores (`layers`: bm25/lsa/nomic/facet, normalized, pre-weight) and `related` (sessions sharing touched files, query-time join) to each result |
+| `--json` | Compact single-line structured JSON (for machine consumers). Same payload as the default; the stable opt-in for when the default output becomes a compact text digest (`docs/design/skill-into-command.md` §2.0) |
 
 Multiple filters = AND.
 

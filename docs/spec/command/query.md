@@ -56,6 +56,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `--offset <n>` | Skip first N turns (default: 0, requires `--session`) |
 | `--limit <n>` | Max turns to return, 0 = no limit (default: 0, requires `--session`) |
 | `--role <human\|assistant\|human_steering\|summary>` | Filter turns by role (requires `--session`). Matches exactly — queue-operation steering turns are stored as role `human_steering` (see [agent-metadata.md](../../agent-metadata.md)) and are not returned by `--role human`; `summary` turns are harness-written compaction distillations (rows stored as `human` by pre-summary versions are reclassified by content fingerprint at read time, scoped to `source = 'claude'` sessions so other agent types are untouched); omit `--role` to see all turns. |
+| `--json` | Compact single-line JSON for session drill (SQL mode already emits compact NDJSON). Same payload as the pretty default; the machine-consumer opt-in that stays stable across the coming text-default (`../../design/skill-into-command.md` §2.0). |
 
 ---
 

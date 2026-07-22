@@ -52,7 +52,6 @@ func NewRootCmd() *cobra.Command {
 		limitFlag    int
 		explainFlag  bool
 		jsonFlag     bool
-		digestFlag   bool
 		alsoFlags    []string
 	)
 
@@ -103,12 +102,7 @@ func NewRootCmd() *cobra.Command {
 				Explain:       explainFlag,
 			}
 
-			if jsonFlag && digestFlag {
-				err := fmt.Errorf("--json and --digest are mutually exclusive")
-				fmt.Fprintln(cmd.ErrOrStderr(), err)
-				return NewSilentError(err)
-			}
-			return runRecall(cmd, gitRoot, filters, alsoFlags, jsonFlag, digestFlag)
+			return runRecall(cmd, gitRoot, filters, alsoFlags, jsonFlag)
 		},
 	}
 
@@ -119,8 +113,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
-	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact structured JSON output (for machine consumers; stable across the coming text default)")
-	cmd.Flags().BoolVar(&digestFlag, "digest", false, "Agent-facing seed digest text (INJECT/KNOWLEDGE/SILENCE + conf=); the in-binary route.py")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
 	cmd.Flags().StringArrayVar(&alsoFlags, "also", nil, "Additional framing(s) of the same question; recall each and RRF-fuse into one seed (repeatable)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")

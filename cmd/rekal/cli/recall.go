@@ -75,7 +75,7 @@ func fuseFramings(outs []*search.Output) *search.Output {
 // default recall output becomes a compact text digest
 // (docs/design/skill-into-command.md §2.0) — machine consumers adopt --json now
 // and are unaffected by that flip.
-func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also []string, jsonCompact, digestMode bool) error {
+func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also []string, jsonCompact bool) error {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
@@ -190,9 +190,10 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also 
 		}
 	}
 
-	// Digest mode: the in-binary route.py — agent-facing seed text instead of
-	// JSON. Exit 1 on SILENCE mirrors route.py so the same gating holds.
-	if digestMode {
+	// Default output is the agent-facing seed digest (the in-binary route.py):
+	// INJECT/KNOWLEDGE/SILENCE + per-seed conf=. Exit 1 on SILENCE mirrors
+	// route.py so the same gating holds. --json gives raw structured results.
+	if !jsonCompact {
 		text, code := formatDigest(&out)
 		fmt.Fprint(cmd.OutOrStdout(), text)
 		if filters.Lineage != nil {
@@ -204,12 +205,7 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also 
 		return nil
 	}
 
-	var data []byte
-	if jsonCompact {
-		data, err = json.Marshal(out)
-	} else {
-		data, err = json.MarshalIndent(out, "", "  ")
-	}
+	data, err := json.Marshal(out)
 	if err != nil {
 		return fmt.Errorf("marshal output: %w", err)
 	}

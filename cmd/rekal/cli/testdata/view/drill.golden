@@ -1,0 +1,6 @@
+s78 t0-3  (h=human a=assistant hs=steering sum=summary)
+t0 2026-07-19 00:47:30 hs: claude/pr-conflict-skill-structure-kzwpca keep working previous session died
+t1 …00:47:36 a: I'll check the current state to understand where the previous session left off.
+t2 …00:47:52 hs: Rekal too build that first
+t3 …00:48:02 a: My branch is currently identical to `origin/main` (both at `ed9dfb1`), working tree clean. Let me find what the previous session was actually working on — checking PRs for both branch names.
+(has_more — raise --limit / --offset)

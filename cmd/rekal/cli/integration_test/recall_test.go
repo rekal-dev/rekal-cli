@@ -112,7 +112,7 @@ func TestRecall_HybridSearch(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	stdout, _, err := env.RunCLI("JWT auth")
+	stdout, _, err := env.RunCLI("JWT auth", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestIndex_CachesLSAProjection(t *testing.T) {
 	}
 
 	// Recall must still work correctly using the cached projection.
-	stdout, _, err := env.RunCLI("JWT auth")
+	stdout, _, err := env.RunCLI("JWT auth", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestRecall_FilterOnly(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	stdout, _, err := env.RunCLI("--actor", "human")
+	stdout, _, err := env.RunCLI("--actor", "human", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestRecall_AutoRebuild(t *testing.T) {
 	seedData(t, env)
 
 	// Don't run index first — recall should auto-rebuild.
-	stdout, stderr, err := env.RunCLI("JWT")
+	stdout, stderr, err := env.RunCLI("JWT", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v\nstderr: %s", err, stderr)
 	}
@@ -226,7 +226,7 @@ func TestQuery_SessionDrilldown(t *testing.T) {
 
 	seedData(t, env)
 
-	stdout, _, err := env.RunCLI("query", "--session", "test-session-1")
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--json")
 	if err != nil {
 		t.Fatalf("query --session should succeed: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestQuery_SessionDrilldown_Full(t *testing.T) {
 
 	seedData(t, env)
 
-	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--full")
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--full", "--json")
 	if err != nil {
 		t.Fatalf("query --session --full should succeed: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestQuery_SessionPagination(t *testing.T) {
 
 	seedData(t, env)
 
-	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--limit", "2")
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--limit", "2", "--json")
 	if err != nil {
 		t.Fatalf("query --session --limit should succeed: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestQuery_SessionPagination_Offset(t *testing.T) {
 
 	seedData(t, env)
 
-	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--offset", "2", "--limit", "2")
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--offset", "2", "--limit", "2", "--json")
 	if err != nil {
 		t.Fatalf("query --session --offset --limit should succeed: %v", err)
 	}
@@ -351,7 +351,7 @@ func TestQuery_SessionRoleFilter(t *testing.T) {
 
 	seedData(t, env)
 
-	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--role", "human")
+	stdout, _, err := env.RunCLI("query", "--session", "test-session-1", "--role", "human", "--json")
 	if err != nil {
 		t.Fatalf("query --session --role should succeed: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestRecall_GroupsSubagentUnderTrunk(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	stdout, _, err := env.RunCLI("release checklist")
+	stdout, _, err := env.RunCLI("release checklist", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}
@@ -479,7 +479,7 @@ func TestRecall_SteeringTurnBoosted(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	stdout, _, err := env.RunCLI("canary rollout")
+	stdout, _, err := env.RunCLI("canary rollout", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}
@@ -539,7 +539,7 @@ func TestRecall_PerConversationBudgetCapsChildren(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	stdout, _, err := env.RunCLI("security sweep")
+	stdout, _, err := env.RunCLI("security sweep", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestQuery_SessionDrilldown_ChildSessionIDs(t *testing.T) {
 
 	seedWorkflowData(t, env)
 
-	stdout, _, err := env.RunCLI("query", "--session", "trunk-session")
+	stdout, _, err := env.RunCLI("query", "--session", "trunk-session", "--json")
 	if err != nil {
 		t.Fatalf("query --session should succeed: %v", err)
 	}

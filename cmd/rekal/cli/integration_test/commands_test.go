@@ -216,7 +216,7 @@ func TestInit_ReinitRefreshesSkills(t *testing.T) {
 	env.Init()
 
 	base := filepath.Join(".claude", "skills", "rekal", "SKILL.md")
-	script := filepath.Join(".claude", "skills", "rekal", "scripts", "route.py")
+	script := filepath.Join(".claude", "skills", "rekal", "scripts", "map.sh")
 	if !env.FileExists(base) {
 		t.Fatalf("base skill missing after init: %s", base)
 	}
@@ -429,7 +429,7 @@ func TestRecall_ProducesJSON(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
-	stdout, _, err := env.RunCLI("--file", "foo", "JWT")
+	stdout, _, err := env.RunCLI("--file", "foo", "JWT", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v", err)
 	}

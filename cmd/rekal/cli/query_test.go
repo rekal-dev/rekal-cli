@@ -92,7 +92,7 @@ func TestSessionDrilldown_RemoteSessionFromIndex(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	if err := runSessionDrilldown(cmd, root, sessionID, true, 0, 0, "", false); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, true, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown (remote session): %v", err)
 	}
 
@@ -147,7 +147,7 @@ func TestSessionDrilldown_RemoteSessionFromIndex(t *testing.T) {
 
 	// Short handle must resolve to the same session.
 	out.Reset()
-	if err := runSessionDrilldown(cmd, root, "s1", false, 0, 0, "", false); err != nil {
+	if err := runSessionDrilldown(cmd, root, "s1", false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown (short handle): %v", err)
 	}
 	var viaShort sessionOutput
@@ -188,7 +188,7 @@ func TestSessionDrilldown_DataSessionStillWorks(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", false); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown (local session): %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestSessionDrilldown_MetadataOmittedForPlainSessions(t *testing.T) {
 	cmd := &cobra.Command{}
 	var out strings.Builder
 	cmd.SetOut(&out)
-	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", false); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown: %v", err)
 	}
 
@@ -276,7 +276,7 @@ func TestSessionDrilldown_SubagentMetadataShown(t *testing.T) {
 	cmd := &cobra.Command{}
 	var out strings.Builder
 	cmd.SetOut(&out)
-	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", false); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown: %v", err)
 	}
 
@@ -302,7 +302,7 @@ func TestSessionDrilldown_NotFoundAnywhere(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	err := runSessionDrilldown(cmd, root, "01DOESNOTEXIST", false, 0, 0, "", false)
+	err := runSessionDrilldown(cmd, root, "01DOESNOTEXIST", false, 0, 0, "", true)
 	if err == nil {
 		t.Fatal("expected error for unknown session, got nil")
 	}

@@ -165,7 +165,7 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 				return fmt.Errorf("provide SQL via --sql \"<statement>\" (or a positional statement), or drill with --session <id>")
 			}
 
-			return runQuery(cmd, gitRoot, sqlStmt, useIndex)
+			return runQuery(cmd, gitRoot, sqlStmt, useIndex, jsonFlag)
 		},
 	}
 
@@ -389,12 +389,12 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		output.Files = files
 	}
 
-	var data []byte
-	if jsonCompact {
-		data, err = json.Marshal(output)
-	} else {
-		data, err = json.MarshalIndent(output, "", "  ")
+	if !jsonCompact {
+		// Default: agent-readable dialogue (view.py's session mode).
+		fmt.Fprintln(cmd.OutOrStdout(), viewSession(&output))
+		return nil
 	}
+	data, err := json.Marshal(output)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -451,7 +451,7 @@ func querySessionFilesFromIndex(indexDB *sql.DB, sessionID string) ([]string, er
 	return files, rows.Err()
 }
 
-func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex bool) error {
+func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex, jsonOut bool) error {
 	// Read-only: only allow SELECT statements.
 	normalized := strings.TrimSpace(strings.ToUpper(query))
 	if !strings.HasPrefix(normalized, "SELECT") {
@@ -481,9 +481,7 @@ func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex bool) error {
 		return fmt.Errorf("columns: %w", err)
 	}
 
-	out := cmd.OutOrStdout()
-	first := true
-
+	collected := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		values := make([]interface{}, len(cols))
 		ptrs := make([]interface{}, len(cols))
@@ -493,37 +491,41 @@ func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex bool) error {
 		if err := rows.Scan(ptrs...); err != nil {
 			return fmt.Errorf("scan: %w", err)
 		}
-
 		row := make(map[string]interface{}, len(cols))
 		for i, col := range cols {
 			v := values[i]
-			// Convert []byte to string for JSON output.
 			if b, ok := v.([]byte); ok {
-				v = string(b)
+				v = string(b) // []byte → string for output
 			}
 			row[col] = v
 		}
-
-		data, err := json.Marshal(row)
-		if err != nil {
-			return fmt.Errorf("marshal: %w", err)
-		}
-
-		if !first {
-			fmt.Fprintln(out)
-		}
-		fmt.Fprint(out, string(data))
-		first = false
+		collected = append(collected, row)
 	}
-
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("rows: %w", err)
 	}
 
-	// Trailing newline if we printed anything.
-	if !first {
-		fmt.Fprintln(out)
+	out := cmd.OutOrStdout()
+	if jsonOut {
+		// Raw NDJSON — one object per row (machine consumers).
+		for i, row := range collected {
+			data, merr := json.Marshal(row)
+			if merr != nil {
+				return fmt.Errorf("marshal: %w", merr)
+			}
+			if i > 0 {
+				fmt.Fprintln(out)
+			}
+			fmt.Fprint(out, string(data))
+		}
+		if len(collected) > 0 {
+			fmt.Fprintln(out)
+		}
+		return nil
 	}
 
+	// Default: agent-readable TSV (view.py's row mode, in the query's own
+	// column order).
+	fmt.Fprintln(out, viewRows(cols, collected))
 	return nil
 }

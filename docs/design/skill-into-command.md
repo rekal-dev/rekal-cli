@@ -20,6 +20,35 @@ default presentation; skill owns judgment + orientation.**
 
 ## 2. The default-uplift principle
 
+### 2.0 Output doctrine — text by default, JSON on opt-in
+
+The governing rule for every read command:
+
+> **Default output is compact, agent-readable text. Structured JSON is opt-in
+> (`--json`).**
+
+This inverts today's default (recall/query emit JSON) and it is the truest
+reading of "agent first" *for an LLM consumer*. The soul's intent is "agent
+consumption over human reading"; when it was written, "agent consumption" was
+assumed to be JSON (agent = a program that parses). But our agent is an LLM,
+and the measured evidence is the opposite: the route/view/find/seek **text**
+digests ran ~13–25× cheaper in tokens than raw recall JSON, and the LoCoMo
+89.3% accuracy lives in the digest form — JSON braces/keys are tokens the model
+spends parsing structure instead of reasoning over content. So the agent-first
+output is the form the LLM reasons over cheapest: **compact structured text.**
+
+This is **not human formatting** (the soul's actual refusal). The digest is
+agent formatting — line-oriented, token-minimal, for the LLM; humans benefit as
+a side effect, exactly as the soul promises. JSON remains the right shape for
+*program* consumers (git hooks, the bench harness, external tooling) — hence
+`--json`, not its removal.
+
+Consequence for §4: every read command's default is its text form; `--json` is
+one universal raw escape hatch. `view` is not a mode — it is this inversion
+(compact text default, `--json` raw) applied to `query`.
+
+### 2.1 Which commands
+
 Agent-first does **not** mean "rewrite every command." It means: for a command
 whose output the agent *reads and reasons over*, the **default** (no flags)
 should already be the agent-optimal form — the digest, the compression, the
@@ -149,9 +178,14 @@ exact bytes the agent sees.** Therefore:
 
 ## 8. Open decisions
 
+- **SOUL.md line.** The practice-table row "Agent first | … | JSON output, not
+  human formatting" is now contradicted by §2.0 + measured evidence. The belief
+  and the Refusal ("agent consumption over human reading") are untouched and in
+  fact *support* text-default; only the dated implementation example ("JSON
+  output") needs correcting to "compact agent-readable text by default,
+  structured JSON on opt-in." Constitutional edit — pending explicit sign-off.
+- **`view` as `query --view` vs the `--json` inversion** — **resolved** (§2.0):
+  the `--json` inversion. Compact text is the default; `--json` is raw.
 - **`log --json`**: uplift needed, or is the table already fine? (leaning: leave)
-- **`view` as `query --view` vs a `--json` inversion** (i.e. compressed is the
-  default, `--json` is raw) — the latter is more consistent with §2 but a bigger
-  change to `query`'s current contract.
 - **Naming**: `--json` vs `--raw` for the escape hatch (leaning `--json`, it
   names the format, not a vibe).

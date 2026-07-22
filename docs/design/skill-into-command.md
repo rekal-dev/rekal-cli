@@ -185,20 +185,26 @@ exact bytes the agent sees.** Therefore:
    turn INJECT/SILENCE into a hard gate. Super-low env-overridable floor, emits
    `conf=`, agent overrides. The command presents; the agent judges.
 
-## 7. Sequence (each step gated by ported test vectors)
+## 7. Sequence — DONE (each step gated by ported test vectors)
 
 1. ✅ Review the command surface; make raw SQL first-class + documented
-   (knowledge tables, `ts` TIMESTAMP note). *(done — commit `f88112d1`)*
-2. Add `--json` to recall + query; repoint the bench harness to `--json`.
-3. Port the pure verbs to subcommands, byte-identical: `when`, `find`.
-4. Fold `seek` into base recall — accept N positional framings, RRF-fuse
-   (n=1 byte-identical to today's recall). No `seek` subcommand ships.
-5. Fold `view` into `query` as the `--json` inversion (compact text default).
-6. Flip recall default → digest (`--json` raw); implement `route` in-command as
-   a recommendation.
-7. Strip `scripts/` + PATH wrappers; slim the skill to prose; simplify
-   `init`/`clean`. Re-run the full test + a LoCoMo spot-check to confirm the
-   headline is unmoved.
+   (knowledge tables, `ts` TIMESTAMP note). *(`f88112d1`)*
+2. ✅ Add `--json` to recall + query. *(`b297b498`)*
+3. ✅ Port the pure verbs to subcommands, byte-identical: `when`, `find`.
+   *(`d465f03b`)*
+4. ✅ Fold `seek` into base recall — repeatable `--also` framing, RRF-fuse
+   (n=1 byte-identical). Chose `--also` (decision B) over positional framings so
+   the proven recall path is unchanged. *(`c2c9eac5`)*
+5. ✅ Fold `view` into `query` (text default, `--json` raw). *(`873c2bc0`)*
+6. ✅ Flip recall default → digest (`--json` raw); `route` in-command
+   (`digest.go`, golden-tested) as a recommendation. *(`873c2bc0`)*
+7. ✅ Strip `scripts/*.py` + PATH wrappers; skill rewritten to pure commands;
+   `init`/`clean` simplified. *(`873c2bc0`)*
+
+**Remaining (outside this repo's test reach):** repoint the bench harness on
+`research/industry-bench` to `--json` (recall's default is now the digest), then
+re-run the LoCoMo verify to confirm the 89.3% headline is unmoved — the corpus
+lives on the research machine, not in CI.
 
 ## 8. Open decisions
 

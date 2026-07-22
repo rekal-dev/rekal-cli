@@ -75,16 +75,38 @@ Three families. A command owns exactly one verb; overlap is a smell.
 
 ### Retrieval — "which/what in the record answers this?"
 
-| Command | Verb | Shape | For |
-|---|---|---|---|
-| `recall` (`rekal "<q>"`) | rank | hybrid BM25+LSA+nomic, top-N, ranked-partial | pointed questions (why, what did X say) |
-| `find` | enumerate | every mention, no ranking, time order, complete | complete-set (all / how many / every) |
-| `seek` | fuse | multi-framing recall, RRF-merged | widening when one phrasing is a guess |
+**Two primitives, not three.** `seek` folds into base recall; `find` cannot.
 
-The retrieval family is separated cleanly along **ranked-partial vs complete vs
-fused**. A partial list is a wrong answer to a set question; a single phrasing
-is a guess — that is *why* `find` and `seek` exist as distinct verbs and are not
-just `recall` with flags.
+| Primitive | Verb | Shape | For |
+|---|---|---|---|
+| `rekal "<q…>"` (recall ∪ seek) | rank / fuse | hybrid BM25+LSA+nomic, top-N, semantic, ranked-partial; 1 framing ranks, N framings RRF-fuse | pointed questions; multi-framing widening |
+| `rekal find <term>` | enumerate | literal `ILIKE` sweep, every mention, no ranking, time order, complete | complete-set (all / how many / every) |
+
+**Why `seek` collapses into recall.** `seek` is recall *generalized*: recall run
+over N framings, RRF-fused. One framing (n=1) reduces to recall exactly — RRF of
+a single ranked list preserves its order, so the output is byte-identical and
+performance is unchanged. There is no genuine recall-vs-seek: it is one
+relevance command taking 1..N positional framings. Folding it kills a verb with
+no semantic loss (`rekal "<q>"` ranks; `rekal "<q1>" "<q2>"` fuses).
+
+**Why `find` cannot fold in.** It is a different *contract*, not a parameter, on
+three axes:
+1. **Complete-unranked vs bounded-ranked.** recall returns the loudest top-N —
+   a partial list is the *right* answer. find returns *every* mention — a
+   partial list is a *wrong* answer. Opposite completeness guarantees; a
+   truncating ranking engine cannot also promise completeness.
+2. **Literal vs semantic.** recall matches by hybrid meaning ("turtle" surfaces
+   pet talk that never says the word); find is a literal substring sweep. A
+   "how many times did X say turtle" question needs literal enumeration —
+   semantic ranking would give a wrong count.
+3. **Different family.** find is a named SQL sweep — it belongs to the
+   navigation/`query` family, on top of raw SQL, not the ranking engine.
+   Merging recall+seek stays in one family; folding find in crosses a boundary.
+
+A `--all` flag on base would bury *two* semantics (completeness + literal↔
+semantic) in a flag and erase the visible **rank-vs-enumerate** choice — the one
+retrieval judgment that most often goes wrong ("a partial set is a wrong
+answer"). The two names force that choice; that is a feature, not redundancy.
 
 ### Navigation — "transform / resolve / drill the record"
 
@@ -94,12 +116,13 @@ just `recall` with flags.
 | `query --view` (mode) | compress | strip JSON chrome from drills/rows |
 | `when` | resolve | relative phrase → absolute date (pure calendar) |
 
-`query` is the substrate everything else *could* be expressed in. `find`,
-`seek`, `when` exist because each encodes a **recurring SQL/compute shape** the
-agent would otherwise re-derive every time — the soul's rule-accretion stop, one
-layer down: *a SQL shape the agent keeps re-deriving is a subcommand waiting to
-be named.* The boundary: `query` is the primitive; the named verbs are the
-specializations that remove toil, never thought.
+`query` is the substrate everything else *could* be expressed in. `find` and
+`when` exist because each encodes a **recurring SQL/compute shape** the agent
+would otherwise re-derive every time — the soul's rule-accretion stop, one layer
+down: *a SQL shape the agent keeps re-deriving is a subcommand waiting to be
+named.* The boundary: `query` is the primitive; the named verbs are the
+specializations that remove toil, never thought. (Multi-framing fusion is *not*
+a navigation verb — it's base recall over N framings; see the retrieval note.)
 
 ### Lifecycle — "manage the store" (not uplifted)
 
@@ -110,11 +133,10 @@ output is a status line, already right. Left alone.
 
 | Command | Default today | Uplifted default | Raw escape |
 |---|---|---|---|
-| `rekal "<q>"` (recall) | raw JSON | route digest (INJECT/KNOWLEDGE/SILENCE + seeds + `conf=`) | `--json` |
+| `rekal "<q…>"` (recall ∪ seek; 1 framing ranks, N fuse) | raw JSON | route digest (INJECT/KNOWLEDGE/SILENCE + seeds + `conf=`) | `--json` |
 | `rekal query "<sql>"` | NDJSON | compressed rows | `--json` |
 | `rekal query --session` | JSON turns | compressed turns | `--json` |
 | `rekal find <term>` | — (new) | enumeration lines | `--json` |
-| `rekal seek "<f>"…` | — (new) | fused digest | `--json` |
 | `rekal when <d> "<p>"` | — (new) | resolved date / window | — (already terse) |
 | `rekal log` | table | unchanged (already terse) | `--json` (optional) |
 | init/clean/checkpoint/push/sync/index/embed | status line | unchanged | — |
@@ -168,22 +190,21 @@ exact bytes the agent sees.** Therefore:
 1. ✅ Review the command surface; make raw SQL first-class + documented
    (knowledge tables, `ts` TIMESTAMP note). *(done — commit `f88112d1`)*
 2. Add `--json` to recall + query; repoint the bench harness to `--json`.
-3. Port the pure verbs to subcommands, byte-identical: `when`, `find`, `seek`.
-4. Fold `view` into `query … --view`.
-5. Flip recall default → digest (`--json` raw); implement `route` in-command as
+3. Port the pure verbs to subcommands, byte-identical: `when`, `find`.
+4. Fold `seek` into base recall — accept N positional framings, RRF-fuse
+   (n=1 byte-identical to today's recall). No `seek` subcommand ships.
+5. Fold `view` into `query` as the `--json` inversion (compact text default).
+6. Flip recall default → digest (`--json` raw); implement `route` in-command as
    a recommendation.
-6. Strip `scripts/` + PATH wrappers; slim the skill to prose; simplify
+7. Strip `scripts/` + PATH wrappers; slim the skill to prose; simplify
    `init`/`clean`. Re-run the full test + a LoCoMo spot-check to confirm the
    headline is unmoved.
 
 ## 8. Open decisions
 
-- **SOUL.md line.** The practice-table row "Agent first | … | JSON output, not
-  human formatting" is now contradicted by §2.0 + measured evidence. The belief
-  and the Refusal ("agent consumption over human reading") are untouched and in
-  fact *support* text-default; only the dated implementation example ("JSON
-  output") needs correcting to "compact agent-readable text by default,
-  structured JSON on opt-in." Constitutional edit — pending explicit sign-off.
+- **SOUL.md line** — **resolved & applied** (commit `17436118`): the practice
+  row now reads "compact agent-readable text by default, structured JSON on
+  opt-in." Belief + Refusal untouched.
 - **`view` as `query --view` vs the `--json` inversion** — **resolved** (§2.0):
   the `--json` inversion. Compact text is the default; `--json` is raw.
 - **`log --json`**: uplift needed, or is the table already fine? (leaning: leave)

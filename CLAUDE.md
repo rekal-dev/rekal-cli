@@ -118,6 +118,12 @@ session discovery keep using the invoking worktree.
 - `when.go`: `rekal when <YYYY-MM-DD> "<phrase>"` — pure-calendar relative→
   absolute date resolver (honest window for vague phrases). In-binary port of
   the skill's `when.py`, byte-identical; no store/preconditions
+- `digest.go`: in-binary port of the skill's `route.py` — turns a recall
+  `search.Output` into the agent-facing seed digest (INJECT/KNOWLEDGE/SILENCE +
+  per-seed `conf=`), byte-identical (diff-tested vs route.py on fixtures).
+  Super-low env-overridable floor (`REKAL_HUNT_*`), recommendation not
+  decision. Reached today via `rekal "<q>" --digest` (opt-in; becomes the
+  default in the migration's flip step)
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +

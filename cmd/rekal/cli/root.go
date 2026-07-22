@@ -52,6 +52,7 @@ func NewRootCmd() *cobra.Command {
 		limitFlag    int
 		explainFlag  bool
 		jsonFlag     bool
+		digestFlag   bool
 	)
 
 	cmd := &cobra.Command{
@@ -101,7 +102,12 @@ func NewRootCmd() *cobra.Command {
 				Explain:       explainFlag,
 			}
 
-			return runRecall(cmd, gitRoot, filters, jsonFlag)
+			if jsonFlag && digestFlag {
+				err := fmt.Errorf("--json and --digest are mutually exclusive")
+				fmt.Fprintln(cmd.ErrOrStderr(), err)
+				return NewSilentError(err)
+			}
+			return runRecall(cmd, gitRoot, filters, jsonFlag, digestFlag)
 		},
 	}
 
@@ -113,6 +119,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact structured JSON output (for machine consumers; stable across the coming text default)")
+	cmd.Flags().BoolVar(&digestFlag, "digest", false, "Agent-facing seed digest text (INJECT/KNOWLEDGE/SILENCE + conf=); the in-binary route.py")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

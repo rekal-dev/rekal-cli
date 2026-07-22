@@ -19,7 +19,7 @@ import (
 // default recall output becomes a compact text digest
 // (docs/design/skill-into-command.md §2.0) — machine consumers adopt --json now
 // and are unaffected by that flip.
-func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonCompact bool) error {
+func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonCompact, digestMode bool) error {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
@@ -108,6 +108,20 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 	out, err := search.Run(indexDB, filters, gitRoot, weights, qe)
 	if err != nil {
 		return err
+	}
+
+	// Digest mode: the in-binary route.py — agent-facing seed text instead of
+	// JSON. Exit 1 on SILENCE mirrors route.py so the same gating holds.
+	if digestMode {
+		text, code := formatDigest(&out)
+		fmt.Fprint(cmd.OutOrStdout(), text)
+		if filters.Lineage != nil {
+			filters.Lineage.FlushResult(len(text))
+		}
+		if code == 1 {
+			return NewSilentError(fmt.Errorf("silence"))
+		}
+		return nil
 	}
 
 	var data []byte

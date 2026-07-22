@@ -107,7 +107,10 @@ session discovery keep using the invoking worktree.
   into the index. **Index-only, never `data.db`**, so imported sessions are
   structurally unpushable to the team; origin-labeled, deduped by content hash
 - `log.go`: Show recent checkpoints
-- `query.go`: Raw SQL access
+- `query.go`: Raw SQL access (explicit `--sql "<stmt>"`; bare positional is
+  shorthand; `--sql`/positional/`--session` mutually exclusive) + session drill;
+  `--json` compact output. `--help` carries the full queryable schema (all
+  tables + columns; FTS-internal/state tables noted as ignore)
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +

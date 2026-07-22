@@ -385,6 +385,46 @@ func TestQuery_ExecutesSQL(t *testing.T) {
 	}
 }
 
+func TestQuery_ExplicitSQLFlag(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	// Explicit SQL mode must produce the same result as the positional shorthand.
+	stdout, _, err := env.RunCLI("query", "--sql", "SELECT 1 AS val")
+	if err != nil {
+		t.Fatalf("query --sql should succeed: %v", err)
+	}
+	if !strings.Contains(stdout, "val") {
+		t.Errorf("expected --sql result with 'val', got: %q", stdout)
+	}
+
+	// --sql and a positional statement conflict.
+	if _, _, err := env.RunCLI("query", "--sql", "SELECT 1", "SELECT 2"); err == nil {
+		t.Error("--sql plus a positional statement should be rejected")
+	}
+	// --sql and --session conflict.
+	if _, _, err := env.RunCLI("query", "--sql", "SELECT 1", "--session", "s1"); err == nil {
+		t.Error("--sql plus --session should be rejected")
+	}
+}
+
+func TestQuery_SchemaHelpDocumentsFullColumns(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	// The queryable columns that drifted in past — --help must name them so an
+	// agent building raw SQL can discover them.
+	help, _, err := env.RunCLI("query", "--help")
+	if err != nil {
+		t.Fatalf("query --help: %v", err)
+	}
+	for _, col := range []string{"agent_type", "description", "spawn_depth", "origin", "facet_text", "knowledge_chunks", "knowledge_embeddings"} {
+		if !strings.Contains(help, col) {
+			t.Errorf("query --help must document %q in the schema", col)
+		}
+	}
+}
+
 func TestRecall_ProducesJSON(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()

@@ -2,7 +2,7 @@
 
 **Role:** Two modes: raw SQL over the Rekal data model, or session drill-down. The `--session` flag is the second step in progressive context loading — after recall returns snippets, the agent drills into specific sessions for full turns.
 
-**Invocation:** `rekal query "<sql>"`, `rekal query --index "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]`.
+**Invocation:** `rekal query --sql "<sql>"` (explicit SQL mode; a bare positional `rekal query "<sql>"` is accepted as shorthand), `rekal query --index --sql "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]`. `--sql`, a positional statement, and `--session` are mutually exclusive.
 
 ---
 
@@ -14,9 +14,10 @@ See [preconditions.md](../preconditions.md): git repo, init done.
 
 ## Two modes
 
-### SQL mode (default)
+### SQL mode (`--sql "<statement>"`, or a bare positional statement)
 
-Run a single SELECT statement against the data DB or index DB.
+Run a single SELECT statement against the data DB or index DB. The mode is
+explicit via `--sql`; a positional statement is the accepted shorthand.
 
 1. **Choose target** — Data DB (`.rekal/data.db`) by default; index DB (`.rekal/index.db`) if `--index`.
 2. **Execute** — Read-only (SELECT only). Rejects non-SELECT statements.
@@ -50,6 +51,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 
 | Flag | Meaning |
 |------|--------|
+| `--sql <statement>` | SQL SELECT to run (explicit SQL mode). A bare positional statement is accepted as shorthand; the two are mutually exclusive, and both are mutually exclusive with `--session` |
 | `--index` | Run SQL against the **index DB** instead of the data DB |
 | `--session <id>` | Show session conversation by ID (drill-down mode) |
 | `--full` | Include tool calls and files in session output (requires `--session`) |
@@ -66,7 +68,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 
 | Table | Purpose |
 |-------|--------|
-| `sessions` | One row per captured session (id, session_hash, captured_at, actor_type, agent_id, user_email, branch) |
+| `sessions` | One row per captured session (id, parent_session_id, session_hash, captured_at, actor_type, agent_id, user_email, branch, source, team_name, workflow_name, agent_type, description, spawn_depth) |
 | `turns` | Conversation turns (id, session_id, turn_index, role, content, ts) |
 | `tool_calls` | Tool invocations (id, session_id, call_order, tool, path, cmd_prefix) |
 | `checkpoints` | Git commit anchors (id, git_sha, git_branch, user_email, ts, actor_type, agent_id, exported) |
@@ -81,11 +83,11 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `turns_ft` | Turn-level full-text search (id, session_id, turn_index, role, content, ts) |
 | `tool_calls_index` | Tool calls per session (id, session_id, call_order, tool, path, cmd_prefix) |
 | `files_index` | Files per checkpoint (checkpoint_id, session_id, file_path, change_type) |
-| `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, parent_session_id, team_name, workflow_name) |
+| `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, parent_session_id, team_name, workflow_name, agent_type, description, spawn_depth, origin, facet_text) |
 | `file_cooccurrence` | Files that change together (file_a, file_b, count) |
 | `session_embeddings` | LSA + Nomic vectors (session_id, embedding, model, generated_at); models `lsa-v1`, `nomic-v1.5` |
 | `knowledge_chunks` | Heading-anchored prose sections of tracked files at HEAD (id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha) |
-| `knowledge_embeddings` | Chunk vectors (content_hash, embedding, model, generated_at) |
+| `knowledge_embeddings` | Chunk vectors (content_hash, model, embedding) |
 | `index_state` | Key-value state (key, value) |
 
 > **`ts` is a TIMESTAMP.** `turns.ts` / `turns_ft.ts` are typed timestamps, not

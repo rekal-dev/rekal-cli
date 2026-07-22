@@ -14,6 +14,7 @@ func newQueryCmd() *cobra.Command {
 	var (
 		useIndex  bool
 		sessionID string
+		sqlFlag   string
 		full      bool
 		offset    int
 		limit     int
@@ -22,7 +23,7 @@ func newQueryCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "query [<sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]]",
+		Use:   "query [--sql \"<statement>\" | <sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]]",
 		Short: "Run raw SQL or drill into a session",
 		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
 
@@ -36,15 +37,23 @@ child_session_ids — subagent/workflow transcripts whose parent_session_id
 points at this session — so an agent can navigate from a trunk conversation
 into the transcript that actually matched.
 
-Raw SQL mode accepts SELECT statements only. Output is one JSON object per row.
-Use --index to query the index DB instead of the data DB.
+SQL mode is explicit: --sql "<statement>". A bare positional statement
+(rekal query "SELECT …") is accepted as shorthand. SELECT only; output is one
+JSON object per row (NDJSON). Use --index to query the index DB. --sql,
+--session, and a positional statement are mutually exclusive.
+
+Full queryable schema (FTS-internal tables — dict/docs/fields/stats/stopwords/
+terms — and state tables — schema_meta/checkpoint_state/index_state — are engine
+internals; ignore them).
 
 DATA DB SCHEMA (.rekal/data.db):
 
   sessions        id, parent_session_id, session_hash, captured_at, actor_type,
-                  agent_id, user_email, branch, source, team_name, workflow_name
-                  (team_name/workflow_name/parent_session_id are optional
-                  harness metadata — NULL for agents without the concept)
+                  agent_id, user_email, branch, source, team_name, workflow_name,
+                  agent_type, description, spawn_depth
+                  (parent_session_id/team_name/workflow_name/agent_type/
+                  description/spawn_depth are optional harness metadata — NULL
+                  for agents without the concept)
   turns           id, session_id, turn_index, role, content, ts
   tool_calls      id, session_id, call_order, tool, path, cmd_prefix
   checkpoints     id, git_sha, git_branch, user_email, ts, actor_type, agent_id,
@@ -60,19 +69,26 @@ INDEX DB SCHEMA (.rekal/index.db):
   session_facets       session_id, user_email, git_branch, actor_type, agent_id,
                        captured_at, turn_count, tool_call_count, file_count,
                        checkpoint_id, git_sha, parent_session_id, team_name,
-                       workflow_name
+                       workflow_name, agent_type, description, spawn_depth,
+                       origin, facet_text
   file_cooccurrence    file_a, file_b, count
   session_embeddings   session_id, embedding, model, generated_at
                        PK: (session_id, model). Models: lsa-v1, nomic-v1.5
   knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
                        content, content_hash, blob_sha
                        (heading-anchored prose sections of tracked files at HEAD)
-  knowledge_embeddings content_hash, embedding, model, generated_at
+  knowledge_embeddings content_hash, model, embedding
 
 Note: turns.ts / turns_ft.ts are TIMESTAMP, not text. "ts LIKE '2023-05%'"
 raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 '2023-06-01', or CAST(ts AS VARCHAR) LIKE '2023-05%'.`,
-		Example: `  # Drill into a session (turns only)
+		Example: `  # Explicit SQL mode
+  rekal query --sql "SELECT id, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
+
+  # Positional shorthand (same as --sql)
+  rekal query "SELECT count(*) FROM turns WHERE role = 'human'"
+
+  # Drill into a session (turns only)
   rekal query --session 01JNQX...
 
   # Drill into a session (turns + tool calls + files)
@@ -116,9 +132,19 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 				return err
 			}
 
-			// --session and positional SQL are mutually exclusive.
-			if sessionID != "" && len(args) > 0 {
-				return fmt.Errorf("--session and SQL argument are mutually exclusive")
+			// SQL statement comes from explicit --sql or the positional
+			// shorthand — never both.
+			sqlStmt := sqlFlag
+			if len(args) > 0 {
+				if sqlFlag != "" {
+					return fmt.Errorf("--sql and a positional SQL statement are mutually exclusive")
+				}
+				sqlStmt = args[0]
+			}
+
+			// SQL (--sql / positional) and --session are mutually exclusive modes.
+			if sessionID != "" && sqlStmt != "" {
+				return fmt.Errorf("--session and SQL (--sql / positional) are mutually exclusive")
 			}
 
 			// --offset, --limit, --role require --session.
@@ -135,14 +161,15 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 				return runSessionDrilldown(cmd, gitRoot, sessionID, full, offset, limit, role, jsonFlag)
 			}
 
-			if len(args) == 0 {
-				return fmt.Errorf("provide a SQL query or use --session <id>")
+			if sqlStmt == "" {
+				return fmt.Errorf("provide SQL via --sql \"<statement>\" (or a positional statement), or drill with --session <id>")
 			}
 
-			return runQuery(cmd, gitRoot, args[0], useIndex)
+			return runQuery(cmd, gitRoot, sqlStmt, useIndex)
 		},
 	}
 
+	cmd.Flags().StringVar(&sqlFlag, "sql", "", "SQL SELECT statement to run (explicit SQL mode; a bare positional statement is accepted as shorthand)")
 	cmd.Flags().BoolVar(&useIndex, "index", false, "Run SQL against the index DB instead of the data DB")
 	cmd.Flags().StringVar(&sessionID, "session", "", "Show session conversation by short handle (s3) or ULID")
 	cmd.Flags().BoolVar(&full, "full", false, "Include tool calls and files in session output")

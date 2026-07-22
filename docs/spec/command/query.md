@@ -80,10 +80,20 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `turns_ft` | Turn-level full-text search (id, session_id, turn_index, role, content, ts) |
 | `tool_calls_index` | Tool calls per session (id, session_id, call_order, tool, path, cmd_prefix) |
 | `files_index` | Files per checkpoint (checkpoint_id, session_id, file_path, change_type) |
-| `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha) |
+| `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, parent_session_id, team_name, workflow_name) |
 | `file_cooccurrence` | Files that change together (file_a, file_b, count) |
-| `session_embeddings` | LSA vectors (session_id, embedding, model, generated_at) |
+| `session_embeddings` | LSA + Nomic vectors (session_id, embedding, model, generated_at); models `lsa-v1`, `nomic-v1.5` |
+| `knowledge_chunks` | Heading-anchored prose sections of tracked files at HEAD (id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha) |
+| `knowledge_embeddings` | Chunk vectors (content_hash, embedding, model, generated_at) |
 | `index_state` | Key-value state (key, value) |
+
+> **`ts` is a TIMESTAMP.** `turns.ts` / `turns_ft.ts` are typed timestamps, not
+> text — `ts LIKE '2023-05%'` raises a DuckDB Binder error (a common cause of a
+> temporal query wrongly reading as "no rows"). Use
+> `ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01'` or
+> `CAST(ts AS VARCHAR) LIKE '2023-05%'`. The FTS-internal tables (`dict`,
+> `docs`, `fields`, `stats`, `stopwords`, `terms`) are DuckDB search internals —
+> ignore them; query `turns_ft` instead.
 
 ---
 
@@ -101,4 +111,10 @@ rekal query "SELECT id, git_sha, user_email FROM checkpoints ORDER BY ts DESC LI
 rekal query "SELECT session_id, file_path FROM files_touched WHERE file_path LIKE '%auth%'"
 rekal query --index "SELECT file_a, file_b, count FROM file_cooccurrence WHERE file_a = 'src/auth/middleware.go' ORDER BY count DESC LIMIT 10"
 rekal query --index "SELECT session_id, user_email, turn_count FROM session_facets WHERE actor_type = 'human'"
+
+# Temporal window — ts is TIMESTAMP, use BETWEEN not LIKE
+rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01' AND role='human' ORDER BY ts"
+
+# Knowledge layer — prose chunks of tracked files at HEAD
+rekal query --index "SELECT path, anchor, start_line, end_line FROM knowledge_chunks WHERE content ILIKE '%merged-only%' ORDER BY path"
 ```

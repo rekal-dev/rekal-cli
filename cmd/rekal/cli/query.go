@@ -62,7 +62,15 @@ INDEX DB SCHEMA (.rekal/index.db):
                        workflow_name
   file_cooccurrence    file_a, file_b, count
   session_embeddings   session_id, embedding, model, generated_at
-                       PK: (session_id, model). Models: lsa-v1, nomic-v1.5`,
+                       PK: (session_id, model). Models: lsa-v1, nomic-v1.5
+  knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
+                       content, content_hash, blob_sha
+                       (heading-anchored prose sections of tracked files at HEAD)
+  knowledge_embeddings content_hash, embedding, model, generated_at
+
+Note: turns.ts / turns_ft.ts are TIMESTAMP, not text. "ts LIKE '2023-05%'"
+raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
+'2023-06-01', or CAST(ts AS VARCHAR) LIKE '2023-05%'.`,
 		Example: `  # Drill into a session (turns only)
   rekal query --session 01JNQX...
 
@@ -93,7 +101,13 @@ INDEX DB SCHEMA (.rekal/index.db):
   rekal query --index "SELECT session_id, agent_id, parent_session_id FROM session_facets WHERE workflow_name = 'release-flow'"
 
   # Embedding model counts
-  rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"`,
+  rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"
+
+  # Prose knowledge chunks matching a term (index DB, knowledge layer)
+  rekal query --index "SELECT path, anchor, start_line, end_line FROM knowledge_chunks WHERE content ILIKE '%merged-only%' ORDER BY path"
+
+  # Turns in a date window (ts is TIMESTAMP — use BETWEEN, not LIKE)
+  rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01' AND role='human' ORDER BY ts"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)

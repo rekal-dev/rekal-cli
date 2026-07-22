@@ -18,7 +18,9 @@ Workflow:
   rekal --file auth "token refresh" Filter by file path
   rekal query --session <id>        Drill into a session (full turns)
   rekal query --session <id> --full Include tool calls and files
-  rekal query "SELECT ..."          Raw SQL for edge cases
+  rekal query "SELECT ..."          Raw SQL over sessions/turns/tools/knowledge
+                                    (complete-set, temporal, analytical asks;
+                                     see 'rekal query --help' for the schema)
 
 Getting Started:
   rekal init                        Initialize Rekal in a git repository

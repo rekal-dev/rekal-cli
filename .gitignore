@@ -32,7 +32,6 @@ __pycache__/
 # Build dependencies (llama.cpp)
 .deps/
 
-# FTS extension blobs fetched at build time (linux/amd64 and osx/arm64 are
-# committed; these two are downloaded by scripts/fetch-fts-extension.sh)
+# FTS extension blob fetched at build time (linux/amd64 and osx/arm64 are
+# committed; linux/arm64 is downloaded by scripts/fetch-fts-extension.sh)
 /cmd/rekal/cli/db/extensions/fts_linux_arm64.duckdb_extension.gz
-/cmd/rekal/cli/db/extensions/fts_osx_amd64.duckdb_extension.gz

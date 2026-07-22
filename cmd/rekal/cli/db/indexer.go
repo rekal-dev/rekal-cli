@@ -15,13 +15,13 @@ import (
 )
 
 // LoadFTSExtension loads the DuckDB FTS extension.
-// On the four shipped platforms (linux/amd64, linux/arm64, darwin/amd64,
-// darwin/arm64) the extension is embedded in the binary and extracted to a
-// local cache — no network access required. The linux/amd64 and darwin/arm64
-// blobs are committed; the linux/arm64 and darwin/amd64 blobs are downloaded
-// at build time by scripts/fetch-fts-extension.sh. On any other platform
-// ftsExtensionGZ is empty and it falls back to downloading from the HTTPS
-// repository at first use.
+// On the three shipped platforms (linux/amd64, linux/arm64, darwin/arm64) the
+// extension is embedded in the binary and extracted to a local cache — no
+// network access required. The linux/amd64 and darwin/arm64 blobs are
+// committed; the linux/arm64 blob is downloaded at build time by
+// scripts/fetch-fts-extension.sh. On any other platform ftsExtensionGZ is
+// empty and it falls back to downloading from the HTTPS repository at first
+// use.
 func LoadFTSExtension(d *sql.DB) error {
 	if len(ftsExtensionGZ) > 0 {
 		return loadEmbeddedFTS(d)

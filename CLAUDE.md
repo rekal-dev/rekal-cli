@@ -301,15 +301,16 @@ mise run build         # Build binary with version from git tag
 mise run build:all     # Build for all platforms (snapshot)
 ```
 
-The DuckDB FTS extension is embedded so recall works offline. The
-linux/amd64 and darwin/arm64 blobs are committed under
-`cmd/rekal/cli/db/extensions/`; the linux/arm64 and darwin/amd64 blobs are
-gitignored and downloaded at build time by `scripts/fetch-fts-extension.sh`
-(a `mise run build` dependency, also run in the release workflow), versioned
-off go-duckdb's own DuckDB pin. Building **directly** with `go build` on
-linux/arm64 or an Intel Mac needs `mise run fetch-extensions` first;
-otherwise the `//go:embed` fails on the missing blob. Without any embedded
-blob, `db.LoadFTSExtension` falls back to a one-time network download.
+The DuckDB FTS extension is embedded so recall works offline, on the same
+three platforms as nomic and the release matrix (linux/amd64, linux/arm64,
+darwin/arm64). The linux/amd64 and darwin/arm64 blobs are committed under
+`cmd/rekal/cli/db/extensions/`; the linux/arm64 blob is gitignored and
+downloaded at build time by `scripts/fetch-fts-extension.sh` (a `mise run
+build` dependency, also run in the release workflow), versioned off
+go-duckdb's own DuckDB pin. Building **directly** with `go build` on
+linux/arm64 needs `mise run fetch-extensions` first; otherwise the
+`//go:embed` fails on the missing blob. On any other platform,
+`db.LoadFTSExtension` falls back to a one-time network download.
 
 **Cloud agents / fresh containers:** the cold-start is build → init → sync →
 verify, and it has three traps — llama.cpp HEAD won't link (pin tag `b8157`),

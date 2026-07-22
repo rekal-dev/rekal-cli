@@ -76,8 +76,9 @@ jobs:
           cmake -B build $CMAKE_ARGS
           cmake --build build --config Release -j$(nproc || sysctl -n hw.ncpu) --target llama --target ggml --target common
 
-      # linux/amd64 and darwin/arm64 ship a committed FTS blob; linux/arm64 and
-      # darwin/amd64 download it here so the binary can run recall offline.
+      # linux/amd64 and darwin/arm64 ship a committed FTS blob; linux/arm64
+      # downloads it here so the binary can run recall offline. No-op for the
+      # committed platforms.
       - name: Fetch FTS extension
         env:
           GOOS: ${{ matrix.goos }}

@@ -2,10 +2,11 @@
 # Download the DuckDB FTS extension for the target platform and place it where
 # the Go build embeds it: cmd/rekal/cli/db/extensions/fts_<platform>.duckdb_extension.gz
 #
-# The linux/amd64 and osx/arm64 blobs are committed to the repo, so this is a
-# no-op for those. The linux/arm64 and osx/amd64 blobs are not committed and are
-# fetched here at build time (invoked by `mise run build` and the release
+# Three platforms embed the extension: linux/amd64 and darwin/arm64 (osx_arm64)
+# are committed, so this is a no-op for those; linux/arm64 is not committed and
+# is fetched here at build time (invoked by `mise run build` and the release
 # workflow). Target platform comes from GOOS/GOARCH (defaulting to the host).
+# Any other platform uses the remote fallback and is skipped.
 #
 # The DuckDB version is read from go-duckdb's own pin so the extension can never
 # drift from the linked library.
@@ -28,6 +29,14 @@ case "$goarch" in
   *) echo "fetch-fts-extension: no embedded FTS extension for GOARCH=$goarch (uses remote fallback), skipping" >&2; exit 0 ;;
 esac
 platform="${os}_${arch}"
+
+# Only these three platforms embed the FTS extension (matching the release
+# matrix and nomic's CGO targets). Anything else uses the remote fallback in
+# db.LoadFTSExtension, so there is nothing to fetch.
+case "$platform" in
+  linux_amd64 | linux_arm64 | osx_arm64) ;;
+  *) echo "fetch-fts-extension: $platform uses the remote FTS fallback (no embedded blob), skipping" >&2; exit 0 ;;
+esac
 
 dest="$ext_dir/fts_${platform}.duckdb_extension.gz"
 if [ -f "$dest" ]; then

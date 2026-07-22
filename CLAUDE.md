@@ -248,6 +248,11 @@ session discovery keep using the invoking worktree.
 - `git-transportation.md`: Git transport layer design
 - `design/skill-router.md`: Unified skill — substrate triage, progressive
   disclosure, executable gate scripts (mermaid)
+- `design/skill-into-command.md`: Interface-lock design for folding the skill
+  scripts into the binary — default-uplift principle (agent form by default,
+  `--json` raw), command boundaries (retrieval/navigation/lifecycle, one verb
+  each), the skill↔command seam, and the byte-identical / no-performance-change
+  migration contract
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent

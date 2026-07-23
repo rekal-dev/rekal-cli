@@ -141,4 +141,4 @@ Real decisions where the beliefs broke the tie.
 | Secure by design | No external calls | Embedding model ships inside the binary. No API keys. No accounts. Data touches only git and the local filesystem. |
 | Simple | Single binary, embedded everything | Database engine, embedding model, compression dictionary — all inside one file. Download it and you're done. |
 | Transparent | Clean install/uninstall | `init` creates `.rekal/` and a hook. `clean` removes both completely. No hidden state anywhere else on the system. |
-| Agent first | Hybrid ranked search, structured output | Three-signal ranking. Agent controls the token budget. JSON output, not human formatting. |
+| Agent first | Hybrid ranked search, agent-readable output | Three-signal ranking. Agent controls the token budget. Compact agent-readable text by default (cheapest for an LLM to reason over), structured JSON on opt-in for programs — the agent is the reader; not human formatting. |

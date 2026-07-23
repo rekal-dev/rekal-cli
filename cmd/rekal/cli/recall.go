@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
@@ -10,16 +12,73 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// rrfK is the standard Reciprocal Rank Fusion constant (Cormack, Clarke &
+// Büttcher 2009) — a rank-smoothing convention, not a corpus-tuned number, and
+// it decides nothing (fusion only reorders). Same value as the folded seek.py.
+const rrfK = 60.0
+
+// fuseFramings RRF-merges the per-framing recall result lists into one seed:
+// score(session) = Σ 1/(k + rank+1) across framings, ordered descending; the
+// representative row per session is its highest-confidence hit (conf reported
+// is that session's strongest framing). Knowledge and warming come from the
+// primary framing. This is the folded seek.py — the "widen across phrasings"
+// move, now recall over N framings.
+func fuseFramings(outs []*search.Output) *search.Output {
+	rrf := map[string]float64{}
+	best := map[string]search.Result{}
+	seen := map[string]bool{}
+	var order []string // first-seen order, for stable tie-breaking
+
+	for _, o := range outs {
+		for rank, r := range o.Results {
+			sid := r.SessionID
+			if sid == "" {
+				sid = r.Sid
+			}
+			if !seen[sid] {
+				seen[sid] = true
+				order = append(order, sid)
+				best[sid] = r
+			} else if r.Confidence > best[sid].Confidence {
+				best[sid] = r
+			}
+			rrf[sid] += 1.0 / (rrfK + float64(rank) + 1.0)
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool { return rrf[order[i]] > rrf[order[j]] })
+
+	fused := &search.Output{
+		Knowledge: outs[0].Knowledge,
+		Query:     outs[0].Query,
+		Filters:   outs[0].Filters,
+		Mode:      outs[0].Mode,
+	}
+	for _, sid := range order {
+		fused.Results = append(fused.Results, best[sid])
+	}
+	fused.Total = len(fused.Results)
+	for _, o := range outs {
+		if o.Semantic != nil {
+			fused.Semantic = o.Semantic
+			break
+		}
+	}
+	return fused
+}
+
 // runRecall opens (and, if empty, rebuilds) the index DB, runs the search, and
-// prints the result as JSON. The ranking/grouping engine lives in the search
-// package; this function is the command-side orchestration around it.
+// prints the seed digest (default) or raw JSON (--json). The ranking/grouping
+// engine lives in the search package; this function is the command-side
+// orchestration around it.
 //
 // weightsJSON is the optional --weights flag: same shape as config.json
 // "weights", applied field-by-field over the merged config (CLI wins). Empty
-// means config/defaults only. Invalid JSON is a hard error (agent must fix
-// the payload); invalid numeric ranges fall back to defaults with a warning,
-// matching the config path.
-func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, weightsJSON string) error {
+// means config/defaults only. Invalid JSON is a hard error (agent must fix the
+// payload); invalid numeric ranges fall back to defaults with a warning.
+//
+// also holds --also framings (RRF-fused into one seed); jsonCompact selects raw
+// structured JSON over the default text digest.
+func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, weightsJSON string, also []string, jsonCompact bool) error {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
@@ -118,12 +177,51 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, weigh
 		filters.Lineage = lin
 	}
 
-	out, err := search.Run(indexDB, filters, gitRoot, weights, qe)
-	if err != nil {
-		return err
+	// Multi-framing recall: each --also value is another phrasing of the same
+	// question; run recall per framing and RRF-fuse into one seed (the folded
+	// seek.py). No --also is byte-identical to a single search.
+	runOne := func(q string) (search.Output, error) {
+		f := filters
+		f.Query = q
+		f.TextQuery = strings.TrimSpace(q) != ""
+		return search.Run(indexDB, f, gitRoot, weights, qe)
+	}
+	var out search.Output
+	if len(also) > 0 {
+		framings := append([]string{filters.Query}, also...)
+		outs := make([]*search.Output, 0, len(framings))
+		for _, q := range framings {
+			o, oerr := runOne(q)
+			if oerr != nil {
+				return oerr
+			}
+			outs = append(outs, &o)
+		}
+		out = *fuseFramings(outs)
+	} else {
+		var oerr error
+		out, oerr = runOne(filters.Query)
+		if oerr != nil {
+			return oerr
+		}
 	}
 
-	data, err := json.MarshalIndent(out, "", "  ")
+	// Default output is the agent-facing seed digest (the in-binary route.py):
+	// INJECT/KNOWLEDGE/SILENCE + per-seed conf=. Exit 1 on SILENCE mirrors
+	// route.py so the same gating holds. --json gives raw structured results.
+	if !jsonCompact {
+		text, code := formatDigest(&out)
+		fmt.Fprint(cmd.OutOrStdout(), text)
+		if filters.Lineage != nil {
+			filters.Lineage.FlushResult(len(text))
+		}
+		if code == 1 {
+			return NewSilentError(fmt.Errorf("silence"))
+		}
+		return nil
+	}
+
+	data, err := json.Marshal(out)
 	if err != nil {
 		return fmt.Errorf("marshal output: %w", err)
 	}

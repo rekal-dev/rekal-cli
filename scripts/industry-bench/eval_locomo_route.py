@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """LoCoMo route-logic eval — no LLM.
 
-For every LoCoMo question (minus known-bad), run stock recall in the ingested
-conversation repo, pipe through the checkout's `route.py` under chat
-calibration, and report gate + token cost (raw recall JSON vs route stdout).
+For every LoCoMo question (minus known-bad), run the in-binary digest gate
+(`rekal "<q>"`, folded in from the retired route.py) in the ingested
+conversation repo under chat calibration, and report gate + token cost (raw
+recall JSON vs digest stdout).
 
 Pass / fail (deterministic):
   * Gold silence (adversarial / abstention) → must SILENCE
   * Otherwise (answerable or open-domain that needs an answer) → must INJECT
   * KNOWLEDGE is always a fail on LoCoMo (marker prose, not dialogue memory)
-  * route.py exit 2 is always a fail
 
   python3 scripts/industry-bench/eval_locomo_route.py
   python3 scripts/industry-bench/eval_locomo_route.py --limit 40 --workers 4
@@ -27,7 +27,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IB = REPO_ROOT / "scripts" / "industry-bench"
-ROUTE = REPO_ROOT / "cmd" / "rekal" / "cli" / "skill" / "skills" / "rekal" / "scripts" / "route.py"
+# route.py was folded into the binary: `rekal "<q>"` prints the digest by
+# default, `--json` gives raw results.
 REKAL = REPO_ROOT / "rekal"
 LOCOMO_ROOT = Path.home() / "imb-locomo"
 CONVS = IB / "datasets" / "data" / "locomo-conversations.jsonl"
@@ -139,7 +140,7 @@ def _recall_route(repo: Path, query: str, env: dict, weights: dict, limit: int) 
     raw = ""
     for attempt in range(6):
         p = subprocess.run(
-            [str(REKAL), *args],
+            [str(REKAL), *args, "--json"],
             cwd=repo,
             env=env,
             capture_output=True,
@@ -166,13 +167,15 @@ def _recall_route(repo: Path, query: str, env: dict, weights: dict, limit: int) 
     except json.JSONDecodeError as err:
         return {"error": f"json: {err}", "gate": "ERROR", "route_rc": 2}
 
+    # The digest is now the default output of `rekal "<q>"` (the in-binary
+    # route.py). Its exit code is the gate code (0 INJECT/KNOWLEDGE, 1 SILENCE).
     rp = subprocess.run(
-        ["python3", str(ROUTE)],
-        input=body,
+        [str(REKAL), *args],
+        cwd=repo,
         capture_output=True,
         text=True,
         env=env,
-        timeout=30,
+        timeout=120,
     )
     rout = (rp.stdout or "").strip()
     line1 = rout.splitlines()[0] if rout else ""
@@ -267,9 +270,6 @@ def main() -> int:
     if not REKAL.exists():
         print(f"missing binary: {REKAL} (build first)", file=sys.stderr)
         return 2
-    if not ROUTE.exists():
-        print(f"missing route.py: {ROUTE}", file=sys.stderr)
-        return 2
     if not LOCOMO_ROOT.is_dir():
         print(f"missing LoCoMo repos: {LOCOMO_ROOT}", file=sys.stderr)
         return 2
@@ -358,7 +358,7 @@ def main() -> int:
         "avg_raw_tok": round(raw_tok / max(1, len(rows)), 1),
         "avg_route_tok": round(route_tok / max(1, len(rows)), 1),
         "chat_calibration": str(calibration),
-        "route": str(ROUTE),
+        "route": "in-binary digest (rekal \"<q>\")",
         "rule": "want_silence→SILENCE; else→INJECT; KNOWLEDGE always fail",
     }
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")

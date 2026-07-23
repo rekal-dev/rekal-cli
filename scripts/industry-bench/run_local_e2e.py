@@ -123,8 +123,7 @@ ANSWER_PROMPT = """You have the Rekal memory skill. Answer ONE question using ON
 
 The skill (follow it faithfully): read {skill_dir}/SKILL.md and {skill_dir}/references/hunt.md first.
 Binary: {rekal}
-Recall:  {rekal} --weights '{weights}' -n <N> "<query>"   (JSON; .results[])
-Route:   pipe recall JSON through {skill_dir}/scripts/recall-route.py — work from its digest
+Recall:  {rekal} --weights '{weights}' -n <N> "<query>"   (prints INJECT/KNOWLEDGE/SILENCE + a candidate digest; add --json for raw .results[])
 Drill:   {rekal} query --session <id> --offset <k> --limit 5   (or --role human; --full last resort)
 SQL:     {rekal} query "SELECT ..."   (tables: sessions, turns(session_id, ts, role, content, turn_index))
 
@@ -143,8 +142,8 @@ Reply with ONLY the final short answer (one or two sentences), no preamble."""
 ANSWER_PROMPT_CARD = """Answer ONE question about the people in this repo's Rekal memory (a searchable ledger of past conversations). Every FACT about these people must come from the memory; you may combine those facts with general world knowledge to reason to a conclusion, but never invent personal facts.
 
 TOOLS
-Search: {rekal} --weights '{weights}' -n 20 "<query>" | python3 {skill_dir}/scripts/recall-route.py
-  → prints INJECT/KNOWLEDGE/SILENCE + a candidate digest (session ids, confidences, snippets)
+Search: {rekal} --weights '{weights}' -n 20 "<query>"
+  → prints INJECT/KNOWLEDGE/SILENCE + a candidate digest (session ids, confidences, snippets); add --json for raw .results[]
 Read a session around a hit: {rekal} query --session <id> --offset <turn-2> --limit 5
 Whole session (small): {rekal} query --session <id> --full
 SQL over all turns: {rekal} query "SELECT ts, session_id, content FROM turns WHERE content ILIKE '%word%' ORDER BY ts"

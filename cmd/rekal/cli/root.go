@@ -19,7 +19,9 @@ Workflow:
   rekal --weights '{"bm25":0.5}' q  Query-time weight overlay (no config write)
   rekal query --session <id>        Drill into a session (full turns)
   rekal query --session <id> --full Include tool calls and files
-  rekal query "SELECT ..."          Raw SQL for edge cases
+  rekal query "SELECT ..."          Raw SQL over sessions/turns/tools/knowledge
+                                    (complete-set, temporal, analytical asks;
+                                     see 'rekal query --help' for the schema)
 
 Getting Started:
   rekal init                        Initialize Rekal in a git repository
@@ -51,6 +53,8 @@ func NewRootCmd() *cobra.Command {
 		limitFlag    int
 		explainFlag  bool
 		weightsFlag  string
+		jsonFlag     bool
+		alsoFlags    []string
 	)
 
 	cmd := &cobra.Command{
@@ -100,7 +104,7 @@ func NewRootCmd() *cobra.Command {
 				Explain:       explainFlag,
 			}
 
-			return runRecall(cmd, gitRoot, filters, weightsFlag)
+			return runRecall(cmd, gitRoot, filters, weightsFlag, alsoFlags, jsonFlag)
 		},
 	}
 
@@ -112,6 +116,8 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 	cmd.Flags().StringVar(&weightsFlag, "weights", "", "Query-time weight JSON (same keys as config weights; overlays local/global config)")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
+	cmd.Flags().StringArrayVar(&alsoFlags, "also", nil, "Additional framing(s) of the same question; recall each and RRF-fuse into one seed (repeatable)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version
@@ -140,6 +146,10 @@ func NewRootCmd() *cobra.Command {
 
 	queryCmd := newQueryCmd()
 	queryCmd.GroupID = "advanced"
+	findCmd := newFindCmd()
+	findCmd.GroupID = "advanced"
+	whenCmd := newWhenCmd()
+	whenCmd.GroupID = "advanced"
 	indexCmd := newIndexCmd()
 	indexCmd.GroupID = "advanced"
 	embedCmd := newEmbedCmd()
@@ -147,7 +157,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.AddCommand(initCmd, cleanCmd, versionCmd)
 	cmd.AddCommand(checkpointCmd, pushCmd, syncCmd, logCmd)
-	cmd.AddCommand(queryCmd, indexCmd, embedCmd)
+	cmd.AddCommand(queryCmd, findCmd, whenCmd, indexCmd, embedCmd)
 	cmd.AddCommand(nomic.NewDaemonCmd())
 
 	return cmd

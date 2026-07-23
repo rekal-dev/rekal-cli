@@ -80,7 +80,7 @@ def run_recall(repo: Path, query: str, limit: int, env: dict, retries: int = 6) 
     for i in range(retries):
         try:
             p = subprocess.run(
-                [REKAL, "--weights", WJ, query, "--limit", str(limit)],
+                [REKAL, "--weights", WJ, query, "--limit", str(limit), "--json"],
                 cwd=repo, env=env, capture_output=True, text=True, timeout=90,
             )
         except subprocess.TimeoutExpired:

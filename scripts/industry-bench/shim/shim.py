@@ -256,36 +256,34 @@ def _extract_json_object(raw: str) -> tuple[dict, str]:
     return json.loads(body), body
 
 
-def _skill_scripts_dir(repo: Path) -> Path:
-    # Prefer the harness checkout's skill scripts — ingested repos freeze
-    # whatever `rekal init` shipped at ingest time (stale hunt-gate bars).
-    source = Path(__file__).resolve().parents[3] / "cmd" / "rekal" / "cli" / "skill" / "skills" / "rekal" / "scripts"
-    if (source / "recall-route.py").exists():
-        return source
-    local = repo / ".claude" / "skills" / "rekal" / "scripts"
-    if (local / "recall-route.py").exists():
-        return local
-    return source
-
-
-def _run_recall_route(repo: Path, recall_json_body: str, env: dict) -> dict:
-    scripts = _skill_scripts_dir(repo)
-    p = subprocess.run(
-        ["python3", str(scripts / "recall-route.py")],
-        input=recall_json_body,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    line = (p.stdout or "").strip()
-    out = {"gate": "SILENCE", "raw": line or (p.stderr or "").strip(), "exit_code": p.returncode}
+def _run_recall_route(rekal: Path, repo: Path, query: str, wj: str | None, limit: int, env: dict) -> dict:
+    # The route/digest gate now lives in the binary: `rekal "<query>"` (no
+    # --json) prints INJECT/KNOWLEDGE/SILENCE + a candidate digest. This is
+    # byte-identical to the retired scripts/route.py. SILENCE exits 1, which is
+    # a valid gate result — not a failure — so we tolerate it here.
+    args = [query, "--limit", str(limit)]
+    if wj:
+        args = ["--weights", wj, *args]
+    line, code = "", None
+    for i in range(8):
+        p = subprocess.run([str(rekal), *args], cwd=repo, env=env, capture_output=True, text=True)
+        blob = ((p.stdout or "") + (p.stderr or "")).lower()
+        if p.returncode not in (0, 1) and any(
+            t in blob for t in ("another rekal process", "lock", "index not built", "rebuilding")
+        ):
+            time.sleep(1.5 * (i + 1))
+            continue
+        line, code = (p.stdout or "").strip(), p.returncode
+        break
+    out = {"gate": "SILENCE", "raw": line, "exit_code": code}
     if not line:
         return out
-    if line.startswith("INJECT"):
+    first = line.splitlines()[0]
+    if first.startswith("INJECT"):
         out["gate"] = "INJECT"
-    elif line.startswith("KNOWLEDGE"):
+    elif first.startswith("KNOWLEDGE"):
         out["gate"] = "KNOWLEDGE"
-    elif line.startswith("SILENCE"):
+    elif first.startswith("SILENCE"):
         out["gate"] = "SILENCE"
     return out
 
@@ -312,15 +310,16 @@ def search(
         env = rekal_env(repo, None, rekal)
     gate_env = apply_calibration_env(env, calibration or {})
 
-    args = [query, "--limit", str(limit)]
-    if wj := calibration_weights_json(calibration or {}):
+    wj = calibration_weights_json(calibration or {})
+    args = [query, "--limit", str(limit), "--json"]
+    if wj:
         args = ["--weights", wj, *args]
     raw = run_rekal(rekal, repo, env, args)
-    payload, body = _extract_json_object(raw)
+    payload, _ = _extract_json_object(raw)
 
     route_info = {"gate": "STOCK", "raw": "stock-route"}
     if route == "skill":
-        route_info = _run_recall_route(repo, body, gate_env)
+        route_info = _run_recall_route(rekal, repo, query, wj, limit, gate_env)
 
     contexts = []
     retrieved_tokens = 0

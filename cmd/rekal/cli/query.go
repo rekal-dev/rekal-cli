@@ -14,14 +14,16 @@ func newQueryCmd() *cobra.Command {
 	var (
 		useIndex  bool
 		sessionID string
+		sqlFlag   string
 		full      bool
 		offset    int
 		limit     int
 		role      string
+		jsonFlag  bool
 	)
 
 	cmd := &cobra.Command{
-		Use:   "query [<sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]]",
+		Use:   "query [--sql \"<statement>\" | <sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]]",
 		Short: "Run raw SQL or drill into a session",
 		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
 
@@ -35,15 +37,23 @@ child_session_ids — subagent/workflow transcripts whose parent_session_id
 points at this session — so an agent can navigate from a trunk conversation
 into the transcript that actually matched.
 
-Raw SQL mode accepts SELECT statements only. Output is one JSON object per row.
-Use --index to query the index DB instead of the data DB.
+SQL mode is explicit: --sql "<statement>". A bare positional statement
+(rekal query "SELECT …") is accepted as shorthand. SELECT only; output is one
+JSON object per row (NDJSON). Use --index to query the index DB. --sql,
+--session, and a positional statement are mutually exclusive.
+
+Full queryable schema (FTS-internal tables — dict/docs/fields/stats/stopwords/
+terms — and state tables — schema_meta/checkpoint_state/index_state — are engine
+internals; ignore them).
 
 DATA DB SCHEMA (.rekal/data.db):
 
   sessions        id, parent_session_id, session_hash, captured_at, actor_type,
-                  agent_id, user_email, branch, source, team_name, workflow_name
-                  (team_name/workflow_name/parent_session_id are optional
-                  harness metadata — NULL for agents without the concept)
+                  agent_id, user_email, branch, source, team_name, workflow_name,
+                  agent_type, description, spawn_depth
+                  (parent_session_id/team_name/workflow_name/agent_type/
+                  description/spawn_depth are optional harness metadata — NULL
+                  for agents without the concept)
   turns           id, session_id, turn_index, role, content, ts
   tool_calls      id, session_id, call_order, tool, path, cmd_prefix
   checkpoints     id, git_sha, git_branch, user_email, ts, actor_type, agent_id,
@@ -59,11 +69,26 @@ INDEX DB SCHEMA (.rekal/index.db):
   session_facets       session_id, user_email, git_branch, actor_type, agent_id,
                        captured_at, turn_count, tool_call_count, file_count,
                        checkpoint_id, git_sha, parent_session_id, team_name,
-                       workflow_name
+                       workflow_name, agent_type, description, spawn_depth,
+                       origin, facet_text
   file_cooccurrence    file_a, file_b, count
   session_embeddings   session_id, embedding, model, generated_at
-                       PK: (session_id, model). Models: lsa-v1, nomic-v1.5`,
-		Example: `  # Drill into a session (turns only)
+                       PK: (session_id, model). Models: lsa-v1, nomic-v1.5
+  knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
+                       content, content_hash, blob_sha
+                       (heading-anchored prose sections of tracked files at HEAD)
+  knowledge_embeddings content_hash, model, embedding
+
+Note: turns.ts / turns_ft.ts are TIMESTAMP, not text. "ts LIKE '2023-05%'"
+raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
+'2023-06-01', or CAST(ts AS VARCHAR) LIKE '2023-05%'.`,
+		Example: `  # Explicit SQL mode
+  rekal query --sql "SELECT id, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
+
+  # Positional shorthand (same as --sql)
+  rekal query "SELECT count(*) FROM turns WHERE role = 'human'"
+
+  # Drill into a session (turns only)
   rekal query --session 01JNQX...
 
   # Drill into a session (turns + tool calls + files)
@@ -93,7 +118,13 @@ INDEX DB SCHEMA (.rekal/index.db):
   rekal query --index "SELECT session_id, agent_id, parent_session_id FROM session_facets WHERE workflow_name = 'release-flow'"
 
   # Embedding model counts
-  rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"`,
+  rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"
+
+  # Prose knowledge chunks matching a term (index DB, knowledge layer)
+  rekal query --index "SELECT path, anchor, start_line, end_line FROM knowledge_chunks WHERE content ILIKE '%merged-only%' ORDER BY path"
+
+  # Turns in a date window (ts is TIMESTAMP — use BETWEEN, not LIKE)
+  rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01' AND role='human' ORDER BY ts"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
@@ -101,9 +132,19 @@ INDEX DB SCHEMA (.rekal/index.db):
 				return err
 			}
 
-			// --session and positional SQL are mutually exclusive.
-			if sessionID != "" && len(args) > 0 {
-				return fmt.Errorf("--session and SQL argument are mutually exclusive")
+			// SQL statement comes from explicit --sql or the positional
+			// shorthand — never both.
+			sqlStmt := sqlFlag
+			if len(args) > 0 {
+				if sqlFlag != "" {
+					return fmt.Errorf("--sql and a positional SQL statement are mutually exclusive")
+				}
+				sqlStmt = args[0]
+			}
+
+			// SQL (--sql / positional) and --session are mutually exclusive modes.
+			if sessionID != "" && sqlStmt != "" {
+				return fmt.Errorf("--session and SQL (--sql / positional) are mutually exclusive")
 			}
 
 			// --offset, --limit, --role require --session.
@@ -117,23 +158,25 @@ INDEX DB SCHEMA (.rekal/index.db):
 			}
 
 			if sessionID != "" {
-				return runSessionDrilldown(cmd, gitRoot, sessionID, full, offset, limit, role)
+				return runSessionDrilldown(cmd, gitRoot, sessionID, full, offset, limit, role, jsonFlag)
 			}
 
-			if len(args) == 0 {
-				return fmt.Errorf("provide a SQL query or use --session <id>")
+			if sqlStmt == "" {
+				return fmt.Errorf("provide SQL via --sql \"<statement>\" (or a positional statement), or drill with --session <id>")
 			}
 
-			return runQuery(cmd, gitRoot, args[0], useIndex)
+			return runQuery(cmd, gitRoot, sqlStmt, useIndex, jsonFlag)
 		},
 	}
 
+	cmd.Flags().StringVar(&sqlFlag, "sql", "", "SQL SELECT statement to run (explicit SQL mode; a bare positional statement is accepted as shorthand)")
 	cmd.Flags().BoolVar(&useIndex, "index", false, "Run SQL against the index DB instead of the data DB")
 	cmd.Flags().StringVar(&sessionID, "session", "", "Show session conversation by short handle (s3) or ULID")
 	cmd.Flags().BoolVar(&full, "full", false, "Include tool calls and files in session output")
 	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
 	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human, assistant, human_steering, or summary (requires --session)")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact single-line JSON for session drill (SQL rows are already NDJSON)")
 	return cmd
 }
 
@@ -213,7 +256,7 @@ var indexDrilldownSource = drilldownSource{
 	children:  db.QueryChildSessionIDsFromIndex,
 }
 
-func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, offset, limit int, role string) error {
+func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, offset, limit int, role string, jsonCompact bool) error {
 	// Open index once: resolve sN→ULID, emit sid on output, and fall back
 	// for teammate sessions that exist only in index.db.
 	var indexDB *sql.DB
@@ -254,7 +297,7 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 
 	session, dataErr := db.QuerySession(dataDB, sessionID)
 	if dataErr == nil {
-		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid)
+		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 	}
 
 	// Not in the data DB — fall back to the index DB, where teammate
@@ -266,10 +309,10 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 	if err != nil {
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
-	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid)
+	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 }
 
-func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string) error {
+func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string, jsonCompact bool) error {
 	sessionID := session.ID
 
 	turns, total, err := src.turns(d, sessionID, db.TurnPageOptions{
@@ -346,7 +389,12 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 		output.Files = files
 	}
 
-	data, err := json.MarshalIndent(output, "", "  ")
+	if !jsonCompact {
+		// Default: agent-readable dialogue (view.py's session mode).
+		fmt.Fprintln(cmd.OutOrStdout(), viewSession(&output))
+		return nil
+	}
+	data, err := json.Marshal(output)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -403,7 +451,7 @@ func querySessionFilesFromIndex(indexDB *sql.DB, sessionID string) ([]string, er
 	return files, rows.Err()
 }
 
-func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex bool) error {
+func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex, jsonOut bool) error {
 	// Read-only: only allow SELECT statements.
 	normalized := strings.TrimSpace(strings.ToUpper(query))
 	if !strings.HasPrefix(normalized, "SELECT") {
@@ -433,9 +481,7 @@ func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex bool) error {
 		return fmt.Errorf("columns: %w", err)
 	}
 
-	out := cmd.OutOrStdout()
-	first := true
-
+	collected := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		values := make([]interface{}, len(cols))
 		ptrs := make([]interface{}, len(cols))
@@ -445,37 +491,41 @@ func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex bool) error {
 		if err := rows.Scan(ptrs...); err != nil {
 			return fmt.Errorf("scan: %w", err)
 		}
-
 		row := make(map[string]interface{}, len(cols))
 		for i, col := range cols {
 			v := values[i]
-			// Convert []byte to string for JSON output.
 			if b, ok := v.([]byte); ok {
-				v = string(b)
+				v = string(b) // []byte → string for output
 			}
 			row[col] = v
 		}
-
-		data, err := json.Marshal(row)
-		if err != nil {
-			return fmt.Errorf("marshal: %w", err)
-		}
-
-		if !first {
-			fmt.Fprintln(out)
-		}
-		fmt.Fprint(out, string(data))
-		first = false
+		collected = append(collected, row)
 	}
-
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("rows: %w", err)
 	}
 
-	// Trailing newline if we printed anything.
-	if !first {
-		fmt.Fprintln(out)
+	out := cmd.OutOrStdout()
+	if jsonOut {
+		// Raw NDJSON — one object per row (machine consumers).
+		for i, row := range collected {
+			data, merr := json.Marshal(row)
+			if merr != nil {
+				return fmt.Errorf("marshal: %w", merr)
+			}
+			if i > 0 {
+				fmt.Fprintln(out)
+			}
+			fmt.Fprint(out, string(data))
+		}
+		if len(collected) > 0 {
+			fmt.Fprintln(out)
+		}
+		return nil
 	}
 
+	// Default: agent-readable TSV (view.py's row mode, in the query's own
+	// column order).
+	fmt.Fprintln(out, viewRows(cols, collected))
 	return nil
 }

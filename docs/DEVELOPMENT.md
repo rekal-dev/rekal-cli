@@ -116,9 +116,12 @@ mv /tmp/nomic.gguf.gz cmd/rekal/cli/nomic/models/nomic-embed-text-v1.5.Q8_0.gguf
 | Coverage report | `mise run test:coverage` (total + `coverage.html` line view) |
 | Run linters | `mise run lint` |
 | Build binary | `mise run build` |
+| Fetch FTS extension | `mise run fetch-extensions` (see below) |
 | Before push | Pre-push hook runs `test:ci` + `lint` if you ran `install-hooks.sh` |
 
 Recommended before committing: run `mise run fmt`, then `mise run test:ci`, then `mise run lint`. The pre-push hook repeats test:ci and lint so push will fail if they fail.
+
+The DuckDB FTS extension is embedded so recall works with no network, on the same three platforms as nomic and the release matrix (linux/amd64, linux/arm64, darwin/arm64). The linux/amd64 and darwin/arm64 blobs are committed under `cmd/rekal/cli/db/extensions/`; the linux/arm64 blob is gitignored and downloaded at build time by `scripts/fetch-fts-extension.sh` (a dependency of `mise run build`, also run in the release workflow), versioned off go-duckdb's own DuckDB pin. If you build **directly** with `go build` on linux/arm64, run `mise run fetch-extensions` first — otherwise the `//go:embed` fails on the missing blob.
 
 ### 1.5 Pre-push hook (optional)
 

@@ -92,7 +92,7 @@ func TestSessionDrilldown_RemoteSessionFromIndex(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	if err := runSessionDrilldown(cmd, root, sessionID, true, 0, 0, ""); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, true, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown (remote session): %v", err)
 	}
 
@@ -126,9 +126,28 @@ func TestSessionDrilldown_RemoteSessionFromIndex(t *testing.T) {
 		t.Errorf("unexpected files: %+v", got.Files)
 	}
 
+	// --json escape hatch: compact single-line JSON, same payload as the
+	// pretty default (the machine-consumer contract that must stay stable
+	// across the coming text-default — docs/design/skill-into-command.md §2.0).
+	out.Reset()
+	if err := runSessionDrilldown(cmd, root, sessionID, true, 0, 0, "", true); err != nil {
+		t.Fatalf("runSessionDrilldown (--json): %v", err)
+	}
+	compact := strings.TrimRight(out.String(), "\n")
+	if strings.Contains(compact, "\n") {
+		t.Errorf("--json output must be single-line, got:\n%s", compact)
+	}
+	var viaJSON sessionOutput
+	if err := json.Unmarshal([]byte(compact), &viaJSON); err != nil {
+		t.Fatalf("--json output must be valid JSON: %v", err)
+	}
+	if viaJSON.SessionID != sessionID || viaJSON.TotalTurns != got.TotalTurns {
+		t.Errorf("--json payload differs from default: %+v vs %+v", viaJSON, got)
+	}
+
 	// Short handle must resolve to the same session.
 	out.Reset()
-	if err := runSessionDrilldown(cmd, root, "s1", false, 0, 0, ""); err != nil {
+	if err := runSessionDrilldown(cmd, root, "s1", false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown (short handle): %v", err)
 	}
 	var viaShort sessionOutput
@@ -169,7 +188,7 @@ func TestSessionDrilldown_DataSessionStillWorks(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, ""); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown (local session): %v", err)
 	}
 
@@ -212,7 +231,7 @@ func TestSessionDrilldown_MetadataOmittedForPlainSessions(t *testing.T) {
 	cmd := &cobra.Command{}
 	var out strings.Builder
 	cmd.SetOut(&out)
-	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, ""); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown: %v", err)
 	}
 
@@ -257,7 +276,7 @@ func TestSessionDrilldown_SubagentMetadataShown(t *testing.T) {
 	cmd := &cobra.Command{}
 	var out strings.Builder
 	cmd.SetOut(&out)
-	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, ""); err != nil {
+	if err := runSessionDrilldown(cmd, root, sessionID, false, 0, 0, "", true); err != nil {
 		t.Fatalf("runSessionDrilldown: %v", err)
 	}
 
@@ -283,7 +302,7 @@ func TestSessionDrilldown_NotFoundAnywhere(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	err := runSessionDrilldown(cmd, root, "01DOESNOTEXIST", false, 0, 0, "")
+	err := runSessionDrilldown(cmd, root, "01DOESNOTEXIST", false, 0, 0, "", true)
 	if err == nil {
 		t.Fatal("expected error for unknown session, got nil")
 	}

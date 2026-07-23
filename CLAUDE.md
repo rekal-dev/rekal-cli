@@ -55,8 +55,23 @@ session discovery keep using the invoking worktree.
   recall filter flags plus `--weights` (query-time JSON overlay)
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
   index DB, refresh the knowledge layer (watermark-gated), resolve weights
-  (config then optional `--weights`), call the `search` package, marshal
-  JSON. The ranking engine itself lives in `search/`.
+  (config then optional `--weights`), call the `search` package. **Default
+  output is the seed digest** (`digest.go`); `--json` gives raw structured
+  results. The ranking engine itself lives in `search/`. Multi-framing recall:
+  each `--also` value is another phrasing; each is recalled and RRF-fused
+  (`fuseFramings`, k=60, conf=max-per-session) into one seed — the folded
+  seek.py. No `--also` is byte-identical to a single search.
+- `digest.go`: in-binary port of the old route.py — turns a `search.Output` into
+  the seed digest (INJECT/KNOWLEDGE/SILENCE + per-seed `conf=`), byte-identical
+  (golden-tested). Super-low env-overridable floor (`REKAL_HUNT_*`),
+  recommendation not decision; SILENCE exits 1.
+- `view.go`: in-binary port of the old view.py — `viewSession` (drill →
+  readable turns) and `viewRows` (SQL → TSV). The default query output;
+  `--json` gives raw. Session view is golden-tested byte-identical
+- `find.go`: `rekal find "<term>" [role]` — complete, time-ordered enumeration
+  sweep over `turns` (port of find.py, diff-identical)
+- `when.go`: `rekal when <YYYY-MM-DD> "<phrase>"` — pure-calendar relative→
+  absolute date resolver (port of when.py, diff-identical; no store)
 - `knowledge_index.go`: Knowledge-layer build/refresh — chunk the repo's
   tracked prose files at HEAD into `index.db` (`knowledge_chunks`), diffing
   stored git blob SHAs against `git ls-tree -r HEAD` so only changed files
@@ -67,14 +82,10 @@ session discovery keep using the invoking worktree.
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
-  skill (tip + scripts + references), PATH wrappers (`wrappers.go`:
-  `rekal-route`/`rekal-view`/`rekal-find`/`rekal-seek`/`rekal-when` shims in
-  `~/.local/bin`, marker-tagged, resolve the invoking repo's installed skill at
-  run time), and one
-  marker-tagged CLAUDE.md sentence (the whole DX:
-  init, done; `clean` removes the line, refresh replaces it in place)
-- `clean.go`: Remove Rekal setup — completely, no residue (incl. the marker-tagged
-  PATH wrappers; foreign same-name files are left alone)
+  skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
+  (the whole DX: init, done; `clean` removes the line, refresh replaces it in
+  place)
+- `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
   knowledge chunks). Deep-semantic session + knowledge vectors are deferred
   to background `rekal embed` after the atomic rename. Also carries the
@@ -108,7 +119,11 @@ session discovery keep using the invoking worktree.
   into the index. **Index-only, never `data.db`**, so imported sessions are
   structurally unpushable to the team; origin-labeled, deduped by content hash
 - `log.go`: Show recent checkpoints
-- `query.go`: Raw SQL access
+- `query.go`: Raw SQL access (explicit `--sql "<stmt>"`; bare positional is
+  shorthand; `--sql`/positional/`--session` mutually exclusive) + session drill.
+  **Default output is agent-readable text** (`view.go`: readable turns / TSV
+  rows); `--json` gives raw JSON/NDJSON. `--help` carries the full queryable
+  schema (all tables + columns; FTS-internal/state tables noted as ignore)
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +
@@ -209,37 +224,24 @@ session discovery keep using the invoking worktree.
   `rekal embed` passes `wait=true` (block for the model, bounded). Cache
   extraction is flock-serialized; spawns are cooldown-rate-limited. This is the
   fix for the concurrent-recall model-load crash
-- `skill/`: One Claude Code skill, redesigned from `SOUL.md`'s "The skill"
-  tenets around three homes — **function → script, knowledge → rich prose on
-  demand, judgment → reasoning**. `skills/rekal/` embeds `SKILL.md` (thin
-  route: 4-substrate triage — tree/knowledge/ledger/map — boundary, silence,
-  dispatch; trusts reasoning, no profiles), `scripts/` (deterministic data for
-  judgment — `route.py` recall gate: INJECT/KNOWLEDGE/SILENCE, inclusive
-  substrates (INJECT may trail a `KNOWLEDGE` line when both match) + a
-  cost-bounded seed digest (top-20 as `sid conf=… t<n> "snippet"`; header
-  carries `top=`/`gap=`; mass stays inside; reformulate or `-n` for the rest;
-  the window is a display budget, not a gate). The episode gate is a super-low
-  floor on absolute `confidence` = `max(saturate(bm25), cosine) +
-  0.15·saturate(facet)` — only the BM25 term is corpus-invariant, so the floor
-  stays low and the agent weighs the emitted `conf=`. Knowledge
-  `score` is reported for the agent to judge — no tuned floor. `view.py`
-  drill/SQL compressor (forwards engine errors verbatim — an error is not an
-  empty set); `find.py` term→all-mentions enumeration sweep (complete, time
-  order, no hand-SQL; `REKAL_BIN` override for tests); `seek.py` multi-framing
-  recall RRF-fused (k=60, literature-standard, never gates) into one route.py
-  digest with `conf`=max-per-session — the ledger's "widen across phrasings"
-  move as a function; `when.py` relative→absolute date resolver (pure calendar,
-  honest window for vague phrases, no store); `map.sh`
-  fresh|watermark; `wiki-gate.sh`), and `references/`
-  (rich, on demand — `ledger.md` is the one page on reasoning over the past:
-  recall/widen/depth-judgment, time-axis, enumeration, whose-fact/premise,
-  analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
-  `reference.md`). No corpus profiles or benchmark tuning ship — chat corpora
-  route to the ledger by the general boundary (only-record-is-conversation) +
-  the reported `mass` signal; the calibrate/profile tooling lives on
-  `research/industry-bench`. `init` installs the whole tree (scripts 0755) and
-  purges legacy `rekal-*` companion dirs; `clean` removes current + legacy.
-  Adding a module = adding a file under `skills/rekal/`; tip must name it.
+- `skill/`: One Claude Code skill, **scriptless** for retrieval/navigation —
+  those moved into the binary as commands (`docs/design/skill-into-command.md`).
+  `skills/rekal/` embeds `SKILL.md` (thin route: 4-substrate triage —
+  tree/knowledge/ledger/map — boundary, silence, dispatch, judgment; trusts
+  reasoning, no profiles), `scripts/` (only the workflow gates now — `map.sh`
+  fresh|watermark, `wiki-gate.sh`), and `references/` (rich, on demand —
+  `ledger.md` is the one page on reasoning over the past: recall/widen/
+  depth-judgment, time-axis, enumeration, whose-fact/premise, analytical SQL,
+  decision arcs, provenance; plus `map.md`, `wiki.md`, `reference.md`). The
+  agent uses the commands directly — `rekal "<q>"` (seed digest, `digest.go`),
+  `rekal "<q>" --also` (RRF widen), `rekal find`, `rekal when`, `rekal query
+  --session`/`--sql` (readable text via `view.go`); all default to compact text,
+  `--json` for raw (SOUL: agent-first output is text, JSON on opt-in). No corpus
+  profiles or benchmark tuning ship. `init` installs the tree (scripts 0755) and
+  purges legacy `rekal-*` companion dirs; `clean` removes current + legacy. The
+  route/gate scripts (route/view/find/seek/when.py) were removed once the
+  commands proved byte-identical (golden/diff-tested); the property harness
+  `scripts/skill-permtest.py` now drives `rekal "<q>"` directly.
   Topology diagrams: `docs/design/skill-router.md`.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
@@ -250,6 +252,11 @@ session discovery keep using the invoking worktree.
 - `git-transportation.md`: Git transport layer design
 - `design/skill-router.md`: Unified skill — substrate triage, progressive
   disclosure, executable gate scripts (mermaid)
+- `design/skill-into-command.md`: Interface-lock design for folding the skill
+  scripts into the binary — default-uplift principle (agent form by default,
+  `--json` raw), command boundaries (retrieval/navigation/lifecycle, one verb
+  each), the skill↔command seam, and the byte-identical / no-performance-change
+  migration contract
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent
@@ -302,6 +309,17 @@ mise run lint          # Lint check (gofmt + golangci-lint)
 mise run build         # Build binary with version from git tag
 mise run build:all     # Build for all platforms (snapshot)
 ```
+
+The DuckDB FTS extension is embedded so recall works offline, on the same
+three platforms as nomic and the release matrix (linux/amd64, linux/arm64,
+darwin/arm64). The linux/amd64 and darwin/arm64 blobs are committed under
+`cmd/rekal/cli/db/extensions/`; the linux/arm64 blob is gitignored and
+downloaded at build time by `scripts/fetch-fts-extension.sh` (a `mise run
+build` dependency, also run in the release workflow), versioned off
+go-duckdb's own DuckDB pin. Building **directly** with `go build` on
+linux/arm64 needs `mise run fetch-extensions` first; otherwise the
+`//go:embed` fails on the missing blob. On any other platform,
+`db.LoadFTSExtension` falls back to a one-time network download.
 
 **Cloud agents / fresh containers:** the cold-start is build → init → sync →
 verify, and it has three traps — llama.cpp HEAD won't link (pin tag `b8157`),

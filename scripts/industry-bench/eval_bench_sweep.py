@@ -64,7 +64,7 @@ def recall_rank(repo: Path, query: str, ev: list[str], wj: str, limit: int, env:
     for i in range(retries):
         try:
             p = subprocess.run(
-                [REKAL, "--weights", wj, query, "--limit", str(limit)],
+                [REKAL, "--weights", wj, query, "--limit", str(limit), "--json"],
                 cwd=repo, env=env, capture_output=True, text=True, timeout=120,
             )
         except subprocess.TimeoutExpired:

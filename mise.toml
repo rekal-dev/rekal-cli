@@ -42,8 +42,13 @@ fi
 golangci-lint run --timeout=10m ./...
 """
 
+[tasks."fetch-extensions"]
+description = "Download the DuckDB FTS extension for this platform if it isn't committed (linux/arm64, darwin/amd64). No-op when the blob is already present."
+run = "./scripts/fetch-fts-extension.sh"
+
 [tasks.build]
 description = "Build the CLI"
+depends = ["fetch-extensions"]
 run = """
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
 go build -ldflags "-X github.com/rekal-dev/rekal-cli/cmd/rekal/cli.Version=${VERSION}" -o rekal ./cmd/rekal

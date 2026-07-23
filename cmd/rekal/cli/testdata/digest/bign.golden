@@ -1,0 +1,23 @@
+INJECT top=0.64 gap=0.00 20 seeds
+  s78 conf=0.64 t70 "...(all `None`). The score distribution: | Query | knowledge[0].score | Correct verdict | route.py verdict…"
+  s77 conf=0.64 t70 "...(all `None`). The score distribution: | Query | knowledge[0].score | Correct verdict | route.py verdict…"
+  s53 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s54 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s14 conf=0.56 t14 "Now tasks #3 (checkpoint.go), #4 (export.go), and #5 (import.go) are unblocked. Let me start with…"
+  s30 conf=0.56 t14 "Now tasks #3 (checkpoint.go), #4 (export.go), and #5 (import.go) are unblocked. Let me start with…"
+  s62 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s61 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s56 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s55 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s58 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s57 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s64 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s59 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s60 conf=0.56 t72 "Right — if we gate at install time, there's no need to also gate at…"
+  s29 conf=0.51 t11 "<command-name>/export</command-name> <command-message>export</command-message> <command-args></command-args>"
+  s13 conf=0.51 t11 "<command-name>/export</command-name> <command-message>export</command-message> <command-args></command-args>"
+  s76 conf=0.45 t19 "...homes**: function → scripts, knowledge → on-demand references, judgment → the agent's reasoning - `route.py`…"
+  s75 conf=0.45 t19 "...homes**: function → scripts, knowledge → on-demand references, judgment → the agent's reasoning - `route.py`…"
+  s66 conf=0.49 t56 "we can run the export as part of the scirpt? no ?"
+  (+58 more)
+KNOWLEDGE docs/design/merged-only-sharing.md=0.79 docs/spec/command/push.md=0.67 docs/research/07-paper-restructure.md=0.63 docs/REVIEW_2026-07-03.md=0.62 docs/design/cross-repo-import.md=0.62

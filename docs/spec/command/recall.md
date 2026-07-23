@@ -82,7 +82,9 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20 when unset; `0` = empty set; negative → error) |
 | `--explain` | Adds per-layer scores (`layers`: bm25/lsa/nomic/facet, normalized, pre-weight) and `related` (sessions sharing touched files, query-time join) to each result |
+| `--also <framing>` | Additional phrasing of the same question; each is recalled and RRF-fused into one seed (repeatable) |
 | `--weights <json>` | Query-time weight overlay. Same keys as config `weights` (`bm25`, `lsa`, `semantic`/`nomic`, `steering_boost`, `summary_boost`, `subagent_downweight`, `facet_boost`). Field-by-field over local → global → defaults. Invalid JSON is an error; does not write config. |
+| `--json` | Raw structured JSON instead of the **default seed digest** (INJECT/KNOWLEDGE/SILENCE text). For machine consumers (`docs/design/skill-into-command.md` §2.0) |
 
 Multiple filters = AND. CLI `--weights` wins over config for keys present in the JSON.
 

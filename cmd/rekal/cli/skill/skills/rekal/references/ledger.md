@@ -5,7 +5,7 @@ alternatives rejected, decisions made. You reach it two ways, chosen by the
 shape of the question:
 
 - **Pointed episode** ("why did we…", "what did X say about…") → `rekal` recall,
-  gated by `route.py`. Recall finds the loudest match.
+  printed as a seed digest. Recall finds the loudest match.
 - **Analytical / complete-set / temporal** ("how many…", "all of…", "in what
   order…") → `rekal query` SQL. SQL enumerates the whole set.
 
@@ -20,16 +20,16 @@ below carry the depth when the first move isn't enough.
 
 | Question shape | First move | Watch for |
 |---|---|---|
-| Pointed episode — why / what did X say | recall → `route.py`; drill top seed at `t<n>`; weak? `seek.py` several framings | premise mismatch; near-miss entity in the answer |
-| Complete-set — all / every / how many / which of N | `find.py "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
-| Temporal — when / before / after / how long | `when.py <anchor> "<phrase>"` for the date, SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
+| Pointed episode — why / what did X say | `rekal "<q>"`; drill top seed at `t<n>`; weak? `rekal "<q>" --also` several framings | premise mismatch; near-miss entity in the answer |
+| Complete-set — all / every / how many / which of N | `rekal find "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
+| Temporal — when / before / after / how long | `rekal when <anchor> "<phrase>"` for the date, SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
 | Whose-fact — my / I / their | drill to the assertion turn ("my X is", "I bought") | discussed / suggested ≠ owned |
 | False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |
 | Decision arc — why did this evolve | steering/`because` SQL gather (below) | thin trail synthesized into fiction |
-| Reflection / pattern / census | decompose to SQL (below); never `route.py` | ranking when the ask is exhaustive |
+| Reflection / pattern / census | decompose to SQL (below); never plain recall | ranking when the ask is exhaustive |
 
 **Stopping rule.** Stop when the answer is grounded in drilled turns you can
-cite. Before concluding SILENCE, `seek.py` one widening across real alternative
+cite. Before concluding SILENCE, `rekal "<q>" --also` one widening across real alternative
 framings — a partial seed is not absence. But if that fuse and two further
 moves add no new evidence, report what you have — or the gap — instead of
 searching on: extra moves past that point manufacture plausible-but-wrong
@@ -39,12 +39,10 @@ yourself grepping code for a past-tense fact, come back to the table.
 ## The recall pipeline
 
 ```bash
-ROOT="${CLAUDE_SKILL_DIR:-$(git rev-parse --show-toplevel)/.claude/skills/rekal}"
-rekal "JWT expiry" | python3 "$ROOT/scripts/route.py"
-# optional filters:
-rekal --file src/auth/ "token refresh" | python3 "$ROOT/scripts/route.py"
-rekal --commit <sha>                   | python3 "$ROOT/scripts/route.py"
-rekal -n 5 --explain "error handling"  | python3 "$ROOT/scripts/route.py"
+rekal "JWT expiry"                      # recall → seed digest (text by default)
+rekal --file src/auth/ "token refresh"  # optional filters
+rekal --commit <sha>
+rekal -n 5 --explain "error handling"
 ```
 
 | Route stdout | Action |
@@ -58,7 +56,7 @@ On `INJECT` the route prints a **seed digest** — the top-20 candidates each as
 `session_id` ULID stays in the raw JSON). `confidence` =
 `max(saturate(bm25), cosine) + 0.15·saturate(facet)`; only the BM25 term is
 corpus-invariant, the cosine term drifts — which is why the floor is super-low
-and you weigh `conf=` yourself. Mass stays inside the script (never a veto).
+and you weigh `conf=` yourself. Mass stays inside recall (never a veto).
 **Work from the seed.** It carries
 enough to synthesize a multi-hop answer without drilling each; drill `sid` at
 `t<turn>` for a full turn (or `--offset/--limit` to zoom), and re-read raw
@@ -66,13 +64,13 @@ recall only for a field the seed omits (`files`). If the top-20 isn't enough,
 **reformulate and multi-search**. The digest is **cost-bounded**: a `-n 100`
 read costs about the same through the route as a `-n 20` one.
 
-`route.py` labels are **recommendations**. It is biased toward more data than
+Recall labels (`INJECT`/`SILENCE`) are **recommendations**. It is biased toward more data than
 decision: a **super-low** episode floor on absolute `confidence` (≥ 0.25; soft
 ≥ 0.20 with gap ≥ 0.02) so only empty / near-zero is machine-silenced, then
 `conf=` on the header and each seed for **you** to weigh. Knowledge is reported
 only above a matching super-low score floor (≥ 0.25); junk markers are omitted.
 Both substrates can appear together when the question is mixed. Neither →
-SILENCE. Drills and SQL always pipe through `view.py`.
+SILENCE. Drills and SQL print readable text by default (add `--json` for raw).
 
 ## One query is a guess — widen before you conclude
 
@@ -81,14 +79,14 @@ with. Evidence routinely lands at rank 5–9, not rank 1 — `rekal` returns 20
 candidates (`-n` to change), so read past the first before you judge. A single
 phrasing is one lookup; a confident answer survives more than one.
 
-**Widening is a function — supply the framings, let the script fuse.**
+**Widening is a command — supply the framings, let recall fuse.**
 
 ```bash
-rekal-seek "token refresh expiry" "JWT session timeout" "logout invalidate"
+rekal "token refresh expiry" --also "JWT session timeout" --also "logout invalidate"
 ```
 
-`seek.py` runs recall once per framing and RRF-fuses the candidate lists into
-one ranked seed (route.py digest, `conf=` per session is that session's
+`--also` runs recall once per framing and RRF-fuses the candidate lists into
+one ranked seed (the recall digest, `conf=` per session is that session's
 strongest framing). A session that surfaces under two framings rises to the
 top — that convergence is the signal. **You** pick the framings; the fuse is
 mechanical. Good framings to hand it: the keyword-only form (drop the question
@@ -132,9 +130,8 @@ set; a **partial list is a wrong answer**. Switch to SQL across *all* sessions.
 Page until empty — do not stop because the first hits sound complete.
 
 ```bash
-rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'" \
-  | python3 "$ROOT/scripts/view.py"
-# then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … | view.py until every row
+rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<term>%'"
+# then page: ORDER BY ts LIMIT 50 OFFSET 0, 50, 100 … until every row
 ```
 
 - **Page until empty.** Stop only when a further OFFSET returns nothing new.
@@ -163,10 +160,8 @@ rekal query "SELECT COUNT(*) FROM turns WHERE role='human' AND content ILIKE '%<
 The ledger has a clock. Use it before you rank.
 
 ```bash
-rekal query "SELECT MIN(ts), MAX(ts), COUNT(DISTINCT session_id) FROM turns" \
-  | python3 "$ROOT/scripts/view.py"
-rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>' AND '<to>' AND role='human' ORDER BY ts" \
-  | python3 "$ROOT/scripts/view.py"
+rekal query "SELECT MIN(ts), MAX(ts), COUNT(DISTINCT session_id) FROM turns"
+rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>' AND '<to>' AND role='human' ORDER BY ts"
 ```
 
 - **Anchor first.** "A month ago", "the day before X" are relative — resolve the
@@ -181,16 +176,16 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   the shift with the calendar, not mental math:
 
   ```bash
-  rekal-when 2023-05-25 "last Saturday"    # -> 2023-05-20 (Saturday)
-  rekal-when 2023-08-14 "last night"       # -> 2023-08-13 (Sunday)
-  rekal-when 2023-11-22 "a few days before" # -> 2023-11-17..2023-11-21 (approx)
+  rekal when 2023-05-25 "last Saturday"    # -> 2023-05-20 (Saturday)
+  rekal when 2023-08-14 "last night"       # -> 2023-08-13 (Sunday)
+  rekal when 2023-11-22 "a few days before" # -> 2023-11-17..2023-11-21 (approx)
   ```
 
-  `when.py` takes the mention's date as the anchor and returns the absolute
+  `rekal when` takes the mention's date as the anchor and returns the absolute
   date — or an honest window for a vague phrase. Deterministic; you pick the
   anchor and judge the result.
 - **Answer in event time, honest precision.** "Yesterday" said Oct 21 → *Oct 20*.
-  "A few days ago" said Aug 19 → *a few days before Aug 19* (`when.py` returns
+  "A few days ago" said Aug 19 → *a few days before Aug 19* (`rekal when` returns
   the window). Don't flatten a relative phrase to the mention date, don't fake
   precision the record lacks, and don't round a relative anchor into a vaguer gloss.
 - **Routine ≠ episode.** "I usually / around 10pm" is a habit; a question about
@@ -226,7 +221,7 @@ are on the record. SILENCE is for missing premises, not missing conclusions.
 ## Analytical asks — decompose to SQL first, don't route
 
 Reflection and pattern-mining need signal clusters, not one pointed episode.
-**Don't** pipe these through `route.py` — decompose, gather, then reason.
+**Don't** answer these with plain recall — decompose, gather, then reason.
 
 1. **Classify.** Reflection / pattern / open question — not a single episode, not
    a tree fact.
@@ -246,7 +241,7 @@ Reflection and pattern-mining need signal clusters, not one pointed episode.
 rekal query --index "SELECT session_id, turn_index, role, substr(content,1,400) FROM turns_ft \
   WHERE role = 'human_steering' \
   AND (content LIKE '%auth%' OR content LIKE '%token%') \
-  ORDER BY session_id, turn_index" | python3 "$ROOT/scripts/view.py"
+  ORDER BY session_id, turn_index"
 ```
 
 Modes: **reflect** (cluster recurring corrections into one durable rule),
@@ -266,7 +261,7 @@ rekal query --index "SELECT session_id, turn_index, role, substr(content,1,300) 
   WHERE (role = 'human_steering' OR content LIKE '%because%' OR content LIKE '%instead of%' \
          OR content LIKE '%constraint%' OR content LIKE '%rejected%' OR content LIKE '%decided%') \
   AND (content LIKE '%<topic-1>%' OR content LIKE '%<topic-2>%') \
-  ORDER BY session_id, turn_index" | python3 "$ROOT/scripts/view.py"
+  ORDER BY session_id, turn_index"
 ```
 
 A real arc needs a real trail: a couple of rows is not a rationale. When the
@@ -284,7 +279,7 @@ When the anchor is a specific file, function, line, or commit:
 git log --oneline -15 -- path/to/file.go
 git log --oneline -15 -L :FuncName:path.go       # follow a function
 rekal --commit <sha>                              # commit → sessions
-rekal query --session <id> --role human_steering | python3 "$ROOT/scripts/view.py"
+rekal query --session <id> --role human_steering
 ```
 
 Emit the chain: artifact → commit `<sha>` → session `<id>` → human intent
@@ -299,13 +294,13 @@ almost nothing and catches misreads (a routine mistaken for an episode, a
 discussed item mistaken for an owned one). Never `--full` by default:
 
 ```bash
-# Always pipe drills through view.py — raw turns, not JSON chrome.
+# Drills print readable turns by default (add --json for raw).
 # Prefer the short handle from the digest (s3); ULID still works.
-rekal query --session <sid|ulid> --offset <snippet_turn_index - 2> --limit 5 | python3 "$ROOT/scripts/view.py"
-rekal query --session <sid|ulid> --role summary                               | python3 "$ROOT/scripts/view.py"
-rekal query --session <sid|ulid> --role human                                 | python3 "$ROOT/scripts/view.py"
-rekal query --session <sid|ulid> --role human_steering                        | python3 "$ROOT/scripts/view.py"
-rekal query --session <sid|ulid> --full                                       | python3 "$ROOT/scripts/view.py"  # last resort
+rekal query --session <sid|ulid> --offset <snippet_turn_index - 2> --limit 5
+rekal query --session <sid|ulid> --role summary
+rekal query --session <sid|ulid> --role human
+rekal query --session <sid|ulid> --role human_steering
+rekal query --session <sid|ulid> --full  # last resort
 ```
 
 Fields: `sid` (short handle — prefer for digests/drills), `session_id` (ULID),

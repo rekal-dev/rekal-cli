@@ -1,15 +1,14 @@
 package skill
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 // TestAll_UnifiedSkill verifies the collapsed suite: one skill named rekal,
-// well-formed tip, and every dispatch target (references + scripts) present.
+// well-formed tip, and every dispatch target (references + the remaining
+// workflow-gate scripts) present. The retrieval/navigation scripts
+// (route/view/find/seek/when) moved into the binary as commands.
 func TestAll_UnifiedSkill(t *testing.T) {
 	t.Parallel()
 
@@ -33,11 +32,6 @@ func TestAll_UnifiedSkill(t *testing.T) {
 
 	wantFiles := []string{
 		"SKILL.md",
-		"scripts/route.py",
-		"scripts/view.py",
-		"scripts/find.py",
-		"scripts/seek.py",
-		"scripts/when.py",
 		"scripts/map.sh",
 		"scripts/wiki-gate.sh",
 		"references/ledger.md",
@@ -50,18 +44,25 @@ func TestAll_UnifiedSkill(t *testing.T) {
 			t.Errorf("missing embedded file %s", rel)
 		}
 	}
-	// Tip must name the modules so progressive disclosure stays wired.
+
+	// The skill must be scriptless for retrieval/navigation — those are commands
+	// now. No .py may ship.
+	for rel := range s.Files {
+		if strings.HasSuffix(rel, ".py") {
+			t.Errorf("skill must not ship Python scripts, found %s", rel)
+		}
+	}
+
+	// Tip must name the commands (progressive disclosure to the binary) and the
+	// remaining references/gate scripts.
 	for _, needle := range []string{
-		"scripts/route.py",
-		"scripts/view.py",
-		"scripts/find.py",
-		"scripts/seek.py",
-		"scripts/when.py",
-		"scripts/map.sh",
-		"scripts/wiki-gate.sh",
+		"rekal ",
+		"rekal find",
+		"rekal when",
 		"references/ledger.md",
 		"references/map.md",
 		"references/reference.md",
+		"scripts/map.sh",
 	} {
 		if !strings.Contains(s.Content, needle) {
 			t.Errorf("SKILL.md tip must mention %s", needle)
@@ -76,426 +77,10 @@ func TestAll_UnifiedSkill(t *testing.T) {
 
 func TestIsScript(t *testing.T) {
 	t.Parallel()
-	if !IsScript("scripts/route.py") {
+	if !IsScript("scripts/map.sh") {
 		t.Fatal("scripts/ should be executable")
 	}
 	if IsScript("references/ledger.md") {
 		t.Fatal("references/ should not be marked script")
-	}
-}
-
-func writeScript(t *testing.T, rel string) string {
-	t.Helper()
-	skills := All()
-	if _, ok := skills[0].Files[rel]; !ok {
-		t.Fatalf("missing %s", rel)
-	}
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "scripts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, data := range skills[0].Files {
-		if !strings.HasPrefix(name, "scripts/") {
-			continue
-		}
-		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, data, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return filepath.Join(dir, rel)
-}
-
-// run feeds JSON to route.py and returns combined output + exit code.
-func runRoute(t *testing.T, path, stdin string) (string, int) {
-	t.Helper()
-	cmd := exec.Command("python3", path)
-	cmd.Stdin = strings.NewReader(stdin)
-	// Drop harness overrides so shipped defaults are what we assert (ambient
-	// REKAL_HUNT_* from industry-bench shells must not leak into unit tests).
-	env := os.Environ()
-	filtered := make([]string, 0, len(env))
-	for _, e := range env {
-		if strings.HasPrefix(e, "REKAL_HUNT_") {
-			continue
-		}
-		filtered = append(filtered, e)
-	}
-	cmd.Env = filtered
-	out, err := cmd.CombinedOutput()
-	code := 0
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			code = ee.ExitCode()
-		} else {
-			t.Fatalf("run route.py: %v (%s)", err, out)
-		}
-	}
-	return string(out), code
-}
-
-func TestRouteScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/route.py")
-
-	// Confident hit -> INJECT. Confidence is emitted (header top=/gap= and per-row
-	// conf=) so the agent can weigh seeds; mass stays inside the script.
-	out, code := runRoute(t, path, `{"results":[{"session_id":"s1","confidence":0.82,"mass":5.6,"score":0.99},{"session_id":"s2","confidence":0.4,"mass":2.0,"score":0.5}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT top=0.82 gap=0.42 ") {
-		t.Fatalf("want INJECT top/gap header exit 0, got code=%d %s", code, out)
-	}
-	if strings.Contains(out, "mass=") {
-		t.Fatalf("mass must stay inside the script, got %s", out)
-	}
-	if !strings.Contains(out, "s1 conf=0.82") {
-		t.Fatalf("want per-seed confidence, got %s", out)
-	}
-
-	// Prefer query-time sid over the full ULID in the digest.
-	out, code = runRoute(t, path, `{"results":[{"session_id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","sid":"s3","confidence":0.9,"mass":5,"score":1}],"knowledge":[]}`)
-	if code != 0 || !strings.Contains(out, "s3 conf=0.90") || strings.Contains(out, "01ARZ3NDEKTSV4RRFFQ69G5FAV") {
-		t.Fatalf("want digest to prefer sid, got code=%d %s", code, out)
-	}
-
-	// Confident but lexically thin (dialogue) -> still INJECT, NOT silenced.
-	// The chat fix: low mass is never a veto (it gated nothing, and isn't emitted).
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":1.4,"score":0.99},{"confidence":0.3,"mass":1.0,"score":0.4}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
-		t.Fatalf("want INJECT exit 0 (thin chat hit not silenced), got code=%d %s", code, out)
-	}
-
-	// Grey-band confidence (old "junk" / dialogue range) injects with conf=
-	// for the agent to weigh — the script suggests, it does not hard-veto.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.48,"mass":2.59,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT top=0.48 ") {
-		t.Fatalf("grey-band conf should INJECT (suggest), got code=%d %s", code, out)
-	}
-
-	// Mid confidence with gap still injects under the low floor.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.63,"mass":4.0,"score":1.19},{"confidence":0.45,"mass":2.4,"score":0.9}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
-		t.Fatalf("conf 0.63 should INJECT under low floor, got code=%d %s", code, out)
-	}
-
-	// With confidence present, gate on confidence — never max-norm score alone.
-	// 0.5 clears the low floor; missing-confidence offtopic (below) still silences.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.5,"score":1.19},{"score":0.95}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT top=0.50 ") {
-		t.Fatalf("confidence-present hit should INJECT on conf, got code=%d %s", code, out)
-	}
-
-	// Offtopic on a modern store: omitempty drops all-zero confidence, so no
-	// result carries a confidence key. Must SILENCE — not INJECT on score/gap.
-	out, code = runRoute(t, path, `{"results":[{"session_id":"x","score":0.65},{"session_id":"y","score":0.43}],"knowledge":[]}`)
-	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("missing-confidence offtopic set must SILENCE, got code=%d %s", code, out)
-	}
-
-	// Low episode floor + knowledge: inclusive INJECT with trailing KNOWLEDGE.
-	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.72}]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
-		t.Fatalf("episode above low floor + knowledge should INJECT, got code=%d %s", code, out)
-	}
-	if !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/x.md=0.72") {
-		t.Fatalf("want trailing KNOWLEDGE docs/x.md=0.72, got %s", out)
-	}
-
-	// Inclusive: strong episode + knowledge emits INJECT (line 1) and a KNOWLEDGE
-	// line — mixed questions can need both substrates.
-	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.85,"mass":6.0,"score":1.08},{"confidence":0.4,"score":0.5}],"knowledge":[{"path":"docs/a.md","score":0.91},{"path":"docs/b.md","score":0.55}]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
-		t.Fatalf("strong episode + knowledge should INJECT on line 1, got code=%d %s", code, out)
-	}
-	if !strings.Contains(out, "KNOWLEDGE") || !strings.Contains(out, "docs/a.md=0.91") {
-		t.Fatalf("strong episode + knowledge must also report KNOWLEDGE, got %s", out)
-	}
-
-	// Below the super-low knowledge report floor: omit the KNOWLEDGE line
-	// (junk marker noise) but still INJECT the episode.
-	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[{"path":"docs/x.md","score":0.12}]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
-		t.Fatalf("episode should still INJECT, got code=%d %s", code, out)
-	}
-	if strings.Contains(out, "KNOWLEDGE") {
-		t.Fatalf("knowledge below report floor must be omitted, got %s", out)
-	}
-
-	// A retryable semantic-warming status adds a trailing note after the verdict
-	// (line 1 stays the verdict), telling the agent to re-run for full quality.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5,"score":1}],"knowledge":[],"semantic":{"status":"warming","retryable":true}}`)
-	if code != 0 || !strings.Contains(out, "INJECT") || !strings.Contains(out, "SEMANTIC warming") {
-		t.Fatalf("warming status should add a SEMANTIC warming note, got code=%d %s", code, out)
-	}
-	if !strings.HasPrefix(strings.SplitN(out, "\n", 2)[0], "INJECT ") {
-		t.Fatalf("verdict must stay on line 1, got: %q", strings.SplitN(out, "\n", 2)[0])
-	}
-	// No semantic field (or not retryable) -> no note.
-	out, _ = runRoute(t, path, `{"results":[{"confidence":0.82,"mass":5,"score":1}],"knowledge":[]}`)
-	if strings.Contains(out, "SEMANTIC warming") {
-		t.Fatalf("no semantic field must not emit a warming note: %s", out)
-	}
-
-	// Seed window: digest shows up to DIGEST_WINDOW=20 candidates each with
-	// conf= + snippet, then "(+N more)". 30 results -> 20 shown + "(+10 more".
-	big := `{"results":[{"session_id":"top","confidence":0.82,"mass":5,"score":1,"snippet":"hello world"}` +
-		strings.Repeat(`,{"session_id":"x","confidence":0.5,"mass":1,"score":1,"snippet":"filler text"}`, 29) +
-		`],"knowledge":[]}`
-	out, code = runRoute(t, path, big)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") || !strings.Contains(out, "(+10 more") {
-		t.Fatalf("digest should show a 20-candidate seed window and (+10 more), got: %s", out)
-	}
-	if !strings.Contains(out, "top conf=0.82") || !strings.Contains(out, "x conf=0.50") {
-		t.Fatalf("seed digest must print per-candidate confidence, got: %s", out)
-	}
-	if n := strings.Count(out, "\"filler text\""); n > 20 { // capped at the window
-		t.Fatalf("seed window not capped at 20, printed %d snippets: %s", n, out)
-	}
-
-	// Episode above the low floor + no knowledge -> INJECT (agent weighs conf=).
-	out, code = runRoute(t, path, `{"results":[{"session_id":"ep","confidence":0.4,"mass":2.0,"score":0.95}],"knowledge":[]}`)
-	if code != 0 || !strings.HasPrefix(out, "INJECT ") {
-		t.Fatalf("conf 0.40 should INJECT under low floor, got code=%d %s", code, out)
-	}
-
-	// Truly below the super-low floor + no knowledge -> machine SILENCE.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.10,"mass":2.0,"score":0.95}],"knowledge":[]}`)
-	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("conf 0.10 + no knowledge should SILENCE, got code=%d %s", code, out)
-	}
-
-	// Knowledge alone below report floor (no episode) -> SILENCE, not KNOWLEDGE.
-	out, code = runRoute(t, path, `{"results":[{"confidence":0.10,"score":0.9}],"knowledge":[{"path":"CLAUDE.md","score":0.09}]}`)
-	if code == 0 || !strings.Contains(out, "SILENCE") {
-		t.Fatalf("junk knowledge alone should SILENCE, got code=%d %s", code, out)
-	}
-}
-
-func TestViewScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/view.py")
-
-	session := `{
-	  "session_id":"s1",
-	  "author":"a@b.c",
-	  "actor":"human",
-	  "branch":"main",
-	  "captured_at":"2026-01-01T00:00:00Z",
-	  "total_turns":3,
-	  "turns":[
-	    {"index":1,"role":"human","content":"hello world","ts":"2023-05-08T10:00:00Z"},
-	    {"index":2,"role":"assistant","content":"hi there","ts":"2023-05-08T10:01:00Z"}
-	  ]
-	}`
-	out, code := runRoute(t, path, session)
-	if code != 0 {
-		t.Fatalf("view session exit: %d %s", code, out)
-	}
-	if strings.Contains(out, `"session_id"`) || strings.Contains(out, "captured_at") {
-		t.Fatalf("view must strip JSON chrome, got %s", out)
-	}
-	if !strings.Contains(out, "s1 t1-2") || !strings.Contains(out, "h=human a=assistant") {
-		t.Fatalf("want compact header with role legend, got %s", out)
-	}
-	if !strings.Contains(out, "t1 2023-05-08T10:00:00Z h: hello world") {
-		t.Fatalf("want first turn full timestamp, got %s", out)
-	}
-	// Same date as previous → shorten to …time (no repeated date).
-	if !strings.Contains(out, "t2 …10:01:00Z a: hi there") {
-		t.Fatalf("want same-date timestamp shortened with …, got %s", out)
-	}
-
-	rows := "{\"a\":1,\"b\":\"x\"}\n{\"a\":2,\"b\":\"y\"}\n"
-	out, code = runRoute(t, path, rows)
-	if code != 0 || !strings.Contains(out, "a\tb") || !strings.Contains(out, "1\tx") {
-		t.Fatalf("want TSV rows, got code=%d %s", code, out)
-	}
-
-	// Engine error text on stdin (2>&1) is forwarded verbatim, exit 2 — never
-	// swallowed as an empty set (wrongful absence).
-	out, code = runRoute(t, path, `rekal: Binder Error: Referenced column "notacol" not found`)
-	if code != 2 || !strings.Contains(out, "Binder Error") {
-		t.Fatalf("want engine error forwarded exit 2, got code=%d %s", code, out)
-	}
-}
-
-// TestFindScript drives find.py against a stub rekal (REKAL_BIN) so the
-// enumeration sweep is tested without a real store.
-func TestFindScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/find.py")
-
-	stub := filepath.Join(t.TempDir(), "rekal-stub")
-	rowsOut := `{"session_id":"01ABC","turn_index":3,"ts":"2023-05-08 10:00:00","role":"human","content":"I adopted a turtle named Fred"}
-{"session_id":"01DEF","turn_index":9,"ts":"2023-06-01 11:00:00","role":"assistant","content":"the turtle tank was cleaned"}`
-	if err := os.WriteFile(stub, []byte("#!/bin/sh\ncat <<'EOF'\n"+rowsOut+"\nEOF\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	runFind := func(bin string, args ...string) (string, int) {
-		t.Helper()
-		cmd := exec.Command("python3", append([]string{path}, args...)...)
-		cmd.Env = append(os.Environ(), "REKAL_BIN="+bin)
-		out, err := cmd.CombinedOutput()
-		code := 0
-		if err != nil {
-			if ee, ok := err.(*exec.ExitError); ok {
-				code = ee.ExitCode()
-			} else {
-				t.Fatalf("run find.py: %v (%s)", err, out)
-			}
-		}
-		return string(out), code
-	}
-
-	// Complete sweep: every mention, one line each, plus the total.
-	out, code := runFind(stub, "turtle")
-	if code != 0 {
-		t.Fatalf("find exit %d: %s", code, out)
-	}
-	for _, want := range []string{"01ABC t3", "01DEF t9", "total 2 mentions in 2 sessions"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("find output missing %q: %s", want, out)
-		}
-	}
-
-	// Engine failure is forwarded, never an empty set.
-	bad := filepath.Join(t.TempDir(), "rekal-bad")
-	if err := os.WriteFile(bad, []byte("#!/bin/sh\necho 'rekal: Binder Error: column x' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	out, code = runFind(bad, "turtle")
-	if code != 2 || !strings.Contains(out, "Binder Error") {
-		t.Fatalf("want forwarded engine error exit 2, got code=%d %s", code, out)
-	}
-
-	// No args → usage, exit 2. Unknown role → exit 2.
-	if _, code = runFind(stub); code != 2 {
-		t.Fatalf("no-arg find should exit 2, got %d", code)
-	}
-	if _, code = runFind(stub, "turtle", "notarole"); code != 2 {
-		t.Fatalf("bad role should exit 2, got %d", code)
-	}
-}
-
-// TestSeekScript drives seek.py against a stub rekal that returns different
-// overlapping candidate lists per framing, so RRF fusion and max-per-session
-// confidence are exercised without a real store.
-func TestSeekScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/seek.py")
-
-	// Framing "token" ranks s1>s2; framing "JWT" ranks s2>s3 with a higher s2
-	// confidence. RRF must lift s2 to the top (it appears in both lists) and
-	// its reported conf must be the max (0.8), not the first-seen (0.5).
-	stub := filepath.Join(t.TempDir(), "rekal-seek-stub")
-	script := "#!/bin/sh\ncase \"$1\" in\n" +
-		"*token*) echo '{\"results\":[{\"session_id\":\"01A\",\"sid\":\"s1\",\"confidence\":0.7,\"snippet\":\"token refresh\",\"snippet_turn_index\":4},{\"session_id\":\"01B\",\"sid\":\"s2\",\"confidence\":0.5,\"snippet\":\"jwt expiry\",\"snippet_turn_index\":9}]}' ;;\n" +
-		"*JWT*) echo '{\"results\":[{\"session_id\":\"01B\",\"sid\":\"s2\",\"confidence\":0.8,\"snippet\":\"jwt expiry deep\",\"snippet_turn_index\":9},{\"session_id\":\"01C\",\"sid\":\"s3\",\"confidence\":0.4,\"snippet\":\"session timeout\",\"snippet_turn_index\":2}]}' ;;\n" +
-		"esac\n"
-	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	runSeek := func(bin string, args ...string) (string, int) {
-		t.Helper()
-		cmd := exec.Command("python3", append([]string{path}, args...)...)
-		cmd.Env = append(os.Environ(), "REKAL_BIN="+bin)
-		out, err := cmd.CombinedOutput()
-		code := 0
-		if err != nil {
-			if ee, ok := err.(*exec.ExitError); ok {
-				code = ee.ExitCode()
-			} else {
-				t.Fatalf("run seek.py: %v (%s)", err, out)
-			}
-		}
-		return string(out), code
-	}
-
-	out, code := runSeek(stub, "token refresh", "JWT expiry")
-	if code != 0 {
-		t.Fatalf("seek exit %d: %s", code, out)
-	}
-	if !strings.HasPrefix(out, "SEEK top=0.80 3 fused seeds (2 framings, RRF)") {
-		t.Fatalf("want fused SEEK header, got: %s", out)
-	}
-	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	// s2 fused from both framings must rank first, at its MAX confidence.
-	if !strings.Contains(lines[1], "s2 conf=0.80") {
-		t.Fatalf("s2 should top the fused list at max conf, got: %s", out)
-	}
-	if !strings.Contains(out, "s1 conf=0.70") || !strings.Contains(out, "s3 conf=0.40") {
-		t.Fatalf("all fused sessions must appear, got: %s", out)
-	}
-
-	// No framing → usage, exit 2.
-	if _, code = runSeek(stub); code != 2 {
-		t.Fatalf("no-arg seek should exit 2, got %d", code)
-	}
-
-	// Engine failure is forwarded, never a silent empty fusion.
-	bad := filepath.Join(t.TempDir(), "rekal-seek-bad")
-	if err := os.WriteFile(bad, []byte("#!/bin/sh\necho 'rekal: boom' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if out, code = runSeek(bad, "anything"); code != 2 || !strings.Contains(out, "boom") {
-		t.Fatalf("want forwarded recall error exit 2, got code=%d %s", code, out)
-	}
-}
-
-// TestWhenScript verifies the deterministic relative-date resolver — the
-// verify case from the plan plus the main phrase families.
-func TestWhenScript(t *testing.T) {
-	t.Parallel()
-	path := writeScript(t, "scripts/when.py")
-
-	runWhen := func(args ...string) (string, int) {
-		t.Helper()
-		cmd := exec.Command("python3", append([]string{path}, args...)...)
-		out, err := cmd.CombinedOutput()
-		code := 0
-		if err != nil {
-			if ee, ok := err.(*exec.ExitError); ok {
-				code = ee.ExitCode()
-			} else {
-				t.Fatalf("run when.py: %v (%s)", err, out)
-			}
-		}
-		return strings.TrimSpace(string(out)), code
-	}
-
-	cases := []struct{ anchor, phrase, want string }{
-		{"2023-05-25", "last Saturday", "2023-05-20 (Saturday)"}, // the verify case
-		{"2023-05-25", "yesterday", "2023-05-24 (Wednesday)"},
-		{"2023-05-25", "three weeks ago", "2023-05-04 (Thursday)"},
-		{"2023-05-25", "2 days ago", "2023-05-23 (Tuesday)"},
-		{"2023-05-25", "next Friday", "2023-05-26 (Friday)"},
-		{"2023-05-25", "last month", "2023-04-01..2023-04-30 (month)"},
-		{"2023-05-25", "a few days ago", "2023-05-20..2023-05-24 (approx)"},
-		{"2023-01-01", "last year", "2022-01-01..2022-12-31 (year)"},
-		// Day-part words + "before/earlier/prior" synonyms of "ago"
-		// (real LoCoMo failure phrasings).
-		{"2023-08-14", "last night", "2023-08-13 (Sunday)"},
-		{"2023-05-25", "this morning", "2023-05-25 (Thursday)"},
-		{"2023-11-22", "a few days before", "2023-11-17..2023-11-21 (approx)"},
-		{"2023-11-22", "several days earlier", "2023-11-17..2023-11-21 (approx)"},
-	}
-	for _, c := range cases {
-		out, code := runWhen(c.anchor, c.phrase)
-		if code != 0 || out != c.want {
-			t.Fatalf("when %s %q = %q (code %d), want %q", c.anchor, c.phrase, out, code, c.want)
-		}
-	}
-
-	// Unrecognized phrase → exit 1 (say so, don't guess).
-	if _, code := runWhen("2023-05-25", "sometime in the future maybe"); code != 1 {
-		t.Fatalf("unrecognized phrase should exit 1, got %d", code)
-	}
-	// Bad anchor / arg count → exit 2.
-	if _, code := runWhen("not-a-date", "yesterday"); code != 2 {
-		t.Fatalf("bad anchor should exit 2, got %d", code)
-	}
-	if _, code := runWhen("2023-05-25"); code != 2 {
-		t.Fatalf("missing phrase should exit 2, got %d", code)
 	}
 }

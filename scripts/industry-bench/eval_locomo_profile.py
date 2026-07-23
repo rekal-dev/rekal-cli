@@ -53,7 +53,7 @@ def load_by_conv() -> dict[str, list[dict]]:
 def run_rekal(repo: Path, wj: str, query: str, limit: int, env: dict, retries: int = 8) -> dict:
     for i in range(retries):
         p = subprocess.run(
-            [REKAL, "--weights", wj, query, "--limit", str(limit)],
+            [REKAL, "--weights", wj, query, "--limit", str(limit), "--json"],
             cwd=repo, env=env, capture_output=True, text=True, timeout=120,
         )
         out = (p.stdout or "") + (p.stderr or "")

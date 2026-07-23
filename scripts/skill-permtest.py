@@ -52,12 +52,8 @@ import sys
 
 # Usage: run from a git repo where Rekal is initialized and the index is
 # populated (rekal init && rekal sync), with the nomic daemon warm for the
-# semantic invariants. Prefers the installed skill copy, falls back to source.
-_CANDIDATES = (
-    ".claude/skills/rekal/scripts/route.py",
-    "cmd/rekal/cli/skill/skills/rekal/scripts/route.py",
-)
-ROUTE = next((p for p in _CANDIDATES if os.path.exists(p)), _CANDIDATES[0])
+# semantic invariants. The digest is the in-binary default output of
+# `rekal "<q>"`; --json gives the raw results for the data-shape invariants.
 
 # Archetype -> representative queries. Junk topics are deliberately NOT ones
 # discussed in this session (avoid self-capture contamination).
@@ -95,11 +91,6 @@ def run(args: list[str]) -> tuple[int, str, str]:
     return p.returncode, p.stdout, p.stderr
 
 
-def route(recall_json: str) -> tuple[int, str]:
-    p = subprocess.run(["python3", ROUTE], input=recall_json, capture_output=True, text=True, timeout=30)
-    return p.returncode, (p.stdout or p.stderr)
-
-
 def verdict_of(out: str) -> str:
     line1 = out.splitlines()[0] if out.strip() else ""
     for v in ("INJECT", "KNOWLEDGE", "SILENCE"):
@@ -120,24 +111,27 @@ def check(cond: bool, label: str) -> None:
 
 
 def cell(query: str, flags: list[str]) -> dict | None:
-    rc, out, err = run([*flags, query])
     tag = f'{flags}"{query[:24]}"'
-    # -n -1 is expected to be rejected (I7); handle before JSON parse.
+    # -n -1 is expected to be rejected (I7); check before anything else.
     if "-1" in flags:
+        rc, _, _ = run([*flags, query, "--json"])
         check(rc != 0, f"I7 -n -1 rejected {tag}")
         return None
-    if rc != 0:
-        FAILS.append(f"I1 recall failed rc={rc} {tag}: {err[:60]}")
+    # Raw JSON for the data-shape invariants.
+    jrc, jout, jerr = run([*flags, query, "--json"])
+    if jrc != 0:
+        FAILS.append(f"I1 recall failed rc={jrc} {tag}: {jerr[:60]}")
         return None
     try:
-        data = json.loads(out)
+        data = json.loads(jout)
     except json.JSONDecodeError:
         FAILS.append(f"I1 non-JSON {tag}")
         return None
-    rrc, rout = route(out)
+    # Digest is the command's default output; its exit code is the verdict code.
+    rrc, rout, _ = run([*flags, query])
     v = verdict_of(rout)
     check(v in ("INJECT", "KNOWLEDGE", "SILENCE"), f"I3 verdict-token {tag} got {v!r}")
-    check(rrc != 2, f"I4 route crash {tag}")
+    check(rrc != 2, f"I4 recall crash {tag}")
     if v in ("INJECT", "KNOWLEDGE"):
         check(rrc == 0, f"I2 exit {tag} v={v} rc={rrc}")
     elif v == "SILENCE":
@@ -165,11 +159,11 @@ def _toks(s: str) -> int:
 
 
 def token_report() -> None:
-    """Log the route's token cost vs raw recall JSON — route.py's digest exists
-    to make the INJECT decision cheap. REPORTED, never gated: a pass/fail
+    """Log the digest's token cost vs raw recall JSON — the default text digest
+    exists to make the INJECT decision cheap. REPORTED, never gated: a pass/fail
     threshold here would be a tuned constant (SOUL.md), and the ratio is
     corpus-dependent. The agent/maintainer reads the numbers and judges."""
-    print("=== Token efficiency: raw recall JSON vs route.py output (report-only) ===")
+    print("=== Token efficiency: raw recall JSON (--json) vs default digest (report-only) ===")
     cases = [
         ("INJECT -n20", "merged-only sharing export gate", []),
         ("INJECT -n100", "merged-only sharing export gate", ["-n", "100"]),
@@ -177,10 +171,10 @@ def token_report() -> None:
         ("SILENCE thin", " ", []),
     ]
     tr = to = 0
-    print(f"  {'case':16} {'raw_tok':>8} {'route_tok':>9} {'saved':>7} {'ratio':>6}")
+    print(f"  {'case':16} {'raw_tok':>8} {'digest_tok':>10} {'saved':>7} {'ratio':>6}")
     for name, q, flags in cases:
-        _, out, _ = run([*flags, q])
-        _, rout = route(out)
+        _, out, _ = run([*flags, q, "--json"])
+        _, rout, _ = run([*flags, q])
         rt, ot = _toks(out), _toks(rout)
         tr += rt
         to += ot

@@ -54,7 +54,11 @@ session discovery keep using the invoking worktree.
 - `root.go`: Root command (recall is the default) + command registration
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
   index DB, refresh the knowledge layer (watermark-gated), call the `search`
-  package. **Default output is the seed digest** (`digest.go`); `--json` gives
+  package. First runs `maybeRefreshStaleSkill` (init.go): the agent enters here
+  after loading the skill, so a skill left behind by a binary upgrade
+  (version-pinned marker mismatch) is refreshed in place — best-effort, bench-
+  gated, touches only the gitignored `.claude/skills/`.
+  **Default output is the seed digest** (`digest.go`); `--json` gives
   raw structured results. The ranking engine itself lives in `search/`.
   Auto-widening recall: `deriveFramings` derives a bounded set (≤`maxFramings`)
   of deterministic reformulations of the query (keyword-only, clause splits,
@@ -94,7 +98,13 @@ session discovery keep using the invoking worktree.
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
   (the whole DX: init, done; `clean` removes the line, refresh replaces it in
-  place)
+  place). `installSkill` pins the binary `Version` into each installed skill
+  dir (`.claude/skills/<name>/.rekal-version`); `maybeRefreshStaleSkill` (called
+  from recall) reads it and re-installs the skill when it's behind the running
+  binary, so an upgrade reaches the repo without a manual re-init. Re-running
+  `rekal init` on an already-initialized repo calls `refreshManaged` (skill +
+  hooks + CLAUDE.md line + gitignore); the recall-time auto-refresh deliberately
+  does **only** the skill (gitignored), never the tracked/side-effectful assets
 - `clean.go`: Remove Rekal setup — completely, no residue
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
   knowledge chunks). Deep-semantic session + knowledge vectors are deferred
@@ -354,7 +364,11 @@ linux/arm64 needs `mise run fetch-extensions` first; otherwise the
 verify, and it has three traps — llama.cpp HEAD won't link (pin tag `b8157`),
 the nomic model ships as a git-LFS pointer (`git lfs pull` or recall silently
 drops to BM25+LSA), and the installed `.claude/skills/rekal/` copy goes stale
-after a rebuild (re-run `rekal init` to refresh it; data is untouched). Follow
+after a rebuild. A **released** binary (versioned via ldflags) self-heals: the
+first recall after an upgrade sees the pinned-version mismatch and refreshes the
+skill in place. A **dev** rebuild keeps `Version="dev"`, so the marker still
+matches and the auto-refresh won't fire — re-run `rekal init` to refresh it
+(data is untouched). Follow
 [`docs/cloud-agent-setup.md`](docs/cloud-agent-setup.md) — it has the exact
 steps, the data-sync sequence (`rekal init` + `rekal sync`), the
 semantic-layer verification, and the no-mise dev-loop fallbacks. Don't repeat

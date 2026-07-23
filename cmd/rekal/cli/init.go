@@ -11,10 +11,17 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/skill"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
 	"github.com/spf13/cobra"
 )
+
+// skillVersionFile is written inside each installed skill dir
+// (.claude/skills/<name>/.rekal-version) recording the binary Version that
+// installed it. A later run compares it to detect a skill left behind by a
+// binary upgrade — see maybeRefreshStaleSkill.
+const skillVersionFile = ".rekal-version"
 
 const rekalHookMarker = "# managed by rekal"
 
@@ -337,8 +344,56 @@ func installSkill(gitRoot string) error {
 				return err
 			}
 		}
+		// Pin the installing binary's version so a later run can detect a skill
+		// left stale by an upgrade and refresh it. Written last, after the
+		// RemoveAll+rewrite above.
+		if err := os.WriteFile(filepath.Join(skillDir, skillVersionFile), []byte(Version+"\n"), 0o644); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// installedSkillVersion returns the binary Version pinned in the installed
+// primary skill dir, or "" when the skill (or marker) is absent — i.e. never
+// installed, or installed by a build predating the version pin.
+func installedSkillVersion(gitRoot string) string {
+	skills := skill.All()
+	if len(skills) == 0 {
+		return ""
+	}
+	path := filepath.Join(gitRoot, ".claude", "skills", skills[0].Name, skillVersionFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// maybeRefreshStaleSkill re-installs the skill files when the version pinned in
+// the installed skill differs from this binary's Version — so an upgraded
+// binary's skill reaches the repo without a manual `rekal init`. It touches
+// only the gitignored .claude/skills/ tree (never CLAUDE.md or hooks, which are
+// tracked / side-effectful and stay the job of an explicit `rekal init`).
+// Best-effort and gated on a version change, so the steady state is one small
+// file read; skipped under bench so benchmarks never mutate the repo.
+func maybeRefreshStaleSkill(gitRoot string, errOut io.Writer) {
+	if session.BenchEnv() {
+		return
+	}
+	installed := installedSkillVersion(gitRoot)
+	if installed == Version {
+		return
+	}
+	if err := installSkill(gitRoot); err != nil {
+		fmt.Fprintf(errOut, "rekal: warning: skill refresh failed: %v\n", err)
+		return
+	}
+	if installed == "" {
+		fmt.Fprintf(errOut, "rekal: installed the %s skill (run `rekal init` to also refresh hooks)\n", Version)
+	} else {
+		fmt.Fprintf(errOut, "rekal: skill was behind (%s) — refreshed to %s (run `rekal init` to also refresh hooks)\n", installed, Version)
+	}
 }
 
 // ensureClaudeGitignore adds the appropriate .claude gitignore entry.

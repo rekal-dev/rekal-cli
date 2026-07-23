@@ -237,6 +237,12 @@ func dedupeFramings(in []string) []string {
 // (docs/design/skill-into-command.md §2.0) — machine consumers adopt --json now
 // and are unaffected by that flip.
 func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonCompact bool) error {
+	// Recall is where the agent enters after loading the skill — the natural
+	// point to notice a skill left stale by a binary upgrade and refresh it in
+	// place (version-pinned; best-effort; a no-op once current). Skill files
+	// live under the gitignored .claude/skills/, so this touches no tracked file.
+	maybeRefreshStaleSkill(gitRoot, cmd.ErrOrStderr())
+
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)

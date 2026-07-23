@@ -263,7 +263,24 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 		}
 	}
 
+	// Drain the L1 recall-graph spool into data.db.recall_edges while we still
+	// hold the write handle — this is the one place the hot recall path's
+	// lock-free appends become the permanent record. Runs even when no new
+	// session was captured (an agent may recall/drill inside an
+	// already-checkpointed session), so the graph never stalls.
+	drained := drainRecallSpool(gitRoot, dataDB, w)
+
 	if inserted == 0 {
+		// Nothing new to checkpoint. If we drained edges, the derived
+		// session_reach aggregate still needs refreshing — release the writer
+		// first (a second live data.db handle can crash under CGO), then refresh.
+		if drained > 0 {
+			_ = dataDB.Close()
+			dataOpen = false
+			if err := db.RefreshSessionReach(gitRoot); err != nil {
+				fmt.Fprintf(w, "rekal: warning: recall-graph reach refresh failed: %v\n", err)
+			}
+		}
 		return nil
 	}
 
@@ -311,12 +328,9 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 		}
 	}
 
-	// Drain the L1 recall-graph spool into data.db.recall_edges while we still
-	// hold the write handle — this is the one place the hot recall path's
-	// lock-free appends become the permanent record. The derived session_reach
-	// aggregate is refreshed by the incremental index update below (it reads
-	// data.db.recall_edges). Best-effort: a graph failure never fails a commit.
-	drainRecallSpool(gitRoot, dataDB, w)
+	// (The recall-graph spool was already drained above, before the
+	// inserted==0 gate; the incremental index update below refreshes
+	// session_reach from data.db.recall_edges.)
 
 	// Release the write handle before index population re-opens/ATTACHes
 	// data.db. Two live connections to one DuckDB file in-process can
@@ -343,17 +357,19 @@ func sha256Hex(data []byte) string {
 
 // drainRecallSpool moves spooled recall-graph edges into data.db.recall_edges,
 // the permanent append-only record. Called at checkpoint with the data.db write
-// handle held. Best-effort — the recall graph is an accreting convenience, so a
-// failure here warns and leaves the spool for the next checkpoint rather than
-// failing the commit.
-func drainRecallSpool(gitRoot string, dataDB *sql.DB, w io.Writer) {
+// handle held. Returns how many edges landed (0 if none) so the caller can
+// decide whether the derived session_reach aggregate needs refreshing.
+// Best-effort — the recall graph is an accreting convenience, so a failure here
+// warns and leaves the spool for the next checkpoint rather than failing the
+// commit.
+func drainRecallSpool(gitRoot string, dataDB *sql.DB, w io.Writer) int {
 	edges, err := graph.Drain(gitRoot)
 	if err != nil {
 		fmt.Fprintf(w, "rekal: warning: recall-graph drain failed: %v\n", err)
 		// fall through — edges read before the error still land below
 	}
 	if len(edges) == 0 {
-		return
+		return 0
 	}
 	newID := ids.NewULIDFunc()
 	rows := make([]db.RecallEdge, 0, len(edges))
@@ -368,7 +384,9 @@ func drainRecallSpool(gitRoot string, dataDB *sql.DB, w io.Writer) {
 	}
 	if err := db.InsertRecallEdges(dataDB, rows); err != nil {
 		fmt.Fprintf(w, "rekal: warning: recall-graph insert failed: %v\n", err)
+		return 0
 	}
+	return len(rows)
 }
 
 // updateIndexIncremental adds newly captured sessions to the index DB

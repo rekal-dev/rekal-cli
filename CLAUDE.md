@@ -84,7 +84,10 @@ session discovery keep using the invoking worktree.
   best-effort). See `docs/design/knowledge-layer.md`
 - `checkpoint.go`: Capture session after commit; also drains the L1 recall-graph
   spool into `data.db.recall_edges` (`drainRecallSpool`) while the data.db
-  writer is held, before the incremental index refresh rebuilds `session_reach`
+  writer is held — even when no new session is captured (an agent may recall/
+  drill inside an already-checkpointed session), refreshing `session_reach` via
+  `db.RefreshSessionReach` on that path so the graph never stalls; otherwise the
+  incremental index refresh rebuilds `session_reach`
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,

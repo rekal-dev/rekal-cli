@@ -121,3 +121,60 @@ func TestRecallGraph_L1_CaptureDrainHint(t *testing.T) {
 		t.Fatalf("recall did not surface S1; results: %s", recallOut)
 	}
 }
+
+// TestRecallGraph_L1_DrainsWithoutNewSession guards the drain-gap fix: an agent
+// that recalls/drills inside an already-checkpointed session, then checkpoints
+// on a commit that captures no new session, must still have its spooled edges
+// drained into recall_edges and session_reach refreshed — the graph must not
+// stall waiting for a fresh session.
+func TestRecallGraph_L1_DrainsWithoutNewSession(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	if err := os.WriteFile(filepath.Join(env.RepoDir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, env.RepoDir, "initial")
+
+	// Capture one session.
+	cleanup := writeSessionFile(t, env.RepoDir, "s.jsonl", testSessionJSONL)
+	defer cleanup()
+	gitCommit(t, env.RepoDir, "work")
+	if _, stderr, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint 1: %v (%s)", err, stderr)
+	}
+	idsOut, _, err := env.RunCLI("query", "--json", "SELECT id FROM sessions")
+	if err != nil {
+		t.Fatalf("query sessions: %v", err)
+	}
+	s1 := ulidRE.FindString(idsOut)
+	if s1 == "" {
+		t.Fatalf("no session id in %q", idsOut)
+	}
+
+	// Drill it → spool an edge.
+	if _, _, err := env.RunCLI("query", "--session", s1, "--limit", "1"); err != nil {
+		t.Fatalf("drill: %v", err)
+	}
+
+	// Checkpoint on a commit that captures NO new session (same transcript,
+	// empty commit). Before the fix this returned early and never drained.
+	gitCommit(t, env.RepoDir, "empty follow-up")
+	if _, stderr, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint 2 (no new session): %v (%s)", err, stderr)
+	}
+
+	// The drill edge must have landed and the aggregate refreshed.
+	assertQueryContains(t, env, "SELECT count(*) as n FROM recall_edges", `"n":1`)
+	reachOut, _, err := env.RunCLI("query", "--index", "--json", "SELECT target_session_id as t, reach_count as c FROM session_reach")
+	if err != nil {
+		t.Fatalf("query session_reach: %v", err)
+	}
+	if !strings.Contains(reachOut, s1) || !strings.Contains(reachOut, `"c":1`) {
+		t.Errorf("session_reach not refreshed after no-new-session checkpoint: %q", reachOut)
+	}
+	// Spool is drained (removed).
+	if _, err := os.Stat(filepath.Join(env.RepoDir, ".rekal", "recall-log.ndjson")); !os.IsNotExist(err) {
+		t.Errorf("spool should be drained, stat err=%v", err)
+	}
+}

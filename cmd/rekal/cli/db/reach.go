@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -121,6 +123,29 @@ func LoadReach(d *sql.DB, ids []string) (map[string]Reach, error) {
 		out[id] = r
 	}
 	return out, rows.Err()
+}
+
+// RefreshSessionReach opens the index at gitRoot, attaches data.db, and rebuilds
+// session_reach. Used by the checkpoint path when recall-graph edges were
+// drained but no new session was captured — so the incremental index update
+// (which normally refreshes session_reach) does not run. No-op if the index DB
+// doesn't exist yet. The data DB must not be held open by the caller (a second
+// live handle to one DuckDB file in-process can crash under CGO).
+func RefreshSessionReach(gitRoot string) error {
+	if _, err := os.Stat(IndexPath(gitRoot)); err != nil {
+		return nil // no index yet; next full build will populate it
+	}
+	indexDB, err := OpenIndex(gitRoot)
+	if err != nil {
+		return err
+	}
+	defer indexDB.Close() //nolint:errcheck
+	dataPath := filepath.Join(StoreDir(gitRoot), "data.db")
+	if _, err := indexDB.Exec(fmt.Sprintf("ATTACH '%s' AS data_db (READ_ONLY)", dataPath)); err != nil {
+		return fmt.Errorf("attach data_db: %w", err)
+	}
+	defer indexDB.Exec("DETACH data_db") //nolint:errcheck
+	return PopulateSessionReach(indexDB)
 }
 
 // PopulateSessionReach rebuilds session_reach from data.db.recall_edges. It

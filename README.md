@@ -13,7 +13,7 @@
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
-> Works with Claude Code, Codex, Gemini, and OpenCode.
+> Works with Claude Code, Codex, Cursor, Gemini, OpenCode, and GitHub Copilot CLI.
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.

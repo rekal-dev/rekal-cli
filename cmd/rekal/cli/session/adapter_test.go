@@ -17,6 +17,9 @@ func TestNonClaudeAdapters_NeverEmitSummaryRole(t *testing.T) {
 {"type":"event_msg","session_id":"codex-fp","timestamp":"2025-06-01T10:00:01Z","payload":{"type":"user_message","message":"` + boiler + `"}}
 `
 	geminiFixture := `{"sessionId":"gemini-fp","startTime":"2025-06-01T10:00:00Z","messages":[{"type":"user","content":"` + boiler + `"}]}`
+	copilotFixture := `{"type":"session.start","timestamp":"2026-05-07T10:00:00Z","data":{"sessionId":"copilot-fp","context":{"cwd":"/tmp/repo"}}}
+{"type":"user.message","timestamp":"2026-05-07T10:00:01Z","data":{"content":"` + boiler + `"}}
+`
 
 	dir := t.TempDir()
 	cases := []struct {
@@ -27,6 +30,7 @@ func TestNonClaudeAdapters_NeverEmitSummaryRole(t *testing.T) {
 	}{
 		{"codex", &CodexAdapter{}, dir + "/codex.jsonl", codexFixture},
 		{"gemini", &GeminiAdapter{}, dir + "/gemini-fp.json", geminiFixture},
+		{"copilot", &CopilotAdapter{}, dir + "/copilot.jsonl", copilotFixture},
 	}
 	for _, tc := range cases {
 		if err := writeTestFile(tc.file, tc.content); err != nil {

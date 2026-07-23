@@ -38,24 +38,28 @@ a program needs to parse it.
 
 - `rekal "<q>"` — recall. Prints a **seed digest**: line 1 is the verdict
   (`INJECT` / `KNOWLEDGE` / `SILENCE`), then per-seed `sid conf=… t<n> "snippet"`.
+  One call already **widens itself** — it fuses several deterministic
+  reformulations of your query (keyword-only, clause splits, a temporal variant)
+  so you get the full picture in one go; still reformulate *by hand* only when
+  the answer needs a genuinely different angle the mechanical variants miss.
   A seed may carry `[reached N×· "past query"]` before its snippet — a **usage**
   hint: this memory was reached (recalled or drilled) N times before, last for
   that query. High reach = load-bearing, well-trodden memory, a good first
   drill; the echoed query shows how the need was framed. It never raises
   `conf=` — judge relevance from `conf=` + content as always. No tag just means
   newly surfaced, not worse.
-- `rekal "<q>" --also "<framing2>" --also "<framing3>"` — widen a weak recall:
-  each `--also` is another phrasing of the *same* question, RRF-fused into one
-  seed. Use when one phrasing wasn't enough before concluding.
 - `rekal find "<term>" [role]` — every ledger mention of a term, complete and in
   time order (the "all / every / how many" sweep). A partial list is a wrong
   answer to a set question — this is the set.
-- `rekal when <YYYY-MM-DD> "<phrase>"` — resolve a relative date ("last
-  Saturday") from a mention's date; honest window for vague phrases.
 - `rekal query --session <sid|ulid> [--offset N --limit 5 --role …]` — drill a
   session into readable turns. `rekal query --sql "SELECT …"` for analytical /
   complete-set SQL (see `references/reference.md` for the full schema; `ts` is a
   TIMESTAMP — use `BETWEEN`, not `LIKE`).
+- **Relative dates** ("last Saturday", "3 days ago"): resolve them yourself
+  against the *mention's* date, and keep relative phrases relative in the answer
+  (a mention dated the 23rd saying "last Saturday" → the 18th). For calendar
+  math you don't trust, do it in SQL — DuckDB has date arithmetic
+  (`DATE '…' - INTERVAL`, `dayofweek(…)`).
 
 `INJECT`/`SILENCE` are **recommendations**, biased toward more data than
 decision: only empty / near-zero absolute `confidence` is machine-silenced
@@ -71,9 +75,9 @@ flat cluster → stay silent on prose.
 |---|---|
 | Present prose / convention | `rekal "<q>"` → on `KNOWLEDGE`, Read the clear leader's `path`@`lines` |
 | Past episode / why / tried / rejected | `rekal "<q>"` → on `INJECT`, `Read references/ledger.md`; drill `rekal query --session <sid> --offset <t-2> --limit 5` |
-| Weak recall, one phrasing wasn't enough | `rekal "<q>" --also "<f2>" --also "<f3>"` — RRF-fuse framings |
+| Weak recall (one call already fused reformulations) | re-search a genuinely different angle — synonyms, entity/path anchor, a re-split of a multi-hop question |
 | All / every / how many mentions of a thing | `rekal find "<term>"` — complete sweep; then drill and judge (class-mapping, set size) |
-| Relative "when" (last Saturday, a month ago) | `rekal when <anchor-date> "<phrase>"` |
+| Relative "when" (last Saturday, a month ago) | resolve against the mention's date yourself; SQL date math for hard cases |
 | Temporal, analytical, decision-arc, provenance | `Read references/ledger.md` — SQL via `rekal query --sql "…"`; don't rank a set |
 | Breadth / structure | `bash scripts/map.sh fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash scripts/wiki-gate.sh` then `Read references/wiki.md` |

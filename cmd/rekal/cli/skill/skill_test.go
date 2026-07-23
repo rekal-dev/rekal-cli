@@ -58,7 +58,6 @@ func TestAll_UnifiedSkill(t *testing.T) {
 	for _, needle := range []string{
 		"rekal ",
 		"rekal find",
-		"rekal when",
 		"references/ledger.md",
 		"references/map.md",
 		"references/reference.md",

@@ -10,12 +10,16 @@ Every read command prints **compact agent-readable text by default**; add
 `--json` only when a program must parse it. Retrieval and navigation are all
 `rekal` subcommands — no scripts, no pipes:
 
-- `rekal "<q>"` — recall → seed digest. `--also "<framing>"` (repeatable) fuses
-  extra phrasings.
+- `rekal "<q>"` — recall → seed digest. One call auto-widens: it fuses several
+  deterministic reformulations (keyword-only, clause splits, temporal) so a
+  single query returns the widened result.
 - `rekal find "<term>" [role]` — complete, time-ordered mention sweep.
-- `rekal when <YYYY-MM-DD> "<phrase>"` — relative→absolute date.
 - `rekal query --session <id>` / `rekal query --sql "…"` — drill / SQL, text by
   default.
+
+Relative dates ("last Saturday", "3 days ago") have no command — resolve them
+against the mention's date, and use SQL date math (`DATE '…' - INTERVAL`,
+`dayofweek(…)`) for anything you don't want to count by hand.
 
 The `map.sh` and `wiki-gate.sh` workflow gates remain under
 `$(git rev-parse --show-toplevel)/.claude/skills/rekal/scripts/`.
@@ -30,7 +34,6 @@ The `map.sh` and `wiki-gate.sh` workflow gates remain under
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default 20; `0` = empty set; negative rejected) |
 | `--explain` | Adds `layers` + `related` (file-sharing sessions) |
-| `--also <framing>` | Additional phrasing of the same question; RRF-fused into one seed (repeatable) |
 | `--json` | Raw structured JSON instead of the default seed digest (machine consumers) |
 
 ## Cross-repo local import (index-only, never pushed)
@@ -69,11 +72,9 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 
 | Command | Role |
 |---|---|
-| `rekal "<q>"` | Recall → seed digest (INJECT / KNOWLEDGE / SILENCE). Super-low floors; you judge `conf=` / `path=score`. `--json` for raw |
-| `rekal "<q>" --also "<f>"` | Multi-framing recall, RRF-fused — widen a weak single-phrasing recall |
+| `rekal "<q>"` | Recall → seed digest (INJECT / KNOWLEDGE / SILENCE). One call auto-widens (fuses deterministic reformulations). Super-low floors; you judge `conf=` / `path=score`. `--json` for raw |
 | `rekal query --session <id>` / `--sql "…"` | Drill / SQL → readable turns or TSV rows (no JSON chrome); `--json` for raw; SQL errors printed verbatim |
 | `rekal find "<term>" [role]` | Every ledger mention of a term, time order, complete — enumeration without hand-SQL |
-| `rekal when <anchor> "<phrase>"` | Relative phrase → absolute date (or honest window); pure calendar, no store |
 | `bash scripts/map.sh fresh` / `watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
 | `bash scripts/wiki-gate.sh` | Refuse wiki on default branch |
 

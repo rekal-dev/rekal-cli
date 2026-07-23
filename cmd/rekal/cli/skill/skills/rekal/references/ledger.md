@@ -20,20 +20,21 @@ below carry the depth when the first move isn't enough.
 
 | Question shape | First move | Watch for |
 |---|---|---|
-| Pointed episode — why / what did X say | `rekal "<q>"`; drill top seed at `t<n>`; weak? `rekal "<q>" --also` several framings | premise mismatch; near-miss entity in the answer |
+| Pointed episode — why / what did X say | `rekal "<q>"`; drill top seed at `t<n>`; weak? re-search a genuinely different angle | premise mismatch; near-miss entity in the answer |
 | Complete-set — all / every / how many / which of N | `rekal find "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
-| Temporal — when / before / after / how long | `rekal when <anchor> "<phrase>"` for the date, SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
+| Temporal — when / before / after / how long | resolve the relative phrase against the mention's date; SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
 | Whose-fact — my / I / their | drill to the assertion turn ("my X is", "I bought") | discussed / suggested ≠ owned |
 | False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |
 | Decision arc — why did this evolve | steering/`because` SQL gather (below) | thin trail synthesized into fiction |
 | Reflection / pattern / census | decompose to SQL (below); never plain recall | ranking when the ask is exhaustive |
 
 **Stopping rule.** Stop when the answer is grounded in drilled turns you can
-cite. Before concluding SILENCE, `rekal "<q>" --also` one widening across real alternative
-framings — a partial seed is not absence. But if that fuse and two further
-moves add no new evidence, report what you have — or the gap — instead of
-searching on: extra moves past that point manufacture plausible-but-wrong
-distractors. And grep of the tree never answers a ledger question; if you catch
+cite. Recall already widens itself (it fuses several reformulations per call),
+so a weak seed is not absence — before concluding SILENCE, re-search once from a
+genuinely different angle the mechanical variants wouldn't reach. But if that
+and two further moves add no new evidence, report what you have — or the gap —
+instead of searching on: extra moves past that point manufacture
+plausible-but-wrong distractors. And grep of the tree never answers a ledger question; if you catch
 yourself grepping code for a past-tense fact, come back to the table.
 
 ## The recall pipeline
@@ -84,24 +85,20 @@ SILENCE. Drills and SQL print readable text by default (add `--json` for raw).
 
 The ledger indexes the words the *past* session used, not the words you asked
 with. Evidence routinely lands at rank 5–9, not rank 1 — `rekal` returns 20
-candidates (`-n` to change), so read past the first before you judge. A single
-phrasing is one lookup; a confident answer survives more than one.
+candidates (`-n` to change), so read past the first before you judge.
 
-**Widening is a command — supply the framings, let recall fuse.**
+**Recall widens itself.** One `rekal "<q>"` already fuses several deterministic
+reformulations of your query — the keyword-only form (question words dropped),
+each clause of a compound question, and a temporal variant when the wording
+calls for it — RRF-merging their candidate lists into one ranked seed (`conf=`
+per session is that session's strongest framing). A session that surfaces under
+two framings rises to the top; that convergence is the signal, and you get it in
+one call. The variants are *mechanical*, though — so when the answer needs a
+genuinely different angle (a synonym set, an entity or path anchor you already
+know, a re-decomposition of a multi-hop question) that a keyword drop won't
+reach, search again by hand with that phrasing.
 
-```bash
-rekal "token refresh expiry" --also "JWT session timeout" --also "logout invalidate"
-```
-
-`--also` runs recall once per framing and RRF-fuses the candidate lists into
-one ranked seed (the recall digest, `conf=` per session is that session's
-strongest framing). A session that surfaces under two framings rises to the
-top — that convergence is the signal. **You** pick the framings; the fuse is
-mechanical. Good framings to hand it: the keyword-only form (drop the question
-words), each clause of a compound/multi-hop question, an entity or path anchor
-you already know, and a synonym set for the same idea.
-
-Only conclude SILENCE after a `seek` across real alternatives also comes back
+Only conclude SILENCE after a genuinely different re-search also comes back
 weak — **a partial seed is not absence**, and one blank phrasing never was.
 
 ### Depth is a judgment, not a reflex
@@ -180,22 +177,23 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN '<from>'
   events are the candidates — check the edge, not just the interior.
 - **Event time ≠ mention time.** A turn's `ts` is when it was *said*. "Last
   month I…" shifts the event. Date the event, not the mention — and expect the
-  report of a trip to land in the *next* session, after it happened. Resolve
-  the shift with the calendar, not mental math:
+  report of a trip to land in the *next* session, after it happened. Resolve the
+  shift against the mention's date (the anchor), keeping the phrase's own
+  precision:
 
-  ```bash
-  rekal when 2023-05-25 "last Saturday"    # -> 2023-05-20 (Saturday)
-  rekal when 2023-08-14 "last night"       # -> 2023-08-13 (Sunday)
-  rekal when 2023-11-22 "a few days before" # -> 2023-11-17..2023-11-21 (approx)
+  ```
+  said 2023-05-25, "last Saturday"     -> 2023-05-20 (Saturday)
+  said 2023-08-14, "last night"        -> 2023-08-13
+  said 2023-11-22, "a few days before" -> a few days before 2023-11-22 (a window, not a point)
   ```
 
-  `rekal when` takes the mention's date as the anchor and returns the absolute
-  date — or an honest window for a vague phrase. Deterministic; you pick the
-  anchor and judge the result.
+  Do the calendar math yourself; for a step you don't trust (weekday counting,
+  month boundaries) compute it in SQL — DuckDB has `DATE '…' - INTERVAL 'N days'`
+  and `dayofweek(…)`.
 - **Answer in event time, honest precision.** "Yesterday" said Oct 21 → *Oct 20*.
-  "A few days ago" said Aug 19 → *a few days before Aug 19* (`rekal when` returns
-  the window). Don't flatten a relative phrase to the mention date, don't fake
-  precision the record lacks, and don't round a relative anchor into a vaguer gloss.
+  "A few days ago" said Aug 19 → *a few days before Aug 19* (a window). Don't
+  flatten a relative phrase to the mention date, don't fake precision the record
+  lacks, and don't round a relative anchor into a vaguer gloss.
 - **Routine ≠ episode.** "I usually / around 10pm" is a habit; a question about
   one occasion needs the past-tense report of that occasion.
 - **One event in the window is not the answer** until you've scanned the whole

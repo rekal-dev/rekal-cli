@@ -28,6 +28,19 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
 
 ## Search modes
 
+### Auto-widening (query provided)
+
+Before the hybrid search runs, recall derives a small bounded set of
+deterministic reformulations of the query — the original, a keyword-only variant
+(stopwords dropped), up to two clause splits (on conjunctions/punctuation), and a
+temporal-emphasis variant when the query carries a time cue — capped at 4. Each
+framing runs the full hybrid search below; their ranked result lists are
+RRF-fused (`k=60`) into one seed, with per-session `confidence` taken as that
+session's strongest framing. The original query is always the first framing, so
+fusion only adds/reorders hits, never drops them; a query that yields no
+reformulation (a single word, no stopwords, no conjunctions) runs as a single
+hybrid search. The reformulation rules are general linguistics, not corpus-tuned.
+
 ### Hybrid search (query provided)
 
 1. **BM25 search** — Full-text search on `turns_ft.content`. Returns up to 200 candidate hits scored by BM25.

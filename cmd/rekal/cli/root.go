@@ -52,7 +52,6 @@ func NewRootCmd() *cobra.Command {
 		limitFlag    int
 		explainFlag  bool
 		jsonFlag     bool
-		alsoFlags    []string
 	)
 
 	cmd := &cobra.Command{
@@ -102,7 +101,7 @@ func NewRootCmd() *cobra.Command {
 				Explain:       explainFlag,
 			}
 
-			return runRecall(cmd, gitRoot, filters, alsoFlags, jsonFlag)
+			return runRecall(cmd, gitRoot, filters, jsonFlag)
 		},
 	}
 
@@ -114,7 +113,6 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
-	cmd.Flags().StringArrayVar(&alsoFlags, "also", nil, "Additional framing(s) of the same question; recall each and RRF-fuse into one seed (repeatable)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version
@@ -145,8 +143,6 @@ func NewRootCmd() *cobra.Command {
 	queryCmd.GroupID = "advanced"
 	findCmd := newFindCmd()
 	findCmd.GroupID = "advanced"
-	whenCmd := newWhenCmd()
-	whenCmd.GroupID = "advanced"
 	indexCmd := newIndexCmd()
 	indexCmd.GroupID = "advanced"
 	embedCmd := newEmbedCmd()
@@ -154,7 +150,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.AddCommand(initCmd, cleanCmd, versionCmd)
 	cmd.AddCommand(checkpointCmd, pushCmd, syncCmd, logCmd)
-	cmd.AddCommand(queryCmd, findCmd, whenCmd, indexCmd, embedCmd)
+	cmd.AddCommand(queryCmd, findCmd, indexCmd, embedCmd)
 	cmd.AddCommand(nomic.NewDaemonCmd())
 
 	return cmd

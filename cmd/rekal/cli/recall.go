@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -120,6 +121,112 @@ func fuseFramings(outs []*search.Output) *search.Output {
 	return fused
 }
 
+// maxFramings bounds how many query reformulations one recall fuses over,
+// capping the per-recall search cost. The original query is always first.
+const maxFramings = 4
+
+// framingStopwords are dropped when building the keyword-only reformulation —
+// general English function words, not corpus-tuned terms.
+var framingStopwords = func() map[string]bool {
+	m := map[string]bool{}
+	for _, w := range strings.Fields(`a an the of to in on at for and or but if is are was were be been being do does did have has had i you he she it we they me my your his her their our this that these those what when where who whom which why how with about from into over under again then once will would can could should may might must not no yes as by so than too very just also there here them us`) {
+		m[w] = true
+	}
+	return m
+}()
+
+// framingTemporalCues trigger the time-emphasis reformulation.
+var framingTemporalCues = map[string]bool{
+	"when": true, "before": true, "after": true, "first": true, "last": true,
+	"date": true, "day": true, "month": true, "year": true, "recently": true,
+	"ago": true, "earliest": true, "latest": true,
+}
+
+var (
+	framingWordRE   = regexp.MustCompile(`[A-Za-z0-9']+`)
+	framingClauseRE = regexp.MustCompile(`(?i)\b(?:and|or|but|then)\b|[,;?]`)
+)
+
+// deriveFramings returns the original query plus a bounded set of deterministic
+// reformulations to RRF-fuse over: a keyword-only variant (stopwords dropped),
+// up to two clause splits (on conjunctions/punctuation), and — when the query
+// carries a temporal cue — a time-emphasis variant. Case-insensitively
+// de-duplicated and capped. A query that yields nothing new returns just
+// [query], so recall stays a single search. Rules are general linguistics (no
+// corpus tuning); mirrors the harness-validated multi-lookup variants.
+func deriveFramings(query string) []string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []string{query}
+	}
+	out := []string{q}
+	kw := framingKeywords(q)
+	if kw != "" && !strings.EqualFold(kw, q) {
+		out = append(out, kw)
+	}
+	clauses := framingClauses(q)
+	if len(clauses) > 2 {
+		clauses = clauses[:2]
+	}
+	out = append(out, clauses...)
+	if kw != "" && framingHasTemporalCue(q) {
+		out = append(out, kw+" date time when")
+	}
+	return dedupeFramings(out)
+}
+
+// framingKeywords drops stopwords and short tokens, leaving the content words.
+func framingKeywords(q string) string {
+	var kept []string
+	for _, t := range framingWordRE.FindAllString(strings.ToLower(q), -1) {
+		if len(t) > 2 && !framingStopwords[t] {
+			kept = append(kept, t)
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+// framingClauses splits on conjunctions/punctuation, keeping parts of ≥3 words.
+func framingClauses(q string) []string {
+	var out []string
+	for _, part := range framingClauseRE.Split(q, -1) {
+		part = strings.TrimSpace(part)
+		if len(strings.Fields(part)) >= 3 {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func framingHasTemporalCue(q string) bool {
+	for _, w := range strings.Fields(strings.ToLower(q)) {
+		if framingTemporalCues[w] {
+			return true
+		}
+	}
+	return false
+}
+
+// dedupeFramings drops empty/duplicate (case-insensitive) framings and caps the
+// count at maxFramings, preserving first-seen order (original query first).
+func dedupeFramings(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		key := strings.ToLower(v)
+		if v == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, v)
+		if len(out) >= maxFramings {
+			break
+		}
+	}
+	return out
+}
+
 // runRecall opens (and, if empty, rebuilds) the index DB, runs the search, and
 // prints the result as JSON. The ranking/grouping engine lives in the search
 // package; this function is the command-side orchestration around it.
@@ -129,7 +236,7 @@ func fuseFramings(outs []*search.Output) *search.Output {
 // default recall output becomes a compact text digest
 // (docs/design/skill-into-command.md §2.0) — machine consumers adopt --json now
 // and are unaffected by that flip.
-func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also []string, jsonCompact bool) error {
+func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonCompact bool) error {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
 		return fmt.Errorf("open index db: %w", err)
@@ -215,18 +322,27 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also 
 		filters.Lineage = lin
 	}
 
-	// Multi-framing recall: each --also value is another phrasing of the same
-	// question; run recall per framing and RRF-fuse into one seed (the folded
-	// seek.py). No --also is byte-identical to a single search.
+	// Auto-widening recall: derive a small bounded set of deterministic
+	// reformulations of the query (keyword-only, clause splits, a temporal
+	// variant) and RRF-fuse their result lists into one seed — the folded
+	// multi-lookup. The original query is always framing v0, so fusion only
+	// adds/reorders hits, never drops them; a query that yields no reformulation
+	// runs as a single search, byte-identical to a plain recall.
 	runOne := func(q string) (search.Output, error) {
 		f := filters
 		f.Query = q
 		f.TextQuery = strings.TrimSpace(q) != ""
 		return search.Run(indexDB, f, gitRoot, weights, qe)
 	}
+	framings := deriveFramings(filters.Query)
 	var out search.Output
-	if len(also) > 0 {
-		framings := append([]string{filters.Query}, also...)
+	if len(framings) <= 1 {
+		var oerr error
+		out, oerr = runOne(filters.Query)
+		if oerr != nil {
+			return oerr
+		}
+	} else {
 		outs := make([]*search.Output, 0, len(framings))
 		for _, q := range framings {
 			o, oerr := runOne(q)
@@ -236,12 +352,6 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also 
 			outs = append(outs, &o)
 		}
 		out = *fuseFramings(outs)
-	} else {
-		var oerr error
-		out, oerr = runOne(filters.Query)
-		if oerr != nil {
-			return oerr
-		}
 	}
 
 	// L1 recall citation graph. Read the reach hint FIRST (the state before

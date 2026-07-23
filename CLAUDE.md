@@ -56,9 +56,12 @@ session discovery keep using the invoking worktree.
   index DB, refresh the knowledge layer (watermark-gated), call the `search`
   package. **Default output is the seed digest** (`digest.go`); `--json` gives
   raw structured results. The ranking engine itself lives in `search/`.
-  Multi-framing recall: each `--also` value is another phrasing; each is
-  recalled and RRF-fused (`fuseFramings`, k=60, conf=max-per-session) into one
-  seed — the folded seek.py. No `--also` is byte-identical to a single search.
+  Auto-widening recall: `deriveFramings` derives a bounded set (≤`maxFramings`)
+  of deterministic reformulations of the query (keyword-only, clause splits,
+  temporal variant — general linguistics, no corpus tuning) and RRF-fuses their
+  result lists (`fuseFramings`, k=60, conf=max-per-session) into one seed. The
+  original query is always framing v0, so fusion only adds/reorders hits; a
+  query that yields no reformulation runs as a single search (byte-identical).
   Also the L1 recall-graph seam (`docs/design/recall-graph.md`): reads each
   seed's reach hint from `session_reach` (`attachReach`) **before** spooling
   this call's own surfaced edges (`logRecallEdges` → `graph.Append`), so a
@@ -74,8 +77,6 @@ session discovery keep using the invoking worktree.
   `--json` gives raw. Session view is golden-tested byte-identical
 - `find.go`: `rekal find "<term>" [role]` — complete, time-ordered enumeration
   sweep over `turns` (port of find.py, diff-identical)
-- `when.go`: `rekal when <YYYY-MM-DD> "<phrase>"` — pure-calendar relative→
-  absolute date resolver (port of when.py, diff-identical; no store)
 - `knowledge_index.go`: Knowledge-layer build/refresh — chunk the repo's
   tracked prose files at HEAD into `index.db` (`knowledge_chunks`), diffing
   stored git blob SHAs against `git ls-tree -r HEAD` so only changed files
@@ -256,8 +257,8 @@ session discovery keep using the invoking worktree.
   `ledger.md` is the one page on reasoning over the past: recall/widen/
   depth-judgment, time-axis, enumeration, whose-fact/premise, analytical SQL,
   decision arcs, provenance; plus `map.md`, `wiki.md`, `reference.md`). The
-  agent uses the commands directly — `rekal "<q>"` (seed digest, `digest.go`),
-  `rekal "<q>" --also` (RRF widen), `rekal find`, `rekal when`, `rekal query
+  agent uses the commands directly — `rekal "<q>"` (seed digest, `digest.go`,
+  auto-widened via `deriveFramings` + RRF), `rekal find`, `rekal query
   --session`/`--sql` (readable text via `view.go`); all default to compact text,
   `--json` for raw (SOUL: agent-first output is text, JSON on opt-in). No corpus
   profiles or benchmark tuning ship. `init` installs the tree (scripts 0755) and

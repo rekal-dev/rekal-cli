@@ -3,6 +3,15 @@
 Status: design (interface lock before migration). No performance change is
 permitted — see §6.
 
+> **Superseded in part (later refinements):** the `seek` verb is no longer a
+> `--also` flag — multi-framing RRF is now folded into the base `rekal "<q>"`,
+> which auto-derives deterministic reformulations and fuses them (see
+> `deriveFramings` in `recall.go` and the recall spec). And the `when` command
+> was removed: relative-date resolution moved back to the agent's own reasoning
+> (skill time-axis guidance + SQL date math), since a pure calendar utility
+> doesn't earn a peer command and can't ship as a script in the scriptless
+> skill. The rest of this document stands.
+
 ## 1. Why — the two souls compose, they don't conflict
 
 The skill soul says *function belongs in a script … move capability down to

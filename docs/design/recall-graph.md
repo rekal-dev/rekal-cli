@@ -52,8 +52,11 @@ graph.Append  ──►  .rekal/recall-log.ndjson  ──► graph.Drain ──�
 
 - **`data.db.recall_edges`** is the permanent, append-only record — the source
   of truth. It is **local-only**: deliberately *not* serialized to the codec /
-  wire (like `checkpoint_state`), so it never touches the git transport. Being
-  additive (`CREATE TABLE IF NOT EXISTS`), it needs no schema-version bump.
+  wire (like `checkpoint_state`), so it never touches the git transport. It is
+  ensured in `MigrateDataSchema` (which runs on every open) via
+  `CREATE TABLE IF NOT EXISTS`, **not** only in `dataDDL` — an existing store
+  written by an older rekal never re-runs the full DDL, so a table added to
+  `dataDDL` alone would never appear there. Additive, so no schema-version bump.
 - **`index.db.session_reach`** is the derived aggregate the hot read path uses:
   `(target_session_id, reach_count, last_query, last_ts)`, rebuilt from
   `recall_edges` in `PopulateIndex` / `PopulateIndexIncremental`. Created on

@@ -92,6 +92,40 @@ func TestRecallEdgesReachAggregate(t *testing.T) {
 	}
 }
 
+// TestMigrateDataSchema_CreatesRecallEdges guards the backwards-compat path: a
+// data.db written by an older rekal (before recall_edges existed) only runs
+// migrations on open, never the full dataDDL, so the table must be ensured in
+// MigrateDataSchema — not just dataDDL — or InsertRecallEdges fails with
+// "table recall_edges does not exist" on every existing store.
+func TestMigrateDataSchema_CreatesRecallEdges(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer d.Close() //nolint:errcheck
+	if err := InitDataSchema(d); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+	// Simulate an old store that predates the table.
+	if _, err := d.Exec(`DROP TABLE IF EXISTS recall_edges`); err != nil {
+		t.Fatalf("drop recall_edges: %v", err)
+	}
+	// Migration runs on every open — it must recreate the table in place.
+	if err := MigrateDataSchema(d); err != nil {
+		t.Fatalf("MigrateDataSchema: %v", err)
+	}
+	if err := InsertRecallEdges(d, []RecallEdge{
+		{ID: "e1", TS: time.Now().UTC(), Kind: "drill", Target: "S1"},
+	}); err != nil {
+		t.Fatalf("recall_edges not created by migration: %v", err)
+	}
+}
+
 func TestLoadReachEmptyOrMissingTable(t *testing.T) {
 	t.Parallel()
 

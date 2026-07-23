@@ -65,6 +65,13 @@ func MigrateDataSchema(d *sql.DB) error {
 		return fmt.Errorf("create schema_meta table: %w", err)
 	}
 
+	// Ensure the L1 recall_edges table on every open — additive, so a data.db
+	// written by an older rekal (which never ran the newer dataDDL) gains it in
+	// place. IF NOT EXISTS makes this idempotent for fresh stores too.
+	if _, err := d.Exec(recallEdgesDDL); err != nil {
+		return fmt.Errorf("create recall_edges table: %w", err)
+	}
+
 	version, err := readSchemaVersion(d, "schema_meta")
 	if err != nil {
 		return err
@@ -233,6 +240,28 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 );
 `
 
+// recallEdgesDDL is the L1 recall citation graph: one row per session an agent
+// reached (recalled or drilled) while working. It is the permanent, append-only
+// record; the derived index.db.session_reach aggregate is rebuilt from it.
+// Local-only by design — deliberately NOT serialized to the codec/wire (like
+// checkpoint_state), so it never touches the git transport.
+//
+// It is ensured in MigrateDataSchema (not just dataDDL) because existing stores
+// only run migrations on open, never the full DDL — a new table added to
+// dataDDL alone would never appear on a data.db written by an older rekal. The
+// CREATE ... IF NOT EXISTS keeps it additive: no schema-version bump. See
+// docs/design/recall-graph.md.
+const recallEdgesDDL = `
+CREATE TABLE IF NOT EXISTS recall_edges (
+	id                 VARCHAR PRIMARY KEY,
+	ts                 TIMESTAMP NOT NULL,
+	kind               VARCHAR NOT NULL,
+	query              VARCHAR,
+	target_session_id  VARCHAR NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_re_target ON recall_edges(target_session_id);
+`
+
 // addColumnIfMissing adds a column to a table when the table exists but the
 // column does not. A missing table is a no-op — the CREATE TABLE DDL will
 // create it with the full current column set.
@@ -330,22 +359,6 @@ CREATE TABLE IF NOT EXISTS checkpoint_state (
 	byte_size   BIGINT NOT NULL,
 	file_hash   VARCHAR NOT NULL
 );
-
--- recall_edges is the L1 recall citation graph: one row per session an agent
--- reached (recalled or drilled) while working. It is the permanent, append-only
--- record; the derived index.db.session_reach aggregate is rebuilt from it.
--- Local-only by design — deliberately NOT serialized to the codec/wire (like
--- checkpoint_state), so it never touches the git transport. Additive table:
--- older builds ignore it, so no schema-version bump. See
--- docs/design/recall-graph.md.
-CREATE TABLE IF NOT EXISTS recall_edges (
-	id                 VARCHAR PRIMARY KEY,
-	ts                 TIMESTAMP NOT NULL,
-	kind               VARCHAR NOT NULL,
-	query              VARCHAR,
-	target_session_id  VARCHAR NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_re_target ON recall_edges(target_session_id);
 
 CREATE TABLE IF NOT EXISTS schema_meta (
 	key         VARCHAR PRIMARY KEY,

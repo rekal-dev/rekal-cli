@@ -75,6 +75,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `files_touched` | Files changed per checkpoint (id, checkpoint_id, file_path, change_type) |
 | `checkpoint_sessions` | Junction: checkpoint_id → session_id |
 | `checkpoint_state` | Incremental state cache (file_path, byte_size, file_hash) |
+| `recall_edges` | L1 recall citation graph (id, ts, kind, query, target_session_id); one row per session reached (kind `recall`/`drill`). Local-only — never pushed/synced |
 
 **Index DB** (`--index`):
 
@@ -88,6 +89,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `session_embeddings` | LSA + Nomic vectors (session_id, embedding, model, generated_at); models `lsa-v1`, `nomic-v1.5` |
 | `knowledge_chunks` | Heading-anchored prose sections of tracked files at HEAD (id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha) |
 | `knowledge_embeddings` | Chunk vectors (content_hash, model, embedding) |
+| `session_reach` | L1 reach aggregate derived from data.db.recall_edges (target_session_id, reach_count, last_query, last_ts) |
 | `index_state` | Key-value state (key, value) |
 
 > **`ts` is a TIMESTAMP.** `turns.ts` / `turns_ft.ts` are typed timestamps, not

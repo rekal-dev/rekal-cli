@@ -132,6 +132,20 @@ type Result struct {
 	// the flag so default output is unchanged.
 	Layers  *Layers   `json:"layers,omitempty"`
 	Related []Related `json:"related,omitempty"`
+
+	// Reached is the L1 recall citation-graph hint: how often this session has
+	// been reached (recalled or drilled) by past work, and a representative
+	// query that reached it. Attached by the recall command from the derived
+	// session_reach aggregate — nil when the session has no reach history, so
+	// output is unchanged on a cold store. The ranking engine never reads it
+	// (display-only). See docs/design/recall-graph.md.
+	Reached *ReachInfo `json:"reached,omitempty"`
+}
+
+// ReachInfo is the display-only recall-graph hint carried on a Result.
+type ReachInfo struct {
+	Count int    `json:"count"`
+	Query string `json:"query,omitempty"`
 }
 
 type SessionDetail struct {

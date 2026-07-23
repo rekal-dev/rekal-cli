@@ -279,6 +279,12 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		return err
 	}
 
+	// session_reach — L1 recall citation-graph aggregate, derived from
+	// data.db.recall_edges.
+	if err := PopulateSessionReach(d); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -654,6 +660,12 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		if err := PopulateFacetText(d, sessionIDs...); err != nil {
 			return err
 		}
+	}
+
+	// session_reach — recompute the L1 aggregate from data.db.recall_edges so
+	// edges drained into data.db at this checkpoint become visible to recall.
+	if err := PopulateSessionReach(d); err != nil {
+		return err
 	}
 
 	return nil

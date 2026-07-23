@@ -114,6 +114,7 @@ Multiple filters = AND.
       "snippet_turn_index": 3,
       "snippet_role": "assistant",
       "summary_turn_index": 41,
+      "reached": {"count": 4, "query": "jwt expiry"},
       "session": {
         "author": "alice@example.com",
         "actor": "human",
@@ -170,6 +171,13 @@ top-level (grouped) results, not raw session hits.
 payload — the summary itself is 10-17KB and is never inlined into recall
 output (progressive disclosure). Drill it with
 `rekal query --session <id> --role summary`.
+
+`reached` is the L1 recall citation-graph hint (`docs/design/recall-graph.md`):
+`count` is how often this session has been reached (recalled or drilled) by past
+work, and `query` is a representative past query that reached it. Present only
+when the session has reach history; omitted on a cold store. In the default
+digest it renders as a per-seed suffix, `[reached 4×· "jwt expiry"]`. It is a
+usage hint, display-only — it never influences ranking or the silence gate.
 
 `session.origin` is present only on sessions folded in by the cross-repo
 local import (`rekal index --include-all` / `--include`): `repo:/path` for

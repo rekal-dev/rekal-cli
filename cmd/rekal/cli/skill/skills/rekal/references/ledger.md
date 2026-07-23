@@ -64,6 +64,14 @@ recall only for a field the seed omits (`files`). If the top-20 isn't enough,
 **reformulate and multi-search**. The digest is **cost-bounded**: a `-n 100`
 read costs about the same through the route as a `-n 20` one.
 
+A seed may carry `[reached N×· "past query"]` before its snippet — the L1 recall
+graph: this session was reached (recalled or drilled) N times by past work, and
+last for that query. It is a **usage** signal, not relevance — a high `reached`
+count marks well-trodden, load-bearing memory and makes a good *first* drill,
+and the echoed past query hints how others framed the same need. It never
+changes `conf=`; weigh relevance from `conf=` + content exactly as before. A
+fresh seed with no `[reached]` is not worse — just newly surfaced.
+
 Recall labels (`INJECT`/`SILENCE`) are **recommendations**. It is biased toward more data than
 decision: a **super-low** episode floor on absolute `confidence` (≥ 0.25; soft
 ≥ 0.20 with gap ≥ 0.02) so only empty / near-zero is machine-silenced, then

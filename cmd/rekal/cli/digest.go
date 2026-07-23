@@ -104,6 +104,27 @@ func knowledgeHits(k []search.KnowledgeHit) string {
 	return strings.Join(parts, " ")
 }
 
+// reachQueryCap bounds the representative query echoed in the reach hint so one
+// long question can't blow up the terse digest line.
+const reachQueryCap = 30
+
+// reachHint renders the L1 recall-graph suffix for a seed: how often it was
+// reached and a representative past query. Empty when the seed has no reach
+// history, so a cold store's digest is byte-identical to before the feature.
+func reachHint(r *search.ReachInfo) string {
+	if r == nil || r.Count <= 0 {
+		return ""
+	}
+	q := strings.TrimSpace(r.Query)
+	if q == "" {
+		return fmt.Sprintf(" [reached %d×]", r.Count)
+	}
+	if rs := []rune(q); len(rs) > reachQueryCap {
+		q = string(rs[:reachQueryCap]) + "…"
+	}
+	return fmt.Sprintf(" [reached %d×· %q]", r.Count, q)
+}
+
 func writeDigestRows(b *strings.Builder, results []search.Result) {
 	n := len(results)
 	if n > digestWindow {
@@ -115,7 +136,10 @@ func writeDigestRows(b *strings.Builder, results []search.Result) {
 			sid = r.SessionID
 		}
 		// Literal double quotes around the (unescaped) snippet, as route.py.
-		fmt.Fprintf(b, "  %s conf=%.2f t%d \"%s\"\n", sid, r.Confidence, r.SnippetTurnIdx, digestSnippet(r.Snippet))
+		// The reach hint is empty unless the seed has recall-graph history, so
+		// this stays byte-identical to route.py on a cold store.
+		fmt.Fprintf(b, "  %s conf=%.2f t%d%s \"%s\"\n",
+			sid, r.Confidence, r.SnippetTurnIdx, reachHint(r.Reached), digestSnippet(r.Snippet))
 	}
 	if more := len(results) - digestWindow; more > 0 {
 		fmt.Fprintf(b, "  (+%d more)\n", more)

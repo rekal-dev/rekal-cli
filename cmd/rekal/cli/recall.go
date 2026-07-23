@@ -1,16 +1,70 @@
 package cli
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
+
+// reachLogCap bounds how many surfaced sessions one recall records as edges —
+// the returned set is already limited by --limit, but a very deep limit
+// shouldn't spool an unbounded batch. Reaching past the digest window is still
+// a real "surfaced" signal, so the cap is generous.
+const reachLogCap = 50
+
+// attachReach fills each result's Reached hint from the derived session_reach
+// aggregate (index.db). Best-effort and display-only: on any error the results
+// are left untouched and recall proceeds with no hint.
+func attachReach(indexDB *sql.DB, results []search.Result) {
+	if len(results) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(results))
+	for _, r := range results {
+		if r.SessionID != "" {
+			ids = append(ids, r.SessionID)
+		}
+	}
+	reach, err := db.LoadReach(indexDB, ids)
+	if err != nil || len(reach) == 0 {
+		return
+	}
+	for i := range results {
+		if rc, ok := reach[results[i].SessionID]; ok && rc.Count > 0 {
+			results[i].Reached = &search.ReachInfo{Count: rc.Count, Query: rc.Query}
+		}
+	}
+}
+
+// logRecallEdges spools one recall edge per surfaced session for the checkpoint
+// drain. Query is the original question (framings are not logged — they are
+// synthetic phrasings and would pollute the representative query). Best-effort.
+func logRecallEdges(gitRoot, query string, results []search.Result) {
+	if len(results) == 0 {
+		return
+	}
+	now := time.Now().UTC()
+	edges := make([]graph.Edge, 0, len(results))
+	for _, r := range results {
+		if r.SessionID == "" {
+			continue
+		}
+		edges = append(edges, graph.Edge{TS: now, Kind: "recall", Query: query, Target: r.SessionID})
+		if len(edges) >= reachLogCap {
+			break
+		}
+	}
+	_ = graph.Append(gitRoot, edges) //nolint:errcheck // best-effort telemetry
+}
 
 // rrfK is the standard Reciprocal Rank Fusion constant (Cormack, Clarke &
 // Büttcher 2009) — a rank-smoothing convention, not a corpus-tuned number, and
@@ -189,6 +243,14 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, also 
 			return oerr
 		}
 	}
+
+	// L1 recall citation graph. Read the reach hint FIRST (the state before
+	// this call, so a session's own recall never inflates the number shown
+	// now), attach it to the surfaced seeds, THEN spool this recall's edges for
+	// the checkpoint drain. Both are best-effort: a graph failure must never
+	// break recall.
+	attachReach(indexDB, out.Results)
+	logRecallEdges(gitRoot, filters.Query, out.Results)
 
 	// Default output is the agent-facing seed digest (the in-binary route.py):
 	// INJECT/KNOWLEDGE/SILENCE + per-seed conf=. Exit 1 on SILENCE mirrors

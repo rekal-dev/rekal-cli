@@ -5,10 +5,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
 	"github.com/spf13/cobra"
 )
+
+// logDrillEdge spools a drill edge for the L1 recall citation graph — the
+// strong "this session was opened" signal. Best-effort; a graph failure never
+// breaks a drill.
+func logDrillEdge(gitRoot, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	_ = graph.Append(gitRoot, []graph.Edge{{ //nolint:errcheck // best-effort telemetry
+		TS:     time.Now().UTC(),
+		Kind:   "drill",
+		Target: sessionID,
+	}})
+}
 
 func newQueryCmd() *cobra.Command {
 	var (
@@ -60,6 +76,9 @@ DATA DB SCHEMA (.rekal/data.db):
                   exported
   files_touched   id, checkpoint_id, file_path, change_type
   checkpoint_sessions  checkpoint_id, session_id
+  recall_edges    id, ts, kind, query, target_session_id
+                  (L1 recall citation graph: one row per session reached
+                  (kind='recall'|'drill'). Local-only — never pushed/synced)
 
 INDEX DB SCHEMA (.rekal/index.db):
 
@@ -78,6 +97,8 @@ INDEX DB SCHEMA (.rekal/index.db):
                        content, content_hash, blob_sha
                        (heading-anchored prose sections of tracked files at HEAD)
   knowledge_embeddings content_hash, model, embedding
+  session_reach        target_session_id, reach_count, last_query, last_ts
+                       (L1 reach aggregate, derived from data.db.recall_edges)
 
 Note: turns.ts / turns_ft.ts are TIMESTAMP, not text. "ts LIKE '2023-05%'"
 raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
@@ -297,6 +318,10 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 
 	session, dataErr := db.QuerySession(dataDB, sessionID)
 	if dataErr == nil {
+		// L1 recall graph: an explicit drill is the strong "this memory was
+		// used" signal. Spool a drill edge for the checkpoint drain (no query
+		// context — the recall that led here is a separate process).
+		logDrillEdge(gitRoot, sessionID)
 		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 	}
 
@@ -309,6 +334,7 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 	if err != nil {
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
+	logDrillEdge(gitRoot, sessionID)
 	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 }
 

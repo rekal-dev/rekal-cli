@@ -38,6 +38,12 @@ a program needs to parse it.
 
 - `rekal "<q>"` — recall. Prints a **seed digest**: line 1 is the verdict
   (`INJECT` / `KNOWLEDGE` / `SILENCE`), then per-seed `sid conf=… t<n> "snippet"`.
+  A seed may carry `[reached N×· "past query"]` before its snippet — a **usage**
+  hint: this memory was reached (recalled or drilled) N times before, last for
+  that query. High reach = load-bearing, well-trodden memory, a good first
+  drill; the echoed query shows how the need was framed. It never raises
+  `conf=` — judge relevance from `conf=` + content as always. No tag just means
+  newly surfaced, not worse.
 - `rekal "<q>" --also "<framing2>" --also "<framing3>"` — widen a weak recall:
   each `--also` is another phrasing of the *same* question, RRF-fused into one
   seed. Use when one phrasing wasn't enough before concluding.

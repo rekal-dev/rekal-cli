@@ -59,10 +59,16 @@ session discovery keep using the invoking worktree.
   Multi-framing recall: each `--also` value is another phrasing; each is
   recalled and RRF-fused (`fuseFramings`, k=60, conf=max-per-session) into one
   seed — the folded seek.py. No `--also` is byte-identical to a single search.
+  Also the L1 recall-graph seam (`docs/design/recall-graph.md`): reads each
+  seed's reach hint from `session_reach` (`attachReach`) **before** spooling
+  this call's own surfaced edges (`logRecallEdges` → `graph.Append`), so a
+  session never inflates its own count.
 - `digest.go`: in-binary port of the old route.py — turns a `search.Output` into
   the seed digest (INJECT/KNOWLEDGE/SILENCE + per-seed `conf=`), byte-identical
   (golden-tested). Super-low env-overridable floor (`REKAL_HUNT_*`),
-  recommendation not decision; SILENCE exits 1.
+  recommendation not decision; SILENCE exits 1. Per-seed `reachHint` suffix
+  (`[reached N×· "query"]`) is empty for unreached seeds, so cold-store output
+  stays byte-identical.
 - `view.go`: in-binary port of the old view.py — `viewSession` (drill →
   readable turns) and `viewRows` (SQL → TSV). The default query output;
   `--json` gives raw. Session view is golden-tested byte-identical
@@ -76,7 +82,9 @@ session discovery keep using the invoking worktree.
   re-chunk; commit-SHA watermark (`knowledge_head_sha`) makes the steady
   state one rev-parse. Called by `index` (full) and recall (incremental,
   best-effort). See `docs/design/knowledge-layer.md`
-- `checkpoint.go`: Capture session after commit
+- `checkpoint.go`: Capture session after commit; also drains the L1 recall-graph
+  spool into `data.db.recall_edges` (`drainRecallSpool`) while the data.db
+  writer is held, before the incremental index refresh rebuilds `session_reach`
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`)
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
@@ -122,7 +130,9 @@ session discovery keep using the invoking worktree.
   shorthand; `--sql`/positional/`--session` mutually exclusive) + session drill.
   **Default output is agent-readable text** (`view.go`: readable turns / TSV
   rows); `--json` gives raw JSON/NDJSON. `--help` carries the full queryable
-  schema (all tables + columns; FTS-internal/state tables noted as ignore)
+  schema (all tables + columns; FTS-internal/state tables noted as ignore). A
+  successful `--session` drill spools an L1 recall-graph drill edge
+  (`logDrillEdge` → `graph.Append`) — the strong "this memory was used" signal.
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +
@@ -142,6 +152,12 @@ session discovery keep using the invoking worktree.
   `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
   `BranchTip` for the merged-only export gate, `MainWorktreeRoot` for the
   worktree-shared store) shared by the command and transport layers
+- `graph/`: L1 recall citation-graph spool — the lock-free write-ahead buffer
+  (`.rekal/recall-log.ndjson`) that keeps query-time edge capture off data.db's
+  writer. `Append` (best-effort, no-op under `session.BenchEnv`) on recall/drill;
+  `Drain` (rename-to-tmp, partial-line-tolerant) at checkpoint. Transient
+  buffer, not the store — the permanent record is `data.db.recall_edges`. See
+  `docs/design/recall-graph.md`
 - `knowledge/`: Prose-file chunker for the knowledge layer — markdown/plain
   text into heading-anchored sections (breadcrumb trails, 1-indexed line
   ranges, content hashes). Pure functions, no git/DB
@@ -201,7 +217,13 @@ session discovery keep using the invoking worktree.
   `EnsureKnowledgeSchema` so old index DBs upgrade in place), the guarded
   `CreateKnowledgeFTSIndex`, and the chunk-vector helpers (missing-vectors
   join for budgeted convergence, content-hash-keyed store/query, orphan
-  pruning). `embedcache.go` is the content-hash-keyed embedding cache
+  pruning). `reach.go` holds the L1 recall citation graph: the permanent
+  append-only `recall_edges` (data.db, **local-only — never wired**, like
+  `checkpoint_state`) via `InsertRecallEdges`, and the derived `session_reach`
+  aggregate (index.db, created on demand by `EnsureReachSchema`) via
+  `PopulateSessionReach` (from `recall_edges` in full + incremental index) and
+  `LoadReach` (the hot-path hint read). `embedcache.go` is the
+  content-hash-keyed embedding cache
   (`.rekal/embed-cache.db`, vectors only): rebuilds embed only unseen content;
   a model switch invalidates by key construction
 - `embedhttp/`: HTTP embedding client — batched, hard-timeboxed so the
@@ -255,6 +277,11 @@ session discovery keep using the invoking worktree.
   `--json` raw), command boundaries (retrieval/navigation/lifecycle, one verb
   each), the skill↔command seam, and the byte-identical / no-performance-change
   migration contract
+- `design/recall-graph.md`: L1 recall citation graph — query-time edge capture
+  (recall + drill), the lock-free spool → checkpoint drain → `recall_edges`
+  (permanent, local-only) → `session_reach` (derived) path, the display-only
+  `[reached N×]` hint, and the non-goals (source attribution, authority
+  ranking, team-sharing)
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent

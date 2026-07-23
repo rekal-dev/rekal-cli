@@ -2,6 +2,7 @@ package cli
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/ids"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/scrub"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
@@ -309,6 +311,13 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 		}
 	}
 
+	// Drain the L1 recall-graph spool into data.db.recall_edges while we still
+	// hold the write handle — this is the one place the hot recall path's
+	// lock-free appends become the permanent record. The derived session_reach
+	// aggregate is refreshed by the incremental index update below (it reads
+	// data.db.recall_edges). Best-effort: a graph failure never fails a commit.
+	drainRecallSpool(gitRoot, dataDB, w)
+
 	// Release the write handle before index population re-opens/ATTACHes
 	// data.db. Two live connections to one DuckDB file in-process can
 	// SIGSEGV in CGO (observed in export QueryTurns after checkpoint).
@@ -330,6 +339,36 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 func sha256Hex(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+
+// drainRecallSpool moves spooled recall-graph edges into data.db.recall_edges,
+// the permanent append-only record. Called at checkpoint with the data.db write
+// handle held. Best-effort — the recall graph is an accreting convenience, so a
+// failure here warns and leaves the spool for the next checkpoint rather than
+// failing the commit.
+func drainRecallSpool(gitRoot string, dataDB *sql.DB, w io.Writer) {
+	edges, err := graph.Drain(gitRoot)
+	if err != nil {
+		fmt.Fprintf(w, "rekal: warning: recall-graph drain failed: %v\n", err)
+		// fall through — edges read before the error still land below
+	}
+	if len(edges) == 0 {
+		return
+	}
+	newID := ids.NewULIDFunc()
+	rows := make([]db.RecallEdge, 0, len(edges))
+	for _, e := range edges {
+		rows = append(rows, db.RecallEdge{
+			ID:     newID(),
+			TS:     e.TS,
+			Kind:   e.Kind,
+			Query:  e.Query,
+			Target: e.Target,
+		})
+	}
+	if err := db.InsertRecallEdges(dataDB, rows); err != nil {
+		fmt.Fprintf(w, "rekal: warning: recall-graph insert failed: %v\n", err)
+	}
 }
 
 // updateIndexIncremental adds newly captured sessions to the index DB

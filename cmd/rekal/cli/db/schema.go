@@ -331,6 +331,22 @@ CREATE TABLE IF NOT EXISTS checkpoint_state (
 	file_hash   VARCHAR NOT NULL
 );
 
+-- recall_edges is the L1 recall citation graph: one row per session an agent
+-- reached (recalled or drilled) while working. It is the permanent, append-only
+-- record; the derived index.db.session_reach aggregate is rebuilt from it.
+-- Local-only by design — deliberately NOT serialized to the codec/wire (like
+-- checkpoint_state), so it never touches the git transport. Additive table:
+-- older builds ignore it, so no schema-version bump. See
+-- docs/design/recall-graph.md.
+CREATE TABLE IF NOT EXISTS recall_edges (
+	id                 VARCHAR PRIMARY KEY,
+	ts                 TIMESTAMP NOT NULL,
+	kind               VARCHAR NOT NULL,
+	query              VARCHAR,
+	target_session_id  VARCHAR NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_re_target ON recall_edges(target_session_id);
+
 CREATE TABLE IF NOT EXISTS schema_meta (
 	key         VARCHAR PRIMARY KEY,
 	value       VARCHAR NOT NULL

@@ -26,11 +26,19 @@ func BenchFingerprints() []string {
 	return out
 }
 
+// BenchEnv reports whether a bench/harness env flag is set
+// (REKAL_BENCH / REKAL_SKIP_CHECKPOINT). Callers that only have the environment
+// to go on — e.g. the recall citation-graph spool — use this to stay out of a
+// benchmark's store without a full payload.
+func BenchEnv() bool {
+	return os.Getenv("REKAL_BENCH") != "" || os.Getenv("REKAL_SKIP_CHECKPOINT") != ""
+}
+
 // SkipCapture reports whether this payload should not be written to data.db.
 // True when the operator set REKAL_BENCH / REKAL_SKIP_CHECKPOINT, the
 // transcript cwd looks like a bench tree, or turn text matches harness prompts.
 func SkipCapture(p *SessionPayload) bool {
-	if os.Getenv("REKAL_BENCH") != "" || os.Getenv("REKAL_SKIP_CHECKPOINT") != "" {
+	if BenchEnv() {
 		return true
 	}
 	if p == nil {

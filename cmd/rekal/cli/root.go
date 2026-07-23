@@ -110,7 +110,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&commitFilter, "commit", "", "Filter by git commit SHA")
 	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
 	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
-	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Max results (default 20; 0 = none; negative rejected)")
+	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Results per framing (default 20; 0 = none; negative rejected). Soft: the RRF-fused union across framings may exceed it")
 	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
 

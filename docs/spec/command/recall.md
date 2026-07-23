@@ -41,6 +41,10 @@ fusion only adds/reorders hits, never drops them; a query that yields no
 reformulation (a single word, no stopwords, no conjunctions) runs as a single
 hybrid search. The reformulation rules are general linguistics, not corpus-tuned.
 
+`-n` bounds each framing's own result list, not the fused total — it is a **soft**
+limit, so a multi-framing query's RRF-fused union (deduped by session, reranked
+by fused score) may return more than `-n` results.
+
 ### Hybrid search (query provided)
 
 1. **BM25 search** — Full-text search on `turns_ft.content`. Returns up to 200 candidate hits scored by BM25.

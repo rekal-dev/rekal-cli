@@ -209,9 +209,12 @@ disposable accelerator over the ledger, reconciled to truth by a one-command
 rebuild, with raw sessions drillable the instant you commit. The intelligence
 isn't pre-baked into stored summaries — the heavy reasoning (retrieval, ranking,
 routing, the agent's own judgment) runs at query time, over the real record,
-when you actually ask. The one expensive write-time step, building that index,
-runs in the background and hard-timeboxed, so your commit never waits. Fresh
-memory, no upkeep, real reasoning on demand.
+when you actually ask. It's **lazy evaluation** — the oldest trick in the
+engineering book, compute on demand instead of eagerly up front — applied to
+memory: lazy inference, so nothing is derived until a question needs it, and
+nothing derived can rot in the meantime. The one expensive write-time step,
+building that index, runs in the background and hard-timeboxed, so your commit
+never waits. Fresh memory, no upkeep, real reasoning on demand.
 
 Token estimates are the visible context produced during the enhanced
 hard-question runs. Reproduce them on your own history: the benchmark labels

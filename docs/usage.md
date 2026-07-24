@@ -5,6 +5,54 @@ travels over git and what stays local, how agents query, and how the skill
 routes. For the marketing overview and quick start, see the
 [README](../README.md); for tuning, see [configuration.md](configuration.md).
 
+## Setup and teardown
+
+```bash
+cd your-project
+rekal init
+```
+
+`rekal init` creates the following on your system:
+
+- `.rekal/` directory containing `data.db` (shared truth) and `index.db` (local
+  search index)
+- A `post-commit` and `pre-push` git hook (marked `# managed by rekal`)
+- The Claude Code skill under `.claude/skills/rekal/` (see
+  [the agent skill](#the-agent-skill))
+- One marker-tagged sentence in `CLAUDE.md` pointing agents at the skill
+  (created if missing; your own content is never touched)
+- An orphan branch `rekal/<your-email>` for transport
+- Appends `.rekal/` to your `.gitignore`
+
+Running `rekal init` again in an already-initialized repo does **not** rebuild
+your store. It refreshes the version-managed skill and hooks and leaves your
+data untouched — so after you upgrade the binary, `rekal init` is how skill
+updates reach an existing repo. A full reinitialize still requires
+`rekal clean` first.
+
+```bash
+rekal clean
+```
+
+`rekal clean` removes everything `init` created:
+
+- Deletes the `.rekal/` directory and all its contents
+- Removes the git hooks (only the ones marked `# managed by rekal`)
+- Removes the installed skill (`.claude/skills/rekal/` plus any legacy
+  `rekal-*` companion dirs), pruning `.claude/skills/` and `.claude/` only if
+  they are left empty — your own `.claude` content is never touched
+- Removes the marker-tagged `CLAUDE.md` sentence (deleting the file only if
+  nothing else remains)
+
+No residue. If you want to start over, run `clean` then `init`.
+
+```bash
+rekal version
+```
+
+When a newer release is available, the CLI prints an update notice after each
+command.
+
 ## Two databases
 
 Rekal keeps two local DuckDB databases in `.rekal/`. The split is deliberate —

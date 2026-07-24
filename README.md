@@ -1,6 +1,6 @@
 # Rekal
 
-**Your AI agent starts every session blank — no idea why the code looks the way it does, or what your team already tried and threw away. Rekal is the memory your team is missing: the *why* behind the code, stored in git, not someone else's cloud.**
+**Rekal is the memory your team is missing — the *why* behind your code, captured at every commit and shared in git, not someone else's cloud. Your AI agent starts every session blank; Rekal gives it your team's reasoning, dead-ends and all.**
 
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
@@ -9,11 +9,11 @@
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eNNabp4b)
 [![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
-[Website](https://rekal.dev) · [arXiv Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/eNNabp4b)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Website](https://rekal.dev) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/eNNabp4b)
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
-> **Zero preprocessing. Pure query-time intelligence.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, and OpenCode.
+> **Memory that lives in git — shared by your team, sharper every session.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, and OpenCode.
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
@@ -23,13 +23,43 @@
   commit under docs/assets/, and replace this comment with the image.
 -->
 
-Every commit captures reasoning. But traditional memory systems trap you: **slow indexing or external servers**. Rekal breaks that. No preprocessing. No memory layers. No external service. Pure query-time inference — everything computed on-demand, locally. Your agent recalls the conversation that produced every change: the reasoning, the dead-ends already ruled out, the exact decision. In ~7.5K context tokens. In a few seconds. From git.
+Every AI session settles decisions — why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. No memory SaaS, no vector-DB tier, nothing to operate — the store is just two files in `.rekal/`. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision — in ~7.5K context tokens, in a few seconds, from git.
 
-**The three moves:**
+- **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
+- **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.
+- **Team memory in git** — merged work travels with the repo over plain push/fetch. No server.
+- **Sharper every session** — sessions link to the queries that reach them, so load-bearing memories stand out.
 
-- **Commit** → Snapshot the session into an append-only log. No preprocessing. No indexing pipeline. No wait.
-- **Push** → Only merged work reaches your team via git orphan branch. No server, no external service, no uploads.
-- **Query** → `rekal "<problem>"` runs full inference on-demand: lexical + graph + deep semantics, all local, all at query time. Returns the turn that answers, with confidence and provenance.
+## Quick start
+
+Requirements: Git, macOS or Linux.
+
+```bash
+# 1. Install (default: ~/.local/bin — override with --target <dir>)
+curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | bash
+
+# 2. Turn it on in your repo
+cd your-project
+rekal init
+
+# 3. Work as normal — commit, and your AI session is captured automatically
+git commit -m "…"
+
+# 4. In any later session, ask
+rekal "why did we drop batching?"
+```
+
+`rekal init` sets up `.rekal/` (the store), a `post-commit`/`pre-push` git hook,
+the agent skill under `.claude/skills/rekal/`, an orphan branch
+`rekal/<your-email>` for transport, and one marker-tagged line in `CLAUDE.md`
+pointing your agent at the skill (your own content is never touched). That line
+is the whole developer experience for most users: init, then commit and push as
+normal — your agent routes its own memory from there.
+
+Re-running `rekal init` refreshes the version-managed skill and hooks without
+touching your data — how skill updates reach a repo after you upgrade the
+binary. To remove everything Rekal created, run `rekal clean` (no residue). Full
+setup, teardown, and verification detail: **[docs/usage.md](docs/usage.md)**.
 
 ## See it in action
 
@@ -83,7 +113,7 @@ $ rekal --json "should webhook retries use a fixed delay?"
 | Instead of | The gap | Rekal |
 |---|---|---|
 | a `MEMORY.md` / notes file | rots, hand-maintained, tied to one branch | captured automatically at every commit, immutable, branch-aware |
-| a RAG / memory SaaS | preprocessing delays + external servers + privacy risk | zero preprocessing, all inference at query time, local-only, no external service |
+| a RAG / memory SaaS | a service to run + external servers + privacy risk | local-only, nothing to operate, memory that travels with the repo |
 | editor rules (Cursor/Copilot) | per-user, per-editor, ephemeral, no team history | team-wide persistent memory, travels with repo, shared decision ledger |
 | `git log` / `git blame` | tell you *what* changed, never *why* | the conversation and reasoning behind the change |
 
@@ -91,15 +121,44 @@ $ rekal --json "should webhook retries use a fixed delay?"
 
 Rekal is built on beliefs. Those beliefs guide every decision. When a choice conflicts with a belief, the choice loses. That is the difference.
 
-- **Zero preprocessing.** No indexing pipeline. No embedding queues. Sessions land raw into the store, inference happens at query time only.
-- **Pure query-time inference.** Full search stack — lexical + graph + deep retrieval — runs on-demand, locally. No external service, no memory layers.
-- **Intent in git.** Not in a separate system. Not behind someone else's service. Orphan branches, full history, travels with the repo.
-- **Thin wire, rich machine.** Every byte over git costs. Search, embeddings, inference — all run locally. No servers, no APIs, no telemetry.
+- **Data and index, separated.** Your sessions land in an append-only `data.db` **raw** — no LLM pre-summarization, no lossy "memory" distillation. The derived `index.db` (full-text + embeddings) is built and rebuilt locally from that data, and can be thrown away and regenerated at any time.
+- **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval — lexical + graph + deep semantic — runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
+- **Simplicity, no stall.** Rekal does real work — indexing, embeddings — but never on your critical path: the commit hook returns immediately and the expensive passes run in the background, hard-timeboxed, so a commit is never blocked on Rekal. No queue to babysit, no service to run. Thin on the wire, rich on the machine.
+- **Self-improving recall graph.** Every recall links a session to the query that reached it. Well-trodden memories then surface with a `[reached N×]` usage hint — a navigation signal that gets richer the more your team leans on them. It's a growing citation graph, not auto-tuned ranking (authority-weighted ranking is on the roadmap). See [docs/design/recall-graph.md](docs/design/recall-graph.md).
+- **Intent in git.** Not in a separate system, not behind someone else's service. Orphan branches, full history, travels with the repo. No servers, no APIs, no telemetry.
 - **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
 - **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
 - **Agent-first output.** A compact text digest built for an agent to act on — verdict, per-seed confidence, drill pointers — with structured JSON one `--json` away. Silence gates and confidence thresholds, not prose.
 
 The full version: [SOUL.md](SOUL.md).
+
+## Team memory
+
+This is the payoff: your team's reasoning, shared without a server. Rekal data
+rides plain git on orphan branches named `rekal/<email>` — no common ancestor
+with your code, so it never touches your history, merges, or working tree.
+
+- **`rekal sync`** fetches teammates' branches and folds their sessions into
+  your local index — team context before you start working.
+- **Merged work only.** Your local store keeps *every* branch at full fidelity,
+  but only work that **landed on the default branch** reaches the wire (ancestor
+  of `main`, or a squash-merge detected by patch-equivalence — no heuristics).
+  Unmerged spikes stay local; a dead-end never leaks to the team, and merged
+  work ships automatically on the next push.
+- **Cross-repo recall (optional)** can span every local session on your machine,
+  index-only so it's structurally unshareable.
+
+The more the team recalls, the more the recall graph links sessions to the
+questions that reach them — shared memory that compounds. Full workflow:
+**[docs/usage.md](docs/usage.md)**.
+
+## Knowledge layer
+
+Recall isn't only past sessions. Rekal also chunks your repo's prose at HEAD
+(`README`, `docs/`, design notes) into a **knowledge** substrate, so a question
+about a current convention returns a pointer to the authoritative file and lines
+rather than an old conversation — the `KNOWLEDGE` verdict in the digest above.
+Design: [docs/design/knowledge-layer.md](docs/design/knowledge-layer.md).
 
 ## The research
 
@@ -113,12 +172,11 @@ rationale — at a few hundred tokens per question. The benchmark labels
 itself from your own commit–session links, so every result is replicable on
 your own history at zero annotation cost. See [docs/research/](docs/research/) for details.
 
-### Measured performance
+### Benchmarks
 
 On two public long-term-memory benchmarks, Rekal reaches strong answer
-quality with **no preprocessing, no memory layers, and no external inference
-service** — every number below is pure query-time inference over git,
-computed locally. The answering agent is **GPT-5 Sol**; Rekal supplies the
+quality with **no memory layers and no external memory service** — retrieval
+runs locally over git. The answering agent is **GPT-5 Sol**; Rekal supplies the
 memory, the model supplies the answer:
 
 | Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
@@ -138,95 +196,21 @@ memory, the model supplies the answer:
 | Workflow adoption | 100% |
 
 That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
-recall — at roughly six agent turns per question, with no preprocessing and
-no memory tier behind it.
+recall — at roughly six agent turns per question, with no memory tier behind
+it.
 
-**The trade-off, made on purpose.** Everything is computed at query time.
-There is no index to precompute, no embedding queue to drain, no memory
-service to call — so a query runs the full stack live and costs a few
-seconds. In exchange: nothing to wait on after a commit, no infrastructure
-to run, and data that never leaves the machine. Rekal spends query-time
-latency to buy zero preprocessing and zero external dependencies. For a
-memory an agent consults a handful of times per task, that is the right side
-of the trade.
+**The design, on purpose: simplicity, no stall.** Rekal does real work — it
+indexes sessions and computes embeddings — but never on your critical path. The
+commit hook returns immediately; the heavy passes run in the background,
+hard-timeboxed, so a commit never waits on Rekal. There is no memory service to
+run, no queue to babysit, no pipeline to keep healthy: the store is two files in
+`.rekal/`, and the index rebuilds from them with one command. You get durable,
+team-shared memory without operating any of it.
 
 Token estimates are the visible context produced during the enhanced
 hard-question runs. Reproduce them on your own history: the benchmark labels
 itself from your commit–session links at zero annotation cost (see
 [docs/research/](docs/research/)).
-
-## Install and uninstall
-
-Install:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | bash
-```
-
-Default location: `~/.local/bin`. Override with `--target <dir>`.
-
-Uninstall:
-
-```bash
-rm ~/.local/bin/rekal
-```
-
-If you installed to a custom directory, remove the binary from there instead.
-
-## Quick start
-
-Requirements: Git, macOS or Linux.
-
-### Set up
-
-```bash
-cd your-project
-rekal init
-```
-
-`rekal init` creates the following on your system:
-
-- `.rekal/` directory containing `data.db` (shared truth) and `index.db` (local search index)
-- A `post-commit` and `pre-push` git hook (marked `# managed by rekal`)
-- The Claude Code skill under `.claude/skills/rekal/` (see [Agent skill](#agent-skill))
-- One marker-tagged sentence in `CLAUDE.md` pointing agents at the skill (created if missing; your own content is never touched)
-- An orphan branch `rekal/<your-email>` for transport
-- Appends `.rekal/` to your `.gitignore`
-
-That one sentence is the whole developer experience for most users: init,
-then commit and push as normal — your agent routes its own memory from there.
-
-Running `rekal init` again in an already-initialized repo does **not** rebuild
-your store. It refreshes the version-managed skill and hooks and leaves your
-data untouched — so after you upgrade the binary, `rekal init` is how skill
-updates reach an existing repo. A full reinitialize still requires
-`rekal clean` first.
-
-### Tear down
-
-```bash
-rekal clean
-```
-
-`rekal clean` removes everything `init` created:
-
-- Deletes the `.rekal/` directory and all its contents
-- Removes the git hooks (only the ones marked `# managed by rekal`)
-- Removes the installed skill (`.claude/skills/rekal/` plus any legacy
-  `rekal-*` companion dirs), pruning `.claude/skills/` and `.claude/` only
-  if they are left empty — your own `.claude` content is never touched
-- Removes the marker-tagged `CLAUDE.md` sentence (deleting the file only if
-  nothing else remains)
-
-No residue. If you want to start over, run `clean` then `init`.
-
-### Verify
-
-```bash
-rekal version
-```
-
-When a newer release is available, the CLI prints an update notice after each command.
 
 ## How it works
 
@@ -318,10 +302,10 @@ design: [docs/design/skill-router.md](docs/design/skill-router.md).
 
 ### Under the hood
 
-Two local DuckDB databases — `data.db` (append-only truth, the only thing
-pushed) and `index.db` (rebuildable local intelligence) — with git orphan
-branches for transport, **merged-work-only** sharing, worktree-shared stores,
-and optional cross-repo recall. All of it is covered in
+Two local DuckDB databases keep the split clean: `data.db` (append-only truth,
+the only thing pushed) and `index.db` (rebuildable local intelligence — FTS,
+embeddings, the recall graph, knowledge chunks). Linked git worktrees share one
+store. The databases, transport, and cross-repo recall are covered in
 **[docs/usage.md](docs/usage.md)**.
 
 ## Configuration

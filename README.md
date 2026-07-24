@@ -188,16 +188,16 @@ memory, the model supplies the answer:
 |---|---|
 | Recall@10 | 93.60% |
 | Recall@5 | 86.44% |
-| Strict accuracy | 70.39% |
 | Official F1 | 63.0 |
 | Typical answer output | ~78–80 tokens |
 | L1 / L2 memory layers | None |
 | External memory service | None |
-| Workflow adoption | 100% |
 
 That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
 recall — at roughly six agent turns per question, with no memory tier behind
-it.
+it. And these are the shipped skill in the loop, not a hand-tuned harness: the
+agent invoked Rekal's routing workflow on ~99% of questions — the gate is used,
+not bypassed.
 
 **The trade we make on purpose: one immutable source of truth — always fresh,
 never a stall.** Rekal keeps your raw sessions as an append-only, immutable

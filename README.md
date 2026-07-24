@@ -200,17 +200,21 @@ agent invoked Rekal's routing workflow on ~99% of questions, and that share
 climbs toward the ceiling as the skill sharpens — the gate is used, not
 bypassed.
 
-**Retrieval & wire (local microbench).** Pure `rekal` recall — no answering
-model — on synthetic LoCoMo `conv-26` (19 sessions, 419 turns; Apple M4,
-`-n 10`, 40 questions). Time/query above is end-to-end agent answering; this
-table is retrieval alone:
+**Retrieval & wire (local microbench).** Two different ratios, don't mix them:
 
 | Metric | Result |
 |---|---|
-| Recall wall time (new process / query) | median ~350 ms (p95 ~400 ms) |
+| **Coding session JSONL → wire** (real Claude transcript, ~4–6 MB) | **~190–400×** — strip tool outputs, file bodies, and JSONL chrome; keep turns + tool metadata; zstd + dict on top |
+| Pure zstd on already-structured payloads | ~2–3.5:1 (session frame ~2:1; LoCoMo chat export ~2.1:1 — chat has almost nothing structural to strip) |
+| 10-frame batch vs per-frame | 6.8× smaller |
+| Recall wall time (LoCoMo `conv-26`, Apple M4, `-n 10`) | median ~350 ms (p95 ~400 ms) |
 | In-process search (`scoring_lineage`) | ~76 ms (knowledge/reach ~55 ms) |
-| Wire compression (zstd + preset dict) | ~2.1:1 on exported payloads |
-| Session-frame unit / 10-frame batch | 2.0:1 · 6.8× vs per-frame |
+
+Time/query in the accuracy table is end-to-end agent answering; the latency
+rows above are pure `rekal` recall. The large wire reduction matches the
+design claim in [SOUL.md](SOUL.md) (a multi-MB session → hundreds of bytes on
+the orphan branch) — that number is vs the raw agent transcript, not vs the
+already-slim codec payload.
 
 **The trade we make on purpose: one immutable source of truth — no summaries,
 no upkeep, real reasoning on demand.** Rekal keeps your raw sessions as an

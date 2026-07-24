@@ -279,46 +279,24 @@ The flow: commit → capture → push → sync → recall.
 
 Day-to-day: commit and push as normal. Everything else is automatic.
 
-### Agent touchpoints
+### What your agent does
 
-| Agent does | Rekal does |
-|------------|------------|
-| `rekal "auth middleware"` | Hybrid search (BM25 + LSA + deep embed + facets) plus a separate `knowledge` block for prose at HEAD; returns a seed digest (INJECT/KNOWLEDGE/SILENCE + per-seed `conf` and a drill pointer), or structured `confidence` / `mass` JSON with `--json` |
-| `rekal query --session <id> --offset N --limit 5` | Returns a small window of turns around the relevant part of the conversation, with `has_more` for pagination |
-| `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
-| `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |
-| `rekal --file src/billing/ "discount"` | Scoped search filtered by file path |
-| `rekal --commit <sha>` | Finds the session(s) that produced a commit — the anchor for change provenance |
-| `rekal query --session <id> --role human_steering` | Returns only the mid-course corrections — the highest-signal turns for intent and preferences |
-| `rekal query --session <id> --role summary` | Returns the harness-written compaction distillations — the cheapest overview of a long session |
-| `rekal sync` (optional, at session start) | Pulls team context before the agent starts working |
+Your agent recalls with `rekal "<query>"` — the compact seed digest it acts on
+directly — and drills into any session with `rekal query --session <id>`,
+controlling how much context it loads: search first, drill progressively, full
+sessions only when needed. The complete command surface and the
+progressive-loading pattern are in **[docs/usage.md](docs/usage.md)**.
 
-The agent controls how much context it loads. Search first, drill down progressively, full sessions only when needed.
+### The agent skill
 
-```bash
-# Agent touches src/billing/ — first, recall prior context
-rekal --file src/billing/ "discount logic"
-
-# Agent finds a relevant session, drills into the matching turn
-rekal query --session 01JNQX... --offset 10 --limit 5
-
-# Agent loads full detail only if needed
-rekal query --session 01JNQX... --full
-```
-
-### Agent skill
-
-The raw commands above are the interface; the **skill** is the playbook.
-`rekal init` installs one Claude Code skill under `.claude/skills/rekal/` —
-a thin route (substrate triage + silence + dispatch) plus on-demand
-`references/` and a couple of built-in gate `scripts/` (progressive
-disclosure). Retrieval and navigation are commands in the binary, not
-scripts. The agent never picks among skills; it classifies the question,
-routes to one substrate, and loads only the module it needs. For a question
-that belongs to the past-reasoning **ledger**, a second step classifies the
-*answer type* and loads exactly one specialist workflow — so a "how long", a
-"how many", and a "when" each get concentrated, non-overlapping guidance.
-Design detail: [`docs/design/skill-router.md`](docs/design/skill-router.md).
+`rekal init` installs one Claude Code skill under `.claude/skills/rekal/`. It is
+a thin route: the agent classifies each question and sends it to one substrate —
+**tree** (grep, now), **knowledge** (prose at HEAD), **ledger** (past
+reasoning), or **map** (structure). For a ledger question, a second step
+classifies the *answer type* and loads exactly one specialist workflow, so
+"how long", "how many", and "when" each get concentrated, non-overlapping
+guidance. Retrieval and navigation are commands in the binary; the skill is
+judgment, not scripts.
 
 ```mermaid
 flowchart TB
@@ -335,118 +313,23 @@ flowchart TB
     gate -->|fact / why| w5["workflows/point-fact.md"]
 ```
 
-| Home | What |
-|-------|------|
-| **Route** (`SKILL.md`) | Thin. Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **ledger** (past) / **map**. For a ledger question, classify the answer type and route to exactly one workflow. Trusts reasoning; silence when memory is the wrong tool. |
-| **Commands** (in the binary) | `rekal "<q>"` (seed digest: INJECT/KNOWLEDGE/SILENCE + per-seed confidence), `rekal find` (complete-set sweep), `rekal query --session`/`--sql` (drill / analytical). Compact text by default, `--json` for machines. |
-| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · `references/workflows/` (five answer-type specialists: duration, complete-set, event-time, inference, point-fact) · map · wiki · flags/SQL. `Read` one and stop. |
-| **Gates** (`scripts/`) | The two workflow gates that remain scripts: `map.sh` (fresh/watermark), `wiki-gate.sh`. |
+Full skill reference: **[docs/usage.md#the-agent-skill](docs/usage.md#the-agent-skill)** ·
+design: [docs/design/skill-router.md](docs/design/skill-router.md).
 
-```mermaid
-flowchart LR
-    j["rekal '&lt;q&gt;'"] --> dg["seed digest"]
-    dg -->|confident episode| i["INJECT + per-seed conf<br/>even if knowledge present"]
-    dg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
-    dg -->|else| s["SILENCE"]
-```
+### Under the hood
 
-Skills are versioned with the binary. After you upgrade, run `rekal init` once
-to refresh them (it leaves your data untouched; legacy `rekal-*` dirs are removed).
+Two local DuckDB databases — `data.db` (append-only truth, the only thing
+pushed) and `index.db` (rebuildable local intelligence) — with git orphan
+branches for transport, **merged-work-only** sharing, worktree-shared stores,
+and optional cross-repo recall. All of it is covered in
+**[docs/usage.md](docs/usage.md)**.
 
-### Ad-hoc usage
+## Configuration
 
-```bash
-# Raw SQL for edge cases
-rekal query "SELECT id, user_email, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
-
-# Rebuild the search index after manual DB changes
-rekal index
-
-# View recent checkpoints
-rekal log
-```
-
-### Two databases
-
-Rekal keeps two local DuckDB databases. The split is deliberate.
-
-- **data.db** — The shared truth. Append-only. Contains sessions, turns, tool calls, checkpoints, files touched — every branch, merged or not. This is the only source `rekal push` encodes from (filtered to merged work — see below). `rekal query` reads from here.
-
-- **index.db** — Local intelligence. Full-text indexes, vector embeddings, file co-occurrence graphs. Never synced. Rebuilt anytime with `rekal index`. This is what powers `rekal "query"` search.
-
-Thin on the wire, rich on the machine.
-
-### Worktrees
-
-Linked git worktrees (`git worktree add`) share **one** `.rekal/` store — the
-one in the main checkout. Init once in the main repo; every worktree then reads
-and writes the same data, index, and config, so there's no per-worktree
-`rekal sync` or reindex. Checkpoints still record the branch and commit of
-whichever worktree you committed in. A repo that never uses worktrees is
-unaffected — the store is just its own `.rekal/`.
-
-### Orphan branches
-
-Rekal data lives on git orphan branches named `rekal/<email>`. These branches have no common ancestor with your code branches — they do not appear in your project history, do not affect merges, and do not clutter your working tree. Standard git push and fetch move the data.
-
-### What gets shared: merged work only
-
-Your local databases keep **every** branch — full fidelity, nothing gated. The wire is different: `rekal push` shares a session only when its code **landed on the default branch**, detected two ways, both exact:
-
-- its commit is an ancestor of `main` (merge-commit and rebase workflows), or
-- its branch's changes landed as a **squash merge** (patch-equivalence detection — no heuristics)
-
-Unmerged work simply waits: it stays local, is re-checked on every push, and ships automatically the moment its branch merges. Abandoned branches never qualify, so a dead-end spike never reaches your teammates. Commit everything for yourself; share only what merged.
-
-### Cross-repo recall (optional)
-
-Your agent's memory can span your whole machine, not just this repo:
-
-```bash
-rekal index --include-all            # recall every local Claude Code session (all repos + shell)
-rekal index --include /path/to/repo  # just that repo
-rekal index --no-local               # back to this repo only
-```
-
-Imported sessions live in the **index only** — never in `data.db`, which is the only thing `push` reads — so they are structurally impossible to share. Results are labeled with their origin (`repo:/path`, `shell:/path`). The setting persists across rebuilds.
-
-## Configuration (optional)
-
-Rekal is zero-config by default. When you do want to tune it, there is exactly one file: `.rekal/config.json` — gitignored, local to the machine, never committed.
-
-```json
-{
-  "local_import": { "all": true },
-  "weights": {
-    "bm25": 0.35,
-    "lsa": 0.10,
-    "nomic": 0.55,
-    "steering_boost": 1.3,
-    "subagent_downweight": 0.7,
-    "facet_boost": 0.3
-  },
-  "embedding": {
-    "endpoint": "$EMBED_ENDPOINT",
-    "model": "nomic-embed-text-v1.5",
-    "api_key_env": "EMBED_API_KEY",
-    "timeout_seconds": 10
-  }
-}
-```
-
-- **`weights`** tunes recall ranking (layer mix, steering-turn boost, subagent discount, and `facet_boost` — the facet layer over each session's tool paths/commands/steering text, on by default at 0.3; set 0 to disable). Applied at query time — changing them takes effect on the next search, no reindex, any corpus size.
-- **`embedding`** switches deep semantic embeddings from the embedded nomic model to any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI). Requests are batched and hard-timeboxed so a slow server can never stall a commit (embedding is always non-fatal). Pointed at localhost, your data still never leaves the machine; pointed at a cloud API, session text leaves — your call, made explicitly.
-
-### API key: three ways, pick one
-
-| Form | Example | Where the secret lives |
-|---|---|---|
-| Real string | `"api_key": "sk-abc123"` | In the file (gitignored, this machine only) |
-| Env reference | `"api_key": "$MY_KEY"` | In the environment, expanded at run time |
-| Env var name | `"api_key_env": "EMBED_API_KEY"` | In the environment, read directly |
-
-Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise `api_key` (after `$VAR` expansion) is used; no key at all just omits the `Authorization` header — the normal case for a localhost server. `endpoint` expands `$VAR` the same way. One edge: a *hardcoded* `api_key` containing a literal `$` would be treated as an env reference — real provider keys never contain `$`, and `api_key_env` is the unambiguous form for anything sensitive.
-- Switching embedding model/endpoint requires one `rekal index` to regenerate vectors. A content-hash-keyed cache (`.rekal/embed-cache.db`, vectors only, never text) makes routine rebuilds embed only new sessions — and makes a model switch cost exactly one full pass.
+Rekal is zero-config by default. To tune ranking weights or point deep
+embeddings at an OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI),
+there is exactly one file — `.rekal/config.json`, gitignored and local-only,
+never committed. See **[docs/configuration.md](docs/configuration.md)**.
 
 ## Commands reference
 
@@ -465,6 +348,17 @@ Precedence: `api_key_env` wins when set and the variable is non-empty; otherwise
 | `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
 
 Full details: [docs/spec/command/](docs/spec/command/).
+
+## Documentation
+
+| Guide | What's in it |
+|---|---|
+| [docs/usage.md](docs/usage.md) | The two databases, orphan branches & merged-work-only sharing, worktrees, the full agent command surface, the skill, cross-repo recall |
+| [docs/configuration.md](docs/configuration.md) | `.rekal/config.json` — ranking weights, embedding backends, API-key handling |
+| [docs/spec/command/](docs/spec/command/) | Per-command reference specs |
+| [docs/research/](docs/research/) | The paper, benchmark harness, and evaluation strategy |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, testing, and contributing |
+| [SOUL.md](SOUL.md) | The beliefs behind every design decision |
 
 ## Development
 

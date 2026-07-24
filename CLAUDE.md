@@ -290,6 +290,12 @@ session discovery keep using the invoking worktree.
 ### Docs (`docs/`)
 
 - `DEVELOPMENT.md`: Dev process, testing, CI/CD
+- `usage.md`: Operational guide the README links out to — two databases,
+  orphan branches & merged-work-only sharing, worktrees, the full agent
+  command surface + skill, cross-repo recall
+- `configuration.md`: `.rekal/config.json` reference — ranking weights,
+  embedding backends, API-key handling (the deep content the README's
+  Configuration section links to)
 - `git-transportation.md`: Git transport layer design
 - `design/skill-router.md`: Unified skill — substrate triage, progressive
   disclosure, executable gate scripts (mermaid)

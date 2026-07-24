@@ -106,6 +106,35 @@ rationale — at a few hundred tokens per question. The benchmark labels
 itself from your own commit–session links, so every result is replicable on
 your own history at zero annotation cost. See [docs/research/](docs/research/) for details.
 
+### Measured performance
+
+On two public long-term-memory benchmarks, Rekal reaches strong answer
+quality with **no memory layers and no external service** — every number
+below is pure query-time inference over git, computed locally:
+
+| Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
+|---|---|---|---|---|---|
+| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | 23.2s |
+| LongMemEval | 86.60% | — | ~10.5K | 6.6 | 27.2s |
+
+| Additional metric (LoCoMo) | Result |
+|---|---|
+| Recall@10 | 93.60% |
+| Recall@5 | 86.44% |
+| Strict accuracy | 70.39% |
+| Official F1 | 63.0 |
+| Typical answer output | ~78–80 tokens |
+| L1 / L2 memory layers | None |
+| External memory service | None |
+| Workflow adoption | 100% |
+
+That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
+recall — at roughly six agent turns per question, with no preprocessing and
+no memory tier behind it. Token estimates are the visible context produced
+during the enhanced hard-question runs. Reproduce them on your own history:
+the benchmark labels itself from your commit–session links at zero
+annotation cost (see [docs/research/](docs/research/)).
+
 ## Install and uninstall
 
 Install:
@@ -261,9 +290,14 @@ rekal query --session 01JNQX... --full
 
 The raw commands above are the interface; the **skill** is the playbook.
 `rekal init` installs one Claude Code skill under `.claude/skills/rekal/` —
-a thin tip (triage + gates) plus on-demand `references/` and built-in
-`scripts/` (progressive disclosure). The agent never picks among skills;
-it classifies the question and loads only the module it needs.
+a thin route (substrate triage + silence + dispatch) plus on-demand
+`references/` and a couple of built-in gate `scripts/` (progressive
+disclosure). Retrieval and navigation are commands in the binary, not
+scripts. The agent never picks among skills; it classifies the question,
+routes to one substrate, and loads only the module it needs. For a question
+that belongs to the past-reasoning **ledger**, a second step classifies the
+*answer type* and loads exactly one specialist workflow — so a "how long", a
+"how many", and a "when" each get concentrated, non-overlapping guidance.
 Design detail: [`docs/design/skill-router.md`](docs/design/skill-router.md).
 
 ```mermaid
@@ -271,26 +305,29 @@ flowchart TB
     tip["SKILL.md route<br/>always loaded, thin"]
     tip --> triage{"Which substrate?"}
     triage -->|Tree now| grep["grep / read HEAD"]
-    triage -->|Knowledge / ledger| route["route.py"]
+    triage -->|Knowledge| readk["rekal '&lt;q&gt;' → Read HEAD prose"]
     triage -->|Map| mapf["map.sh fresh → map.md"]
-    triage -->|past reasoning| ref["Read references/ledger.md"]
-    route -->|KNOWLEDGE| readk["Read pointer — stop"]
-    route -->|INJECT| drill["ledger.md → drill"]
-    route -->|SILENCE| quiet["No memory inject"]
+    triage -->|Ledger / past reasoning| gate{"Answer type?"}
+    gate -->|duration| w1["workflows/duration.md"]
+    gate -->|count / set| w2["workflows/complete-set.md"]
+    gate -->|event time| w3["workflows/event-time.md"]
+    gate -->|inference| w4["workflows/inference.md"]
+    gate -->|fact / why| w5["workflows/point-fact.md"]
 ```
 
 | Home | What |
 |-------|------|
-| **Route** (`SKILL.md`) | Thin. Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **ledger** (past) / **map**. Trusts reasoning; silence when memory is the wrong tool. |
-| **Function** (`scripts/`) | Deterministic data for judgment: `route.py` (INJECT/KNOWLEDGE/SILENCE + digest, reports a `low_mass` signal), `map.sh` (fresh/watermark), `wiki-gate.sh`. |
-| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · map · wiki · flags/SQL. `Read` one and stop. |
+| **Route** (`SKILL.md`) | Thin. Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **ledger** (past) / **map**. For a ledger question, classify the answer type and route to exactly one workflow. Trusts reasoning; silence when memory is the wrong tool. |
+| **Commands** (in the binary) | `rekal "<q>"` (seed digest: INJECT/KNOWLEDGE/SILENCE + per-seed confidence), `rekal find` (complete-set sweep), `rekal query --session`/`--sql` (drill / analytical). Compact text by default, `--json` for machines. |
+| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · `references/workflows/` (five answer-type specialists: duration, complete-set, event-time, inference, point-fact) · map · wiki · flags/SQL. `Read` one and stop. |
+| **Gates** (`scripts/`) | The two workflow gates that remain scripts: `map.sh` (fresh/watermark), `wiki-gate.sh`. |
 
 ```mermaid
 flowchart LR
-    j["rekal JSON"] --> rt["route.py"]
-    rt -->|confident episode| i["INJECT + digest<br/>even if knowledge present<br/>reports low_mass"]
-    rt -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
-    rt -->|else| s["SILENCE"]
+    j["rekal '&lt;q&gt;'"] --> dg["seed digest"]
+    dg -->|confident episode| i["INJECT + per-seed conf<br/>even if knowledge present"]
+    dg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
+    dg -->|else| s["SILENCE"]
 ```
 
 Skills are versioned with the binary. After you upgrade, run `rekal init` once

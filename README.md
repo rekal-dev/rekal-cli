@@ -13,7 +13,7 @@
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
-> Works with Claude Code, Codex, Cursor, Gemini, OpenCode, and GitHub Copilot CLI.
+> **Zero preprocessing. Pure query-time intelligence.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, and OpenCode.
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
@@ -23,13 +23,13 @@
   commit under docs/assets/, and replace this comment with the image.
 -->
 
-Code has git — every line, every author, recorded forever. The *reasoning* behind it has nothing: the conversations where you and your AI weighed approaches, rejected alternatives, and decided — gone the moment the session ends. Rekal is the ledger for that. It hooks into git, captures the AI session behind every commit, and hands the precise prior context back to your agent the next time it works the same problem — including the dead-ends your team already ruled out.
+Every commit captures reasoning. But traditional memory systems trap you: **slow indexing or external servers**. Rekal breaks that. No preprocessing. No memory layers. No external service. Pure query-time inference — everything computed on-demand, locally. Your agent recalls the conversation that produced every change: the reasoning, the dead-ends already ruled out, the exact decision. In ~7.5K context tokens. In ~23 seconds. From git.
 
-**In three lines:**
+**The three moves:**
 
-- **Commit** → Rekal snapshots the conversation that produced the change into an append-only log.
-- **Push** → only *merged* work rides a git orphan branch to your team. No server, no API, no telemetry.
-- **Recall** → `rekal "<problem>"` returns scored prior context — decisions, rejected alternatives, dead-ends — as JSON your agent drills into.
+- **Commit** → Snapshot the session into an append-only log. No preprocessing. No indexing pipeline. No wait.
+- **Push** → Only merged work reaches your team via git orphan branch. No server, no external service, no uploads.
+- **Query** → `rekal "<problem>"` runs full inference on-demand: lexical + graph + deep semantics, all local, all at query time. Returns the turn that answers, with confidence and provenance.
 
 ## See it in action
 
@@ -76,21 +76,21 @@ $ rekal query --session 01JNQX8F2K9M... --role human_steering
 | Instead of | The gap | Rekal |
 |---|---|---|
 | a `MEMORY.md` / notes file | rots, hand-maintained, tied to one branch | captured automatically at every commit, immutable, branch-aware |
-| a RAG / memory SaaS | your code's intent lives on someone else's server | never leaves git and your machine — no server, no API, no telemetry |
-| editor rules (Cursor/Copilot) | per-user, per-editor, not shared team history | team-wide, editor-agnostic, travels with the repo |
+| a RAG / memory SaaS | preprocessing delays + external servers + privacy risk | zero preprocessing, all inference at query time, local-only, no external service |
+| editor rules (Cursor/Copilot) | per-user, per-editor, ephemeral, no team history | team-wide persistent memory, travels with repo, shared decision ledger |
 | `git log` / `git blame` | tell you *what* changed, never *why* | the conversation and reasoning behind the change |
 
 ## What makes Rekal different
 
 Rekal is built on beliefs. Those beliefs guide every decision. When a choice conflicts with a belief, the choice loses. That is the difference.
 
-- **Immutable.** The record cannot be edited or deleted. Append-only is what makes the ledger trustworthy.
-- **Intent lives next to the code.** Not in a separate system. Not behind someone else's service. In git, next to the code it explains.
-- **Thin on the wire, rich on the machine.** Git is the transport and every byte costs. Indexes, embeddings, search — all computed locally.
-- **Secure by design.** The data never leaves git and the local machine. No servers. No APIs. No telemetry.
-- **Simple.** Single binary. Everything embedded. Nothing to install, nothing to configure, nothing to break.
-- **Transparent.** The user sees everything that was created and can remove all of it. No sticky tape.
-- **Agent first.** The agent is the consumer. Output format, query interface, context loading — all favor the agent.
+- **Zero preprocessing.** No indexing pipeline. No embedding queues. Sessions land raw into the store, inference happens at query time only.
+- **Pure query-time inference.** Full search stack — lexical + graph + deep retrieval — runs on-demand, locally. No external service, no memory layers.
+- **Intent in git.** Not in a separate system. Not behind someone else's service. Orphan branches, full history, travels with the repo.
+- **Thin wire, rich machine.** Every byte over git costs. Search, embeddings, inference — all run locally. No servers, no APIs, no telemetry.
+- **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
+- **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
+- **Agent-first output.** Scored JSON, drill-down interface, silence gates, confidence thresholds. Designed for agent consumption, not readability.
 
 The full version: [SOUL.md](SOUL.md).
 

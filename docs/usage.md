@@ -32,11 +32,13 @@ rekal init
 - An orphan branch `rekal/<your-email>` for transport
 - Appends `.rekal/` to your `.gitignore`
 
-Running `rekal init` again in an already-initialized repo does **not** rebuild
-your store. It refreshes the version-managed skill and hooks and leaves your
-data untouched — so after you upgrade the binary, `rekal init` is how skill
-updates reach an existing repo. A full reinitialize still requires
-`rekal clean` first.
+Skill files also self-heal: the next recall after a binary upgrade compares the
+pinned `.rekal-version` in `.claude/skills/` to the running binary and
+re-installs the skill when it lags (hooks and instruction files are not
+touched). Running `rekal init` again in an already-initialized repo does
+**not** rebuild your store — it refreshes the skill, hooks, CLAUDE.md marker,
+and detected-agent rules, and leaves your data untouched. A full reinitialize
+still requires `rekal clean` first.
 
 ```bash
 rekal clean

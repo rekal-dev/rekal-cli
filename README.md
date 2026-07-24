@@ -59,10 +59,12 @@ own content is never touched. That
 line is the whole developer experience for most users: init, then commit and
 push as normal — your agent routes its own memory from there.
 
-Re-running `rekal init` refreshes the version-managed skill and hooks without
-touching your data — how skill updates reach a repo after you upgrade the
-binary. To remove everything Rekal created, run `rekal clean` (no residue). Full
-setup, teardown, and verification detail: **[docs/usage.md](docs/usage.md)**.
+After you upgrade the binary, the next recall that sees a pinned skill-version
+mismatch refreshes `.claude/skills/` in place (hooks and agent instruction
+files are left alone). Re-run `rekal init` to also refresh hooks, the CLAUDE.md
+marker line, and other detected-agent rules — data stays untouched. To remove
+everything Rekal created, run `rekal clean` (no residue). Full setup, teardown,
+and verification detail: **[docs/usage.md](docs/usage.md)**.
 
 ## See it in action
 

@@ -62,9 +62,10 @@ Creates:
 If the remote already has data on your rekal branch, it is fetched and
 imported into the local data DB automatically.
 
-If Rekal is already initialized, 'init' leaves your data untouched and only
-refreshes the version-managed skills and hooks — run it after upgrading the
-binary to pick up new or changed skills.`,
+If Rekal is already initialized, 'init' leaves your data untouched and
+refreshes the version-managed skill, hooks, and agent instruction lines.
+(The skill also auto-refreshes on the next recall when its pinned version
+lags the binary; re-run init to refresh hooks and instruction files too.)`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
@@ -77,10 +78,10 @@ binary to pick up new or changed skills.`,
 			rekalDir := RekalDir(gitRoot)
 
 			// Already initialized: don't rebuild the store, but do refresh the
-			// version-managed assets (skills and hooks). These ship inside the
-			// binary and are meant to track it, so `rekal init` after an upgrade
-			// is how they get updated — without this, new/changed skills would
-			// never reach an existing repo short of a full clean+init.
+			// version-managed assets (skill, hooks, instruction lines). The
+			// skill also self-heals via maybeRefreshStaleSkill on recall when
+			// .rekal-version lags the binary; init is still the path for hooks
+			// and tracked/side-effectful instruction files.
 			if _, err := os.Stat(rekalDir); err == nil {
 				if err := refreshManaged(gitRoot, cmd.ErrOrStderr()); err != nil {
 					fmt.Fprintln(cmd.ErrOrStderr(), err)

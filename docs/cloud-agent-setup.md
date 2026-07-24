@@ -14,10 +14,11 @@ it encodes the setup mistakes that cost real time:
    — the semantic layer is silently off and any quality testing is
    unrepresentative. Always pull the model before you judge recall quality.
 3. **The installed skill goes stale.** `.claude/skills/rekal/` is a copy
-   written by `rekal init`, not a symlink to source. After rebuilding a newer
-   binary (or pulling a branch that changed `cmd/rekal/cli/skill/skills/`),
-   **re-run `rekal init`** — it leaves data untouched and refreshes the
-   installed skill/hooks in place. Otherwise every skill test and route call
+   written by `rekal init`, not a symlink to source. A **released** binary
+   self-heals on the next recall when `.rekal-version` lags. A **dev** rebuild
+   often keeps `Version="dev"`, so the marker still matches — **re-run
+   `rekal init`** (data untouched) to refresh the skill/hooks. Otherwise every
+   skill test and route call
    exercises an old router.
 
 ## 1. Build (one-time)

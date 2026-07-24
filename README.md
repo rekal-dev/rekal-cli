@@ -38,37 +38,44 @@ Last week, one engineer and their agent settled how webhook retries should work.
 ```console
 $ rekal "should webhook retries use a fixed delay?"
 ```
+```text
+INJECT top=0.81 gap=0.28 2 seeds
+  01JNQX8F2K9M conf=0.81 t14 [reached 3×· "webhook retry policy"] "no, a fixed 5s delay stampedes the downstream on recovery. Use exponential backoff with jitter…"
+  01JNR2A7YQ4P conf=0.53 t9 "we capped retries at 5 attempts then dead-letter — anything past that never lands…"
+```
+
+Compact text by default — the whole answer in two lines. Line one is the
+**verdict**: `INJECT` (surface this memory now); the alternatives are
+`KNOWLEDGE` (read a HEAD-prose pointer instead) and `SILENCE` (memory isn't
+the tool — stay quiet). Each seed is a session id, its **absolute**
+confidence, the turn to drill (`t14`), and the snippet. `[reached 3×· …]` is
+the recall graph: this memory has been used three times before, last for
+"webhook retry policy" — a load-bearing decision, and a good first drill.
+
+The agent gets the decision **and the reason the alternative was rejected** — sourced from the human's own mid-course correction — before it wastes a round re-proposing it. It drills in for the full reasoning with one more call:
+
+```console
+$ rekal query --session 01JNQX8F2K9M --role human_steering
+```
+
+Everything defaults to text an agent can act on directly; add `--json` when a program needs to parse it — the same result carries `score` (rank within the set, max-normalized), absolute `confidence`, and raw BM25 `mass`, so a silence gate can reject a query that is merely the best of a weak set:
+
+```console
+$ rekal --json "should webhook retries use a fixed delay?"
+```
 ```json
 {
   "query": "should webhook retries use a fixed delay?",
-  "total": 3,
   "results": [
     {
-      "session_id": "01JNQX8F2K9M...",
-      "score": 0.87,
-      "confidence": 0.81,
-      "mass": 5.4,
-      "snippet": "...no, a fixed 5s delay stampedes the downstream on
-                  recovery. Use exponential backoff with jitter instead.",
+      "session_id": "01JNQX8F2K9M",
+      "score": 0.87, "confidence": 0.81, "mass": 5.4,
+      "snippet": "no, a fixed 5s delay stampedes the downstream on recovery. Use exponential backoff with jitter…",
       "snippet_role": "human_steering",
-      "session": {
-        "author": "dev@team.dev",
-        "branch": "feat/webhooks",
-        "commit": "a1b2c3d",
-        "files": ["services/webhooks/delivery.go"]
-      }
+      "session": { "author": "dev@team.dev", "branch": "feat/webhooks", "commit": "a1b2c3d" }
     }
   ]
 }
-```
-
-`score` ranks within the result set (max-normalized). The skill silence gate
-uses absolute `confidence` (and raw BM25 `mass`) so junk queries do not
-clear the bar just by being the best of a weak set.
-The agent gets the decision **and the reason the alternative was rejected** — sourced from the human's own mid-course correction — before it wastes a round re-proposing it. That is the whole product in one exchange. It drills in for the full reasoning with one more call:
-
-```console
-$ rekal query --session 01JNQX8F2K9M... --role human_steering
 ```
 
 ## Why not just…?
@@ -90,7 +97,7 @@ Rekal is built on beliefs. Those beliefs guide every decision. When a choice con
 - **Thin wire, rich machine.** Every byte over git costs. Search, embeddings, inference — all run locally. No servers, no APIs, no telemetry.
 - **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
 - **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
-- **Agent-first output.** Scored JSON, drill-down interface, silence gates, confidence thresholds. Designed for agent consumption, not readability.
+- **Agent-first output.** A compact text digest built for an agent to act on — verdict, per-seed confidence, drill pointers — with structured JSON one `--json` away. Silence gates and confidence thresholds, not prose.
 
 The full version: [SOUL.md](SOUL.md).
 
@@ -247,7 +254,7 @@ flowchart LR
 
     subgraph query ["Query"]
         J["rekal 'keyword'"] -->|"hybrid + knowledge"| E
-        E -->|"scored JSON<br/>confidence · mass"| K["Agent"]
+        E -->|"seed digest (text)<br/>conf · mass · --json"| K["Agent"]
         K -->|"rekal query<br/>--session &lt;id&gt;"| B
         B -->|"full conversation"| K
     end
@@ -276,7 +283,7 @@ Day-to-day: commit and push as normal. Everything else is automatic.
 
 | Agent does | Rekal does |
 |------------|------------|
-| `rekal "auth middleware"` | Hybrid search (BM25 + LSA + deep embed + facets) plus a separate `knowledge` block for prose at HEAD; returns scored JSON with `confidence` / `mass` for silence gates and `snippet_turn_index` for drill |
+| `rekal "auth middleware"` | Hybrid search (BM25 + LSA + deep embed + facets) plus a separate `knowledge` block for prose at HEAD; returns a seed digest (INJECT/KNOWLEDGE/SILENCE + per-seed `conf` and a drill pointer), or structured `confidence` / `mass` JSON with `--json` |
 | `rekal query --session <id> --offset N --limit 5` | Returns a small window of turns around the relevant part of the conversation, with `has_more` for pagination |
 | `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
 | `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |

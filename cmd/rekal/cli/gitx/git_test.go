@@ -189,3 +189,75 @@ func TestDefaultBranch_EmptyRepo(t *testing.T) {
 		t.Fatalf("DefaultBranch on empty repo = %q, want empty", got)
 	}
 }
+
+func TestTrackedBlobs_PathToSHA(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+
+	write := func(path, content string) {
+		t.Helper()
+		full := filepath.Join(dir, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, dir, "add", path)
+	}
+	write("docs/a.md", "# A\n")
+	write("docs/über notes.md", "# Über\n")
+	git(t, dir, "commit", "-m", "add prose")
+
+	blobs := TrackedBlobs(dir, "HEAD")
+	if len(blobs) < 2 {
+		t.Fatalf("TrackedBlobs = %v, want ≥2 paths", blobs)
+	}
+	for _, path := range []string{"docs/a.md", "docs/über notes.md"} {
+		sha, ok := blobs[path]
+		if !ok || sha == "" {
+			t.Fatalf("missing blob for %q in %v", path, blobs)
+		}
+		want := strings.TrimSpace(git(t, dir, "rev-parse", "HEAD:"+path))
+		if sha != want {
+			t.Fatalf("%s sha = %s, want %s", path, sha, want)
+		}
+	}
+
+	// Rename keeps the blob SHA under the new path.
+	oldSHA := blobs["docs/a.md"]
+	git(t, dir, "mv", "docs/a.md", "docs/b.md")
+	git(t, dir, "commit", "-m", "rename")
+	after := TrackedBlobs(dir, "HEAD")
+	if _, ok := after["docs/a.md"]; ok {
+		t.Fatal("old path still in TrackedBlobs after rename")
+	}
+	if after["docs/b.md"] != oldSHA {
+		t.Fatalf("renamed blob sha = %s, want %s", after["docs/b.md"], oldSHA)
+	}
+}
+
+func TestBlobContents_Batch(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	full := filepath.Join(dir, "docs/x.md")
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte("hello blob\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "docs/x.md")
+	git(t, dir, "commit", "-m", "x")
+	sha := strings.TrimSpace(git(t, dir, "rev-parse", "HEAD:docs/x.md"))
+
+	got := BlobContents(dir, []string{sha, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"})
+	if string(got[sha]) != "hello blob\n" {
+		t.Fatalf("BlobContents[%s] = %q", sha, got[sha])
+	}
+	if _, ok := got["deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"]; ok {
+		t.Fatal("missing SHA should not appear in BlobContents")
+	}
+}

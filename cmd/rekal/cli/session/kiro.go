@@ -27,13 +27,15 @@ import (
 // User/globalStorage/kiro.kiroagent/workspace-sessions/<ws>/:
 //
 //	sessions.json     index: [{sessionId, dateCreated, workspaceDirectory, hidden}]
+//	                  dateCreated is unix milliseconds as a decimal string
 //	<sessionId>.json  {history:[{message:{role:"user"|"assistant", content: string | [{type,text}]}}]}
 //
 // Discovery is exact for both — the CLI's `cwd` and the IDE index's
-// `workspaceDirectory` record the repo. Tool calls carry no documented shape,
-// so they're extracted best-effort and fail soft; the conversation text is the
-// reliable part. Parse dispatches on the ref's extension (.jsonl → CLI,
-// .json → IDE).
+// `workspaceDirectory` record the repo. IDE history entries do not carry a
+// documented toolUses block (tools live in separate execution files under the
+// profile hash); when a toolUses array is present it's extracted best-effort
+// and fails soft. Conversation text is the reliable part. Parse dispatches on
+// the ref's extension (.jsonl → CLI, .json → IDE).
 type KiroAdapter struct{}
 
 func (a *KiroAdapter) Name() string { return "kiro" }
@@ -436,7 +438,9 @@ type kiroIDESession struct {
 }
 
 // kiroIDEEntry is one history entry. Content is a string or an array of
-// {type,text} parts; ToolUses (when present) carry the turn's tool calls.
+// {type,text} parts. ToolUses is optional and often absent — verified local
+// Kiro IDE sessions store tools on execution files (actionType/input), not
+// here; when present, parse best-effort.
 type kiroIDEEntry struct {
 	Message struct {
 		Role    string          `json:"role"`

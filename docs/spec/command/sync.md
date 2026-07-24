@@ -22,7 +22,7 @@ Captures local work, pushes it, fetches remote branches, and rebuilds the search
 2. **Push** (non-fatal) — Push local data to remote via `doPush`. If it fails, print a warning and continue.
 3. **Fetch remote refs** (non-fatal) — `git fetch origin 'refs/heads/rekal/*:refs/remotes/origin/rekal/*'`. If fetch fails (no remote, offline), continue with local data only.
 4. **List remote branches** — `git for-each-ref` on `refs/remotes/origin/rekal/`, excluding the current user's branch.
-5. **Rebuild index** — Drop and recreate all index tables, then:
+5. **Rebuild index** — Same atomic rebuild as `rekal index` (temp file → rename), then:
    - Populate from local `data.db` (sessions, turns, tool calls, files, facets, co-occurrence)
    - **Cross-repo local import (if enabled)** — When the `local_import` preference in `.rekal/config.json` is set (via `rekal index --include-all` / `--include`), fold this machine's other Claude Code sessions into `turns_ft` / `session_facets`, labeled with `origin`. Index only — never written to `data.db`, so they can never be pushed. Deduped by content hash against `data.db`. Sync honors the last-set preference; it does not change it.
    - For each remote branch: decode wire format (`rekal.body` + `dict.bin`), insert into `turns_ft`, `session_facets`, `files_index` — **skip tool calls** for remote data

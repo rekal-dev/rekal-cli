@@ -24,9 +24,11 @@ func newIndexCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "index",
 		Short: "Rebuild the index DB from the data DB",
-		Long: `Drop and rebuild the index DB (.rekal/index.db) from the data DB.
+		Long: `Rebuild the index DB (.rekal/index.db) from the data DB.
 
-The index is local-only and never synced. It contains:
+Builds into a temporary file and atomically replaces the live index only
+after the rebuild succeeds — a failed or interrupted rebuild leaves the
+previous index untouched. The index is local-only and never synced. It contains:
   - Full-text search index (BM25) over conversation turns
   - LSA vector embeddings for lightweight semantic similarity
   - Session facets (author, branch, actor, counts) for fast filtering

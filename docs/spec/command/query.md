@@ -21,18 +21,18 @@ explicit via `--sql`; a positional statement is the accepted shorthand.
 
 1. **Choose target** — Data DB (`.rekal/data.db`) by default; index DB (`.rekal/index.db`) if `--index`.
 2. **Execute** — Read-only (SELECT only). Rejects non-SELECT statements.
-3. **Output** — One JSON object per row (NDJSON).
+3. **Output** — TSV rows by default (header + values). With `--json`, one JSON object per row (NDJSON).
 
 ### Session drill-down (`--session <id>`)
 
-Returns the full conversation for a specific session. This is the progressive loading drill-down — after `rekal <query>` returns scored snippets, the agent calls `rekal query --session <id>` to get full turns.
+Returns the full conversation for a specific session. This is the progressive loading drill-down — after `rekal <query>` returns a seed digest (or `--json` results), the agent calls `rekal query --session <id>` to get full turns.
 
 1. **Query session** — Fetch session metadata from `sessions` table.
 2. **Query turns** — Fetch turns ordered by `turn_index`, applying `--role` filter if set.
 3. **Count total** — Run a COUNT query (respecting `--role` filter) to populate `total_turns`.
 4. **Paginate** — Apply `--offset` and `--limit` to the turn query.
 5. **If `--full`** — Also fetch tool calls and files touched.
-6. **Output** — Single JSON object with session metadata, pagination fields, turns, and optionally tool calls and files. Optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) is included when present and omitted for sessions from agents without the concept — see [agent-metadata.md](../../agent-metadata.md). Also always includes `child_session_ids` — the sessions whose `parent_session_id` points at this one (subagent/workflow transcripts folded under it in recall) — empty when there are none, so an agent can navigate from a collapsed recall result into the exact transcript that matched.
+6. **Output** — Readable turn transcript by default; with `--json`, a single JSON object with session metadata, pagination fields, turns, and optionally tool calls and files. Optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) is included when present and omitted for sessions from agents without the concept — see [agent-metadata.md](../../agent-metadata.md). Also always includes `child_session_ids` — the sessions whose `parent_session_id` points at this one (subagent/workflow transcripts folded under it in recall) — empty when there are none, so an agent can navigate from a collapsed recall result into the exact transcript that matched.
 
 `--session` and positional SQL are mutually exclusive. `--offset`, `--limit`, and `--role` require `--session`.
 
@@ -58,7 +58,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `--offset <n>` | Skip first N turns (default: 0, requires `--session`) |
 | `--limit <n>` | Max turns to return, 0 = no limit (default: 0, requires `--session`) |
 | `--role <human\|assistant\|human_steering\|summary>` | Filter turns by role (requires `--session`). Matches exactly — queue-operation steering turns are stored as role `human_steering` (see [agent-metadata.md](../../agent-metadata.md)) and are not returned by `--role human`; `summary` turns are harness-written compaction distillations (rows stored as `human` by pre-summary versions are reclassified by content fingerprint at read time, scoped to `source = 'claude'` sessions so other agent types are untouched); omit `--role` to see all turns. |
-| `--json` | Compact single-line JSON for session drill (SQL mode already emits compact NDJSON). Same payload as the pretty default; the machine-consumer opt-in that stays stable across the coming text-default (`../../design/skill-into-command.md` §2.0). |
+| `--json` | JSON instead of the default text/TSV — session drill → one object; SQL → NDJSON. |
 
 ---
 

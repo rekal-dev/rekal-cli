@@ -103,13 +103,17 @@ progressively, load full sessions only when needed.
 | Agent does | Rekal does |
 |------------|------------|
 | `rekal "auth middleware"` | Hybrid search (BM25 + LSA + deep embed + facets) plus a separate `knowledge` block for prose at HEAD; returns a seed digest (INJECT/KNOWLEDGE/SILENCE + per-seed `conf` and a drill pointer), or structured `confidence` / `mass` JSON with `--json` |
-| `rekal query --session <id> --offset N --limit 5` | Returns a small window of turns around the relevant part of the conversation, with `has_more` for pagination |
+| `rekal find "auth middleware"` | Complete, time-ordered enumeration of every ledger mention — for "all / every / how many" asks |
+| `rekal query --session <id> --offset N --limit 5` | Readable window of turns around the relevant part (`--json` for one object; `has_more` for pagination) |
 | `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
 | `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |
 | `rekal --file src/billing/ "discount"` | Scoped search filtered by file path |
 | `rekal --commit <sha>` | Finds the session(s) that produced a commit — the anchor for change provenance |
+| `rekal --explain "…"` | Adds per-layer scores and related-session joins (JSON shape; pair with `--json`) |
 | `rekal query --session <id> --role human_steering` | Returns only the mid-course corrections — the highest-signal turns for intent and preferences |
 | `rekal query --session <id> --role summary` | Returns the harness-written compaction distillations — the cheapest overview of a long session |
+| `rekal query --sql "SELECT …"` | Analytical / temporal SQL → TSV rows (`--json` for NDJSON; `--index` for index DB) |
+| `rekal embed` | Fill missing semantic vectors (also started in the background after `index` / `sync`) |
 | `rekal sync` (optional, at session start) | Pulls team context before the agent starts working |
 
 ```bash

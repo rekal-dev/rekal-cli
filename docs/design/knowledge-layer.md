@@ -19,8 +19,8 @@ the session layer uses — a moved section or reverted edit re-fills from
 cache, never from the model. Structural rebuilds (`rekal index`/`sync`)
 chunk + FTS synchronously, then spawn background `rekal embed` for vectors
 (budgeted bites, DuckDB lock released between passes — see
-`docs/spec/command/embed.md`). The post-commit hook still embeds up to 256
-chunks per commit. Recall never embeds — latency stays pure read. At query
+`docs/spec/command/embed.md`). The post-commit hook still embeds up to 16
+chunks per commit (`knowledgeEmbedBudget`). Recall never embeds — latency stays pure read. At query
 time the knowledge score blends *absolute* saturating BM25 with cosine
 similarity using the session ranking's keyword/semantic split
 (`weights.layers2`) — never max-normalized within the candidate set (that

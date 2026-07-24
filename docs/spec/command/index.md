@@ -1,6 +1,6 @@
 # rekal index
 
-**Role:** Full rebuild of the index DB from the data DB. Drops and recreates all index tables, then repopulates from `.rekal/data.db`. Safe to run anytime — no data loss; data DB is source of truth.
+**Role:** Full rebuild of the index DB from the data DB. Builds into `index.db.rebuilding`, then atomically renames over the live index only on success — a failed rebuild leaves the previous index untouched. Safe to run anytime — no data loss; data DB is source of truth.
 
 **Invocation:** `rekal index`.
 
@@ -16,7 +16,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 
 1. **Run shared preconditions** — Git root, init done.
 2. **Open index DB** — Load FTS extension.
-3. **Drop and recreate** — Drop all index tables (`turns_ft`, `tool_calls_index`, `files_index`, `session_facets`, `file_cooccurrence`, `session_embeddings`, `index_state`), then recreate schema.
+3. **Open a fresh temp index** — Create schema in `index.db.rebuilding` (empty file; nothing to drop). The live `index.db` is not opened for write until the final rename.
 4. **Populate from data DB** — Attach `data.db` read-only and bulk-insert:
    - `turns_ft` — All turns from `data_db.turns`
    - `tool_calls_index` — All tool calls from `data_db.tool_calls`

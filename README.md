@@ -354,11 +354,13 @@ never committed. See **[docs/configuration.md](docs/configuration.md)**.
 | `rekal checkpoint` | Capture the current session after a commit |
 | `rekal push [--force] [--re-export]` | Push Rekal data to the remote branch (merged work only) |
 | `rekal sync [--self]` | Sync team context from remote rekal branches |
-| `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB; optionally fold in cross-repo local sessions |
+| `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB (atomic temp→rename); optionally fold in cross-repo local sessions |
+| `rekal embed` | Fill missing semantic embeddings (resumable; also started after index/sync) |
 | `rekal log [--limit N]` | Show recent checkpoints |
-| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [query]` | Hybrid search over sessions, optionally scoped by file, commit, author, or actor; `--explain` adds per-layer scores and related-session joins |
-| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full]` | Drill into a session — window by turn, filter by role (`human`/`assistant`/`human_steering`/`summary`), or load full detail |
-| `rekal query "<sql>" [--index]` | Run raw SQL against the data or index DB |
+| `rekal find "<term>" [role]` | Enumerate every ledger mention of a term (complete, time order) |
+| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [--json] [query]` | Hybrid search → seed digest by default; `--json` for raw structured results; `--explain` adds per-layer scores |
+| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full] [--json]` | Drill into a session — readable turns by default; `--json` for one object |
+| `rekal query --sql "<sql>" [--index] [--json]` | Raw SQL → TSV by default; `--json` for NDJSON |
 
 Full details: [docs/spec/command/](docs/spec/command/).
 

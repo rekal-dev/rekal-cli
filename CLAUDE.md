@@ -348,7 +348,7 @@ session discovery keep using the invoking worktree.
   `scripts/bench/prompts/`). The full multi-repo run sequence + the paper's
   data pack is `docs/research/RUN.md`
 - `spec/preconditions.md`: Shared checks for all commands
-- `spec/command/`: One file per command — checkpoint, clean, index, init, log, push, query, recall, sync
+- `spec/command/`: One file per command — checkpoint, clean, embed, find, index, init, log, push, query, recall, sync
 
 ## Development
 

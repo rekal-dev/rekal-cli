@@ -1,10 +1,18 @@
 # Skill router — one thin route, three homes
 
+> **Historical / superseded for retrieval.** The Python gates this doc describes
+> (`scripts/route.py`, `view.py`, etc.) were folded into the binary — recall
+> returns a seed digest from `digest.go`, drill/SQL/find are `rekal` commands,
+> and relative dates are agent reasoning + SQL (no `when` command). What still
+> ships as scripts is the map/wiki gates (`scripts/map.sh`, `scripts/wiki-gate.sh`).
+> For the live surface see `skills/rekal/SKILL.md` and `docs/spec/command/`.
+> Kept as design history for the three-homes framing.
+
 The Claude Code surface is a **single** skill (`skills/rekal/`), redesigned from
 `SOUL.md`'s "The skill" tenets. It is thin on the route, rich on arrival, and
 organized around three homes:
 
-- **Function → a script** — deterministic data for the agent's judgment.
+- **Function → a command (or a remaining gate script)** — deterministic data for the agent's judgment.
 - **Knowledge → rich prose, on demand** — informs judgment, never makes it.
 - **Judgment → the agent's reasoning** — never frozen into a script or a rule.
 

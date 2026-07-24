@@ -1,6 +1,6 @@
 # rekal (root) — recall
 
-**Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. Returns scored snippets and metadata — just enough for the agent to decide what matters. For full session content, use `rekal show <session_id>`.
+**Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. Default stdout is a compact **seed digest** (INJECT / KNOWLEDGE / SILENCE + per-seed confidence and drill pointers) — just enough for the agent to decide what matters. Use `--json` for the structured payload. For full session content, use `rekal query --session <session_id>`.
 
 **Invocation:** `rekal [filters...] [query]`. Subcommands (init, clean, checkpoint, etc.) take precedence when present.
 
@@ -22,7 +22,7 @@ See [preconditions.md](../preconditions.md): git repo, init done. If the index i
    - **With query text** → Hybrid search (BM25 + LSA + Nomic combined scoring).
    - **Without query text** → Filter-only search (latest sessions matching filters).
 4. **Refresh the knowledge layer** — watermark-gated against HEAD: when the indexed commit matches, this is one `rev-parse`; when HEAD moved, only prose files whose git blob SHAs changed are re-chunked (see [knowledge-layer design](../../design/knowledge-layer.md)). Best-effort — recall proceeds on a stale or absent layer.
-5. **Output** — Structured JSON to stdout. Fields: `knowledge` (omitted when empty), `results`, `query`, `filters`, `mode`, `total`. Each result's `session` detail carries optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) when present, omitted otherwise — grouping/drill-down data, deliberately not a filter surface (see [agent-metadata.md](../../agent-metadata.md)).
+5. **Output** — Seed digest text to stdout by default. With `--json`, structured JSON: `knowledge` (omitted when empty), `results`, `query`, `filters`, `mode`, `total`. Each result's `session` detail carries optional harness metadata (`agent_id`, `team_name`, `workflow_name`, `parent_session_id`) when present, omitted otherwise — grouping/drill-down data, deliberately not a filter surface (see [agent-metadata.md](../../agent-metadata.md)).
 
 ---
 
@@ -99,7 +99,7 @@ Query `session_facets` with filter WHERE clauses, ordered by `captured_at DESC`.
 | `--actor <human\|agent>` | Filter by actor type |
 | `-n`, `--limit <n>` | Max results (default: 20 when unset; `0` = empty set; negative → error) |
 | `--explain` | Adds per-layer scores (`layers`: bm25/lsa/nomic/facet, normalized, pre-weight) and `related` (sessions sharing touched files, query-time join) to each result |
-| `--json` | Compact single-line structured JSON (for machine consumers). Same payload as the default; the stable opt-in for when the default output becomes a compact text digest (`docs/design/skill-into-command.md` §2.0) |
+| `--json` | Raw structured JSON instead of the default seed digest (for machine consumers) |
 
 Multiple filters = AND.
 

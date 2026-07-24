@@ -10,10 +10,14 @@ Experience and behaviour per command. One file per command under `command/`.
 | `rekal clean` | [command/clean.md](command/clean.md) |
 | `rekal checkpoint` | [command/checkpoint.md](command/checkpoint.md) |
 | `rekal push` | [command/push.md](command/push.md) |
-| `rekal index` | [command/index.md](command/index.md) |
-| `rekal query "<sql>"` | [command/query.md](command/query.md) |
-| `rekal log` | [command/log.md](command/log.md) |
 | `rekal sync` | [command/sync.md](command/sync.md) |
+| `rekal index` | [command/index.md](command/index.md) |
+| `rekal embed` | [command/embed.md](command/embed.md) |
+| `rekal log` | [command/log.md](command/log.md) |
+| `rekal find` | [command/find.md](command/find.md) |
+| `rekal query` | [command/query.md](command/query.md) |
 | `rekal` (root recall) | [command/recall.md](command/recall.md) |
 
 **Soul:** Minimum touch. Root = recall only. Everything else is explicit subcommands. We keep the command set small — no extra subcommands unless necessary.
+
+**Output defaults (keep help/specs in sync):** recall and `query --session` print agent-readable text by default; `query` SQL prints TSV; `--json` opts into structured JSON/NDJSON. `find` is text-only.

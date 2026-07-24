@@ -1,16 +1,13 @@
 # Skill → command: agent-first defaults, boundaries, and the skill/command seam
 
-Status: design (interface lock before migration). No performance change is
-permitted — see §6.
+Status: **migration complete** for the live CLI surface. Tables below that still
+list `when`, `--also`, or `query --view` are historical — do not treat them as
+current flags/commands. No performance change is permitted — see §6.
 
-> **Superseded in part (later refinements):** the `seek` verb is no longer a
-> `--also` flag — multi-framing RRF is now folded into the base `rekal "<q>"`,
-> which auto-derives deterministic reformulations and fuses them (see
-> `deriveFramings` in `recall.go` and the recall spec). And the `when` command
-> was removed: relative-date resolution moved back to the agent's own reasoning
-> (skill time-axis guidance + SQL date math), since a pure calendar utility
-> doesn't earn a peer command and can't ship as a script in the scriptless
-> skill. The rest of this document stands.
+> **Live surface (authoritative):** `rekal "<q>"` auto-widens via `deriveFramings`
+> + RRF (no `--also`); `rekal find` / `query --session` / `query --sql` are
+> text/TSV by default (`--json` for raw); there is **no** `when` command —
+> relative dates are skill guidance + SQL. Specs: `docs/spec/command/`.
 
 ## 1. Why — the two souls compose, they don't conflict
 

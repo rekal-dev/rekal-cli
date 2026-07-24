@@ -182,7 +182,7 @@ memory, the model supplies the answer:
 | Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query (agent) |
 |---|---|---|---|---|---|
 | LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | a few seconds |
-| LongMemEval | 86.60% | — | ~10.5K | 6.6 | a few seconds |
+| LongMemEval | 86.60% | 99% | ~10.5K | 6.6 | a few seconds |
 
 | Additional metric (LoCoMo) | Result |
 |---|---|
@@ -193,9 +193,9 @@ memory, the model supplies the answer:
 | L1 / L2 memory layers | None |
 | External memory service | None |
 
-That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
-recall — at roughly six agent turns per question, with no memory tier behind
-it. And these are the shipped skill in the loop, not a hand-tuned harness: the
+That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and Top-20 recall
+of 98.6% (LoCoMo) / 99% (LongMemEval) — at roughly six agent turns per
+question, with no memory tier behind it. And these are the shipped skill in the loop, not a hand-tuned harness: the
 agent invoked Rekal's routing workflow on ~99% of questions, and that share
 climbs toward the ceiling as the skill sharpens — the gate is used, not
 bypassed.

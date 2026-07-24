@@ -195,10 +195,10 @@ memory, the model supplies the answer:
 
 That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and Top-20 recall
 of 98.6% (LoCoMo) / 99% (LongMemEval) — at roughly six agent turns per
-question, with no memory tier behind it. And these are the shipped skill in the loop, not a hand-tuned harness: the
-agent invoked Rekal's routing workflow on ~99% of questions, and that share
-climbs toward the ceiling as the skill sharpens — the gate is used, not
-bypassed.
+question, with no memory tier behind it. And these are the shipped skill in
+the loop, not a hand-tuned harness: as the answering agent gets stronger, so
+does the skill — accuracy climbs toward the ~98.6% / 99% Top-20 recall
+ceiling as the right seeds are surfaced.
 
 **Local store, wire & recall latency** (Rekal's own coding sessions, Apple M4 —
 6 Claude transcripts / 14 sessions, 473 turns; pure `rekal`, no answering model):

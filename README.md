@@ -179,7 +179,7 @@ quality with **no memory layers and no external memory service** — retrieval
 runs locally over git. The answering agent is **GPT-5 Sol**; Rekal supplies the
 memory, the model supplies the answer:
 
-| Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
+| Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query (agent) |
 |---|---|---|---|---|---|
 | LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | a few seconds |
 | LongMemEval | 86.60% | — | ~10.5K | 6.6 | a few seconds |
@@ -199,6 +199,18 @@ it. And these are the shipped skill in the loop, not a hand-tuned harness: the
 agent invoked Rekal's routing workflow on ~99% of questions, and that share
 climbs toward the ceiling as the skill sharpens — the gate is used, not
 bypassed.
+
+**Retrieval & wire (local microbench).** Pure `rekal` recall — no answering
+model — on synthetic LoCoMo `conv-26` (19 sessions, 419 turns; Apple M4,
+`-n 10`, 40 questions). Time/query above is end-to-end agent answering; this
+table is retrieval alone:
+
+| Metric | Result |
+|---|---|
+| Recall wall time (new process / query) | median ~350 ms (p95 ~400 ms) |
+| In-process search (`scoring_lineage`) | ~76 ms (knowledge/reach ~55 ms) |
+| Wire compression (zstd + preset dict) | ~2.1:1 on exported payloads |
+| Session-frame unit / 10-frame batch | 2.0:1 · 6.8× vs per-frame |
 
 **The trade we make on purpose: one immutable source of truth — no summaries,
 no upkeep, real reasoning on demand.** Rekal keeps your raw sessions as an

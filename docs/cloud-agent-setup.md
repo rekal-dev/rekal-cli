@@ -64,8 +64,9 @@ rekal query --session <sid> | python3 .claude/skills/rekal/scripts/view.py  # dr
 
 `rekal init`/`sync` run under your configured git identity (`git config
 user.email`) and push to `rekal/<email>`; set the identity you intend before
-running if the environment defaults to a bot user. Re-running `init` after a
-binary rebuild is safe and required — it refreshes the installed skill (trap 3).
+running if the environment defaults to a bot user. After a **dev** binary
+rebuild, re-run `init` (safe; data untouched) so the skill/hooks refresh
+(trap 3) — released binaries self-heal the skill on the next recall.
 
 The first recall after `init`/`sync` may print `SEMANTIC warming` — the nomic
 daemon is still loading; results are keyword + LSA. Re-run with backoff

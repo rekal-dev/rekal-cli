@@ -6,10 +6,10 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
 [![arXiv](https://img.shields.io/badge/arXiv-2607.14390-b31b1b)](https://arxiv.org/abs/2607.14390)
 [![License](https://img.shields.io/github/license/rekal-dev/rekal-cli?color=blue)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eNNabp4b)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/hDMj8zHH2)
 [![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Website](https://rekal.dev) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/eNNabp4b)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Website](https://rekal.dev) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/hDMj8zHH2)
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 

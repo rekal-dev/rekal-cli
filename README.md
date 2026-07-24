@@ -200,27 +200,24 @@ agent invoked Rekal's routing workflow on ~99% of questions, and that share
 climbs toward the ceiling as the skill sharpens — the gate is used, not
 bypassed.
 
-**Local store, wire & recall latency** (Rekal's own coding sessions on Apple M4 —
-6 Claude transcripts / 14 sessions incl. subagents, 473 turns; pure `rekal`,
-no answering model). Time/query in the accuracy table above is end-to-end
-agent answering; these rows are retrieval and footprint alone:
+**Local store, wire & recall latency** (Rekal's own coding sessions, Apple M4 —
+6 Claude transcripts / 14 sessions, 473 turns; pure `rekal`, no answering model):
 
 | Metric | Result |
 |---|---|
-| Raw agent JSONL | 8.5 MB |
-| Wire (session frames on the orphan branch) | 54 KB (**~158×** smaller; median ~155×, up to ~187×) |
-| Local `data.db` | 5.8 MB |
-| Local `index.db` (FTS + embeddings) | 10.8 MB |
+| Raw JSONL | 8.5 MB |
+| Wire | 54 KB (**~158×**) |
+| `data.db` | 5.8 MB |
+| `index.db` | 10.8 MB |
 | Local store (`data` + `index`) | 16.5 MB |
-| Recall wall time (`rekal -n 10`, new process / query) | median **~150 ms** (p95 ~210 ms) |
-| Recall wall time (synthetic LoCoMo `conv-26`, 40 questions) | median ~350 ms (p95 ~400 ms) |
-| In-process search (`scoring_lineage`) | ~76 ms (knowledge/reach ~55 ms) |
-| Pure zstd on already-structured payloads | ~2–3.5:1 (the big win is stripping tool outputs / file bodies / JSONL chrome before zstd) |
+| Recall latency | median **~150 ms** (p95 ~210 ms) |
+| LoCoMo synthetic recall | median ~350 ms (p95 ~400 ms) |
+| In-process search | ~76 ms |
 
-The large wire reduction matches the design claim in [SOUL.md](SOUL.md): a
-multi-MB coding session becomes tens of KB on the orphan branch — vs the raw
-agent transcript, not vs the already-slim codec payload. Local DBs stay rich
-on the machine; only the wire is thin.
+Time/query in the accuracy table is end-to-end agent answering; these rows are
+retrieval and footprint alone. Wire reduction is vs the raw agent transcript
+(strip tool outputs / file bodies / JSONL chrome, then zstd) — see [SOUL.md](SOUL.md).
+Local DBs stay rich on the machine; only the wire is thin.
 
 **The trade we make on purpose: one immutable source of truth — no summaries,
 no upkeep, real reasoning on demand.** Rekal keeps your raw sessions as an

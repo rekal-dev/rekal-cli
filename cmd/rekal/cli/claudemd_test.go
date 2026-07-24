@@ -82,8 +82,9 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 	// Not parallel: uses t.Setenv to fake the machine's installed agents.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	// Installed: codex (→ AGENTS.md) and gemini (→ GEMINI.md). Copilot absent.
-	for _, d := range []string{".codex", ".gemini"} {
+	// Installed: codex (→ AGENTS.md), gemini (→ GEMINI.md), kiro
+	// (→ .kiro/steering/rekal.md). Copilot absent.
+	for _, d := range []string{".codex", ".gemini", ".kiro"} {
 		if err := os.MkdirAll(filepath.Join(home, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -92,6 +93,7 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 	repo := t.TempDir()
 	agents := filepath.Join(repo, "AGENTS.md")
 	gemini := filepath.Join(repo, "GEMINI.md")
+	kiro := filepath.Join(repo, ".kiro", "steering", "rekal.md")
 	copilot := filepath.Join(repo, ".github", "copilot-instructions.md")
 
 	// A user already has an AGENTS.md with their own content.
@@ -103,8 +105,9 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 	var buf bytes.Buffer
 	installAgentInstructions(repo, &buf)
 
-	// Detected agents' files carry the marker; user content is preserved.
-	for _, p := range []string{agents, gemini} {
+	// Detected agents' files carry the marker (including the nested Kiro
+	// steering file, whose parent dirs are created); user content is preserved.
+	for _, p := range []string{agents, gemini, kiro} {
 		data, err := os.ReadFile(p)
 		if err != nil || !strings.Contains(string(data), rekalClaudeMDMarker) {
 			t.Fatalf("%s missing rekal line: %v / %q", p, err, string(data))
@@ -122,6 +125,9 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 	gi, _ := os.ReadFile(filepath.Join(repo, ".gitignore"))
 	if !strings.Contains(string(gi), "/GEMINI.md") {
 		t.Fatalf("newly-created GEMINI.md should be gitignored: %q", string(gi))
+	}
+	if !strings.Contains(string(gi), "/.kiro/steering/rekal.md") {
+		t.Fatalf("newly-created Kiro steering file should be gitignored: %q", string(gi))
 	}
 	if strings.Contains(string(gi), "/AGENTS.md") {
 		t.Fatalf("pre-existing AGENTS.md must not be gitignored: %q", string(gi))
@@ -145,5 +151,13 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 	}
 	if _, err := os.Stat(gemini); !os.IsNotExist(err) {
 		t.Fatal("GEMINI.md we created should be removed on clean")
+	}
+	// The Kiro steering file we created is removed, and its empty parent dirs
+	// (.kiro/steering, .kiro) are pruned.
+	if _, err := os.Stat(kiro); !os.IsNotExist(err) {
+		t.Fatal(".kiro/steering/rekal.md we created should be removed on clean")
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".kiro")); !os.IsNotExist(err) {
+		t.Fatal("empty .kiro should be pruned on clean")
 	}
 }

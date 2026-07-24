@@ -55,8 +55,9 @@ Creates:
   CLAUDE.md line     One marker-tagged sentence pointing agents at the skill
   agent rules        For each other AI agent detected on this machine, one
                      marker-tagged line in the file it reads: AGENTS.md
-                     (Codex/Cursor/OpenCode), GEMINI.md (Gemini), or
-                     .github/copilot-instructions.md (Copilot)
+                     (Codex/Cursor/OpenCode), GEMINI.md (Gemini),
+                     .github/copilot-instructions.md (Copilot), or
+                     .kiro/steering/rekal.md (Kiro)
 
 If the remote already has data on your rekal branch, it is fetched and
 imported into the local data DB automatically.
@@ -466,6 +467,7 @@ func installAgentInstructions(gitRoot string, w io.Writer) {
 		{filepath.Join(home, ".cursor"), "cursor", "AGENTS.md"},
 		{filepath.Join(home, ".gemini"), "gemini", "GEMINI.md"},
 		{filepath.Join(home, ".copilot"), "copilot", filepath.Join(".github", "copilot-instructions.md")},
+		{filepath.Join(home, ".kiro"), "kiro", filepath.Join(".kiro", "steering", "rekal.md")},
 	}
 	// Group detected agents by target file so a shared file (AGENTS.md) is
 	// written once and its message names every agent that reads it.

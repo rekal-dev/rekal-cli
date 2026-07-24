@@ -23,7 +23,8 @@ rekal init
   (created if missing; your own content is never touched)
 - For each **other** AI agent detected on your machine, one marker-tagged line
   in the file it reads: `AGENTS.md` (Codex / Cursor / OpenCode), `GEMINI.md`
-  (Gemini), or `.github/copilot-instructions.md` (Copilot). Detection is per
+  (Gemini), `.github/copilot-instructions.md` (Copilot), or
+  `.kiro/steering/rekal.md` (Kiro). Detection is per
   machine — a teammate who clones the repo and uses a different agent re-runs
   `rekal init` to add theirs. A file Rekal **newly creates** is gitignored
   (it's machine-specific, so it stays local); a file you already track keeps its

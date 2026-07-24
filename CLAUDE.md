@@ -108,17 +108,19 @@ session discovery keep using the invoking worktree.
   tracked/side-effectful assets. `installAgentInstructions` covers the
   non-Claude agents: it detects which are installed on the machine (home-dir
   probe — `~/.codex`, `~/.local/share/opencode`, `~/.cursor`, `~/.gemini`,
-  `~/.copilot`) and writes the marker-tagged `rekalAgentLine` into the file each
-  reads — `AGENTS.md` (Codex/OpenCode/Cursor, written once), `GEMINI.md`
-  (Gemini), `.github/copilot-instructions.md` (Copilot) — via the generalized
+  `~/.copilot`, `~/.kiro`) and writes the marker-tagged `rekalAgentLine` into
+  the file each reads — `AGENTS.md` (Codex/OpenCode/Cursor, written once),
+  `GEMINI.md` (Gemini), `.github/copilot-instructions.md` (Copilot),
+  `.kiro/steering/rekal.md` (Kiro) — via the generalized
   `ensureManagedLine`. Created-if-missing, replace-in-place on refresh, user
   content preserved; a file Rekal **newly creates** is gitignored (per-machine
   detection → local-only), while a file the user already tracked stays tracked
   with only the marker line injected
 - `clean.go`: Remove Rekal setup — completely, no residue. `removeManagedLines`
   strips the marker line from CLAUDE.md and every detected-agent file (AGENTS.md
-  / GEMINI.md / .github/copilot-instructions.md), deleting a file that was ours
-  and pruning an emptied `.github`
+  / GEMINI.md / .github/copilot-instructions.md / .kiro/steering/rekal.md),
+  deleting a file that was ours and pruning emptied `.github` / `.kiro/steering`
+  / `.kiro`
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
   knowledge chunks). Deep-semantic session + knowledge vectors are deferred
   to background `rekal embed` after the atomic rename. Also carries the

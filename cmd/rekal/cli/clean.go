@@ -70,12 +70,16 @@ func removeManagedLines(gitRoot string) {
 		"AGENTS.md",
 		"GEMINI.md",
 		filepath.Join(".github", "copilot-instructions.md"),
+		filepath.Join(".kiro", "steering", "rekal.md"),
 	} {
 		removeManagedLine(filepath.Join(gitRoot, rel))
 	}
-	// If we created .github only for copilot-instructions.md, prune it when
-	// empty (os.Remove refuses a non-empty dir, so user content is safe).
+	// Prune directories we may have created solely for an agent file, when they
+	// are left empty (os.Remove refuses a non-empty dir, so user content is
+	// safe). .kiro/steering nests, so remove it before .kiro.
 	_ = os.Remove(filepath.Join(gitRoot, ".github"))
+	_ = os.Remove(filepath.Join(gitRoot, ".kiro", "steering"))
+	_ = os.Remove(filepath.Join(gitRoot, ".kiro"))
 }
 
 // removeManagedLine deletes the marker-tagged line Rekal injected into the file

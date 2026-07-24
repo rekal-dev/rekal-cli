@@ -13,7 +13,7 @@
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
-> **Memory that lives in git — shared by your team, sharper every session.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, and OpenCode.
+> **Memory that lives in git — shared by your team, sharper every session.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
@@ -54,7 +54,8 @@ the agent skill under `.claude/skills/rekal/`, an orphan branch
 `rekal/<your-email>` for transport, and one marker-tagged line in `CLAUDE.md`
 pointing your agent at the skill — plus the equivalent line in the rules file of
 any other agent it detects (`AGENTS.md` for Codex/Cursor/OpenCode, `GEMINI.md`,
-or `.github/copilot-instructions.md`). Your own content is never touched. That
+`.github/copilot-instructions.md`, or `.kiro/steering/rekal.md` for Kiro). Your
+own content is never touched. That
 line is the whole developer experience for most users: init, then commit and
 push as normal — your agent routes its own memory from there.
 

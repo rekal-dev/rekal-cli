@@ -124,7 +124,7 @@ Rekal is built on beliefs. Those beliefs guide every decision. When a choice con
 - **Data and index, separated.** Your sessions land in an append-only `data.db` **raw** — no LLM pre-summarization, no lossy "memory" distillation. The derived `index.db` (full-text + embeddings) is built and rebuilt locally from that data, and can be thrown away and regenerated at any time.
 - **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval — lexical + graph + deep semantic — runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
 - **One immutable source of truth — fresh, no stall.** Raw sessions are an append-only, immutable ledger in git — the truth; the index (embeddings and all) is a disposable derivative, a pure function of that truth. So it can never drift or go stale the way a separate memory store does — a rebuild always reconciles it — and because it's disposable, the heavy passes run in the background, hard-timeboxed, so your commit never waits. Thin on the wire, rich on the machine.
-- **Self-improving recall graph.** Every recall links a session to the query that reached it. Well-trodden memories then surface with a `[reached N×]` usage hint — a navigation signal that gets richer the more your team leans on them. It's a growing citation graph, not auto-tuned ranking (authority-weighted ranking is on the roadmap). See [docs/design/recall-graph.md](docs/design/recall-graph.md).
+- **Self-improving recall graph.** Every recall links a session to the query that reached it. Well-trodden memories then surface with a `[reached N×]` usage hint and, by default, rank a little higher (`reach_boost`) — a growing citation graph that gets sharper the more your team leans on it. It's self-activating (no effect until edges accumulate) and a flat reach boost, not learned authority propagation — full PageRank-of-memory is on the roadmap. See [docs/design/recall-graph.md](docs/design/recall-graph.md).
 - **Intent in git.** Not in a separate system, not behind someone else's service. Orphan branches, full history, travels with the repo. No servers, no APIs, no telemetry.
 - **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
 - **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
@@ -319,8 +319,9 @@ store. The databases, transport, and cross-repo recall are covered in
 
 ## Configuration
 
-Rekal is zero-config by default. To tune ranking weights or point deep
-embeddings at an OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI),
+Rekal is zero-config by default. To tune ranking weights — the hybrid layer
+mix, the facet layer, and the recency / recall-graph reach boosts — or point
+deep embeddings at an OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI),
 there is exactly one file — `.rekal/config.json`, gitignored and local-only,
 never committed. See **[docs/configuration.md](docs/configuration.md)**.
 

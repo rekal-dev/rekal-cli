@@ -33,6 +33,13 @@ const rekalClaudeMDMarker = "<!-- managed by rekal -->"
 // the skill carries the full routing policy; this line just makes it load.
 const rekalClaudeMDLine = "Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code, `rekal` knowledge for present prose at HEAD, the ledger (`rekal` + gates) for past intent, the map for structure. " + rekalClaudeMDMarker
 
+// rekalAgentLine is the marker-tagged instruction Rekal manages in a non-Claude
+// agent's rules file (AGENTS.md / GEMINI.md / .github/copilot-instructions.md).
+// Those agents have no skill, so — unlike the CLAUDE.md line — it names the
+// commands directly. Same marker as CLAUDE.md so refresh replaces it and clean
+// removes it.
+const rekalAgentLine = "Rekal memory is active in this repo. Before non-trivial work, recall prior sessions with `rekal \"<what you're about to do>\"` (returns the why, the decisions, and the dead-ends already ruled out); drill a hit with `rekal query --session <id>`; sweep every mention with `rekal find \"<term>\"`. Output is compact text — add `--json` to parse it. " + rekalClaudeMDMarker
+
 func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -46,6 +53,10 @@ Creates:
   orphan branch      rekal/<email> for wire format storage
   agent skill        .claude/skills/rekal/ (tip + scripts/ + references/)
   CLAUDE.md line     One marker-tagged sentence pointing agents at the skill
+  agent rules        For each other AI agent detected on this machine, one
+                     marker-tagged line in the file it reads: AGENTS.md
+                     (Codex/Cursor/OpenCode), GEMINI.md (Gemini), or
+                     .github/copilot-instructions.md (Copilot)
 
 If the remote already has data on your rekal branch, it is fetched and
 imported into the local data DB automatically.
@@ -164,7 +175,7 @@ binary to pick up new or changed skills.`,
 			}
 
 			// Detect other AI agents and print integration hints.
-			printAgentHints(cmd.ErrOrStderr(), gitRoot)
+			installAgentInstructions(gitRoot, cmd.ErrOrStderr())
 
 			fmt.Fprintln(cmd.OutOrStdout(), "Rekal initialized.")
 			return nil
@@ -283,6 +294,8 @@ func refreshManaged(gitRoot string, errOut io.Writer) error {
 	if err := ensureClaudeGitignore(gitRoot); err != nil {
 		return fmt.Errorf("update .gitignore for .claude: %w", err)
 	}
+	// Refresh (and add newly-detected) non-Claude agent instruction files.
+	installAgentInstructions(gitRoot, errOut)
 	return nil
 }
 
@@ -291,7 +304,18 @@ func refreshManaged(gitRoot string, errOut io.Writer) error {
 // upgrades update the wording; otherwise the sentence is appended (creating
 // the file when missing). The user's own content is never touched.
 func ensureClaudeMDLine(gitRoot string) error {
-	path := filepath.Join(gitRoot, "CLAUDE.md")
+	return ensureManagedLine(filepath.Join(gitRoot, "CLAUDE.md"), rekalClaudeMDLine)
+}
+
+// ensureManagedLine injects (or refreshes) a single marker-tagged line in the
+// file at path. A line carrying the marker is replaced in place, so upgrades
+// update the wording; otherwise the line is appended (creating the file, and
+// any missing parent directory, when absent). The user's own content is never
+// touched.
+func ensureManagedLine(path, line string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -300,9 +324,9 @@ func ensureClaudeMDLine(gitRoot string) error {
 	content := string(data)
 	if strings.Contains(content, rekalClaudeMDMarker) {
 		lines := strings.Split(content, "\n")
-		for i, line := range lines {
-			if strings.Contains(line, rekalClaudeMDMarker) {
-				lines[i] = rekalClaudeMDLine
+		for i, l := range lines {
+			if strings.Contains(l, rekalClaudeMDMarker) {
+				lines[i] = line
 			}
 		}
 		return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
@@ -314,7 +338,7 @@ func ensureClaudeMDLine(gitRoot string) error {
 	if content != "" {
 		content += "\n"
 	}
-	content += rekalClaudeMDLine + "\n"
+	content += line + "\n"
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
@@ -420,68 +444,47 @@ func ensureClaudeGitignore(gitRoot string) error {
 	return appendGitignoreEntry(gitRoot, entry)
 }
 
-// printAgentHints detects installed AI agents and prints integration hints.
-// Writes a reference instructions file to .rekal/agent-instructions.md so
-// users can copy the content into their AGENTS.md or GEMINI.md.
-func printAgentHints(w io.Writer, gitRoot string) {
+// installAgentInstructions detects which AI agents are installed on this machine
+// (by their home-dir footprint) and writes Rekal's marker-tagged instruction
+// line into the repo file each one reads: AGENTS.md (Codex / OpenCode / Cursor),
+// GEMINI.md (Gemini CLI), and .github/copilot-instructions.md (Copilot). Claude
+// Code is handled separately (the skill + the CLAUDE.md line). Each file is
+// created if missing, the marker line is replaced in place on refresh, and the
+// user's own content is preserved — clean removes the line (and an emptied
+// file). Detection is per machine, so a teammate who clones the repo and uses a
+// different agent re-runs `rekal init` to add theirs. Best-effort: a write
+// failure for one agent never aborts init.
+func installAgentInstructions(gitRoot string, w io.Writer) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
-
-	var agents []string
-	if _, err := os.Stat(filepath.Join(home, ".codex")); err == nil {
-		agents = append(agents, "codex")
+	// Detected agent (home-dir probe) → the repo instructions file it reads.
+	probes := []struct{ path, agent, file string }{
+		{filepath.Join(home, ".codex"), "codex", "AGENTS.md"},
+		{filepath.Join(home, ".local", "share", "opencode"), "opencode", "AGENTS.md"},
+		{filepath.Join(home, ".cursor"), "cursor", "AGENTS.md"},
+		{filepath.Join(home, ".gemini"), "gemini", "GEMINI.md"},
+		{filepath.Join(home, ".copilot"), "copilot", filepath.Join(".github", "copilot-instructions.md")},
 	}
-	if _, err := os.Stat(filepath.Join(home, ".gemini")); err == nil {
-		agents = append(agents, "gemini")
-	}
-	if _, err := os.Stat(filepath.Join(home, ".local", "share", "opencode")); err == nil {
-		agents = append(agents, "opencode")
-	}
-
-	if len(agents) == 0 {
-		return
-	}
-
-	// Write reference instructions file.
-	refPath := filepath.Join(RekalDir(gitRoot), "agent-instructions.md")
-	_ = os.WriteFile(refPath, []byte(agentInstructionsContent), 0o644)
-
-	for _, agent := range agents {
-		switch agent {
-		case "codex", "opencode":
-			fmt.Fprintf(w, "rekal: %s detected — copy .rekal/agent-instructions.md into your AGENTS.md\n", agent)
-		case "gemini":
-			fmt.Fprintln(w, "rekal: gemini CLI detected — copy .rekal/agent-instructions.md into your GEMINI.md")
+	// Group detected agents by target file so a shared file (AGENTS.md) is
+	// written once and its message names every agent that reads it.
+	byFile := map[string][]string{}
+	var order []string
+	for _, p := range probes {
+		if _, err := os.Stat(p.path); err != nil {
+			continue
 		}
+		if _, seen := byFile[p.file]; !seen {
+			order = append(order, p.file)
+		}
+		byFile[p.file] = append(byFile[p.file], p.agent)
+	}
+	for _, rel := range order {
+		if err := ensureManagedLine(filepath.Join(gitRoot, rel), rekalAgentLine); err != nil {
+			fmt.Fprintf(w, "rekal: could not write %s: %v\n", rel, err)
+			continue
+		}
+		fmt.Fprintf(w, "rekal: wrote %s (%s)\n", rel, strings.Join(byFile[rel], ", "))
 	}
 }
-
-const agentInstructionsContent = `# Rekal — Session Memory
-
-This repo uses Rekal to capture AI coding sessions. Use it to understand prior
-context before modifying code.
-
-## Quick Start
-
-` + "```" + `bash
-rekal "keyword"                        # search sessions
-rekal --file src/auth/ "token refresh" # filter by file
-rekal query --session <id>             # drill into a session
-` + "```" + `
-
-## When to Use
-
-- Before modifying a file — check what prior sessions touched it
-- When you need context about why code looks the way it does
-- When working on files that were recently changed by AI agents
-
-## Workflow
-
-1. Search: ` + "`rekal \"keyword\"`" + `
-2. Drill down: ` + "`rekal query --session <id> --offset N --limit 5`" + `
-3. Full context: ` + "`rekal query --session <id> --full`" + `
-
-Run ` + "`rekal --help`" + ` for all commands.
-`

@@ -103,9 +103,20 @@ session discovery keep using the invoking worktree.
   from recall) reads it and re-installs the skill when it's behind the running
   binary, so an upgrade reaches the repo without a manual re-init. Re-running
   `rekal init` on an already-initialized repo calls `refreshManaged` (skill +
-  hooks + CLAUDE.md line + gitignore); the recall-time auto-refresh deliberately
-  does **only** the skill (gitignored), never the tracked/side-effectful assets
-- `clean.go`: Remove Rekal setup — completely, no residue
+  hooks + CLAUDE.md line + agent rules + gitignore); the recall-time
+  auto-refresh deliberately does **only** the skill (gitignored), never the
+  tracked/side-effectful assets. `installAgentInstructions` covers the
+  non-Claude agents: it detects which are installed on the machine (home-dir
+  probe — `~/.codex`, `~/.local/share/opencode`, `~/.cursor`, `~/.gemini`,
+  `~/.copilot`) and writes the marker-tagged `rekalAgentLine` into the file each
+  reads — `AGENTS.md` (Codex/OpenCode/Cursor, written once), `GEMINI.md`
+  (Gemini), `.github/copilot-instructions.md` (Copilot) — via the generalized
+  `ensureManagedLine`. Tracked files (unlike the gitignored skill), created-if-
+  missing, replace-in-place on refresh, user content preserved
+- `clean.go`: Remove Rekal setup — completely, no residue. `removeManagedLines`
+  strips the marker line from CLAUDE.md and every detected-agent file (AGENTS.md
+  / GEMINI.md / .github/copilot-instructions.md), deleting a file that was ours
+  and pruning an emptied `.github`
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
   knowledge chunks). Deep-semantic session + knowledge vectors are deferred
   to background `rekal embed` after the atomic rename. Also carries the

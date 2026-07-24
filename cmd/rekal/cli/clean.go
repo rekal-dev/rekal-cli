@@ -54,15 +54,35 @@ func runClean(gitRoot string) error {
 	removeHook(filepath.Join(gitRoot, ".git", "hooks", "post-commit"))
 	removeHook(filepath.Join(gitRoot, ".git", "hooks", "pre-push"))
 	removeSkill(gitRoot)
-	removeClaudeMDLine(gitRoot)
+	removeManagedLines(gitRoot)
 	return nil
 }
 
-// removeClaudeMDLine deletes the marker-tagged sentence init injected into
-// CLAUDE.md. If nothing but whitespace remains the file is removed entirely
-// (it was ours); a file with the user's own content keeps everything else.
-func removeClaudeMDLine(gitRoot string) {
-	path := filepath.Join(gitRoot, "CLAUDE.md")
+// removeManagedLines strips Rekal's marker-tagged line from every managed
+// instructions file — CLAUDE.md plus the per-agent files init writes on
+// detection (AGENTS.md, GEMINI.md, .github/copilot-instructions.md). Files left
+// with only whitespace were ours and are deleted; a file with the user's own
+// content keeps everything else. An emptied .github directory is pruned only if
+// nothing else remains there.
+func removeManagedLines(gitRoot string) {
+	for _, rel := range []string{
+		"CLAUDE.md",
+		"AGENTS.md",
+		"GEMINI.md",
+		filepath.Join(".github", "copilot-instructions.md"),
+	} {
+		removeManagedLine(filepath.Join(gitRoot, rel))
+	}
+	// If we created .github only for copilot-instructions.md, prune it when
+	// empty (os.Remove refuses a non-empty dir, so user content is safe).
+	_ = os.Remove(filepath.Join(gitRoot, ".github"))
+}
+
+// removeManagedLine deletes the marker-tagged line Rekal injected into the file
+// at path. If nothing but whitespace remains the file is removed entirely (it
+// was ours); a file with the user's own content keeps everything else. A file
+// without the marker (or absent) is left untouched.
+func removeManagedLine(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil || !strings.Contains(string(data), rekalClaudeMDMarker) {
 		return

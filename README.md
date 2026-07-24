@@ -52,9 +52,11 @@ rekal "why did we drop batching?"
 `rekal init` sets up `.rekal/` (the store), a `post-commit`/`pre-push` git hook,
 the agent skill under `.claude/skills/rekal/`, an orphan branch
 `rekal/<your-email>` for transport, and one marker-tagged line in `CLAUDE.md`
-pointing your agent at the skill (your own content is never touched). That line
-is the whole developer experience for most users: init, then commit and push as
-normal — your agent routes its own memory from there.
+pointing your agent at the skill — plus the equivalent line in the rules file of
+any other agent it detects (`AGENTS.md` for Codex/Cursor/OpenCode, `GEMINI.md`,
+or `.github/copilot-instructions.md`). Your own content is never touched. That
+line is the whole developer experience for most users: init, then commit and
+push as normal — your agent routes its own memory from there.
 
 Re-running `rekal init` refreshes the version-managed skill and hooks without
 touching your data — how skill updates reach a repo after you upgrade the

@@ -21,6 +21,11 @@ rekal init
   [the agent skill](#the-agent-skill))
 - One marker-tagged sentence in `CLAUDE.md` pointing agents at the skill
   (created if missing; your own content is never touched)
+- For each **other** AI agent detected on your machine, one marker-tagged line
+  in the file it reads: `AGENTS.md` (Codex / Cursor / OpenCode), `GEMINI.md`
+  (Gemini), or `.github/copilot-instructions.md` (Copilot). Detection is per
+  machine — a teammate who clones the repo and uses a different agent re-runs
+  `rekal init` to add theirs.
 - An orphan branch `rekal/<your-email>` for transport
 - Appends `.rekal/` to your `.gitignore`
 

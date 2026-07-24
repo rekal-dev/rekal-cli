@@ -21,3 +21,5 @@ Experience and behaviour per command. One file per command under `command/`.
 **Soul:** Minimum touch. Root = recall only. Everything else is explicit subcommands. We keep the command set small — no extra subcommands unless necessary.
 
 **Output defaults (keep help/specs in sync):** recall and `query --session` print agent-readable text by default; `query` SQL prints TSV; `--json` opts into structured JSON/NDJSON. `find` is text-only.
+
+**Evidence:** `cmd/rekal/cli/help_sync_test.go` asserts (1) cobra help phrases for defaults/rebuild, (2) every public command is registered, (3) every command above has a matching `command/*.md` (root → `recall.md`), (4) key spec/README phrases still match those defaults, (5) embed budgets are 16. Update the test in the same change when you change help or specs.

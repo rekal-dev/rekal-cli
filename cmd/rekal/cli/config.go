@@ -150,11 +150,13 @@ type weightsConfig struct {
 	// Default 0.3 (held-out tuned); 0 disables the layer entirely.
 	FacetBoost *float64 `json:"facet_boost,omitempty"`
 	// RecencyBoost scales a recency layer (newer sessions ranked higher,
-	// additive). Default 0 (off). RecencyBoost/ReachBoost never feed the
-	// silence gate — they only reorder within a result set.
+	// additive). Default 0.15 (inert when candidates share a timestamp); 0
+	// disables. RecencyBoost/ReachBoost never feed the silence gate — they only
+	// reorder within a result set.
 	RecencyBoost *float64 `json:"recency_boost,omitempty"`
 	// ReachBoost scales the L1 recall-graph layer (sessions past recalls/drills
-	// reached rank higher, additive). Default 0 (off).
+	// reached rank higher, additive). Default 0.2 (inert until the graph has
+	// edges); 0 disables.
 	ReachBoost *float64 `json:"reach_boost,omitempty"`
 }
 

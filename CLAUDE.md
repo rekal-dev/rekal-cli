@@ -132,9 +132,11 @@ session discovery keep using the invoking worktree.
   the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
   summary boost, subagent discount, facet boost, plus the opt-in
   `recency_boost` and `reach_boost` additive layers — recency over
-  `session_facets.captured_at`, reach over the L1 `session_reach` graph, both
-  default 0 / ranking-only, never the silence gate — applied at query time, no
-  reindex), and
+  `session_facets.captured_at` (default 0.15, inert when candidates share a
+  timestamp), reach over the L1 `session_reach` graph (default 0.2,
+  self-activating — byte-identical until the graph has edges); both
+  ranking-only, never the silence gate, `0` disables — applied at query time,
+  no reindex), and
   the `embedding` section (OpenAI-compatible HTTP backend: endpoint/model/
   api_key with `$VAR` expansion and `api_key_env`; a Cohere Embed model under
   the `openai` provider auto-sends `input_type`)
@@ -182,12 +184,14 @@ session discovery keep using the invoking worktree.
   the additive facet layer (BM25 over per-session tool paths + command
   prefixes + steering text; `weights.facet_boost`, default 0.3, `0` =
   byte-identical pre-facet ranking; fails soft without a facet FTS index),
-  the opt-in additive **recency** and **reach** layers (`weights.recency_boost`
-  / `reach_boost`, both default `0`; recency = min-max over
+  the additive **recency** and **reach** layers (`weights.recency_boost`
+  default 0.15 / `reach_boost` default 0.2; recency = min-max over
   `session_facets.captured_at`, reach = max-normalized L1 `session_reach.reach_count`
   via `loadCapturedAt`/`loadReachCounts`; additive before the subagent discount
-  like facet, ranking-only — excluded from `absoluteConfidence` — and byte-
-  identical at 0, reach fails soft on an index without the reach table),
+  like facet, ranking-only — excluded from `absoluteConfidence`. Each
+  self-inerts until it has signal — recency contributes 0 when candidates share
+  a timestamp, reach is byte-identical on a cold store and fails soft on an
+  index without the reach table; `0` disables the lookup),
   with configurable weights (`weights.go`; query-time only), signal weighting
   (steering-turn boost, compaction-summary boost, subagent down-weight),
   conversation grouping

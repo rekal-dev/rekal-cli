@@ -87,12 +87,12 @@ INJECT top=0.62 gap=0.05 12 seeds
 every seed is unreached, so the digest is byte-identical to before the feature.
 
 **Display-only by default.** The reach signal ships as a hint — no silence-gate
-change, no retune — and the agent judges. An **opt-in** ranking layer now sits
-on the same signal: `weights.reach_boost` (default `0`) adds a max-normalized
-reach term to the hybrid score (`hybrid += reach_boost × reachNorm`, before the
-subagent discount, ranking-only — never `absoluteConfidence`). At `0` ranking is
-byte-identical and the `session_reach` lookup never runs; set it > 0 to let
-load-bearing memory rank higher. This is the first realized step of the
+change, no retune — and the agent judges. A ranking layer now sits on the same
+signal: `weights.reach_boost` (default `0.2`) adds a max-normalized reach term
+to the hybrid score (`hybrid += reach_boost × reachNorm`, before the subagent
+discount, ranking-only — never `absoluteConfidence`). It is self-activating — a
+cold store has no reach edges, so ranking is byte-identical until the graph
+accumulates — and set it to `0` to disable the `session_reach` lookup entirely. This is the first realized step of the
 authority-ranking direction below; the full session↔session PageRank remains a
 later layer.
 

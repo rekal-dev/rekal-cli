@@ -48,9 +48,12 @@ type Weights struct {
 	// min-max-normalized additive term — hybrid += RecencyBoost * recencyNorm
 	// — before the subagent discount. recencyNorm is 1 for the newest
 	// candidate and 0 for the oldest in the result set, so it reorders within
-	// a set without changing which sessions qualify. Ships 0 (off): the
-	// captured_at lookup never runs and ranking is byte-identical. Never feeds
-	// absolute confidence — a newer session is not inherently more relevant.
+	// a set without changing which sessions qualify. Ships 0.15 — a gentle
+	// recency prior that breaks near-ties toward recent context; it is inert
+	// whenever the candidate set shares a timestamp (span 0). Set 0 to disable:
+	// the captured_at lookup never runs and ranking is byte-identical. Never
+	// feeds absolute confidence — a newer session is not inherently more
+	// relevant.
 	RecencyBoost float64
 
 	// ReachBoost scales the L1 recall-graph layer: sessions past recalls and
@@ -58,10 +61,12 @@ type Weights struct {
 	// max-normalized additive boost — hybrid += ReachBoost * reachNorm —
 	// before the subagent discount. This turns the citation-graph signal
 	// ("load-bearing memory ranks higher") from a display-only hint into
-	// ranking (the L1→L2 seam in docs/design/recall-graph.md). Ships 0 (off):
-	// the session_reach lookup never runs, the layer fails soft on an index
-	// with no reach table, and ranking is byte-identical. Never feeds absolute
-	// confidence — a well-trodden session is not inherently more relevant.
+	// ranking (the L1→L2 seam in docs/design/recall-graph.md). Ships 0.2 —
+	// self-activating: a cold store has no reach edges, so reachNorm is 0 for
+	// every session and ranking is byte-identical until the graph accumulates.
+	// The layer fails soft on an index with no reach table. Set 0 to disable
+	// the lookup entirely. Never feeds absolute confidence — a well-trodden
+	// session is not inherently more relevant.
 	ReachBoost float64
 }
 
@@ -74,9 +79,9 @@ func DefaultWeights() Weights {
 		SteeringBoost:      1.3,
 		SummaryBoost:       1.15,
 		SubagentDownweight: 0.7,
-		FacetBoost:         0.3, // held-out tuned; set weights.facet_boost 0 to disable
-		RecencyBoost:       0,   // opt-in; set weights.recency_boost > 0 to favor recent memory
-		ReachBoost:         0,   // opt-in; set weights.reach_boost > 0 to rank load-bearing memory higher
+		FacetBoost:         0.3,  // held-out tuned; set weights.facet_boost 0 to disable
+		RecencyBoost:       0.15, // gentle recency prior; inert when candidates share a timestamp; 0 to disable
+		ReachBoost:         0.2,  // favors load-bearing memory; inert until the recall graph has edges; 0 to disable
 	}
 }
 

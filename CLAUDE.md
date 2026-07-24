@@ -242,10 +242,12 @@ session discovery keep using the invoking worktree.
   `gemini`, `opencode`, `copilot`, `kiro` — each `Discover`s that agent's
   session files for the repo and `Parse`s them into a `SessionPayload`. `kiro.go`
   (`KiroAdapter`) reads Kiro CLI sessions at `$KIRO_HOME/sessions/cli/<id>.json`
-  (metadata: `session_id`/`cwd`/`title` — `cwd` gives the exact repo match) +
-  `<id>.jsonl` (event log); the jsonl message schema is unofficial so turn/tool
-  extraction is defensive (string / object / Anthropic-style parts) and fails
-  soft (`$KIRO_HOME` defaults to `~/.kiro`).
+  (metadata: `session_id`/`cwd`/`title`/`created_at` — `cwd` gives the exact
+  repo match, `created_at` the captured-at) + `<id>.jsonl` (v3 event log:
+  `{"kind":"Prompt"|"AssistantMessage","data":{"content":[{"kind":"text","data":"…"}]}}`;
+  schema verified against the community reader prabhugr/kiro-cli-history since
+  Kiro's is unpublished). Tool blocks have no documented shape so they're
+  best-effort/fail-soft; `$KIRO_HOME` defaults to `~/.kiro`.
   `SkipCapture` refuses RekalBench/harness sessions (`REKAL_BENCH` /
   `REKAL_SKIP_CHECKPOINT`, bench cwd, gen_queries prompt fingerprints) so
   synthetic fixtures are never checkpointed or locally imported into a

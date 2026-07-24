@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-// kiroFixtureJSONL mirrors the observed Kiro CLI event log: a user turn (string
-// content), an assistant turn carrying Anthropic-style content parts (text +
-// tool_use), and a tool/status line with no conversational role (skipped).
-const kiroFixtureJSONL = `{"role":"user","content":"Add JWT authentication","timestamp":"2026-05-07T10:00:00Z"}
-{"role":"assistant","content":[{"type":"text","text":"I'll add JWT auth."},{"type":"tool_use","name":"fs_write","input":{"path":"src/auth.ts"}}],"timestamp":"2026-05-07T10:00:05Z"}
-{"role":"tool","content":[{"type":"tool_result","text":"ok"}],"timestamp":"2026-05-07T10:00:06Z"}
+// kiroFixtureJSONL mirrors the Kiro CLI v3 event log: a Prompt (human) and an
+// AssistantMessage whose content blocks carry text plus a best-effort tool
+// block, and a non-conversational event kind that is skipped.
+const kiroFixtureJSONL = `{"kind":"Prompt","data":{"content":[{"kind":"text","data":"Add JWT authentication"}]}}
+{"kind":"AssistantMessage","data":{"content":[{"kind":"text","data":"I'll add JWT auth."},{"kind":"toolUse","data":{"name":"fs_write","input":{"path":"src/auth.ts"}}}]}}
+{"kind":"ToolResult","data":{"content":[{"kind":"text","data":"ok"}]}}
 `
 
 func TestKiroAdapter_Parse(t *testing.T) {

@@ -14,13 +14,13 @@ import (
 const gettingStarted = `
 
 Workflow:
-  rekal "keyword"                   Search sessions (BM25 + LSA + Nomic hybrid)
+  rekal "keyword"                   Search sessions → seed digest (use --json for raw)
   rekal --file auth "token refresh" Filter by file path
-  rekal query --session <id>        Drill into a session (full turns)
+  rekal find "auth middleware"      Every ledger mention of a term (complete, time order)
+  rekal query --session <id>        Drill into a session (readable turns; --json for raw)
   rekal query --session <id> --full Include tool calls and files
-  rekal query "SELECT ..."          Raw SQL over sessions/turns/tools/knowledge
-                                    (complete-set, temporal, analytical asks;
-                                     see 'rekal query --help' for the schema)
+  rekal query "SELECT ..."          Raw SQL → TSV rows (complete-set / temporal / analytical;
+                                    --json for NDJSON; see 'rekal query --help' for schema)
 
 Getting Started:
   rekal init                        Initialize Rekal in a git repository
@@ -28,6 +28,7 @@ Getting Started:
   rekal push                        Share context with the team (merged work only)
   rekal sync                        Pull team context
   rekal index --include-all         Also recall your other repos' sessions (local only, never pushed)
+  rekal embed                       Fill missing semantic embeddings (also runs after index/sync)
 `
 
 // resolveRecallLimit interprets -n/--limit. Unset → (DefaultLimit, false).

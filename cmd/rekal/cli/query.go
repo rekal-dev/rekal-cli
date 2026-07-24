@@ -43,8 +43,9 @@ func newQueryCmd() *cobra.Command {
 		Short: "Run raw SQL or drill into a session",
 		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
 
-Session drill-down (--session) returns the full conversation as JSON. Add --full
-to include tool calls and files touched. Use --offset, --limit, and --role to
+Session drill-down (--session) prints a readable turn transcript by default
+(compact text an agent can act on). Add --json for a single JSON object,
+--full for tool calls and files touched. Use --offset, --limit, and --role to
 paginate through turns or filter by role (human, assistant, human_steering, or
 summary — the exact stored role; steering turns are the text a human typed
 while the agent was already working, summary turns are the harness-written
@@ -54,9 +55,9 @@ points at this session — so an agent can navigate from a trunk conversation
 into the transcript that actually matched.
 
 SQL mode is explicit: --sql "<statement>". A bare positional statement
-(rekal query "SELECT …") is accepted as shorthand. SELECT only; output is one
-JSON object per row (NDJSON). Use --index to query the index DB. --sql,
---session, and a positional statement are mutually exclusive.
+(rekal query "SELECT …") is accepted as shorthand. SELECT only; rows print as
+TSV by default, or NDJSON with --json. Use --index to query the index DB.
+--sql, --session, and a positional statement are mutually exclusive.
 
 Full queryable schema (FTS-internal tables — dict/docs/fields/stats/stopwords/
 terms — and state tables — schema_meta/checkpoint_state/index_state — are engine
@@ -197,7 +198,7 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
 	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human, assistant, human_steering, or summary (requires --session)")
-	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Compact single-line JSON for session drill (SQL rows are already NDJSON)")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "JSON instead of the default text/TSV (session → one object; SQL → NDJSON)")
 	return cmd
 }
 

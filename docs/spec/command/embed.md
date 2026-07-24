@@ -42,9 +42,10 @@ So:
 2. Loop budgeted bites until nothing remains:
    - Open `index.db`
    - Session vectors: store cache hits for every session missing a vector
-     under the configured model; embed up to 256 *uncached* contents
-   - Knowledge vectors: embed up to 256 chunks missing vectors (same budget
-     as the post-commit hook)
+     under the configured model; embed up to 16 *uncached* contents per bite
+     (`sessionEmbedBudget`)
+   - Knowledge vectors: embed up to 16 chunks missing vectors per bite
+     (`knowledgeEmbedBudget`; same as the post-commit hook)
    - Close `index.db` (release the write lock so recall/checkpoint can run)
    - Brief yield, then next bite
 3. Progress and errors append to `.rekal/embed.log` when spawned from

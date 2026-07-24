@@ -114,8 +114,8 @@ below is pure query-time inference over git, computed locally:
 
 | Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
 |---|---|---|---|---|---|
-| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | 23.2s |
-| LongMemEval | 86.60% | — | ~10.5K | 6.6 | 27.2s |
+| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | ~23s |
+| LongMemEval | 86.60% | — | ~10.5K | 6.6 | ~27s |
 
 | Additional metric (LoCoMo) | Result |
 |---|---|

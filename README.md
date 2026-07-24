@@ -200,21 +200,27 @@ agent invoked Rekal's routing workflow on ~99% of questions, and that share
 climbs toward the ceiling as the skill sharpens — the gate is used, not
 bypassed.
 
-**Retrieval & wire (local microbench).** Two different ratios, don't mix them:
+**Local store, wire & recall latency** (Rekal's own coding sessions on Apple M4 —
+6 Claude transcripts / 14 sessions incl. subagents, 473 turns; pure `rekal`,
+no answering model). Time/query in the accuracy table above is end-to-end
+agent answering; these rows are retrieval and footprint alone:
 
 | Metric | Result |
 |---|---|
-| **Coding session JSONL → wire** (real Claude transcript, ~4–6 MB) | **~190–400×** — strip tool outputs, file bodies, and JSONL chrome; keep turns + tool metadata; zstd + dict on top |
-| Pure zstd on already-structured payloads | ~2–3.5:1 (session frame ~2:1; LoCoMo chat export ~2.1:1 — chat has almost nothing structural to strip) |
-| 10-frame batch vs per-frame | 6.8× smaller |
-| Recall wall time (LoCoMo `conv-26`, Apple M4, `-n 10`) | median ~350 ms (p95 ~400 ms) |
+| Raw agent JSONL | 8.5 MB |
+| Wire (session frames on the orphan branch) | 54 KB (**~158×** smaller; median ~155×, up to ~187×) |
+| Local `data.db` | 5.8 MB |
+| Local `index.db` (FTS + embeddings) | 10.8 MB |
+| Local store (`data` + `index`) | 16.5 MB |
+| Recall wall time (`rekal -n 10`, new process / query) | median **~150 ms** (p95 ~210 ms) |
+| Recall wall time (synthetic LoCoMo `conv-26`, 40 questions) | median ~350 ms (p95 ~400 ms) |
 | In-process search (`scoring_lineage`) | ~76 ms (knowledge/reach ~55 ms) |
+| Pure zstd on already-structured payloads | ~2–3.5:1 (the big win is stripping tool outputs / file bodies / JSONL chrome before zstd) |
 
-Time/query in the accuracy table is end-to-end agent answering; the latency
-rows above are pure `rekal` recall. The large wire reduction matches the
-design claim in [SOUL.md](SOUL.md) (a multi-MB session → hundreds of bytes on
-the orphan branch) — that number is vs the raw agent transcript, not vs the
-already-slim codec payload.
+The large wire reduction matches the design claim in [SOUL.md](SOUL.md): a
+multi-MB coding session becomes tens of KB on the orphan branch — vs the raw
+agent transcript, not vs the already-slim codec payload. Local DBs stay rich
+on the machine; only the wire is thin.
 
 **The trade we make on purpose: one immutable source of truth — no summaries,
 no upkeep, real reasoning on demand.** Rekal keeps your raw sessions as an

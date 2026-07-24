@@ -23,7 +23,7 @@
   commit under docs/assets/, and replace this comment with the image.
 -->
 
-Every commit captures reasoning. But traditional memory systems trap you: **slow indexing or external servers**. Rekal breaks that. No preprocessing. No memory layers. No external service. Pure query-time inference — everything computed on-demand, locally. Your agent recalls the conversation that produced every change: the reasoning, the dead-ends already ruled out, the exact decision. In ~7.5K context tokens. In seconds. From git.
+Every commit captures reasoning. But traditional memory systems trap you: **slow indexing or external servers**. Rekal breaks that. No preprocessing. No memory layers. No external service. Pure query-time inference — everything computed on-demand, locally. Your agent recalls the conversation that produced every change: the reasoning, the dead-ends already ruled out, the exact decision. In ~7.5K context tokens. In a few seconds. From git.
 
 **The three moves:**
 
@@ -114,8 +114,8 @@ below is pure query-time inference over git, computed locally:
 
 | Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
 |---|---|---|---|---|---|
-| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | seconds |
-| LongMemEval | 86.60% | — | ~10.5K | 6.6 | seconds |
+| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | a few seconds |
+| LongMemEval | 86.60% | — | ~10.5K | 6.6 | a few seconds |
 
 | Additional metric (LoCoMo) | Result |
 |---|---|
@@ -130,10 +130,21 @@ below is pure query-time inference over git, computed locally:
 
 That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
 recall — at roughly six agent turns per question, with no preprocessing and
-no memory tier behind it. Token estimates are the visible context produced
-during the enhanced hard-question runs. Reproduce them on your own history:
-the benchmark labels itself from your commit–session links at zero
-annotation cost (see [docs/research/](docs/research/)).
+no memory tier behind it.
+
+**The trade-off, made on purpose.** Everything is computed at query time.
+There is no index to precompute, no embedding queue to drain, no memory
+service to call — so a query runs the full stack live and costs a few
+seconds. In exchange: nothing to wait on after a commit, no infrastructure
+to run, and data that never leaves the machine. Rekal spends query-time
+latency to buy zero preprocessing and zero external dependencies. For a
+memory an agent consults a handful of times per task, that is the right side
+of the trade.
+
+Token estimates are the visible context produced during the enhanced
+hard-question runs. Reproduce them on your own history: the benchmark labels
+itself from your commit–session links at zero annotation cost (see
+[docs/research/](docs/research/)).
 
 ## Install and uninstall
 

@@ -5,27 +5,35 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
 
-// KiroAdapter discovers and parses Kiro (kiro.dev) CLI chat sessions.
+// KiroAdapter discovers and parses Kiro (kiro.dev) chat sessions from both the
+// CLI and the IDE. Kiro's schema is not officially published
+// (github kirodotdev/Kiro#5094); both formats are verified against community
+// readers (prabhugr/kiro-cli-history for the CLI, pajaydev/kiro-history for the
+// IDE).
 //
-// Layout (Kiro CLI v3 "JSONL" format; verified against the community reader
-// prabhugr/kiro-cli-history since Kiro's schema is not officially published —
-// github kirodotdev/Kiro#5094):
+// CLI (v3 "JSONL"), under $KIRO_HOME (default ~/.kiro):
 //
-//	$KIRO_HOME/sessions/cli/<session-id>.json    metadata {session_id, cwd, title, created_at, updated_at}
-//	$KIRO_HOME/sessions/cli/<session-id>.jsonl   one event object per line
+//	sessions/cli/<id>.json    metadata {session_id, cwd, title, created_at}
+//	sessions/cli/<id>.jsonl   one event per line —
+//	                          {"kind":"Prompt"|"AssistantMessage","data":{"content":[{"kind":"text","data":"…"}]}}
 //
-// where $KIRO_HOME defaults to ~/.kiro. Each .jsonl line is
-// `{"kind": <event>, "data": {"content": [ {"kind":"text","data":"…"}, … ]}}`;
-// the conversational events are `kind:"Prompt"` (the human) and
-// `kind:"AssistantMessage"` (the model), and text lives in content blocks whose
-// own `kind` is `"text"` (their `data` is the string). Discovery is exact — the
-// sibling .json's `cwd` records the repo the session ran in. Tool-call blocks
-// carry no publicly documented shape, so they are extracted best-effort and
-// fail soft. IDE sessions (stored without cwd metadata) are not yet covered.
+// IDE, under the Code-OSS global storage (macOS ~/Library/Application Support/
+// Kiro, Linux ~/.config/Kiro, Windows %APPDATA%/Kiro) at
+// User/globalStorage/kiro.kiroagent/workspace-sessions/<ws>/:
+//
+//	sessions.json     index: [{sessionId, dateCreated, workspaceDirectory, hidden}]
+//	<sessionId>.json  {history:[{message:{role:"user"|"assistant", content: string | [{type,text}]}}]}
+//
+// Discovery is exact for both — the CLI's `cwd` and the IDE index's
+// `workspaceDirectory` record the repo. Tool calls carry no documented shape,
+// so they're extracted best-effort and fail soft; the conversation text is the
+// reliable part. Parse dispatches on the ref's extension (.jsonl → CLI,
+// .json → IDE).
 type KiroAdapter struct{}
 
 func (a *KiroAdapter) Name() string { return "kiro" }
@@ -52,13 +60,20 @@ func kiroCLIDir() string {
 }
 
 func (a *KiroAdapter) Discover(repoPath string) ([]SessionRef, error) {
+	var refs []SessionRef
+	refs = append(refs, discoverKiroCLI(repoPath)...)
+	refs = append(refs, discoverKiroIDE(repoPath)...)
+	return refs, nil
+}
+
+func discoverKiroCLI(repoPath string) []SessionRef {
 	cliDir := kiroCLIDir()
 	if cliDir == "" {
-		return nil, nil
+		return nil
 	}
 	entries, err := os.ReadDir(cliDir)
 	if err != nil {
-		return nil, nil // no Kiro CLI sessions on this machine
+		return nil // no Kiro CLI sessions on this machine
 	}
 
 	var refs []SessionRef
@@ -80,7 +95,7 @@ func (a *KiroAdapter) Discover(repoPath string) ([]SessionRef, error) {
 		}
 		refs = append(refs, SessionRef{Path: jsonl})
 	}
-	return refs, nil
+	return refs
 }
 
 // kiroRepoMatch reports whether a session's cwd belongs to repoPath — the exact
@@ -91,6 +106,13 @@ func kiroRepoMatch(cwd, repoPath string) bool {
 }
 
 func (a *KiroAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
+	if strings.HasSuffix(ref.Path, ".jsonl") {
+		return parseKiroCLI(ref)
+	}
+	return parseKiroIDE(ref.Path)
+}
+
+func parseKiroCLI(ref SessionRef) (*SessionPayload, error) {
 	data, err := os.ReadFile(ref.Path)
 	if err != nil {
 		return nil, err
@@ -237,4 +259,250 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// kiroRole maps an IDE message role onto the canonical human/assistant turn
+// roles, or "" for a role that carries no conversational turn.
+func kiroRole(role, _ string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "user", "human":
+		return "human"
+	case "assistant", "ai", "model":
+		return "assistant"
+	}
+	return ""
+}
+
+// --- Kiro IDE sessions (Code-OSS global storage) ---
+
+// kiroIDEStorageDir returns Kiro IDE's globalStorage/kiro.kiroagent directory
+// for this platform, or the $KIRO_IDE_STORAGE override (used by tests). Empty
+// when it can't be resolved.
+func kiroIDEStorageDir() string {
+	if s := strings.TrimSpace(os.Getenv("KIRO_IDE_STORAGE")); s != "" {
+		return s
+	}
+	if runtime.GOOS == "windows" {
+		appdata := os.Getenv("APPDATA")
+		if appdata == "" {
+			return ""
+		}
+		return filepath.Join(appdata, "Kiro", "User", "globalStorage", "kiro.kiroagent")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Application Support", "Kiro", "User", "globalStorage", "kiro.kiroagent")
+	}
+	return filepath.Join(home, ".config", "Kiro", "User", "globalStorage", "kiro.kiroagent")
+}
+
+func discoverKiroIDE(repoPath string) []SessionRef {
+	base := kiroIDEStorageDir()
+	if base == "" {
+		return nil
+	}
+	wsRoot := filepath.Join(base, "workspace-sessions")
+	wsDirs, err := os.ReadDir(wsRoot)
+	if err != nil {
+		return nil // no Kiro IDE sessions on this machine
+	}
+
+	var refs []SessionRef
+	for _, ws := range wsDirs {
+		if !ws.IsDir() {
+			continue
+		}
+		wsDir := filepath.Join(wsRoot, ws.Name())
+		idxData, err := os.ReadFile(filepath.Join(wsDir, "sessions.json"))
+		if err != nil {
+			continue
+		}
+		var index []kiroIDEIndex
+		if err := json.Unmarshal(idxData, &index); err != nil {
+			continue
+		}
+		for _, e := range index {
+			if e.Hidden || e.SessionID == "" {
+				continue
+			}
+			sf := filepath.Join(wsDir, e.SessionID+".json")
+			// Prefer the index's workspaceDirectory; fall back to the session
+			// file's own workspacePath/workspaceDirectory when the index omits it.
+			wsPath := e.WorkspaceDirectory
+			if wsPath == "" {
+				if s, err := readKiroIDESession(sf); err == nil {
+					wsPath = firstNonEmpty(s.WorkspacePath, s.WorkspaceDirectory)
+				}
+			}
+			if wsPath == "" || !kiroRepoMatch(kiroStripFileScheme(wsPath), repoPath) {
+				continue
+			}
+			if _, err := os.Stat(sf); err != nil {
+				continue
+			}
+			refs = append(refs, SessionRef{Path: sf})
+		}
+	}
+	return refs
+}
+
+// kiroStripFileScheme drops a leading file:// so a VS Code-style workspace URI
+// compares against a plain repo path.
+func kiroStripFileScheme(dir string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(dir, "file://"), "localhost")
+}
+
+func parseKiroIDE(path string) (*SessionPayload, error) {
+	sess, err := readKiroIDESession(path)
+	if err != nil {
+		return nil, nil // not a recognizable IDE session file — skip, never fatal
+	}
+	sessionID := strings.TrimSuffix(filepath.Base(path), ".json")
+	payload := &SessionPayload{
+		SessionID:  sessionID,
+		Source:     "kiro",
+		ActorType:  "human",
+		CapturedAt: time.Now().UTC(),
+	}
+	// captured_at from the workspace's sessions.json index (dateCreated).
+	if ts := kiroIDECreatedAt(filepath.Dir(path), sessionID); !ts.IsZero() {
+		payload.CapturedAt = ts
+	}
+	for _, h := range sess.History {
+		role := kiroRole(h.Message.Role, "")
+		if role == "" {
+			continue
+		}
+		if text := kiroIDEText(h.Message.Content); text != "" {
+			payload.Turns = append(payload.Turns, Turn{Role: role, Content: text})
+		}
+		if role == "assistant" {
+			payload.ToolCalls = append(payload.ToolCalls, kiroIDETools(h.ToolUses)...)
+		}
+	}
+	return payload, nil
+}
+
+func readKiroIDESession(path string) (kiroIDESession, error) {
+	var sess kiroIDESession
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return sess, err
+	}
+	if err := json.Unmarshal(data, &sess); err != nil {
+		return sess, err
+	}
+	return sess, nil
+}
+
+// kiroIDECreatedAt reads the workspace sessions.json index in dir and returns
+// the dateCreated of the given session, or zero when unavailable.
+func kiroIDECreatedAt(dir, sessionID string) time.Time {
+	data, err := os.ReadFile(filepath.Join(dir, "sessions.json"))
+	if err != nil {
+		return time.Time{}
+	}
+	var index []kiroIDEIndex
+	if err := json.Unmarshal(data, &index); err != nil {
+		return time.Time{}
+	}
+	for _, e := range index {
+		if e.SessionID == sessionID {
+			return parseTimestamp(e.DateCreated)
+		}
+	}
+	return time.Time{}
+}
+
+// kiroIDEIndex is one entry of a workspace's sessions.json index.
+type kiroIDEIndex struct {
+	SessionID          string `json:"sessionId"`
+	Title              string `json:"title"`
+	DateCreated        string `json:"dateCreated"`
+	WorkspaceDirectory string `json:"workspaceDirectory"`
+	Hidden             bool   `json:"hidden"`
+}
+
+// kiroIDESession is a <sessionId>.json IDE session file.
+type kiroIDESession struct {
+	History            []kiroIDEEntry `json:"history"`
+	Title              string         `json:"title"`
+	SessionID          string         `json:"sessionId"`
+	WorkspacePath      string         `json:"workspacePath"`
+	WorkspaceDirectory string         `json:"workspaceDirectory"`
+}
+
+// kiroIDEEntry is one history entry. Content is a string or an array of
+// {type,text} parts; ToolUses (when present) carry the turn's tool calls.
+type kiroIDEEntry struct {
+	Message struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+		ID      string          `json:"id"`
+	} `json:"message"`
+	ExecutionID string          `json:"executionId"`
+	ToolUses    json.RawMessage `json:"toolUses"`
+}
+
+// kiroIDEText extracts a message's text — a plain string, or the joined text of
+// an array of {type,text} parts.
+func kiroIDEText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strings.TrimSpace(s)
+	}
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &parts); err != nil {
+		return ""
+	}
+	var texts []string
+	for _, p := range parts {
+		if p.Text != "" {
+			texts = append(texts, p.Text)
+		}
+	}
+	return strings.TrimSpace(strings.Join(texts, "\n"))
+}
+
+// kiroIDETools best-effort extracts tool calls from an assistant entry's
+// toolUses. The block shape is undocumented, so it accepts the plausible name /
+// argument keys and fails soft.
+func kiroIDETools(raw json.RawMessage) []ToolCall {
+	if len(raw) == 0 {
+		return nil
+	}
+	var uses []struct {
+		Name     string                 `json:"name"`
+		ToolName string                 `json:"toolName"`
+		Tool     string                 `json:"tool"`
+		Input    map[string]interface{} `json:"input"`
+		Args     map[string]interface{} `json:"arguments"`
+	}
+	if err := json.Unmarshal(raw, &uses); err != nil {
+		return nil
+	}
+	var tools []ToolCall
+	for _, u := range uses {
+		name := firstNonEmpty(u.Name, u.ToolName, u.Tool)
+		if name == "" {
+			continue
+		}
+		tc := ToolCall{Tool: name}
+		if u.Input != nil {
+			toolCallArgsFromMap(&tc, u.Input)
+		} else if u.Args != nil {
+			toolCallArgsFromMap(&tc, u.Args)
+		}
+		tools = append(tools, tc)
+	}
+	return tools
 }

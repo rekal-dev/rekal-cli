@@ -241,13 +241,20 @@ session discovery keep using the invoking worktree.
   `Adapter` per agent (`adapter.go` registry): `claude`, `cursor`, `codex`,
   `gemini`, `opencode`, `copilot`, `kiro` — each `Discover`s that agent's
   session files for the repo and `Parse`s them into a `SessionPayload`. `kiro.go`
-  (`KiroAdapter`) reads Kiro CLI sessions at `$KIRO_HOME/sessions/cli/<id>.json`
-  (metadata: `session_id`/`cwd`/`title`/`created_at` — `cwd` gives the exact
-  repo match, `created_at` the captured-at) + `<id>.jsonl` (v3 event log:
-  `{"kind":"Prompt"|"AssistantMessage","data":{"content":[{"kind":"text","data":"…"}]}}`;
-  schema verified against the community reader prabhugr/kiro-cli-history since
-  Kiro's is unpublished). Tool blocks have no documented shape so they're
-  best-effort/fail-soft; `$KIRO_HOME` defaults to `~/.kiro`.
+  (`KiroAdapter`) reads **both** Kiro CLI and IDE sessions (Parse dispatches on
+  the ref extension). CLI: `$KIRO_HOME/sessions/cli/<id>.json` (metadata:
+  `session_id`/`cwd`/`title`/`created_at` — `cwd` gives the exact repo match) +
+  `<id>.jsonl` (v3 event log
+  `{"kind":"Prompt"|"AssistantMessage","data":{"content":[{"kind":"text","data":"…"}]}}`).
+  IDE: the Code-OSS global storage (`$KIRO_IDE_STORAGE` override; else
+  macOS `~/Library/Application Support/Kiro`, Linux `~/.config/Kiro`, Windows
+  `%APPDATA%/Kiro`) at `User/globalStorage/kiro.kiroagent/workspace-sessions/<ws>/`
+  — `sessions.json` index (`workspaceDirectory` repo match, `dateCreated`,
+  `hidden`) + `<sessionId>.json` (`{history:[{message:{role,content}}]}`,
+  content string or `[{type,text}]`). Both schemas verified against the
+  community readers (prabhugr/kiro-cli-history, pajaydev/kiro-history) since
+  Kiro's is unpublished; tool blocks have no documented shape so they're
+  best-effort/fail-soft. `$KIRO_HOME` defaults to `~/.kiro`.
   `SkipCapture` refuses RekalBench/harness sessions (`REKAL_BENCH` /
   `REKAL_SKIP_CHECKPOINT`, bench cwd, gen_queries prompt fingerprints) so
   synthetic fixtures are never checkpointed or locally imported into a

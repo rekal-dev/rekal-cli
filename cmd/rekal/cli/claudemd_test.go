@@ -117,6 +117,15 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 	if _, err := os.Stat(copilot); !os.IsNotExist(err) {
 		t.Fatal("copilot-instructions.md written though copilot not installed")
 	}
+	// GEMINI.md was newly created → gitignored (per-machine, local-only).
+	// AGENTS.md pre-existed as the user's tracked file → not gitignored.
+	gi, _ := os.ReadFile(filepath.Join(repo, ".gitignore"))
+	if !strings.Contains(string(gi), "/GEMINI.md") {
+		t.Fatalf("newly-created GEMINI.md should be gitignored: %q", string(gi))
+	}
+	if strings.Contains(string(gi), "/AGENTS.md") {
+		t.Fatalf("pre-existing AGENTS.md must not be gitignored: %q", string(gi))
+	}
 
 	// Refresh is idempotent — the marker line is replaced, not duplicated.
 	installAgentInstructions(repo, &buf)

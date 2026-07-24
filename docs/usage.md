@@ -25,7 +25,9 @@ rekal init
   in the file it reads: `AGENTS.md` (Codex / Cursor / OpenCode), `GEMINI.md`
   (Gemini), or `.github/copilot-instructions.md` (Copilot). Detection is per
   machine — a teammate who clones the repo and uses a different agent re-runs
-  `rekal init` to add theirs.
+  `rekal init` to add theirs. A file Rekal **newly creates** is gitignored
+  (it's machine-specific, so it stays local); a file you already track keeps its
+  tracked status and just gains the one line.
 - An orphan branch `rekal/<your-email>` for transport
 - Appends `.rekal/` to your `.gitignore`
 

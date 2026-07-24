@@ -111,8 +111,10 @@ session discovery keep using the invoking worktree.
   `~/.copilot`) and writes the marker-tagged `rekalAgentLine` into the file each
   reads — `AGENTS.md` (Codex/OpenCode/Cursor, written once), `GEMINI.md`
   (Gemini), `.github/copilot-instructions.md` (Copilot) — via the generalized
-  `ensureManagedLine`. Tracked files (unlike the gitignored skill), created-if-
-  missing, replace-in-place on refresh, user content preserved
+  `ensureManagedLine`. Created-if-missing, replace-in-place on refresh, user
+  content preserved; a file Rekal **newly creates** is gitignored (per-machine
+  detection → local-only), while a file the user already tracked stays tracked
+  with only the marker line injected
 - `clean.go`: Remove Rekal setup — completely, no residue. `removeManagedLines`
   strips the marker line from CLAUDE.md and every detected-agent file (AGENTS.md
   / GEMINI.md / .github/copilot-instructions.md), deleting a file that was ours

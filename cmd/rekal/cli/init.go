@@ -481,9 +481,20 @@ func installAgentInstructions(gitRoot string, w io.Writer) {
 		byFile[p.file] = append(byFile[p.file], p.agent)
 	}
 	for _, rel := range order {
-		if err := ensureManagedLine(filepath.Join(gitRoot, rel), rekalAgentLine); err != nil {
+		path := filepath.Join(gitRoot, rel)
+		_, statErr := os.Stat(path)
+		preexisting := statErr == nil
+		if err := ensureManagedLine(path, rekalAgentLine); err != nil {
 			fmt.Fprintf(w, "rekal: could not write %s: %v\n", rel, err)
 			continue
+		}
+		// A file Rekal newly created is per-machine (which agents are installed
+		// varies by developer), so keep it local — gitignore it. A file the user
+		// already tracked stays tracked; we only injected our marker line.
+		if !preexisting {
+			if err := appendGitignoreEntry(gitRoot, "/"+filepath.ToSlash(rel)); err != nil {
+				fmt.Fprintf(w, "rekal: could not gitignore %s: %v\n", rel, err)
+			}
 		}
 		fmt.Fprintf(w, "rekal: wrote %s (%s)\n", rel, strings.Join(byFile[rel], ", "))
 	}

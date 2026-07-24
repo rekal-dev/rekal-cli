@@ -42,6 +42,27 @@ type Weights struct {
 	// soft). Set 0 to disable: the facet search never runs and ranking is
 	// byte-identical to the pre-facet engine.
 	FacetBoost float64
+
+	// RecencyBoost scales a recency layer: candidates are nudged by how
+	// recently they were captured (session_facets.captured_at), added as a
+	// min-max-normalized additive term — hybrid += RecencyBoost * recencyNorm
+	// — before the subagent discount. recencyNorm is 1 for the newest
+	// candidate and 0 for the oldest in the result set, so it reorders within
+	// a set without changing which sessions qualify. Ships 0 (off): the
+	// captured_at lookup never runs and ranking is byte-identical. Never feeds
+	// absolute confidence — a newer session is not inherently more relevant.
+	RecencyBoost float64
+
+	// ReachBoost scales the L1 recall-graph layer: sessions past recalls and
+	// drills have reached (index session_reach.reach_count) get a
+	// max-normalized additive boost — hybrid += ReachBoost * reachNorm —
+	// before the subagent discount. This turns the citation-graph signal
+	// ("load-bearing memory ranks higher") from a display-only hint into
+	// ranking (the L1→L2 seam in docs/design/recall-graph.md). Ships 0 (off):
+	// the session_reach lookup never runs, the layer fails soft on an index
+	// with no reach table, and ranking is byte-identical. Never feeds absolute
+	// confidence — a well-trodden session is not inherently more relevant.
+	ReachBoost float64
 }
 
 // DefaultWeights returns the tuned defaults.
@@ -54,6 +75,8 @@ func DefaultWeights() Weights {
 		SummaryBoost:       1.15,
 		SubagentDownweight: 0.7,
 		FacetBoost:         0.3, // held-out tuned; set weights.facet_boost 0 to disable
+		RecencyBoost:       0,   // opt-in; set weights.recency_boost > 0 to favor recent memory
+		ReachBoost:         0,   // opt-in; set weights.reach_boost > 0 to rank load-bearing memory higher
 	}
 }
 

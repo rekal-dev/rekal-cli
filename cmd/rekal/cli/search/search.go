@@ -75,6 +75,10 @@ type Layers struct {
 	// Facet is the facet layer's normalized score (weights.facet_boost > 0,
 	// the shipped default; 0 when disabled or no facet index exists).
 	Facet float64 `json:"facet"`
+	// Recency and Reach are the normalized recency / recall-graph layer scores
+	// (weights.recency_boost / reach_boost > 0; 0 when their layer is off).
+	Recency float64 `json:"recency"`
+	Reach   float64 `json:"reach"`
 }
 
 // Related is a query-time join to sessions that touched the same files —
@@ -440,6 +444,39 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		parentIDs = nil // non-fatal — falls back to no down-weighting/grouping
 	}
 
+	// Recency + recall-graph (reach) layers. Both are gated by their boost, so
+	// a 0 weight runs no query and leaves ranking byte-identical. They reorder
+	// within the candidate set only — never the silence gate (absoluteConfidence
+	// ignores them): a newer or oft-reached session is not inherently more
+	// relevant.
+	var capturedAt map[string]time.Time
+	var minTs, maxTs time.Time
+	if w.RecencyBoost > 0 {
+		capturedAt = loadCapturedAt(indexDB, candidateIDs)
+		for _, ts := range capturedAt {
+			if ts.IsZero() {
+				continue
+			}
+			if minTs.IsZero() || ts.Before(minTs) {
+				minTs = ts
+			}
+			if maxTs.IsZero() || ts.After(maxTs) {
+				maxTs = ts
+			}
+		}
+	}
+	recencySpan := maxTs.Sub(minTs).Seconds()
+	var reachCounts map[string]int
+	var maxReach int
+	if w.ReachBoost > 0 {
+		reachCounts = loadReachCounts(indexDB, candidateIDs)
+		for _, c := range reachCounts {
+			if c > maxReach {
+				maxReach = c
+			}
+		}
+	}
+
 	// Compute hybrid scores — 3-way when nomic available, 2-way fallback.
 	useNomic := len(nomicScores) > 0
 	bm25W3, lsaW3, nomicW3 := w.layers3()
@@ -478,6 +515,21 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		// is a no-op in those cases.
 		facetC := w.FacetBoost * facetNorm
 		hybrid += facetC
+		// Recency layer: additive, min-max over the candidate set (newest → 1),
+		// applied before the subagent discount like facet. 0 when the layer is
+		// off or the set has no timestamp spread.
+		recencyNorm := 0.0
+		if recencySpan > 0 {
+			if ts, ok := capturedAt[sid]; ok && !ts.IsZero() {
+				recencyNorm = ts.Sub(minTs).Seconds() / recencySpan
+			}
+		}
+		// Recall-graph (reach) layer: additive, max-normalized reach_count.
+		reachNorm := 0.0
+		if maxReach > 0 {
+			reachNorm = float64(reachCounts[sid]) / float64(maxReach)
+		}
+		hybrid += w.RecencyBoost*recencyNorm + w.ReachBoost*reachNorm
 		hybridPreSub := hybrid
 		// Subagent/workflow transcripts (non-null parent) are discounted
 		// relative to trunk turns of equal relevance.
@@ -491,7 +543,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		conf := absoluteConfidence(sh.bm25Raw, sh.lsaScore, sh.nomicScore, sh.facetScore, useNomic, w, parent)
 		sc := scored{sessionID: sid, score: hybrid, confidence: conf, mass: sh.bm25Raw, hit: sh}
 		if filters.Explain {
-			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm), Facet: round2(facetNorm)}
+			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm), Facet: round2(facetNorm), Recency: round2(recencyNorm), Reach: round2(reachNorm)}
 		}
 		if on {
 			sc.lineage = &candidateLineage{
@@ -1343,6 +1395,65 @@ func loadParentIDs(indexDB *sql.DB, sessionIDs []string) (map[string]string, err
 		result[sid] = nullStr(parent)
 	}
 	return result, rows.Err()
+}
+
+// loadCapturedAt batch-loads captured_at for candidate sessions from
+// session_facets, feeding the recency layer. Best-effort: a query error or an
+// unreadable timestamp simply omits the session (0 recency contribution), so a
+// caller never fails on it. Only invoked when weights.recency_boost > 0.
+func loadCapturedAt(indexDB *sql.DB, sessionIDs []string) map[string]time.Time {
+	result := make(map[string]time.Time, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return result
+	}
+	inClause, args := sqlInClause(sessionIDs)
+	rows, err := indexDB.Query(
+		"SELECT session_id, captured_at FROM session_facets WHERE session_id IN ("+inClause+")",
+		args...,
+	)
+	if err != nil {
+		return result // fail soft — recency contributes nothing
+	}
+	defer rows.Close() //nolint:errcheck
+	for rows.Next() {
+		var sid string
+		var ts time.Time
+		if err := rows.Scan(&sid, &ts); err != nil {
+			continue
+		}
+		result[sid] = ts
+	}
+	return result
+}
+
+// loadReachCounts batch-loads recall-graph reach_count for candidate sessions
+// from the derived session_reach table, feeding the reach layer. Best-effort: a
+// missing table (older index.db with no reach schema) or query error yields an
+// empty map, so the layer fails soft to a no-op. Only invoked when
+// weights.reach_boost > 0.
+func loadReachCounts(indexDB *sql.DB, sessionIDs []string) map[string]int {
+	result := make(map[string]int, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return result
+	}
+	inClause, args := sqlInClause(sessionIDs)
+	rows, err := indexDB.Query(
+		"SELECT target_session_id, reach_count FROM session_reach WHERE target_session_id IN ("+inClause+")",
+		args...,
+	)
+	if err != nil {
+		return result // fail soft — no session_reach table or query error
+	}
+	defer rows.Close() //nolint:errcheck
+	for rows.Next() {
+		var sid string
+		var c int
+		if err := rows.Scan(&sid, &c); err != nil {
+			continue
+		}
+		result[sid] = c
+	}
+	return result
 }
 
 // resolveRoot walks the parent_session_id chain to find the trunk

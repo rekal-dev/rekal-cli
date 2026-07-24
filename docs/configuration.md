@@ -13,7 +13,9 @@ committed, pushed, or synced.
     "nomic": 0.55,
     "steering_boost": 1.3,
     "subagent_downweight": 0.7,
-    "facet_boost": 0.3
+    "facet_boost": 0.3,
+    "recency_boost": 0,
+    "reach_boost": 0
   },
   "embedding": {
     "endpoint": "$EMBED_ENDPOINT",
@@ -34,6 +36,21 @@ Tunes recall ranking (layer mix, steering-turn boost, subagent discount, and
 `facet_boost` — the facet layer over each session's tool paths/commands/steering
 text, on by default at 0.3; set 0 to disable). Applied at query time — changing
 them takes effect on the next search, no reindex, at any corpus size.
+
+Two additive ranking layers ship **off** (0) and are opt-in:
+
+- **`recency_boost`** — nudges more recently captured sessions up the ranking
+  (min-max over the candidate set: newest → +boost, oldest → +0).
+- **`reach_boost`** — nudges sessions the L1 recall graph has reached before up
+  the ranking (max-normalized `session_reach.reach_count`), turning the
+  `[reached N×]` usage hint from display-only into ranking. Fails soft on an
+  index with no reach data.
+
+Both are additive terms applied before the subagent discount, exactly like
+`facet_boost`; both reorder *within* a result set and **never** feed the silence
+gate (a newer or oft-reached session is not inherently more relevant). Start
+small (e.g. `0.1`–`0.2`) and tune per corpus; `0` is byte-identical to the
+engine without them.
 
 ## `embedding`
 

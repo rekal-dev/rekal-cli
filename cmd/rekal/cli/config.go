@@ -149,6 +149,13 @@ type weightsConfig struct {
 	// paths + command prefixes + steering text, added as a fourth term).
 	// Default 0.3 (held-out tuned); 0 disables the layer entirely.
 	FacetBoost *float64 `json:"facet_boost,omitempty"`
+	// RecencyBoost scales a recency layer (newer sessions ranked higher,
+	// additive). Default 0 (off). RecencyBoost/ReachBoost never feed the
+	// silence gate — they only reorder within a result set.
+	RecencyBoost *float64 `json:"recency_boost,omitempty"`
+	// ReachBoost scales the L1 recall-graph layer (sessions past recalls/drills
+	// reached rank higher, additive). Default 0 (off).
+	ReachBoost *float64 `json:"reach_boost,omitempty"`
 }
 
 // resolve merges the config over the defaults and validates. Layer weights
@@ -195,6 +202,12 @@ func (wc *weightsConfig) resolve() (search.Weights, error) {
 		return w, err
 	}
 	if err := set(&w.FacetBoost, wc.FacetBoost, "facet_boost", true); err != nil {
+		return w, err
+	}
+	if err := set(&w.RecencyBoost, wc.RecencyBoost, "recency_boost", true); err != nil {
+		return w, err
+	}
+	if err := set(&w.ReachBoost, wc.ReachBoost, "reach_boost", true); err != nil {
 		return w, err
 	}
 	if w.BM25+w.LSA+w.Semantic <= 0 {
@@ -451,6 +464,12 @@ func mergeWeights(global, local *weightsConfig) *weightsConfig {
 	}
 	if local.FacetBoost != nil {
 		merged.FacetBoost = local.FacetBoost
+	}
+	if local.RecencyBoost != nil {
+		merged.RecencyBoost = local.RecencyBoost
+	}
+	if local.ReachBoost != nil {
+		merged.ReachBoost = local.ReachBoost
 	}
 	return &merged
 }

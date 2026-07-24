@@ -109,8 +109,10 @@ your own history at zero annotation cost. See [docs/research/](docs/research/) f
 ### Measured performance
 
 On two public long-term-memory benchmarks, Rekal reaches strong answer
-quality with **no memory layers and no external service** — every number
-below is pure query-time inference over git, computed locally:
+quality with **no preprocessing, no memory layers, and no external inference
+service** — every number below is pure query-time inference over git,
+computed locally. The answering agent is **GPT-5 Sol**; Rekal supplies the
+memory, the model supplies the answer:
 
 | Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
 |---|---|---|---|---|---|

@@ -2,7 +2,7 @@ package session
 
 // Adapter discovers and parses sessions for a specific AI agent.
 type Adapter interface {
-	// Name returns the agent identifier (e.g. "claude", "cursor", "codex", "gemini", "opencode", "copilot").
+	// Name returns the agent identifier (e.g. "claude", "cursor", "codex", "gemini", "opencode", "copilot", "kiro").
 	Name() string
 	// Discover returns session references for the given repo path.
 	Discover(repoPath string) ([]SessionRef, error)
@@ -31,6 +31,7 @@ var Adapters = []Adapter{
 	&GeminiAdapter{},
 	&OpenCodeAdapter{},
 	&CopilotAdapter{},
+	&KiroAdapter{},
 }
 
 // toolCallArgsFromMap fills in tc.Path (preferring file_path, falling back

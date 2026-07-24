@@ -237,7 +237,15 @@ session discovery keep using the invoking worktree.
   block above `results`, never merged with session ranking; fails soft
   without a knowledge FTS index, and to keyword-only without chunk vectors —
   `docs/design/knowledge-layer.md`)
-- `session/`: Claude Code `.jsonl` parsing — extract turns, tool calls, deduplicate.
+- `session/`: AI-session parsing — extract turns, tool calls, deduplicate. One
+  `Adapter` per agent (`adapter.go` registry): `claude`, `cursor`, `codex`,
+  `gemini`, `opencode`, `copilot`, `kiro` — each `Discover`s that agent's
+  session files for the repo and `Parse`s them into a `SessionPayload`. `kiro.go`
+  (`KiroAdapter`) reads Kiro CLI sessions at `$KIRO_HOME/sessions/cli/<id>.json`
+  (metadata: `session_id`/`cwd`/`title` — `cwd` gives the exact repo match) +
+  `<id>.jsonl` (event log); the jsonl message schema is unofficial so turn/tool
+  extraction is defensive (string / object / Anthropic-style parts) and fails
+  soft (`$KIRO_HOME` defaults to `~/.kiro`).
   `SkipCapture` refuses RekalBench/harness sessions (`REKAL_BENCH` /
   `REKAL_SKIP_CHECKPOINT`, bench cwd, gen_queries prompt fingerprints) so
   synthetic fixtures are never checkpointed or locally imported into a

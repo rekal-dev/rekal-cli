@@ -23,7 +23,7 @@
   commit under docs/assets/, and replace this comment with the image.
 -->
 
-Every commit captures reasoning. But traditional memory systems trap you: **slow indexing or external servers**. Rekal breaks that. No preprocessing. No memory layers. No external service. Pure query-time inference — everything computed on-demand, locally. Your agent recalls the conversation that produced every change: the reasoning, the dead-ends already ruled out, the exact decision. In ~7.5K context tokens. In ~23 seconds. From git.
+Every commit captures reasoning. But traditional memory systems trap you: **slow indexing or external servers**. Rekal breaks that. No preprocessing. No memory layers. No external service. Pure query-time inference — everything computed on-demand, locally. Your agent recalls the conversation that produced every change: the reasoning, the dead-ends already ruled out, the exact decision. In ~7.5K context tokens. In seconds. From git.
 
 **The three moves:**
 
@@ -114,8 +114,8 @@ below is pure query-time inference over git, computed locally:
 
 | Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query |
 |---|---|---|---|---|---|
-| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | ~23s |
-| LongMemEval | 86.60% | — | ~10.5K | 6.6 | ~27s |
+| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | seconds |
+| LongMemEval | 86.60% | — | ~10.5K | 6.6 | seconds |
 
 | Additional metric (LoCoMo) | Result |
 |---|---|

@@ -196,20 +196,22 @@ memory, the model supplies the answer:
 That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
 recall — at roughly six agent turns per question, with no memory tier behind
 it. And these are the shipped skill in the loop, not a hand-tuned harness: the
-agent invoked Rekal's routing workflow on ~99% of questions — the gate is used,
-not bypassed.
+agent invoked Rekal's routing workflow on ~99% of questions, and that share
+climbs toward the ceiling as the skill sharpens — the gate is used, not
+bypassed.
 
-**The trade we make on purpose: one immutable source of truth — always fresh,
-never a stall.** Rekal keeps your raw sessions as an append-only, immutable
-ledger in git — the single source of truth — and treats the index (embeddings
-and all) as a disposable derivative it rebuilds on demand. That one choice pays off twice. Because the index is a pure function
-of git plus your sessions, it can never drift from reality the way a separate
-memory store does — no stale summaries, no cache to invalidate, no
-re-summarization rot; a one-command rebuild always reconciles it to truth, and
-raw sessions are drillable the instant you commit. And because that index is
-disposable, the heavy passes — embeddings, deep indexing — run in the
-background, hard-timeboxed, so your commit never waits on Rekal. Durable,
-team-shared memory that stays fresh and never gets in your way.
+**The trade we make on purpose: one immutable source of truth — no summaries,
+no upkeep, real reasoning on demand.** Rekal keeps your raw sessions as an
+append-only, immutable ledger in git — the single source of truth — and never
+distills them into lossy "memories." There is nothing to summarize, nothing to
+maintain, nothing that drifts: the index (embeddings and all) is just a
+disposable accelerator over the ledger, reconciled to truth by a one-command
+rebuild, with raw sessions drillable the instant you commit. The intelligence
+isn't pre-baked into stored summaries — the heavy reasoning (retrieval, ranking,
+routing, the agent's own judgment) runs at query time, over the real record,
+when you actually ask. The one expensive write-time step, building that index,
+runs in the background and hard-timeboxed, so your commit never waits. Fresh
+memory, no upkeep, real reasoning on demand.
 
 Token estimates are the visible context produced during the enhanced
 hard-question runs. Reproduce them on your own history: the benchmark labels

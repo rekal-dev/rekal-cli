@@ -55,11 +55,6 @@ a program needs to parse it.
   session into readable turns. `rekal query --sql "SELECT …"` for analytical /
   complete-set SQL (see `references/reference.md` for the full schema; `ts` is a
   TIMESTAMP — use `BETWEEN`, not `LIKE`).
-- **Relative dates** ("last Saturday", "3 days ago"): resolve them yourself
-  against the *mention's* date, and keep relative phrases relative in the answer
-  (a mention dated the 23rd saying "last Saturday" → the 18th). For calendar
-  math you don't trust, do it in SQL — DuckDB has date arithmetic
-  (`DATE '…' - INTERVAL`, `dayofweek(…)`).
 
 `INJECT`/`SILENCE` are **recommendations**, biased toward more data than
 decision: only empty / near-zero absolute `confidence` is machine-silenced
@@ -77,7 +72,7 @@ flat cluster → stay silent on prose.
 | Past episode / why / tried / rejected | `rekal "<q>"` → on `INJECT`, `Read references/ledger.md`; drill `rekal query --session <sid> --offset <t-2> --limit 5` |
 | Weak recall (one call already fused reformulations) | re-search a genuinely different angle — synonyms, entity/path anchor, a re-split of a multi-hop question |
 | All / every / how many mentions of a thing | `rekal find "<term>"` — complete sweep; then drill and judge (class-mapping, set size) |
-| Relative "when" (last Saturday, a month ago) | resolve against the mention's date yourself; SQL date math for hard cases |
+| Relative "when" (last Saturday, a month ago) | ledger → classify at the workflow gate below (event-time) |
 | Temporal, analytical, decision-arc, provenance | `Read references/ledger.md` — SQL via `rekal query --sql "…"`; don't rank a set |
 | Breadth / structure | `bash scripts/map.sh fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash scripts/wiki-gate.sh` then `Read references/wiki.md` |
@@ -86,6 +81,42 @@ flat cluster → stay silent on prose.
 The command returns data; you decide the move. Cite session / turn / commit with
 every memory claim.
 
+## Ledger workflow gate
+
+For a question routed to the ledger, classify the answer type before searching.
+Choose the first matching row and read exactly that workflow. Do not blend
+several workflows: concentrated guidance is more reliable than a pile of
+partially relevant checks.
+
+1. Elapsed time or duration between endpoints → Read `references/workflows/duration.md`
+2. A count, set, plural list, repeated events, or ordered history → Read `references/workflows/complete-set.md`
+3. A calendar time/date or temporal relation → Read `references/workflows/event-time.md`
+4. A qualified prediction, likelihood, possibility, or inference → Read `references/workflows/inference.md`
+5. A fact, episode, explanation, provenance, reflection, or other ledger answer → Read `references/workflows/point-fact.md`
+
+Classify by the form of the answer requested, not by incidental words: "Which
+events happened before June?" asks for a set, while "When did the event happen?"
+asks for event time. The workflow supplies evidence invariants and useful
+operations, never truth. The ledger remains authoritative; preserve genuine
+ambiguity and reject unsupported premises.
+
+### Final answer check
+
+Before answering, silently compare the candidate answer with the requested
+actor, entity, relation, time scope, and answer type.
+
+- Reject another speaker's fact, a nearby semantic slot, an adjacent event, or a
+  suggestion or plan mistaken for a completed event.
+- When event time is requested, resolve a source-relative expression against the
+  historical assertion timestamp. A relative expression in the question is
+  anchored to the asker's present. Preserve source precision.
+- For a count or set, ensure members were enumerated across the requested scope,
+  class-mapped when necessary, and deduplicated.
+- Before answering "unknown," make one focused reformulation only when retrieved
+  evidence signals that the exact fact may be buried.
+- If a check fails, repair evidence gathering rather than weakening the evidence
+  standard or satisfying a false premise.
+
 ## Judgment — agent, not the command
 
 - **Only what the ledger holds.** Do not invent or pad. If the record is thin,
@@ -93,8 +124,10 @@ every memory claim.
 - **A partial set is a wrong answer when the question asks for the set.** Use
   `rekal find` / SQL and page until empty. Ranked recall is for pointed
   questions, not "all / which / how many / every beat of an arc."
-- **Keep the speaker's precision.** Relative time and attribution stay as the
-  record states them; don't round, force, or tidy away ambiguity.
+- **Keep the record's precision.** Month-only evidence supports a month, not an
+  invented day; attribution stays as the record states it; don't fake precision
+  the record lacks or tidy away genuine ambiguity. (A resolvable source-relative
+  phrase is still converted — see the event-time workflow.)
 - **A false premise has no answer.** When the question asserts something the
   record contradicts or never says, say that — never fabricate the asserted
   fact, and never silently answer a corrected question nobody asked.

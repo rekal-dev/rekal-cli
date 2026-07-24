@@ -262,11 +262,18 @@ session discovery keep using the invoking worktree.
   those moved into the binary as commands (`docs/design/skill-into-command.md`).
   `skills/rekal/` embeds `SKILL.md` (thin route: 4-substrate triage —
   tree/knowledge/ledger/map — boundary, silence, dispatch, judgment; trusts
-  reasoning, no profiles), `scripts/` (only the workflow gates now — `map.sh`
-  fresh|watermark, `wiki-gate.sh`), and `references/` (rich, on demand —
-  `ledger.md` is the one page on reasoning over the past: recall/widen/
-  depth-judgment, time-axis, enumeration, whose-fact/premise, analytical SQL,
-  decision arcs, provenance; plus `map.md`, `wiki.md`, `reference.md`). The
+  reasoning, no profiles; plus the **ledger workflow gate** — a ledger question
+  classifies the requested *answer type* and loads exactly one specialist
+  workflow, followed by a shared `### Final answer check` contract), `scripts/`
+  (only the workflow gates now — `map.sh` fresh|watermark, `wiki-gate.sh`), and
+  `references/` (rich, on demand — `ledger.md` is the one page on reasoning over
+  the past: recall/widen/depth-judgment, time-axis, enumeration, whose-fact/
+  premise, analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
+  `reference.md`, and `references/workflows/` — the five answer-type specialists
+  the gate routes to: `duration.md`, `complete-set.md`, `event-time.md`,
+  `inference.md`, `point-fact.md`, each a concentrated evidence contract, not
+  truth. Ordered/exclusive routing + shipped content are hash-pinned in
+  `skill_test.go`). The
   agent uses the commands directly — `rekal "<q>"` (seed digest, `digest.go`,
   auto-widened via `deriveFramings` + RRF), `rekal find`, `rekal query
   --session`/`--sql` (readable text via `view.go`); all default to compact text,

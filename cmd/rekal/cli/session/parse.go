@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -662,14 +663,40 @@ func parseTimestamp(s string) time.Time {
 	if s == "" {
 		return time.Time{}
 	}
-	// Claude uses ISO 8601 format.
+	// Claude / most agents use ISO 8601.
 	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		// Try without nanoseconds.
-		t, err = time.Parse(time.RFC3339, s)
+	if err == nil {
+		return t
+	}
+	t, err = time.Parse(time.RFC3339, s)
+	if err == nil {
+		return t
+	}
+	// Kiro IDE sessions.json dateCreated is unix milliseconds as a decimal
+	// string (e.g. "1753744492244"). Accept seconds too when all-digits.
+	if allDigits(s) {
+		n, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
 			return time.Time{}
 		}
+		if n >= 1_000_000_000_000 { // ms since epoch
+			return time.UnixMilli(n).UTC()
+		}
+		if n >= 1_000_000_000 { // seconds since epoch
+			return time.Unix(n, 0).UTC()
+		}
 	}
-	return t
+	return time.Time{}
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

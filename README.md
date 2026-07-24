@@ -123,7 +123,7 @@ Rekal is built on beliefs. Those beliefs guide every decision. When a choice con
 
 - **Data and index, separated.** Your sessions land in an append-only `data.db` **raw** — no LLM pre-summarization, no lossy "memory" distillation. The derived `index.db` (full-text + embeddings) is built and rebuilt locally from that data, and can be thrown away and regenerated at any time.
 - **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval — lexical + graph + deep semantic — runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
-- **Simplicity, no stall.** Rekal does real work — indexing, embeddings — but never on your critical path: the commit hook returns immediately and the expensive passes run in the background, hard-timeboxed, so a commit is never blocked on Rekal. No queue to babysit, no service to run. Thin on the wire, rich on the machine.
+- **One source of truth — fresh, no stall.** Raw sessions are the truth in git; the index (embeddings and all) is a disposable derivative, a pure function of that truth. So it can never drift or go stale the way a separate memory store does — a rebuild always reconciles it — and because it's disposable, the heavy passes run in the background, hard-timeboxed, so your commit never waits. Thin on the wire, rich on the machine.
 - **Self-improving recall graph.** Every recall links a session to the query that reached it. Well-trodden memories then surface with a `[reached N×]` usage hint — a navigation signal that gets richer the more your team leans on them. It's a growing citation graph, not auto-tuned ranking (authority-weighted ranking is on the roadmap). See [docs/design/recall-graph.md](docs/design/recall-graph.md).
 - **Intent in git.** Not in a separate system, not behind someone else's service. Orphan branches, full history, travels with the repo. No servers, no APIs, no telemetry.
 - **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
@@ -199,13 +199,17 @@ That is 90.6% LoCoMo accuracy, 86.6% LongMemEval accuracy, and 98.6% Top-20
 recall — at roughly six agent turns per question, with no memory tier behind
 it.
 
-**The design, on purpose: simplicity, no stall.** Rekal does real work — it
-indexes sessions and computes embeddings — but never on your critical path. The
-commit hook returns immediately; the heavy passes run in the background,
-hard-timeboxed, so a commit never waits on Rekal. There is no memory service to
-run, no queue to babysit, no pipeline to keep healthy: the store is two files in
-`.rekal/`, and the index rebuilds from them with one command. You get durable,
-team-shared memory without operating any of it.
+**The trade we make on purpose: one source of truth — always fresh, never a
+stall.** Rekal keeps your raw sessions as the single source of truth in git and
+treats the index — embeddings and all — as a disposable derivative it rebuilds
+on demand. That one choice pays off twice. Because the index is a pure function
+of git plus your sessions, it can never drift from reality the way a separate
+memory store does — no stale summaries, no cache to invalidate, no
+re-summarization rot; a one-command rebuild always reconciles it to truth, and
+raw sessions are drillable the instant you commit. And because that index is
+disposable, the heavy passes — embeddings, deep indexing — run in the
+background, hard-timeboxed, so your commit never waits on Rekal. Durable,
+team-shared memory that stays fresh and never gets in your way.
 
 Token estimates are the visible context produced during the enhanced
 hard-question runs. Reproduce them on your own history: the benchmark labels

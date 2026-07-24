@@ -83,12 +83,24 @@ func (a *CopilotAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
+	// seenTools dedupes tool calls by toolCallId across the two sources that
+	// carry them — assistant.message.toolRequests (the intent) and
+	// tool.execution_start (the execution). Whichever event lands first records
+	// the tool; the other skips it.
+	seenTools := make(map[string]bool)
+
 	for scanner.Scan() {
 		var ev copilotEvent
 		if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
 			continue
 		}
 		ts := parseTimestamp(ev.Timestamp)
+
+		// captured_at is the session's real start, the earliest event time —
+		// not the ingestion wall clock (that is only the final fallback below).
+		if !ts.IsZero() && (payload.CapturedAt.IsZero() || ts.Before(payload.CapturedAt)) {
+			payload.CapturedAt = ts
+		}
 
 		switch ev.Type {
 		case "session.start":
@@ -100,9 +112,24 @@ func (a *CopilotAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 				if payload.CWD == "" {
 					payload.CWD = d.Context.CWD
 				}
+				// The branch lives at data.context.branch on real payloads;
+				// data.repository.branch is the legacy/observed fallback.
 				if payload.Branch == "" {
-					payload.Branch = d.Repository.Branch
+					if d.Context.Branch != "" {
+						payload.Branch = d.Context.Branch
+					} else {
+						payload.Branch = d.Repository.Branch
+					}
 				}
+			}
+
+		case "system.message":
+			// Copilot's system prompt / task instructions — the steering
+			// equivalent. Ingest as a human_steering turn so it is queryable.
+			if txt := copilotMessageText(ev.Data); txt != "" {
+				payload.Turns = append(payload.Turns, Turn{
+					Role: "human_steering", Content: txt, Timestamp: ts,
+				})
 			}
 
 		case "user.message":
@@ -113,15 +140,46 @@ func (a *CopilotAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 			}
 
 		case "assistant.message":
-			if txt := copilotMessageText(ev.Data); txt != "" {
+			var d copilotAssistantData
+			_ = json.Unmarshal(ev.Data, &d)
+			// A tool-only assistant turn has empty content; synthesize a
+			// readable stand-in from its tool requests so the turn is not
+			// dropped (the majority of assistant turns are tool-only).
+			txt := copilotRawText(d.Content)
+			if txt == "" {
+				txt = copilotToolRequestSummary(d.ToolRequests)
+			}
+			if txt != "" {
 				payload.Turns = append(payload.Turns, Turn{
 					Role: "assistant", Content: txt, Timestamp: ts,
 				})
+			}
+			// Tool intents also come from toolRequests, not just
+			// tool.execution_start — record them, deduped by toolCallId.
+			for _, tr := range d.ToolRequests {
+				if tr.Name == "" {
+					continue
+				}
+				if tr.ToolCallID != "" {
+					if seenTools[tr.ToolCallID] {
+						continue
+					}
+					seenTools[tr.ToolCallID] = true
+				}
+				tc := ToolCall{Tool: tr.Name}
+				copilotFillToolArgs(&tc, tr.Arguments)
+				payload.ToolCalls = append(payload.ToolCalls, tc)
 			}
 
 		case "tool.execution_start":
 			var d copilotToolData
 			if err := json.Unmarshal(ev.Data, &d); err == nil && d.ToolName != "" {
+				if d.ToolCallID != "" {
+					if seenTools[d.ToolCallID] {
+						continue
+					}
+					seenTools[d.ToolCallID] = true
+				}
 				tc := ToolCall{Tool: d.ToolName}
 				copilotFillToolArgs(&tc, d.Arguments)
 				payload.ToolCalls = append(payload.ToolCalls, tc)
@@ -146,16 +204,46 @@ type copilotEvent struct {
 type copilotStartData struct {
 	SessionID string `json:"sessionId"`
 	Context   struct {
-		CWD string `json:"cwd"`
+		CWD    string `json:"cwd"`
+		Branch string `json:"branch"`
 	} `json:"context"`
 	Repository struct {
 		Branch string `json:"branch"`
 	} `json:"repository"`
 }
 
+// copilotAssistantData is the assistant.message payload: free-text content
+// (often "") plus the tool requests the turn issued.
+type copilotAssistantData struct {
+	Content      json.RawMessage      `json:"content"` // string (may be "")
+	ToolRequests []copilotToolRequest `json:"toolRequests"`
+}
+
+// copilotToolRequest is one tool intent carried on an assistant.message. The
+// toolCallId ties it to the matching tool.execution_start for dedupe.
+type copilotToolRequest struct {
+	ToolCallID string          `json:"toolCallId"`
+	Name       string          `json:"name"`
+	Arguments  json.RawMessage `json:"arguments"`
+}
+
 type copilotToolData struct {
-	ToolName  string          `json:"toolName"`
-	Arguments json.RawMessage `json:"arguments"`
+	ToolCallID string          `json:"toolCallId"`
+	ToolName   string          `json:"toolName"`
+	Arguments  json.RawMessage `json:"arguments"`
+}
+
+// copilotToolRequestSummary renders a tool-only assistant turn's intent as
+// readable text (e.g. `[tool: shell] [tool: write_file]`) so the turn carries
+// content and is not dropped. Returns "" when no request names a tool.
+func copilotToolRequestSummary(reqs []copilotToolRequest) string {
+	var parts []string
+	for _, tr := range reqs {
+		if tr.Name != "" {
+			parts = append(parts, "[tool: "+tr.Name+"]")
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // copilotMessageText pulls the human-readable text out of a user.message /
@@ -260,7 +348,10 @@ func copilotSessionMatchesRepo(eventsPath, repoPath string) bool {
 		}
 		var d copilotStartData
 		if err := json.Unmarshal(ev.Data, &d); err == nil && d.Context.CWD != "" {
-			return strings.HasPrefix(d.Context.CWD, repoPath)
+			// Exact repo or a path *inside* it — never a sibling that merely
+			// shares the prefix (repo vs repo-2).
+			return d.Context.CWD == repoPath ||
+				strings.HasPrefix(d.Context.CWD, repoPath+string(os.PathSeparator))
 		}
 	}
 	return false

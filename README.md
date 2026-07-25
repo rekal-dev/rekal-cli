@@ -237,9 +237,10 @@ routing, the agent's own judgment) runs at query time, over the real record,
 when you actually ask. It's **lazy evaluation** — the oldest trick in the
 engineering book, compute on demand instead of eagerly up front — applied to
 memory: lazy inference, so nothing is derived until a question needs it, and
-nothing derived can rot in the meantime. The record itself rides git with the
-team, so the next recall — yours or a teammate's — can reuse those sessions as
-seeds. The one expensive write-time step, building that index, runs in the
+nothing derived can rot in the meantime. And when you *do* pay for ask-time
+reasoning, that ask becomes another session — distilled, reasoned, riding git
+with the team — so the cost of the inference is implicitly cached for the next
+recall. The one expensive write-time step, building that index, runs in the
 background and hard-timeboxed, so your commit never waits. Fresh memory, no
 upkeep, real reasoning on demand.
 

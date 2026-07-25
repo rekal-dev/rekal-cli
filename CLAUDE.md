@@ -339,7 +339,11 @@ session discovery keep using the invoking worktree.
   `scripts/`. The split is the point: a plugin tracks `main` while an installed
   binary does not, so shipping the recall skill in both would load two copies at
   once and let the newer one describe flags the user's binary lacks. One owner,
-  no divergence — pinned by `TestPlugin_SetupOnly` in `skill_test.go`.
+  no divergence — pinned by `TestPlugin_SetupOnly` in `skill_test.go`. The
+  plugin versions on its own line (`plugin/.claude-plugin/plugin.json`, not the
+  binary's `v0.2.x`) — **bump it whenever the setup skill changes**, or
+  self-hosted-marketplace users stay pinned; `claude plugin validate --strict`
+  (what the submission pipeline runs) rejects a missing version.
   Topology diagrams: `docs/design/skill-router.md`.
   Distribution + the community-marketplace submission path:
   `docs/design/plugin-distribution.md`.

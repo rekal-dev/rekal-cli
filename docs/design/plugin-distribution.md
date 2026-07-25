@@ -50,8 +50,15 @@ has one owner, and it is the artifact whose commands it documents.
 `rekal-setup`, and `skills/`, `references/`, and `scripts/` must not exist under
 `plugin/`.
 
-The plugin declares no `version`, so the git SHA is the version. That is
-harmless now — setup instructions are slow-moving and version-independent.
+The plugin carries its own `version`, on its own line — `0.1.0`, unrelated to
+the binary's `v0.2.x`. They are different artifacts now, and the version says
+so. Omitting it would fall back to the git commit SHA and auto-update on every
+push, but `claude plugin validate --strict` treats a missing version as an
+error, and the submission pipeline runs that check. So: **bump the version in
+`plugin/.claude-plugin/plugin.json` whenever the setup skill changes**, or
+self-hosted-marketplace users stay pinned to what they installed. The community
+catalog pins a commit SHA and re-pins as `main` moves, so that path updates
+either way.
 
 ## 3. Asking is the gate
 

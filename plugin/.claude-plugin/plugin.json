@@ -2,6 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rekal",
   "displayName": "Rekal",
+  "version": "0.1.0",
   "description": "Set up Rekal — git-backed memory of prior AI sessions: why a change was made, what was tried, what was rejected. This plugin installs the binary and initializes the repo; the binary then installs the full recall skill.",
   "author": {
     "name": "Rekal",

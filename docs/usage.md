@@ -190,7 +190,7 @@ removed).
 Your agent's memory can span your whole machine, not just this repo:
 
 ```bash
-rekal index --include-all            # recall every local Claude Code session (all repos + shell)
+rekal index --include-all            # recall every local agent session (all agents, repos + shell)
 rekal index --include /path/to/repo  # just that repo
 rekal index --no-local               # back to this repo only
 ```

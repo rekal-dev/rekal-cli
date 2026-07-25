@@ -23,7 +23,8 @@ type SessionRef struct {
 }
 
 // Adapters is the registry of all known agent adapters.
-// Checkpoint iterates this list to discover sessions from all agents.
+// Checkpoint and cross-repo local import iterate this list to discover
+// sessions from every supported agent.
 var Adapters = []Adapter{
 	&ClaudeAdapter{},
 	&CursorAdapter{},
@@ -33,6 +34,16 @@ var Adapters = []Adapter{
 	&CopilotAdapter{},
 	&KiroAdapter{},
 }
+
+// Ensure every registered adapter can enumerate all local sessions for
+// `rekal index --include-all`.
+var _ AllDiscoverer = (*ClaudeAdapter)(nil)
+var _ AllDiscoverer = (*CursorAdapter)(nil)
+var _ AllDiscoverer = (*CodexAdapter)(nil)
+var _ AllDiscoverer = (*GeminiAdapter)(nil)
+var _ AllDiscoverer = (*OpenCodeAdapter)(nil)
+var _ AllDiscoverer = (*CopilotAdapter)(nil)
+var _ AllDiscoverer = (*KiroAdapter)(nil)
 
 // toolCallArgsFromMap fills in tc.Path (preferring file_path, falling back
 // to path) and tc.CmdPrefix (truncated command) from a generic tool-call

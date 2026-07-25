@@ -12,7 +12,6 @@ import (
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
-	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -313,31 +312,18 @@ func containsFold(s, substr string) bool {
 }
 
 // localPref is the persisted cross-repo import preference. Absent (the zero
-// value) means the default: no cross-repo import.
+// value) means the default: no cross-repo import. Import walks every registered
+// session adapter (not Claude-only).
 type localPref struct {
-	// All imports every local project (rekal index --include-all).
+	// All imports every local agent session on this machine (--include-all).
 	All bool `json:"all,omitempty"`
-	// Repos imports only these repo paths (rekal index --include <repo>).
+	// Repos imports sessions for these repo paths from every adapter (--include).
 	Repos []string `json:"repos,omitempty"`
 }
 
 // enabled reports whether any cross-repo import is requested.
 func (p localPref) enabled() bool {
 	return p.All || len(p.Repos) > 0
-}
-
-// roots resolves the preference to the project session directories to import.
-func (p localPref) roots() ([]string, error) {
-	if p.All {
-		return session.EnumerateProjectDirs()
-	}
-	dirs := make([]string, 0, len(p.Repos))
-	for _, repo := range p.Repos {
-		if dir := session.ProjectDirForRepo(repo); dir != "" {
-			dirs = append(dirs, dir)
-		}
-	}
-	return dirs, nil
 }
 
 func configPath(gitRoot string) string {

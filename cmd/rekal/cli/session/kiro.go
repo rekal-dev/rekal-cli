@@ -133,6 +133,7 @@ func parseKiroCLI(ref SessionRef) (*SessionPayload, error) {
 	payload.CapturedAt = time.Now().UTC()
 	metaPath := strings.TrimSuffix(ref.Path, ".jsonl") + ".json"
 	if meta, err := readKiroMeta(metaPath); err == nil {
+		payload.CWD = meta.CWD
 		if ts := parseTimestamp(meta.CreatedAt); !ts.IsZero() {
 			payload.CapturedAt = ts
 		}
@@ -368,7 +369,9 @@ func parseKiroIDE(path string) (*SessionPayload, error) {
 		Source:     "kiro",
 		ActorType:  "human",
 		CapturedAt: time.Now().UTC(),
+		CWD:        firstNonEmpty(sess.WorkspacePath, sess.WorkspaceDirectory),
 	}
+	payload.CWD = kiroStripFileScheme(payload.CWD)
 	// captured_at from the workspace's sessions.json index (dateCreated).
 	if ts := kiroIDECreatedAt(filepath.Dir(path), sessionID); !ts.IsZero() {
 		payload.CapturedAt = ts

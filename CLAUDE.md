@@ -156,7 +156,7 @@ session discovery keep using the invoking worktree.
   api_key with `$VAR` expansion and `api_key_env`; a Cohere Embed model under
   the `openai` provider auto-sends `input_type`)
 - `local_import.go`: Cross-repo local session import — folds this machine's
-  other Claude Code sessions (all repos + shell, from `~/.claude/projects/*`)
+  other local agent sessions (all registered adapters — Claude/Cursor/Codex/Gemini/OpenCode/Copilot/Kiro)
   into the index. **Index-only, never `data.db`**, so imported sessions are
   structurally unpushable to the team; origin-labeled, deduped by content hash
 - `log.go`: Show recent checkpoints

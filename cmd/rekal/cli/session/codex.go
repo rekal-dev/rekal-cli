@@ -68,11 +68,18 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 			if payload.SessionID == "" {
 				payload.SessionID = entry.SessionID
 			}
+			if payload.CWD == "" {
+				payload.CWD = entry.extractCWD()
+			}
 			if payload.Branch == "" {
 				var meta codexSessionMeta
 				if err := json.Unmarshal(entry.Payload, &meta); err == nil && meta.Git.Branch != "" {
 					payload.Branch = meta.Git.Branch
 				}
+			}
+		case "turn_context":
+			if payload.CWD == "" {
+				payload.CWD = entry.extractCWD()
 			}
 
 		case "event_msg":

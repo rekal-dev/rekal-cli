@@ -14,10 +14,11 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 )
 
-// importLocalSessions folds the developer's cross-repo Claude Code history into
-// this repo's index, honoring the persisted preference (pref). It reads local
-// session transcripts straight from ~/.claude/projects and inserts them into
-// the index DB only — turns_ft and session_facets — and NEVER into data.db.
+// importLocalSessions folds the developer's cross-repo agent history into this
+// repo's index, honoring the persisted preference (pref). It discovers sessions
+// from every registered agent adapter (Claude, Cursor, Codex, Gemini, OpenCode,
+// Copilot, Kiro) and inserts them into the index DB only — turns_ft and
+// session_facets — and NEVER into data.db.
 //
 // This index-only path is the whole basis for the feature being safe: data.db
 // is the only thing `push`/`export` reads, so a session that exists only in the
@@ -26,19 +27,12 @@ import (
 //
 // Sessions whose content hash already appears in data.db (this repo's own
 // captured history, plus anything synced) are skipped, so a re-run or an
-// overlap with the current repo does not double-index.
+// overlap with the current repo does not double-index. The hash matches
+// checkpoint: file bytes for Path refs, sha256("adapter:DBID") for DB refs.
 //
-// Returns the number of sessions and distinct project directories imported.
+// Returns the number of sessions and distinct origin roots imported.
 func importLocalSessions(indexDB *sql.DB, gitRoot string, pref localPref, w io.Writer) (sessions, projects int, err error) {
 	if !pref.enabled() {
-		return 0, 0, nil
-	}
-
-	roots, err := pref.roots()
-	if err != nil {
-		return 0, 0, fmt.Errorf("resolve local roots: %w", err)
-	}
-	if len(roots) == 0 {
 		return 0, 0, nil
 	}
 
@@ -54,71 +48,104 @@ func importLocalSessions(indexDB *sql.DB, gitRoot string, pref localPref, w io.W
 	}
 
 	// seen guards against the same transcript being reachable through more
-	// than one root (e.g. --include of a repo that --include-all also covers).
+	// than one adapter path or overlapping --include roots.
 	seen := make(map[string]bool)
+	origins := make(map[string]bool)
 	newID := ids.NewULIDFunc()
-	adapter := &session.ClaudeAdapter{}
 
-	for _, projectDir := range roots {
-		refs, derr := session.DiscoverSessionRefsInDir(projectDir)
-		if derr != nil {
-			fmt.Fprintf(w, "rekal: warning: skipping %s: %v\n", projectDir, derr)
-			continue
-		}
+	type work struct {
+		adapter  session.Adapter
+		ref      session.SessionRef
+		fallback string // origin fallback when Parse leaves CWD empty
+	}
+	var jobs []work
 
-		importedFromDir := 0
-		for _, ref := range refs {
-			if ref.Path == "" {
+	if pref.All {
+		for _, adapter := range session.Adapters {
+			refs, derr := session.DiscoverAllSessions(adapter)
+			if derr != nil {
+				fmt.Fprintf(w, "rekal: warning: skipping %s all-discover: %v\n", adapter.Name(), derr)
 				continue
 			}
-			data, rerr := os.ReadFile(ref.Path)
+			for _, ref := range refs {
+				jobs = append(jobs, work{adapter: adapter, ref: ref})
+			}
+		}
+	} else {
+		for _, repo := range pref.Repos {
+			for _, adapter := range session.Adapters {
+				refs, derr := adapter.Discover(repo)
+				if derr != nil {
+					fmt.Fprintf(w, "rekal: warning: skipping %s in %s: %v\n", adapter.Name(), repo, derr)
+					continue
+				}
+				for _, ref := range refs {
+					jobs = append(jobs, work{adapter: adapter, ref: ref, fallback: repo})
+				}
+			}
+		}
+	}
+
+	for _, job := range jobs {
+		var fileData []byte
+		if job.ref.Path != "" {
+			data, rerr := os.ReadFile(job.ref.Path)
 			if rerr != nil || len(data) == 0 {
 				continue
 			}
-			hash := sha256Hex(data)
-			if knownHashes[hash] || seen[hash] {
-				continue
-			}
-			seen[hash] = true
-
-			payload, perr := adapter.Parse(ref)
-			if perr != nil || payload == nil {
-				continue
-			}
-			scrub.Scrub(payload)
-			if len(payload.Turns) == 0 {
-				continue
-			}
-			if session.SkipCapture(payload) {
-				continue
-			}
-
-			origin := originLabel(payload.CWD, projectDir)
-			if err := insertLocalSession(indexDB, newID, payload, origin); err != nil {
-				return sessions, projects, err
-			}
-			sessions++
-			importedFromDir++
+			fileData = data
+		} else if job.ref.DBID == "" {
+			continue
 		}
-		if importedFromDir > 0 {
-			projects++
+
+		hash := session.ContentHash(job.adapter, job.ref, fileData)
+		if knownHashes[hash] || seen[hash] {
+			continue
+		}
+		seen[hash] = true
+
+		payload, perr := job.adapter.Parse(job.ref)
+		if perr != nil || payload == nil {
+			continue
+		}
+		scrub.Scrub(payload)
+		if len(payload.Turns) == 0 {
+			continue
+		}
+		if session.SkipCapture(payload) {
+			continue
+		}
+
+		origin := originLabel(payload.CWD, job.fallback)
+		if err := insertLocalSession(indexDB, newID, payload, origin); err != nil {
+			return sessions, projects, err
+		}
+		sessions++
+		if origin != "" {
+			origins[origin] = true
 		}
 	}
 
-	return sessions, projects, nil
+	return sessions, len(origins), nil
 }
 
 // originLabel describes where a cross-repo session came from, for display in
-// recall. Prefers the transcript's recorded cwd; falls back to the project
-// directory when the transcript carried no cwd. A cwd that is itself a git
-// repository is labeled repo:, everything else shell:.
-func originLabel(cwd, projectDir string) string {
+// recall. Prefers the transcript's recorded cwd; falls back to the --include
+// repo path. A path that is itself a git repository is labeled repo:; a real
+// cwd that isn't is shell:; an include-only fallback with no .git is local:.
+func originLabel(cwd, fallback string) string {
 	path := cwd
 	if path == "" {
-		return "local:" + projectDir
+		path = fallback
+	}
+	if path == "" {
+		return ""
 	}
 	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
 		return "repo:" + path
+	}
+	if cwd == "" {
+		return "local:" + path
 	}
 	return "shell:" + path
 }

@@ -73,6 +73,9 @@ func parseOpenCodeDB(dbPath, sessionID string) (*SessionPayload, error) {
 		ActorType:  "human",
 		CapturedAt: time.Now().UTC(),
 	}
+	if err := db.QueryRow("SELECT directory FROM session WHERE id = ?", sessionID).Scan(&payload.CWD); err != nil {
+		payload.CWD = ""
+	}
 
 	// Query messages ordered by creation time.
 	rows, err := db.Query(

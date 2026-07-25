@@ -13,7 +13,7 @@
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
-> **Memory that lives in git — shared by your team, sharper every session.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
+> **Memory that lives in git — shared by your team, personally adaptive as you recall.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
@@ -28,7 +28,7 @@ Every AI session settles decisions — why this approach, what got tried and thr
 - **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
 - **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.
 - **Team memory in git** — merged work travels with the repo over plain push/fetch. No server.
-- **Sharper every session** — sessions link to the queries that reach them, so load-bearing memories stand out.
+- **Personalised & adaptive** — as *you* recall, load-bearing memories get a local usage hint and a gentle ranking nudge — on your machine only, never synced.
 
 ## Quick start
 
@@ -84,8 +84,9 @@ Compact text by default — the whole answer in two lines. Line one is the
 `KNOWLEDGE` (read a HEAD-prose pointer instead) and `SILENCE` (memory isn't
 the tool — stay quiet). Each seed is a session id, its **absolute**
 confidence, the turn to drill (`t14`), and the snippet. `[reached 3×· …]` is
-the recall graph: this memory has been used three times before, last for
-"webhook retry policy" — a load-bearing decision, and a good first drill.
+your personal recall graph: *you* have used this memory three times before,
+last for "webhook retry policy" — a load-bearing decision on your machine
+(local-only, never pushed), and a good first drill.
 
 The agent gets the decision **and the reason the alternative was rejected** — sourced from the human's own mid-course correction — before it wastes a round re-proposing it. It drills in for the full reasoning with one more call:
 
@@ -129,7 +130,7 @@ Rekal is built on beliefs. Those beliefs guide every decision. When a choice con
 - **Data and index, separated.** Your sessions land in an append-only `data.db` **raw** — no LLM pre-summarization, no lossy "memory" distillation. The derived `index.db` (full-text + embeddings) is built and rebuilt locally from that data, and can be thrown away and regenerated at any time.
 - **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval — lexical + graph + deep semantic — runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
 - **One immutable source of truth — fresh, no stall.** Raw sessions are an append-only, immutable ledger in git — the truth; the index (embeddings and all) is a disposable derivative, a pure function of that truth. So it can never drift or go stale the way a separate memory store does — a rebuild always reconciles it — and because it's disposable, the heavy passes run in the background, hard-timeboxed, so your commit never waits. Thin on the wire, rich on the machine.
-- **Self-improving recall graph.** Every recall links a session to the query that reached it. Well-trodden memories then surface with a `[reached N×]` usage hint and, by default, rank a little higher (`reach_boost`) — a growing citation graph that gets sharper the more your team leans on it, self-activating with no effect until edges accumulate. See [docs/design/recall-graph.md](docs/design/recall-graph.md).
+- **Personalised, adaptive recall graph.** Every recall links a session to the query that reached it — on *your* machine only (never pushed or synced). Well-trodden memories surface with a `[reached N×]` hint and, by default, rank a little higher (`reach_boost`). Self-activating; inert until *you* accumulate edges. See [docs/design/recall-graph.md](docs/design/recall-graph.md).
 - **Intent in git.** Not in a separate system, not behind someone else's service. Orphan branches, full history, travels with the repo. No servers, no APIs, no telemetry.
 - **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
 - **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
@@ -153,9 +154,9 @@ with your code, so it never touches your history, merges, or working tree.
 - **Cross-repo recall (optional)** can span every local session on your machine,
   index-only so it's structurally unshareable.
 
-The more the team recalls, the more the recall graph links sessions to the
-questions that reach them — shared memory that compounds. Full workflow:
-**[docs/usage.md](docs/usage.md)**.
+Team memory is the shared session ledger. The recall graph is separate:
+personal and local — it adapts to *your* access patterns and never rides the
+wire. Full workflow: **[docs/usage.md](docs/usage.md)**.
 
 ## Knowledge layer
 

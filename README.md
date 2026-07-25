@@ -1,7 +1,10 @@
 # Rekal
 
-**Rekal is the memory your team is missing — the *why* behind your code, captured at every commit and shared in git, not someone else's cloud. Your AI agent starts every session blank; Rekal gives it your team's reasoning, dead-ends and all.**
+### Your agent starts every session blank. Your team keeps re-deciding the same things.
 
+**Rekal is the *why* behind your code — every AI session captured at commit time, stored in git, recalled in ~150 ms. No server. No vector database. Nothing to operate.**
+
+[![Website](https://img.shields.io/badge/rekal.dev-live-22d3ee)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
 [![arXiv](https://img.shields.io/badge/arXiv-2607.14390-b31b1b)](https://arxiv.org/abs/2607.14390)
@@ -9,11 +12,27 @@
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/hDMj8zHH2)
 [![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Website](https://rekal.dev) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/hDMj8zHH2)
+**[rekal.dev](https://rekal.dev)** · [Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/hDMj8zHH2)
 
-📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
+### The numbers
 
-> **Memory that lives in git — shared by your team, personally adaptive as you recall.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
+| | |
+|---|---|
+| **90.6%** | LoCoMo accuracy — **98.6%** top-20 recall |
+| **86.6%** | LongMemEval accuracy — **99%** top-20 recall |
+| **~150 ms** | median local recall (p95 ~210 ms) |
+| **158×** | thinner on the wire than the raw transcript |
+| **16.5 MB** | entire local store for 473 turns of real work |
+| **0** | memory servers, vector DB tiers, SaaS subscriptions |
+
+Retrieval runs locally over git with **no memory layers and no external memory
+service**. On the accuracy rows the answering agent is GPT-5 Sol — Rekal supplies
+the memory, the model supplies the answer. Full tables, methodology, and the
+latency corpus: **[Benchmarks](#benchmarks)**.
+
+📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) — arXiv 2607.14390
+
+> **Memory that lives in git — shared by your team, personally adaptive as you recall.**
 
 <!--
   TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
@@ -23,12 +42,20 @@
   commit under docs/assets/, and replace this comment with the image.
 -->
 
-Every AI session settles decisions — why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. No memory SaaS, no vector-DB tier, nothing to operate — the store is just two files in `.rekal/`. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision — in ~7.5K context tokens, in a few seconds, from git.
+Every AI session settles decisions — why this approach, what got tried and thrown
+away. Then the session ends and that reasoning is gone. Your next agent proposes
+the thing you rejected last Tuesday, and nobody remembers why it was rejected.
+
+Rekal captures the session at every commit, stores it **raw** in git, indexes and
+embeds it **locally in the background**, and shares it with your team when the
+work merges. The store is two files in `.rekal/`. That's the whole system.
 
 - **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
 - **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.
 - **Team memory in git** — merged work travels with the repo over plain push/fetch. No server.
+- **No memory SaaS** — nothing to sign up for, nothing to operate, no vendor holding your reasoning. It lives in your repo and travels over your own git remote.
 - **Personalised & adaptive** — as *you* recall, load-bearing memories get a local usage hint and a gentle ranking nudge — on your machine only, never synced.
+- **Works with the agent you already use** — Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, OpenCode.
 
 ## Quick start
 
@@ -195,7 +222,7 @@ rationale — at a few hundred tokens per question. The benchmark labels
 itself from your own commit–session links, so every result is replicable on
 your own history at zero annotation cost. See [docs/research/](docs/research/) for details.
 
-### Benchmarks
+## Benchmarks
 
 On two public long-term-memory benchmarks, Rekal reaches strong answer
 quality with **no memory layers and no external memory service** — retrieval

@@ -314,7 +314,11 @@ session discovery keep using the invoking worktree.
   `references/` (rich, on demand — `ledger.md` is the one page on reasoning over
   the past: recall/widen/depth-judgment, time-axis, enumeration, whose-fact/
   premise, analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
-  `reference.md`, and `references/workflows/` — the five answer-type specialists
+  `reference.md`, `setup.md` — the bootstrap page reached only when a rekal
+  command reports `command not found` / `not initialized`, so a skill that
+  arrives **without** the binary (plugin install) can install it and
+  `rekal init`, always asking first — and `references/workflows/` — the five
+  answer-type specialists
   the gate routes to: `duration.md`, `complete-set.md`, `event-time.md`,
   `inference.md`, `point-fact.md`, each a concentrated evidence contract, not
   truth. Ordered/exclusive routing + shipped content are hash-pinned in
@@ -328,7 +332,17 @@ session discovery keep using the invoking worktree.
   route/gate scripts (route/view/find/seek/when.py) were removed once the
   commands proved byte-identical (golden/diff-tested); the property harness
   `scripts/skill-permtest.py` now drives `rekal "<q>"` directly.
+  This skill ships **only** in the binary. The Claude Code plugin (`plugin/`,
+  listed by the repo-root `.claude-plugin/marketplace.json`) is **setup-only**:
+  one thin `rekal-setup` skill that explains Rekal, installs the binary, and
+  runs `rekal init` — then hands off. It carries no `skills/`, `references/`, or
+  `scripts/`. The split is the point: a plugin tracks `main` while an installed
+  binary does not, so shipping the recall skill in both would load two copies at
+  once and let the newer one describe flags the user's binary lacks. One owner,
+  no divergence — pinned by `TestPlugin_SetupOnly` in `skill_test.go`.
   Topology diagrams: `docs/design/skill-router.md`.
+  Distribution + the community-marketplace submission path:
+  `docs/design/plugin-distribution.md`.
 - `versioncheck/`: Auto-update notification
 - `integration_test/`: Integration tests (`//go:build integration`)
 
@@ -354,6 +368,11 @@ session discovery keep using the invoking worktree.
   (permanent, local-only) → `session_reach` (derived) path, the display-only
   `[reached N×]` hint, and the non-goals (source attribution, authority
   ranking, team-sharing)
+- `design/plugin-distribution.md`: Claude Code plugin packaging — why the plugin
+  is setup-only (the binary stays the single owner of the recall skill; a plugin
+  tracks `main`, an installed binary does not), the `references/setup.md`
+  recovery page, self-hosted marketplace vs. the community marketplace's
+  form-not-PR submission path, and the non-goals
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent

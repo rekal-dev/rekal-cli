@@ -170,7 +170,7 @@ flowchart TB
 |-------|------|
 | **Route** (`SKILL.md`) | Thin. Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **ledger** (past) / **map**. For a ledger question, classify the answer type and route to exactly one workflow. Trusts reasoning; silence when memory is the wrong tool. |
 | **Commands** (in the binary) | `rekal "<q>"` (seed digest: INJECT/KNOWLEDGE/SILENCE + per-seed confidence), `rekal find` (complete-set sweep), `rekal query --session`/`--sql` (drill / analytical). Compact text by default, `--json` for machines. |
-| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · `references/workflows/` (five answer-type specialists: duration, complete-set, event-time, inference, point-fact) · map · wiki · flags/SQL. `Read` one and stop. |
+| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · `references/workflows/` (five answer-type specialists: duration, complete-set, event-time, inference, point-fact) · `setup.md` (install / `rekal init`, reached only when a command reports it is missing) · map · wiki · flags/SQL. `Read` one and stop. |
 | **Gates** (`scripts/`) | The two workflow gates that remain scripts: `map.sh` (fresh/watermark), `wiki-gate.sh`. |
 
 ```mermaid
@@ -184,6 +184,24 @@ flowchart LR
 Skills are versioned with the binary. After you upgrade, run `rekal init` once
 to refresh them (it leaves your data untouched; legacy `rekal-*` dirs are
 removed).
+
+### Starting from Claude Code — the plugin
+
+If you'd rather not start at a shell, this repository is also a plugin
+marketplace:
+
+```
+/plugin marketplace add rekal-dev/rekal-cli
+/plugin install rekal@rekal-dev
+```
+
+The plugin is **setup only**. It gives your agent one thin skill that explains
+what Rekal is, installs the binary, and runs `rekal init` — asking you before
+each step. The recall skill above is not in the plugin; `rekal init` installs
+it, versioned with the binary whose commands it describes. Shipping it in both
+places would put two copies in your context and let the plugin's copy drift
+ahead of your installed binary. Detail:
+[`design/plugin-distribution.md`](design/plugin-distribution.md).
 
 ## Cross-repo recall (optional)
 

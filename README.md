@@ -66,6 +66,12 @@ marker line, and other detected-agent rules — data stays untouched. To remove
 everything Rekal created, run `rekal clean` (no residue). Full setup, teardown,
 and verification detail: **[docs/usage.md](docs/usage.md)**.
 
+Prefer to start from Claude Code? This repo is also a plugin marketplace —
+`/plugin marketplace add rekal-dev/rekal-cli` then `/plugin install
+rekal@rekal-dev`. The plugin is setup only: it walks your agent through
+installing the binary and running `rekal init`, which installs the recall skill
+itself.
+
 ## See it in action
 
 Last week, one engineer and their agent settled how webhook retries should work. This week, a *different* agent is about to re-propose the approach that was already rejected — until it asks Rekal first:

@@ -3,6 +3,9 @@ package skill
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -80,8 +83,9 @@ func TestSkill_ContentHashes(t *testing.T) {
 	s := rekalSkill(t)
 
 	want := map[string]string{
-		"SKILL.md":                             "d9663e2b8d6c56dcd0562b33dd7a49a914f2788f49c4d132049a1bda0367b002",
+		"SKILL.md":                             "c5afd7af6f0fbb122d1edd310f1f938364f23b43e3c35eacba87b8fb692364c6",
 		"references/ledger.md":                 "98b3c6a0424772ce31ee6da157ca490a936beec8b88694ff3c602c417d3c72ea",
+		"references/setup.md":                  "cd667590919d7725c48f1ca3334cf7c1cf5ec5525b42c96c3e977c6c1143e62b",
 		"references/map.md":                    "9434758a67fcded223659227b0e62c02a9c3a8b6a4f9cb005df00fa02ccbc950",
 		"references/wiki.md":                   "ce117f95ffd1f0d8d70b3d0c1d3401b641f1ef0ca3beb9a1d3812d4c65bc86a1",
 		"references/reference.md":              "bd0a571a8cba25d6a6749e3c97238e9373ebabdf14e748218fdbfd66d0eea58d",
@@ -137,6 +141,7 @@ func TestAll_UnifiedSkill(t *testing.T) {
 		"references/map.md",
 		"references/wiki.md",
 		"references/reference.md",
+		"references/setup.md",
 		"references/workflows/duration.md",
 		"references/workflows/complete-set.md",
 		"references/workflows/event-time.md",
@@ -174,6 +179,62 @@ func TestAll_UnifiedSkill(t *testing.T) {
 	for _, name := range LegacyNames {
 		if name == "" {
 			t.Fatal("empty legacy name")
+		}
+	}
+}
+
+// pluginRoot is the Claude Code plugin directory, relative to this package.
+const pluginRoot = "../../../../plugin"
+
+// TestPlugin_SetupOnly pins the ownership split: the plugin bootstraps (install
+// the binary, `rekal init`) and ships exactly one setup skill. The recall skill
+// stays embedded in the binary, whose commands it describes. Shipping it in both
+// places would load two copies at once, and the plugin copy tracks main while an
+// installed binary does not — the newer skill would describe flags the user's
+// binary lacks. One owner, no divergence.
+func TestPlugin_SetupOnly(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(filepath.Join(pluginRoot, ".claude-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatalf("plugin manifest unreadable: %v", err)
+	}
+	var manifest struct {
+		Name   string   `json:"name"`
+		Skills []string `json:"skills"`
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("plugin.json is not valid JSON: %v", err)
+	}
+	// The name is immutable once published — users install by this slug.
+	if manifest.Name != "rekal" {
+		t.Errorf("plugin name = %q, want rekal", manifest.Name)
+	}
+	// SKILL.md sits at the plugin root, so the skill path is the root itself.
+	if len(manifest.Skills) != 1 || manifest.Skills[0] != "./" {
+		t.Errorf("plugin skills = %v, want [./] (single skill at the plugin root)", manifest.Skills)
+	}
+
+	// The plugin's own skill is the setup skill, not the recall skill.
+	tip, err := os.ReadFile(filepath.Join(pluginRoot, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("plugin SKILL.md unreadable: %v", err)
+	}
+	if !strings.Contains(string(tip), "name: rekal-setup\n") {
+		t.Error("plugin SKILL.md must declare name: rekal-setup, distinct from the embedded recall skill")
+	}
+	if !strings.Contains(string(tip), "rekal init") {
+		t.Error("plugin SKILL.md must route the user to rekal init — bootstrapping is its whole job")
+	}
+
+	// No recall-skill material may reappear here. A skills/ dir or any of the
+	// embedded skill's pages would resurrect the two-copy problem.
+	if _, err := os.Stat(filepath.Join(pluginRoot, "skills")); !os.IsNotExist(err) {
+		t.Error("plugin must not carry a skills/ directory — the recall skill ships in the binary")
+	}
+	for _, banned := range []string{"references", "scripts"} {
+		if _, err := os.Stat(filepath.Join(pluginRoot, banned)); !os.IsNotExist(err) {
+			t.Errorf("plugin must not carry %s/ — that is recall-skill material owned by the binary", banned)
 		}
 	}
 }

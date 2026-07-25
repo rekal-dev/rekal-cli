@@ -2,11 +2,11 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rekal",
   "displayName": "Rekal Memory",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Memory for your agent, built on four ideas. Save the session transcript raw and append-only — no summaries to rot. Agent agnostic: Claude Code, Cursor, Codex, Gemini, Copilot, Kiro, OpenCode. Reason at query time over the real record. Git is the transport and embedding is local — no server, no external memory service. Sets up the binary and turns memory on per repository.",
   "author": {
     "name": "Rekal",
-    "url": "https://github.com/rekal-dev"
+    "url": "https://rekal.dev/"
   },
   "homepage": "https://rekal.dev/",
   "repository": "https://github.com/rekal-dev/rekal-cli",

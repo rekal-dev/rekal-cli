@@ -334,8 +334,12 @@ session discovery keep using the invoking worktree.
   `scripts/skill-permtest.py` now drives `rekal "<q>"` directly.
   This skill ships **only** in the binary. The Claude Code plugin (`plugin/`,
   listed by the repo-root `.claude-plugin/marketplace.json`) is **setup-only**:
-  one thin `rekal-setup` skill that explains Rekal, installs the binary, and
-  runs `rekal init` — then hands off. It carries no `skills/`, `references/`, or
+  two skills — `/rekal:install` (once per machine) and `/rekal:init` (once per
+  repository, the recurring one, and deliberately silent on a repo that merely
+  lacks `.rekal/`) — plus `bin/rekal-install`, a byte-identical vendored copy of
+  `scripts/install.sh` that puts the installer on the Bash `PATH` instead of
+  piping a live URL into a shell (`TestPlugin_VendoredInstaller` pins the copy).
+  It carries no recall material — no `skills/rekal`, `references/`, or
   `scripts/`. The split is the point: a plugin tracks `main` while an installed
   binary does not, so shipping the recall skill in both would load two copies at
   once and let the newer one describe flags the user's binary lacks. One owner,

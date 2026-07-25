@@ -1,9 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rekal",
-  "displayName": "Rekal",
-  "version": "0.1.0",
-  "description": "Set up Rekal — git-backed memory of prior AI sessions: why a change was made, what was tried, what was rejected. This plugin installs the binary and initializes the repo; the binary then installs the full recall skill.",
+  "displayName": "Rekal Memory",
+  "version": "0.2.0",
+  "description": "Git-backed memory of prior AI sessions — why a change was made, what was tried, what was rejected. Installs the Rekal binary and turns memory on per repository; the binary then owns the recall skill.",
   "author": {
     "name": "Rekal",
     "url": "https://github.com/rekal-dev"
@@ -11,6 +11,5 @@
   "homepage": "https://github.com/rekal-dev/rekal-cli",
   "repository": "https://github.com/rekal-dev/rekal-cli",
   "license": "Apache-2.0",
-  "keywords": ["memory", "recall", "git", "sessions", "context", "ledger"],
-  "skills": ["./"]
+  "keywords": ["memory", "recall", "git", "sessions", "context", "ledger"]
 }

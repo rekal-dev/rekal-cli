@@ -1,11 +1,14 @@
 package skill
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -200,42 +203,89 @@ func TestPlugin_SetupOnly(t *testing.T) {
 		t.Fatalf("plugin manifest unreadable: %v", err)
 	}
 	var manifest struct {
-		Name   string   `json:"name"`
-		Skills []string `json:"skills"`
+		Name    string `json:"name"`
+		Version string `json:"version"`
 	}
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("plugin.json is not valid JSON: %v", err)
 	}
-	// The name is immutable once published — users install by this slug.
+	// The name is immutable once published — users install by this slug, and it
+	// is the skill namespace (/rekal:install, /rekal:init).
 	if manifest.Name != "rekal" {
 		t.Errorf("plugin name = %q, want rekal", manifest.Name)
 	}
-	// SKILL.md sits at the plugin root, so the skill path is the root itself.
-	if len(manifest.Skills) != 1 || manifest.Skills[0] != "./" {
-		t.Errorf("plugin skills = %v, want [./] (single skill at the plugin root)", manifest.Skills)
+	// `claude plugin validate --strict` — what the submission pipeline runs —
+	// rejects a missing version.
+	if manifest.Version == "" {
+		t.Error("plugin.json must declare a version; strict validation rejects it otherwise")
 	}
 
-	// The plugin's own skill is the setup skill, not the recall skill.
-	tip, err := os.ReadFile(filepath.Join(pluginRoot, "SKILL.md"))
+	// Exactly two skills: install (per machine) and init (per repo).
+	entries, err := os.ReadDir(filepath.Join(pluginRoot, "skills"))
 	if err != nil {
-		t.Fatalf("plugin SKILL.md unreadable: %v", err)
+		t.Fatalf("plugin skills/ unreadable: %v", err)
 	}
-	if !strings.Contains(string(tip), "name: rekal-setup\n") {
-		t.Error("plugin SKILL.md must declare name: rekal-setup, distinct from the embedded recall skill")
+	got := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			got = append(got, e.Name())
+		}
 	}
-	if !strings.Contains(string(tip), "rekal init") {
-		t.Error("plugin SKILL.md must route the user to rekal init — bootstrapping is its whole job")
+	sort.Strings(got)
+	want := []string{"init", "install"}
+	if !slices.Equal(got, want) {
+		t.Errorf("plugin skills = %v, want %v — setup only, the recall skill ships in the binary", got, want)
+	}
+	for _, name := range want {
+		tip, err := os.ReadFile(filepath.Join(pluginRoot, "skills", name, "SKILL.md"))
+		if err != nil {
+			t.Errorf("plugin skill %s unreadable: %v", name, err)
+			continue
+		}
+		if !strings.Contains(string(tip), "name: "+name+"\n") {
+			t.Errorf("plugin skill %s must declare name: %s", name, name)
+		}
 	}
 
-	// No recall-skill material may reappear here. A skills/ dir or any of the
-	// embedded skill's pages would resurrect the two-copy problem.
-	if _, err := os.Stat(filepath.Join(pluginRoot, "skills")); !os.IsNotExist(err) {
-		t.Error("plugin must not carry a skills/ directory — the recall skill ships in the binary")
-	}
-	for _, banned := range []string{"references", "scripts"} {
+	// No recall-skill material may reappear here. These are the embedded skill's
+	// own pages; a copy of any of them resurrects the two-copy problem.
+	for _, banned := range []string{
+		filepath.Join("skills", "rekal"),
+		"references",
+		"scripts",
+	} {
 		if _, err := os.Stat(filepath.Join(pluginRoot, banned)); !os.IsNotExist(err) {
-			t.Errorf("plugin must not carry %s/ — that is recall-skill material owned by the binary", banned)
+			t.Errorf("plugin must not carry %s — that is recall-skill material owned by the binary", banned)
 		}
+	}
+}
+
+// TestPlugin_VendoredInstaller pins the vendored installer byte-identical to the
+// project's own script. The plugin ships it so setup runs reviewed, SHA-pinned
+// code instead of piping a live URL into a shell — which only holds if the copy
+// cannot drift from the original.
+func TestPlugin_VendoredInstaller(t *testing.T) {
+	t.Parallel()
+
+	vendored, err := os.ReadFile(filepath.Join(pluginRoot, "bin", "rekal-install"))
+	if err != nil {
+		t.Fatalf("vendored installer unreadable: %v", err)
+	}
+	origin, err := os.ReadFile(filepath.Join(pluginRoot, "..", "scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("scripts/install.sh unreadable: %v", err)
+	}
+	if !bytes.Equal(vendored, origin) {
+		t.Error("plugin/bin/rekal-install has drifted from scripts/install.sh — re-copy it")
+	}
+
+	// It must be executable, or Claude Code puts a non-runnable file on PATH.
+	info, err := os.Stat(filepath.Join(pluginRoot, "bin", "rekal-install"))
+	if err != nil {
+		t.Fatalf("vendored installer unstattable: %v", err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		t.Errorf("plugin/bin/rekal-install mode = %v, want the executable bit set", info.Mode().Perm())
 	}
 }
 

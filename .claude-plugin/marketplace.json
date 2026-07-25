@@ -9,8 +9,8 @@
     {
       "name": "rekal",
       "source": "./plugin",
-      "displayName": "Rekal",
-      "description": "Set up Rekal — git-backed memory of prior AI sessions: why a change was made, what was tried, what was rejected. This plugin installs the binary and initializes the repo; the binary then installs the full recall skill.",
+      "displayName": "Rekal Memory",
+      "description": "Git-backed memory of prior AI sessions — why a change was made, what was tried, what was rejected. Installs the Rekal binary and turns memory on per repository; the binary then owns the recall skill.",
       "homepage": "https://github.com/rekal-dev/rekal-cli",
       "repository": "https://github.com/rekal-dev/rekal-cli",
       "license": "Apache-2.0",

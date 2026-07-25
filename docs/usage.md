@@ -195,12 +195,23 @@ marketplace:
 /plugin install rekal@rekal-dev
 ```
 
-The plugin is **setup only**. It gives your agent one thin skill that explains
-what Rekal is, installs the binary, and runs `rekal init` — asking you before
-each step. The recall skill above is not in the plugin; `rekal init` installs
-it, versioned with the binary whose commands it describes. Shipping it in both
-places would put two copies in your context and let the plugin's copy drift
-ahead of your installed binary. Detail:
+The plugin is **setup only** — two commands:
+
+| Command | Scope |
+|---|---|
+| `/rekal:install` | once per machine — installs the binary |
+| `/rekal:init` | once per repository — runs `rekal init` |
+
+Both confirm before touching anything, and both are model-invoked too: a `rekal`
+command reporting `command not found` routes to the first, `not initialized` to
+the second. The plugin also ships the installer itself on `PATH`
+(`bin/rekal-install`), so setup runs code that came with the plugin rather than a
+live `curl | bash`.
+
+The recall skill above is not in the plugin; `rekal init` installs it, versioned
+with the binary whose commands it describes. Shipping it in both places would put
+two copies in your context and let the plugin's copy drift ahead of your
+installed binary. Detail:
 [`design/plugin-distribution.md`](design/plugin-distribution.md).
 
 ## Cross-repo recall (optional)

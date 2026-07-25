@@ -34,6 +34,19 @@ Every AI session settles decisions — why this approach, what got tried and thr
 
 Requirements: Git, macOS or Linux.
 
+### From Claude Code
+
+```
+/plugin marketplace add rekal-dev/rekal-cli
+/plugin install rekal@rekal-dev
+```
+
+Then `/rekal:install` once per machine, and `/rekal:init` in each repo you want
+memory in. Both confirm before touching anything. That's the whole setup — skip
+to step 3 below.
+
+### From a shell
+
 ```bash
 # 1. Install (default: ~/.local/bin — override with --target <dir>)
 curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | bash
@@ -66,11 +79,9 @@ marker line, and other detected-agent rules — data stays untouched. To remove
 everything Rekal created, run `rekal clean` (no residue). Full setup, teardown,
 and verification detail: **[docs/usage.md](docs/usage.md)**.
 
-Prefer to start from Claude Code? This repo is also a plugin marketplace —
-`/plugin marketplace add rekal-dev/rekal-cli` then `/plugin install
-rekal@rekal-dev`. The plugin is setup only: it walks your agent through
-installing the binary and running `rekal init`, which installs the recall skill
-itself.
+The Claude Code plugin above is setup only — `/rekal:install` and `/rekal:init`,
+plus the installer it ships. The recall skill itself comes from the binary, so it
+always matches the version answering your commands.
 
 ## See it in action
 

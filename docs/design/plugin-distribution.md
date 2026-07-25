@@ -22,16 +22,36 @@ Nothing about the store, the wire format, or capture changes. This is packaging.
 ```
 plugin/                               ← plugin root: setup only
 ├── .claude-plugin/plugin.json
-├── SKILL.md                          ← one skill, name: rekal-setup
+├── bin/rekal-install                 ← byte-identical copy of scripts/install.sh
+├── skills/install/SKILL.md           → /rekal:install   (once per machine)
+├── skills/init/SKILL.md              → /rekal:init      (once per repository)
 └── README.md
 
 .claude-plugin/marketplace.json       ← repo root: the catalog listing it
 cmd/rekal/cli/skill/skills/rekal/     ← the recall skill — binary only, not shipped here
 ```
 
-The plugin carries no `skills/`, no `references/`, no `scripts/`. It explains
-what Rekal is, installs the binary, runs `rekal init`, and hands off. From that
-point the binary owns the recall skill, exactly as it always has.
+**Two commands, because they have different lifecycles.** Installing the binary
+happens once per machine; `rekal init` happens once per repository, and again in
+the next repository, and the one after. Collapsing them into a single "setup"
+flow assumes setup is a one-time event and the plugin is dead weight afterward.
+It isn't: the plugin is user-scoped, so it is loaded in every repo the user
+opens, which makes it the natural home for the recurring per-repo action.
+
+Both skills are also model-invoked — `command not found` routes to `install`,
+`not initialized` routes to `init`. The `init` skill's description explicitly
+tells it **not** to volunteer on a repo that merely lacks `.rekal/`; almost no
+repo should be initialized, and a skill loaded everywhere that proposes
+initializing everything is a nag.
+
+**The installer is vendored, not fetched.** `bin/` lands on the Bash tool's
+`PATH`, so `bin/rekal-install` — a byte-identical copy of `scripts/install.sh`,
+pinned by `TestPlugin_VendoredInstaller` — replaces piping a live URL into a
+shell. The install logic is then part of the reviewed, SHA-pinned plugin rather
+than whatever that URL serves at run time. It still downloads the platform
+archive from GitHub Releases, which is unavoidable: the binary embeds a ~134 MB
+model, so the release archives run ~160 MB and cannot ship inside a plugin (see
+§5).
 
 **Why not ship the recall skill in the plugin.** The first design did, with the
 skill dir doubling as the plugin root — one directory, two consumers, no copy to
@@ -46,8 +66,8 @@ user's binary does not implement.
 
 Setup-only makes that state unreachable rather than managed. The recall skill
 has one owner, and it is the artifact whose commands it documents.
-`TestPlugin_SetupOnly` pins it: the manifest declares a single root skill named
-`rekal-setup`, and `skills/`, `references/`, and `scripts/` must not exist under
+`TestPlugin_SetupOnly` pins it: `plugin/skills/` holds exactly `install` and
+`init`, and `skills/rekal`, `references/`, and `scripts/` must not exist under
 `plugin/`.
 
 The plugin carries its own `version`, on its own line — `0.1.0`, unrelated to
@@ -108,9 +128,15 @@ Anthropic's discretion. There is no application, and the form does not feed it.
 
 ## 5. Non-goals
 
-- **Shipping the binary in the plugin.** It is platform-specific, embeds a
-  model, and the release tarballs run ~165 MB. The plugin ships the skill and
-  the instructions to fetch the binary.
+- **Shipping the binary in the plugin.** The embedded model alone is 140,589,761
+  bytes gzipped; release archives run 162–169 MB, across three platforms. GitHub
+  rejects any file over 100 MB at push, so it cannot even be committed. LFS does
+  not rescue it — a plugin fetch does not run `git lfs pull`, so users would
+  receive the 134-byte pointer and fail silently, exactly the trap
+  `docs/cloud-agent-setup.md` already documents. And the plugin cache is
+  version-keyed (`cache/<marketplace>/<plugin>/<version>/`), so every bump would
+  leave another half-gigabyte behind. The plugin ships the 8.5 KB installer
+  instead.
 - **Setup as a substrate in the recall skill.** Inside the embedded skill,
   setup is a reference page behind an error string. The triage table stays four
   rows. `rekal-setup` is a separate skill because it lives in a separate

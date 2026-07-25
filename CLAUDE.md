@@ -314,11 +314,13 @@ session discovery keep using the invoking worktree.
   `references/` (rich, on demand — `ledger.md` is the one page on reasoning over
   the past: recall/widen/depth-judgment, time-axis, enumeration, whose-fact/
   premise, analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
-  `reference.md`, `setup.md` — the bootstrap page reached only when a rekal
-  command reports `command not found` / `not initialized`, so a skill that
-  arrives **without** the binary (plugin install) can install it and
-  `rekal init`, always asking first — and `references/workflows/` — the five
-  answer-type specialists
+  `reference.md`, `setup.md` — the recovery page, reached **only** when a rekal
+  command reports `command not found` / `not initialized` (a broken `PATH`, a
+  deleted binary), always asking before it installs or inits. Error-driven, not
+  intent-driven: a user who *asks* to set Rekal up is the plugin's job
+  (`/rekal:install`, `/rekal:init`), so this skill's description and dispatch
+  row deliberately do not claim that trigger — and `references/workflows/` —
+  the five answer-type specialists
   the gate routes to: `duration.md`, `complete-set.md`, `event-time.md`,
   `inference.md`, `point-fact.md`, each a concentrated evidence contract, not
   truth. Ordered/exclusive routing + shipped content are hash-pinned in

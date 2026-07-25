@@ -82,20 +82,24 @@ either way.
 
 ## 3. Asking is the gate
 
-Both skills — the plugin's `rekal-setup` and the embedded skill's
-`references/setup.md` — hold the same rule above every command: **ask before
-installing, ask before initializing.** Installing pipes a script from the
-internet into a shell; `rekal init` writes hooks, a branch, and a line in the
-user's `CLAUDE.md`. An agent does not make those decisions.
+Every setup surface — the plugin's `install` and `init` skills, and the embedded
+skill's `references/setup.md` — holds the same rule above every command: **ask
+before installing, ask before initializing.** `rekal init` writes hooks, a
+branch, and a line in the user's `CLAUDE.md`; installing puts an executable on
+their machine. An agent does not make those decisions.
 
 If the user declines, the skill stands down and says memory is not available
 here. Silence is a supported answer, as everywhere else in this skill.
 
-`references/setup.md` stays in the embedded skill for the other direction: an
-agent that already has the recall skill but hits `command not found` (a broken
-`PATH`) or `not initialized`. The tip routes there on exactly those two error
-strings, so the `rekal init` path never reads it — the cost to the existing
-surface is one line in `SKILL.md`.
+**The trigger split is error-driven vs. intent-driven.** A user who *asks* to
+set Rekal up is the plugin's job — that is what `/rekal:install` and
+`/rekal:init` are for, and they are the only surface present before the binary
+exists. `references/setup.md` covers the other direction only: an agent that
+already has the recall skill (so `rekal init` has run) and then hits `command
+not found` — a broken `PATH`, a deleted binary. The tip routes there on error
+strings alone, so the ordinary path never reads it and the embedded skill never
+competes with the plugin for the setup request. Cost to the existing surface:
+one line in `SKILL.md`.
 
 ## 4. Publishing — two paths, one of them is not a pull request
 

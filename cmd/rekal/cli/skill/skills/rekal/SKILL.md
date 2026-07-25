@@ -1,8 +1,7 @@
 ---
 name: rekal
 description: >
-  Use in a repo with Rekal initialized (.rekal/ exists), or when the user asks
-  to set Rekal up. Rekal is memory of
+  Use in a repo with Rekal initialized (.rekal/ exists). Rekal is memory of
   prior AI sessions — who changed what, why, and when. Before spending a token,
   decide WHERE the answer lives: TREE / KNOWLEDGE / LEDGER / MAP. Route to one
   substrate, act, and stay silent when memory is not the tool. Rekal's commands
@@ -81,7 +80,7 @@ flat cluster → stay silent on prose.
 | Breadth / structure | `bash scripts/map.sh fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash scripts/wiki-gate.sh` then `Read references/wiki.md` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
-| `rekal` missing, repo uninitialized, or "set up Rekal" | `Read references/setup.md` — ask before installing or initializing |
+| A `rekal` command reports `command not found` / `not initialized` | `Read references/setup.md` — ask before installing or initializing |
 
 The command returns data; you decide the move. Cite session / turn / commit with
 every memory claim.

@@ -86,9 +86,8 @@ func TestSkill_ContentHashes(t *testing.T) {
 	s := rekalSkill(t)
 
 	want := map[string]string{
-		"SKILL.md":                             "0b492684ea835a82174c6b0236443241e11f7271ca52167f006153913d436b41",
+		"SKILL.md":                             "d9663e2b8d6c56dcd0562b33dd7a49a914f2788f49c4d132049a1bda0367b002",
 		"references/ledger.md":                 "98b3c6a0424772ce31ee6da157ca490a936beec8b88694ff3c602c417d3c72ea",
-		"references/setup.md":                  "cd667590919d7725c48f1ca3334cf7c1cf5ec5525b42c96c3e977c6c1143e62b",
 		"references/map.md":                    "9434758a67fcded223659227b0e62c02a9c3a8b6a4f9cb005df00fa02ccbc950",
 		"references/wiki.md":                   "ce117f95ffd1f0d8d70b3d0c1d3401b641f1ef0ca3beb9a1d3812d4c65bc86a1",
 		"references/reference.md":              "bd0a571a8cba25d6a6749e3c97238e9373ebabdf14e748218fdbfd66d0eea58d",
@@ -144,7 +143,6 @@ func TestAll_UnifiedSkill(t *testing.T) {
 		"references/map.md",
 		"references/wiki.md",
 		"references/reference.md",
-		"references/setup.md",
 		"references/workflows/duration.md",
 		"references/workflows/complete-set.md",
 		"references/workflows/event-time.md",

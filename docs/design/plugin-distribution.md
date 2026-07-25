@@ -82,24 +82,20 @@ either way.
 
 ## 3. Asking is the gate
 
-Every setup surface — the plugin's `install` and `init` skills, and the embedded
-skill's `references/setup.md` — holds the same rule above every command: **ask
-before installing, ask before initializing.** `rekal init` writes hooks, a
-branch, and a line in the user's `CLAUDE.md`; installing puts an executable on
-their machine. An agent does not make those decisions.
+Both setup skills hold the same rule above every command: **ask before
+installing, ask before initializing.** `rekal init` writes hooks, a branch, and
+a line in the user's `CLAUDE.md`; installing puts an executable on their
+machine. An agent does not make those decisions.
 
 If the user declines, the skill stands down and says memory is not available
-here. Silence is a supported answer, as everywhere else in this skill.
+here. Silence is a supported answer, as everywhere else in Rekal.
 
-**The trigger split is error-driven vs. intent-driven.** A user who *asks* to
-set Rekal up is the plugin's job — that is what `/rekal:install` and
-`/rekal:init` are for, and they are the only surface present before the binary
-exists. `references/setup.md` covers the other direction only: an agent that
-already has the recall skill (so `rekal init` has run) and then hits `command
-not found` — a broken `PATH`, a deleted binary. The tip routes there on error
-strings alone, so the ordinary path never reads it and the embedded skill never
-competes with the plugin for the setup request. Cost to the existing surface:
-one line in `SKILL.md`.
+**Setup lives entirely in the plugin.** The embedded recall skill is untouched by
+any of this — byte-identical to what it was before the plugin existed. That is
+the cleanest form of the ownership split: the plugin is purely additive, the
+binary's skill carries no setup material at all, and no release is required for
+the plugin to work. A user who asks to set Rekal up reaches `/rekal:install` or
+`/rekal:init`, which are the only surface that exists before the binary does.
 
 ## 4. Publishing — two paths, one of them is not a pull request
 

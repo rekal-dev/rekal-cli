@@ -314,13 +314,7 @@ session discovery keep using the invoking worktree.
   `references/` (rich, on demand — `ledger.md` is the one page on reasoning over
   the past: recall/widen/depth-judgment, time-axis, enumeration, whose-fact/
   premise, analytical SQL, decision arcs, provenance; plus `map.md`, `wiki.md`,
-  `reference.md`, `setup.md` — the recovery page, reached **only** when a rekal
-  command reports `command not found` / `not initialized` (a broken `PATH`, a
-  deleted binary), always asking before it installs or inits. Error-driven, not
-  intent-driven: a user who *asks* to set Rekal up is the plugin's job
-  (`/rekal:install`, `/rekal:init`), so this skill's description and dispatch
-  row deliberately do not claim that trigger — and `references/workflows/` —
-  the five answer-type specialists
+  `reference.md`, and `references/workflows/` — the five answer-type specialists
   the gate routes to: `duration.md`, `complete-set.md`, `event-time.md`,
   `inference.md`, `point-fact.md`, each a concentrated evidence contract, not
   truth. Ordered/exclusive routing + shipped content are hash-pinned in
@@ -380,8 +374,8 @@ session discovery keep using the invoking worktree.
   ranking, team-sharing)
 - `design/plugin-distribution.md`: Claude Code plugin packaging — why the plugin
   is setup-only (the binary stays the single owner of the recall skill; a plugin
-  tracks `main`, an installed binary does not), the `references/setup.md`
-  recovery page, self-hosted marketplace vs. the community marketplace's
+  tracks `main`, an installed binary does not), why the binary cannot ship
+  inside it, self-hosted marketplace vs. the community marketplace's
   form-not-PR submission path, and the non-goals
 - `db/`: Database schema and design
 - `research/`: Memory-research program — positioning claim + evidence ladder,

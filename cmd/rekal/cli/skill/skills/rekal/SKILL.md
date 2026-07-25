@@ -12,9 +12,6 @@ description: >
 
 Most wasted effort is the wrong substrate. Decide before you grep or recall.
 
-If a rekal command reports `command not found` or `not initialized`, the setup
-is missing, not the memory — `Read references/setup.md`.
-
 | Substrate | Holds | Tense | Reach it with | Answers |
 |---|---|---|---|---|
 | Tree | current code | now | grep / read | what does X do, where is it |
@@ -80,7 +77,6 @@ flat cluster → stay silent on prose.
 | Breadth / structure | `bash scripts/map.sh fresh` then `Read references/map.md` |
 | Publish `docs/wiki/` | `bash scripts/wiki-gate.sh` then `Read references/wiki.md` |
 | Flags, SQL, PATH, schema | `Read references/reference.md` |
-| A `rekal` command reports `command not found` / `not initialized` | `Read references/setup.md` — ask before installing or initializing |
 
 The command returns data; you decide the move. Cite session / turn / commit with
 every memory claim.

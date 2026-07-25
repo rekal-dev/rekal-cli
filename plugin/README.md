@@ -47,8 +47,12 @@ gets better as the agent does.
 
 ## Git is the transport
 
-No server. No vector database. No account. Nothing to operate, nothing to breach,
-because there is nothing to connect to.
+No server. No account. No external memory service. Nothing to operate, nothing to
+breach, because there is nothing to connect to.
+
+Embedding is local. The model ships inside the binary, embeddings are computed on
+your machine and stored in `.rekal/`, and they never travel. Semantic search with
+no tier to run or pay for.
 
 Memory travels the way code travels: `git push`. Merged work reaches your team.
 Unmerged work stays on your machine. The store is two files in `.rekal/`.

@@ -23,7 +23,7 @@
   commit under docs/assets/, and replace this comment with the image.
 -->
 
-Every AI session settles decisions — why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. No memory SaaS, no vector-DB tier, nothing to operate — the store is just two files in `.rekal/`. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision — in ~7.5K context tokens, in a few seconds, from git.
+Every AI session settles decisions — why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. No memory SaaS, no external memory service — embedding is local, and the store is just two files in `.rekal/`. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision — in ~7.5K context tokens, in a few seconds, from git.
 
 - **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
 - **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.

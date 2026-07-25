@@ -10,7 +10,7 @@
       "name": "rekal",
       "source": "./plugin",
       "displayName": "Rekal Memory",
-      "description": "Your agent starts every session blank. Rekal gives it your team's reasoning — why a change was made, what was tried, what was rejected — recalled from git in ~150 ms. No server, no vector DB, no subscription. Sets up the binary and turns memory on per repository.",
+      "description": "Memory for your agent, built on four ideas. Save the session transcript raw and append-only — no summaries to rot. Agent agnostic: Claude Code, Cursor, Codex, Gemini, Copilot, Kiro, OpenCode. Reason at query time over the real record. Git is the transport — no server, no vector database. Sets up the binary and turns memory on per repository.",
       "homepage": "https://github.com/rekal-dev/rekal-cli",
       "repository": "https://github.com/rekal-dev/rekal-cli",
       "license": "Apache-2.0",

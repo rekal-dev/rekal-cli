@@ -1,41 +1,58 @@
 # Rekal Memory
 
-**Your agent starts every session blank. Rekal gives it your team's reasoning — why this approach, what got tried, what got thrown away — recalled from git in ~150 ms.**
+Code has git. Every line, every change, every author — recorded forever. The
+reasoning behind the code has nothing.
 
-[rekal.dev](https://rekal.dev) · [GitHub](https://github.com/rekal-dev/rekal-cli) · [Paper (arXiv:2607.14390)](https://arxiv.org/abs/2607.14390)
+Your agent starts every session blank. It reads the code. It does not know why
+the code looks that way, what was tried last week, or which approach the team
+already explored and abandoned.
 
----
+Rekal is the ledger for that. Four ideas, in order.
 
-Every AI session settles decisions. Then it ends, and the reasoning is gone. Next
-week a different agent proposes the thing you already rejected, and nobody
-remembers why it was rejected.
+## Save the transcript
 
-Rekal captures each session at commit time, stores it **raw in git**, and indexes
-it **locally**. No server. No vector database. No subscription. The store is two
-files in `.rekal/` that travel with your repo.
+The session is the record. Rekal writes it raw and append-only.
 
-```
-$ rekal "should webhook retries use a fixed delay?"
+No summaries. No distillation. Nothing derived. A summary is a lossy guess about
+what will matter later, made before anyone knows the question — and it rots
+quietly while you trust it. The transcript does not rot. It is what was actually
+said.
 
-INJECT top=0.81 gap=0.28 2 seeds
-  01JNQX8F2K9M conf=0.81 t14 [reached 3×] "no, a fixed 5s delay stampedes the
-  downstream on recovery. Use exponential backoff with jitter…"
-```
+Immutable once written. Nobody edits it, nobody deletes it. That is what makes it
+worth sharing: if anyone could edit the record, nobody could trust it.
 
-## The numbers
+## Agent agnostic
 
-| | |
-|---|---|
-| **90.6%** | LoCoMo accuracy — **98.6%** top-20 recall |
-| **86.6%** | LongMemEval accuracy — **99%** top-20 recall |
-| **~150 ms** | median local recall |
-| **158×** | thinner on the wire than the raw transcript |
-| **0** | memory servers, vector DB tiers, SaaS subscriptions |
+The transcript is the substrate, not one vendor's memory format.
 
-Retrieval runs locally over git, with no memory layers and no external memory
-service. On the accuracy rows the answering agent is GPT-5 Sol — Rekal supplies
-the memory, the model supplies the answer.
-[Full tables and methodology →](https://github.com/rekal-dev/rekal-cli#benchmarks)
+Rekal reads sessions from Claude Code, Cursor, Codex, Gemini, Copilot, Kiro, and
+OpenCode, and answers from all of them together. Switch agents next quarter and
+the ledger is still yours.
+
+## Reason at query time
+
+Nothing is precomputed into "memories." Retrieval, ranking, routing, judgment —
+all of it runs when you ask, against the real record.
+
+This is lazy evaluation applied to memory. Nothing is derived until a question
+needs it, so nothing derived can be stale. The index is a disposable accelerator
+over the ledger; delete it and one command rebuilds it from truth.
+
+The skill orients your agent and hands it the record. It does not script the
+steps. Tools remove toil, never thought — the judgment stays with the agent, and
+gets better as the agent does.
+
+## Git is the transport
+
+No server. No vector database. No account. Nothing to operate, nothing to breach,
+because there is nothing to connect to.
+
+Memory travels the way code travels: `git push`. Merged work reaches your team.
+Unmerged work stays on your machine. The store is two files in `.rekal/`.
+
+Thin on the wire, rich on the machine — strip what git already has, compress what
+remains, compute indexes and embeddings locally and never ship them. Recall runs
+on your machine, median around 150 ms.
 
 ## Install
 
@@ -44,42 +61,35 @@ the memory, the model supplies the answer.
 /plugin install rekal@rekal-dev
 ```
 
-Then two commands, each asking before it touches anything:
+Then two commands. Each says what it will do and waits.
 
-| Command | Scope | Does |
-|---|---|---|
-| `/rekal:install` | once per machine | installs the `rekal` binary |
-| `/rekal:init` | once per repository | store, git hooks, transport branch, recall skill |
+| Command | Scope |
+|---|---|
+| `/rekal:install` | once per machine — installs the `rekal` binary |
+| `/rekal:init` | once per repository — store, git hook, transport branch, recall skill |
 
-Both also fire on their own when a `rekal` command reports `command not found`
-or `not initialized` — so your agent recovers without you remembering the
-command.
+Both also fire on their own when a `rekal` command reports `command not found` or
+`not initialized`.
 
-Requires git, macOS or Linux.
+Requires git, macOS or Linux. After that, commit as normal — a post-commit hook
+captures the session. `rekal clean` removes everything, with no residue.
 
-## After setup
+## What this plugin is
 
-Commit as normal. Your session is captured by a `post-commit` hook. In any later
-session — yours or a teammate's — the agent asks Rekal first and gets the
-decision *and the reason the alternative was rejected*.
+Setup only: two skills and the installer they run.
 
-Merged work travels to your team over plain `git push`. Unmerged work stays
-local. `rekal clean` removes everything, no residue.
-
-Works alongside Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
-
-## What this plugin is, precisely
-
-Setup only: two skills and the installer they run. The **recall skill** — the one
-that actually answers questions — is embedded in the `rekal` binary and installed
-by `rekal init`, so it always matches the version running your commands.
+The recall skill — the one that answers questions — ships inside the binary and
+is installed by `rekal init`, so it always matches the version running your
+commands. Bundling it here too would load two copies at once and let the newer
+one describe flags your binary does not have.
 
 `bin/rekal-install` is a byte-identical copy of the project's
 [`scripts/install.sh`](https://github.com/rekal-dev/rekal-cli/blob/main/scripts/install.sh),
-pinned by a test. Setup runs code that shipped with this reviewed plugin rather
-than piping a live URL into your shell.
+pinned by a test, so setup runs code that shipped with this plugin rather than a
+live URL piped into your shell.
 
-Why the recall skill isn't bundled here:
-[`docs/design/plugin-distribution.md`](https://github.com/rekal-dev/rekal-cli/blob/main/docs/design/plugin-distribution.md).
-
-Apache-2.0 · [rekal.dev](https://rekal.dev)
+[rekal.dev](https://rekal.dev) ·
+[Source](https://github.com/rekal-dev/rekal-cli) ·
+[Design](https://github.com/rekal-dev/rekal-cli/blob/main/docs/design/plugin-distribution.md) ·
+[Paper](https://arxiv.org/abs/2607.14390) ·
+Apache-2.0

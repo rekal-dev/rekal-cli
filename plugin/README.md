@@ -31,6 +31,9 @@ the ledger is still yours.
 
 ## Reason at query time
 
+Maintained memory layers answer from summaries built before anyone asked the
+question, and need a consolidation pipeline kept healthy. Rekal has neither.
+
 Nothing is precomputed into "memories." Retrieval, ranking, routing, judgment —
 all of it runs when you ask, against the real record.
 

@@ -150,9 +150,10 @@ Reuse the existing discovery. For each requested project directory under
 trunk `.jsonl` plus its nested `subagents/…` tree. The only new discovery code
 is enumerating the project directories; the per-project recursion is unchanged.
 
-`CLAUDE_CONFIG_DIR` is honored as it is today. v1 scope is Claude Code's store;
-other adapters (codex/gemini/opencode) are a follow-up — their per-tool roots
-plug into the same "enumerate roots → discover → import" shape.
+`CLAUDE_CONFIG_DIR` is honored for Claude. All registered adapters now
+participate: `--include <repo>` calls each adapter's `Discover(repo)`;
+`--include-all` calls each adapter's `DiscoverAll()`. Dedup hashes match
+checkpoint (file bytes, or `sha256("adapter:DBID")` for OpenCode).
 
 ## Dedup
 

@@ -10,6 +10,8 @@ import (
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestOriginLabel(t *testing.T) {
@@ -22,15 +24,17 @@ func TestOriginLabel(t *testing.T) {
 	shellDir := t.TempDir()
 
 	cases := []struct {
-		name, cwd, projectDir, want string
+		name, cwd, fallback, want string
 	}{
 		{"git repo cwd", repoDir, "/proj", "repo:" + repoDir},
 		{"non-repo cwd", shellDir, "/proj", "shell:" + shellDir},
-		{"no cwd falls back to project dir", "", "/proj/x", "local:/proj/x"},
+		{"no cwd non-git fallback", "", "/proj/x", "local:/proj/x"},
+		{"no cwd git fallback", "", repoDir, "repo:" + repoDir},
+		{"empty", "", "", ""},
 	}
 	for _, tc := range cases {
-		if got := originLabel(tc.cwd, tc.projectDir); got != tc.want {
-			t.Errorf("%s: originLabel(%q) = %q, want %q", tc.name, tc.cwd, tc.want, got)
+		if got := originLabel(tc.cwd, tc.fallback); got != tc.want {
+			t.Errorf("%s: originLabel(%q,%q) = %q, want %q", tc.name, tc.cwd, tc.fallback, got, tc.want)
 		}
 	}
 }
@@ -190,6 +194,156 @@ func TestImportLocalSessions_DisabledPrefIsNoop(t *testing.T) {
 	}
 	if sessions != 0 || projects != 0 {
 		t.Fatalf("disabled pref imported %d/%d, want 0/0", sessions, projects)
+	}
+}
+
+// TestImportLocalSessions_AllAgentsInclude imports Cursor + Copilot sessions
+// for an --include repo path (not Claude-only).
+func TestImportLocalSessions_AllAgentsInclude(t *testing.T) {
+	gitRoot, otherRepo := setupLocalImport(t)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("COPILOT_HOME", filepath.Join(home, "copilot"))
+
+	// Cursor transcript for otherRepo.
+	stem := "cursor-sess"
+	cursorBase := filepath.Join(home, ".cursor", "projects", session.SanitizeCursorRepoPath(otherRepo), "agent-transcripts", stem)
+	if err := os.MkdirAll(cursorBase, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cursorBody := `{"role":"user","message":{"content":[{"type":"text","text":"cursor cross-repo question"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"cursor answer"}]}}
+`
+	if err := os.WriteFile(filepath.Join(cursorBase, stem+".jsonl"), []byte(cursorBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Copilot session whose cwd is otherRepo.
+	copilotDir := filepath.Join(home, "copilot", "session-state", "cp1")
+	if err := os.MkdirAll(copilotDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copilotBody := `{"type":"session.start","timestamp":"2026-05-07T10:00:00Z","data":{"sessionId":"cp1","context":{"cwd":"` + otherRepo + `"}}}
+{"type":"user.message","timestamp":"2026-05-07T10:00:01Z","data":{"content":"copilot cross-repo question"}}
+{"type":"assistant.message","timestamp":"2026-05-07T10:00:02Z","data":{"content":{"text":"copilot answer","length":14}}}
+`
+	if err := os.WriteFile(filepath.Join(copilotDir, "events.jsonl"), []byte(copilotBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	indexDB := openTestIndex(t, gitRoot)
+	defer indexDB.Close()
+
+	sessions, projects, err := importLocalSessions(indexDB, gitRoot, localPref{Repos: []string{otherRepo}}, io.Discard)
+	if err != nil {
+		t.Fatalf("importLocalSessions: %v", err)
+	}
+	if sessions < 2 {
+		t.Fatalf("imported %d sessions from %d origins, want ≥2 (cursor+copilot)", sessions, projects)
+	}
+
+	var n int
+	if err := indexDB.QueryRow(`SELECT count(*) FROM turns_ft WHERE content LIKE '%cross-repo question%'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n < 2 {
+		t.Fatalf("turns matching cross-repo question = %d, want ≥2", n)
+	}
+}
+
+// TestImportLocalSessions_IncludeAllDiscoversUnscopedSessions verifies
+// --include-all pulls sessions that Discover(repo) would miss (wrong cwd).
+func TestImportLocalSessions_IncludeAllDiscoversUnscopedSessions(t *testing.T) {
+	gitRoot, _ := setupLocalImport(t)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("COPILOT_HOME", filepath.Join(home, "copilot"))
+	// Isolate Claude so include-all doesn't walk the setupLocalImport projects tree only.
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, "no-claude"))
+
+	foreign := "/work/foreign-app"
+	copilotDir := filepath.Join(home, "copilot", "session-state", "foreign")
+	if err := os.MkdirAll(copilotDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"type":"session.start","timestamp":"2026-05-07T10:00:00Z","data":{"sessionId":"foreign","context":{"cwd":"` + foreign + `"}}}
+{"type":"user.message","timestamp":"2026-05-07T10:00:01Z","data":{"content":"include-all finds me"}}
+{"type":"assistant.message","timestamp":"2026-05-07T10:00:02Z","data":{"content":{"text":"yes","length":3}}}
+`
+	if err := os.WriteFile(filepath.Join(copilotDir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	indexDB := openTestIndex(t, gitRoot)
+	defer indexDB.Close()
+
+	sessions, _, err := importLocalSessions(indexDB, gitRoot, localPref{All: true}, io.Discard)
+	if err != nil {
+		t.Fatalf("importLocalSessions: %v", err)
+	}
+	if sessions < 1 {
+		t.Fatal("include-all imported 0 sessions, want the foreign Copilot session")
+	}
+	var content string
+	if err := indexDB.QueryRow(`SELECT content FROM turns_ft WHERE content LIKE '%include-all finds me%'`).Scan(&content); err != nil {
+		t.Fatalf("foreign session not in index: %v", err)
+	}
+}
+
+// TestImportLocalSessions_OpenCodeDedupUsesAdapterDBHash ensures DB-backed
+// OpenCode sessions share checkpoint's sha256("opencode:"+id) dedup key.
+func TestImportLocalSessions_OpenCodeDedupUsesAdapterDBHash(t *testing.T) {
+	gitRoot, otherRepo := setupLocalImport(t)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dbPath := filepath.Join(home, ".local", "share", "opencode", "opencode.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	odb, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := odb.Exec(`
+		CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT);
+		CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT, time_created TEXT);
+		CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, data TEXT, time_created TEXT);
+		INSERT INTO session (id, directory) VALUES ('oc-dup', ?);
+		INSERT INTO message (id, session_id, data, time_created) VALUES
+			('m1', 'oc-dup', '{"role":"user"}', '2026-01-01T10:00:00Z'),
+			('m2', 'oc-dup', '{"role":"assistant"}', '2026-01-01T10:00:01Z');
+		INSERT INTO part (id, message_id, data, time_created) VALUES
+			('p1', 'm1', '{"type":"text","text":"already in data.db"}', '2026-01-01T10:00:00Z'),
+			('p2', 'm2', '{"type":"text","text":"ok"}', '2026-01-01T10:00:01Z');
+	`, otherRepo); err != nil {
+		odb.Close()
+		t.Fatal(err)
+	}
+	odb.Close()
+
+	hash := session.ContentHash(&session.OpenCodeAdapter{}, session.SessionRef{DBID: "oc-dup"}, nil)
+	dataDB, err := db.OpenData(gitRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InsertSession(dataDB, "existing-oc", "", hash, "human", "", "dev@example.com", "main", "2026-01-01T10:00:00Z", "opencode"); err != nil {
+		dataDB.Close()
+		t.Fatal(err)
+	}
+	dataDB.Close()
+
+	indexDB := openTestIndex(t, gitRoot)
+	defer indexDB.Close()
+
+	sessions, _, err := importLocalSessions(indexDB, gitRoot, localPref{Repos: []string{otherRepo}}, io.Discard)
+	if err != nil {
+		t.Fatalf("importLocalSessions: %v", err)
+	}
+	if sessions != 0 {
+		t.Fatalf("imported %d, want 0 (OpenCode hash deduped against data.db)", sessions)
 	}
 }
 

@@ -45,11 +45,12 @@ Rebuild when the index is out of date or after importing new data.
 'rekal sync' rebuilds the index automatically.
 
 Cross-repo local import (--include-all / --include / --no-local) folds your
-own Claude Code history from other repos and shell sessions on this machine
-into recall. These sessions are stored in the index only, never in the data
-DB, so they can be recalled locally but can never be pushed to the team.
-The choice is remembered: plain 'rekal index' and 'rekal sync' keep whatever
-you last set. Default is off.`,
+own local agent history (Claude, Cursor, Codex, Gemini, OpenCode, Copilot,
+Kiro — every registered adapter) from other repos and shell sessions on this
+machine into recall. These sessions are stored in the index only, never in
+the data DB, so they can be recalled locally but can never be pushed to the
+team. The choice is remembered: plain 'rekal index' and 'rekal sync' keep
+whatever you last set. Default is off.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {
@@ -65,9 +66,9 @@ you last set. Default is off.`,
 	}
 
 	cmd.Flags().BoolVar(&includeAll, "include-all", false,
-		"import every local Claude Code session on this machine (all repos + shell) into recall")
+		"import every local agent session on this machine (all agents, repos + shell) into recall")
 	cmd.Flags().StringArrayVar(&include, "include", nil,
-		"import local sessions for specific repo path(s) into recall (repeatable)")
+		"import local sessions for specific repo path(s) into recall (repeatable; all agents)")
 	cmd.Flags().BoolVar(&noLocal, "no-local", false,
 		"stop importing local cross-repo sessions (clears the remembered choice)")
 

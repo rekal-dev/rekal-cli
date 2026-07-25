@@ -78,6 +78,9 @@ func TestOpenCodeAdapter_Parse(t *testing.T) {
 	if payload.SessionID != "oc-001" {
 		t.Errorf("SessionID = %q, want oc-001", payload.SessionID)
 	}
+	if payload.CWD != "/tmp/repo" {
+		t.Errorf("CWD = %q, want /tmp/repo", payload.CWD)
+	}
 
 	if len(payload.Turns) != 2 {
 		t.Fatalf("len(Turns) = %d, want 2", len(payload.Turns))

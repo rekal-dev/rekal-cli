@@ -23,7 +23,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
    - `files_index` — Files touched, denormalized via `checkpoint_sessions`
    - `session_facets` — Aggregated session metadata (email, branch, actor, counts, checkpoint/SHA)
    - `file_cooccurrence` — Self-join on tool call paths within same session
-5. **Cross-repo local import (if enabled)** — When the `local_import` preference in `.rekal/config.json` is set, fold this machine's other Claude Code sessions (other repos and shell sessions under `~/.claude/projects/*`) into `turns_ft` / `session_facets`, labeled with an `origin` (`repo:`/`shell:`). **Index only — never written to `data.db`, so these sessions can be recalled locally but can never be pushed to the team.** Sessions whose content hash already exists in `data.db` are skipped.
+5. **Cross-repo local import (if enabled)** — When the `local_import` preference in `.rekal/config.json` is set, fold this machine's other agent sessions from every registered adapter (Claude, Cursor, Codex, Gemini, OpenCode, Copilot, Kiro — other repos and shell) into `turns_ft` / `session_facets`, labeled with an `origin` (`repo:`/`shell:`/`local:`). **Index only — never written to `data.db`, so these sessions can be recalled locally but can never be pushed to the team.** Sessions whose content hash already exists in `data.db` are skipped (file-byte hash for Path refs; `sha256("adapter:DBID")` for OpenCode).
 6. **Create FTS index** — DuckDB BM25 full-text search on `turns_ft.content` (only if turns exist).
 6b. **Build facet documents + facet FTS index** — `PopulateFacetText` rebuilds `session_facets.facet_text` (distinct tool paths + command prefixes + steering text, capped; derived from the index's own tables, so cross-repo imports are covered) after the import step, then the guarded facet FTS index is created — skipped entirely when no session has facet material.
 6c. **Build the knowledge layer (structural)** — Chunk the repo's tracked prose files at HEAD into `knowledge_chunks` + guarded knowledge FTS. Watermarked by commit SHA. Non-fatal. Chunk *vectors* are **not** filled here — see step 10. See [knowledge-layer design](../../design/knowledge-layer.md).
@@ -42,11 +42,11 @@ The index DB can be deleted at any time; `rekal index` rebuilds it completely. N
 
 ## Flags
 
-Cross-repo local import — fold your own Claude Code history from other repos and shell sessions on this machine into recall. These flags **set a persistent preference** (stored in `.rekal/config.json`, gitignored) and rebuild. A plain `rekal index` — and `rekal sync` — then **honor** whatever was last set. Default is off. Mutually exclusive.
+Cross-repo local import — fold your own local agent history (every registered adapter) from other repos and shell sessions on this machine into recall. These flags **set a persistent preference** (stored in `.rekal/config.json`, gitignored) and rebuild. A plain `rekal index` — and `rekal sync` — then **honor** whatever was last set. Default is off. Mutually exclusive.
 
 | Flag | Effect |
 |---|---|
-| `--include-all` | Import every local Claude Code session (all repos + shell sessions). |
+| `--include-all` | Import every local agent session on this machine (all agents, repos + shell). |
 | `--include <repo>` | Import local sessions for specific repo path(s). Repeatable. |
 | `--no-local` | Stop importing; clears the remembered preference. |
 

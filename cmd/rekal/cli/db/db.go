@@ -180,6 +180,46 @@ func QuerySessionIDByHash(d *sql.DB, hash string) (string, error) {
 	return id, nil
 }
 
+// SessionExtent reports how much of a session is already stored: its turn count
+// and tool-call count. Used by capture to append only what is new when the same
+// transcript is checkpointed again at a later commit.
+func SessionExtent(d *sql.DB, sessionID string) (turns, toolCalls int, err error) {
+	if err = d.QueryRow(
+		`SELECT count(*) FROM turns WHERE session_id = $1`, sessionID,
+	).Scan(&turns); err != nil {
+		return 0, 0, fmt.Errorf("count turns: %w", err)
+	}
+	if err = d.QueryRow(
+		`SELECT count(*) FROM tool_calls WHERE session_id = $1`, sessionID,
+	).Scan(&toolCalls); err != nil {
+		return 0, 0, fmt.Errorf("count tool_calls: %w", err)
+	}
+	return turns, toolCalls, nil
+}
+
+// SessionTurnContents returns the stored turn contents for a session, ordered by
+// turn_index. Capture compares these against a freshly parsed transcript to
+// confirm it is a strict extension before appending — a transcript that was
+// rewritten rather than extended must not be merged into the existing session.
+func SessionTurnContents(d *sql.DB, sessionID string) ([]string, error) {
+	rows, err := d.Query(
+		`SELECT content FROM turns WHERE session_id = $1 ORDER BY turn_index`, sessionID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query turn contents: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+	var out []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, fmt.Errorf("scan turn content: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // SessionMetaFields bundles optional harness metadata for InsertSessionMeta:
 // team/workflow (Claude Code teammates runs and dynamic workflows) and
 // agent-type/description/spawn-depth (Task subagent meta.json sidecars —

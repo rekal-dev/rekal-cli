@@ -87,7 +87,17 @@ session discovery keep using the invoking worktree.
   re-chunk; commit-SHA watermark (`knowledge_head_sha`) makes the steady
   state one rev-parse. Called by `index` (full) and recall (incremental,
   best-effort). See `docs/design/knowledge-layer.md`
-- `checkpoint.go`: Capture session after commit; also drains the L1 recall-graph
+- `checkpoint.go`: Capture session after commit. Session identity is the
+  **transcript ref**, not its bytes (`refHash = sha256("ref:"+cacheKey)`, stored
+  in `session_hash`): a live conversation has different content at every commit,
+  so the old content hash made each commit a brand-new session and re-stored the
+  whole transcript — measured 2.07× amplification and duplicate seeds crowding
+  out recall. A re-captured transcript now resolves to its existing session and
+  appends only turns/tool-calls past `db.SessionExtent`, gated by `turnsExtend`
+  (the parsed transcript must be the stored turns plus more; a rewritten one
+  falls back to a new session, so an append can never splice unrelated turns
+  into history). Subagent parent lookup keys on the trunk's ref for the same
+  reason. Also drains the L1 recall-graph
   spool into `data.db.recall_edges` (`drainRecallSpool`) while the data.db
   writer is held — even when no new session is captured (an agent may recall/
   drill inside an already-checkpointed session), refreshing `session_reach` via
@@ -271,7 +281,13 @@ session discovery keep using the invoking worktree.
   population (incl. `PopulateFacetText` — per-session facet documents from
   the index's own tables, full + incremental — and the guarded
   `CreateFacetFTSIndex`, built by `index`/`sync` only when facet material
-  exists). `knowledge.go` holds the knowledge layer's tables
+  exists). `PurgeSupersededSessionsFromIndex` collapses re-captures written
+  before capture keyed on ref identity: a session whose turns are a strict
+  prefix of a longer one's is dropped from the **index only** — data.db keeps
+  every copy, since the ledger is append-only and those rows are already on the
+  wire. Grouped by source + author + parent + turn 0 so different agents that
+  open alike are never merged; runs before facets/reach so neither is computed
+  for a session about to be dropped. `knowledge.go` holds the knowledge layer's tables
   (`knowledge_chunks` + `knowledge_embeddings`, created on demand by
   `EnsureKnowledgeSchema` so old index DBs upgrade in place), the guarded
   `CreateKnowledgeFTSIndex`, and the chunk-vector helpers (missing-vectors

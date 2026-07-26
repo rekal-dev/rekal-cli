@@ -140,21 +140,13 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 				}
 			}
 
-			exists, err := db.SessionExistsByHash(dataDB, hash)
-			if err != nil {
-				return fmt.Errorf("dedup check: %w", err)
-			}
-			if exists {
-				if ref.Path != "" {
-					info, _ := os.Stat(ref.Path)
-					if info != nil {
-						_ = db.UpsertCheckpointState(dataDB, cacheKey, info.Size(), hash)
-					}
-				} else {
-					_ = db.UpsertCheckpointState(dataDB, cacheKey, 0, hash)
-				}
-				continue
-			}
+			// Session identity is the transcript reference, not its bytes. A
+			// live conversation has different content at every commit, so a
+			// content hash made each commit look like a brand-new session and
+			// stored the whole transcript again (2x-10x amplification, and
+			// duplicate seeds crowding out recall). Keyed by ref, the same
+			// conversation resolves to one session that grows by appending.
+			refHash := sha256Hex([]byte("ref:" + cacheKey))
 
 			payload, err := adapter.Parse(ref)
 			if err != nil || payload == nil {
@@ -174,7 +166,42 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 				continue
 			}
 
-			sessionID := newID()
+			// Resolve to an existing session when this transcript was captured
+			// before and has only grown since. A transcript that was rewritten
+			// rather than extended fails the prefix check and is stored as a
+			// new session, so a mismatch can never corrupt the earlier record.
+			appendToID := ""
+			startTurn, startToolCall := 0, 0
+			if existingID, qErr := db.QuerySessionIDByHash(dataDB, refHash); qErr == nil && existingID != "" {
+				stored, sErr := db.SessionTurnContents(dataDB, existingID)
+				if sErr != nil {
+					return sErr
+				}
+				if turnsExtend(stored, payload.Turns) {
+					nTurns, nTools, eErr := db.SessionExtent(dataDB, existingID)
+					if eErr != nil {
+						return eErr
+					}
+					appendToID, startTurn, startToolCall = existingID, nTurns, nTools
+				}
+			}
+
+			// Already fully captured — refresh the file cache and move on.
+			if appendToID != "" && startTurn >= len(payload.Turns) && startToolCall >= len(payload.ToolCalls) {
+				if ref.Path != "" {
+					if info, statErr := os.Stat(ref.Path); statErr == nil {
+						_ = db.UpsertCheckpointState(dataDB, cacheKey, info.Size(), hash)
+					}
+				} else {
+					_ = db.UpsertCheckpointState(dataDB, cacheKey, 0, hash)
+				}
+				continue
+			}
+
+			sessionID := appendToID
+			if sessionID == "" {
+				sessionID = newID()
+			}
 			capturedAt := time.Now().UTC()
 
 			// Resolve the parent session for subagent transcripts: prefer a
@@ -184,27 +211,32 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			if payload.ParentSessionPath != "" {
 				parentSessionID = trunkSessionIDs[payload.ParentSessionPath]
 				if parentSessionID == "" {
-					if trunkData, rdErr := os.ReadFile(payload.ParentSessionPath); rdErr == nil && len(trunkData) > 0 {
-						if id, qErr := db.QuerySessionIDByHash(dataDB, sha256Hex(trunkData)); qErr == nil {
-							parentSessionID = id
-						}
+					// Look the trunk up by its ref identity, for the same
+					// reason capture uses one: the trunk keeps growing, so its
+					// content hash changes between commits while its ref does not.
+					if id, qErr := db.QuerySessionIDByHash(dataDB, sha256Hex([]byte("ref:"+payload.ParentSessionPath))); qErr == nil {
+						parentSessionID = id
 					}
 				}
 			}
 
-			// Insert session into DuckDB.
-			if err := db.InsertSessionMeta(
-				dataDB, sessionID, parentSessionID, hash,
-				payload.ActorType, payload.AgentID, email, payload.Branch, capturedAt.Format(time.RFC3339),
-				payload.Source, db.SessionMetaFields{
-					TeamName:     payload.TeamName,
-					WorkflowName: payload.WorkflowName,
-					AgentType:    payload.AgentType,
-					Description:  payload.Description,
-					SpawnDepth:   payload.SpawnDepth,
-				},
-			); err != nil {
-				return fmt.Errorf("insert session: %w", err)
+			// Insert the session row only for a conversation not already stored;
+			// an append reuses the existing row untouched (append-only holds —
+			// turns are added, nothing is rewritten).
+			if appendToID == "" {
+				if err := db.InsertSessionMeta(
+					dataDB, sessionID, parentSessionID, refHash,
+					payload.ActorType, payload.AgentID, email, payload.Branch, capturedAt.Format(time.RFC3339),
+					payload.Source, db.SessionMetaFields{
+						TeamName:     payload.TeamName,
+						WorkflowName: payload.WorkflowName,
+						AgentType:    payload.AgentType,
+						Description:  payload.Description,
+						SpawnDepth:   payload.SpawnDepth,
+					},
+				); err != nil {
+					return fmt.Errorf("insert session: %w", err)
+				}
 			}
 			if payload.ParentSessionPath == "" && ref.Path != "" {
 				trunkSessionIDs[ref.Path] = sessionID
@@ -213,8 +245,11 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 				trunkOnlySessionIDs = append(trunkOnlySessionIDs, sessionID)
 			}
 
-			// Insert turns into DuckDB.
-			for i, t := range payload.Turns {
+			// Insert turns into DuckDB. On an append, start past what is already
+			// stored; turn_index keeps counting from there, so the sequence
+			// stays contiguous across commits.
+			for i := startTurn; i < len(payload.Turns); i++ {
+				t := payload.Turns[i]
 				ts := ""
 				if !t.Timestamp.IsZero() {
 					ts = t.Timestamp.UTC().Format(time.RFC3339)
@@ -225,7 +260,8 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			}
 
 			// Insert tool calls into DuckDB.
-			for i, tc := range payload.ToolCalls {
+			for i := startToolCall; i < len(payload.ToolCalls); i++ {
+				tc := payload.ToolCalls[i]
 				if err := db.InsertToolCall(dataDB, newID(), sessionID, i, tc.Tool, tc.Path, tc.CmdPrefix); err != nil {
 					return fmt.Errorf("insert tool_call: %w", err)
 				}
@@ -348,6 +384,26 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 
 	fmt.Fprintf(w, "rekal: %d session(s) captured\n", inserted)
 	return nil
+}
+
+// turnsExtend reports whether parsed is the stored turn sequence plus zero or
+// more turns appended — the shape a live transcript has when it is checkpointed
+// again at a later commit.
+//
+// This is the guard on the append path. A transcript that was truncated,
+// rewritten, or replaced by a different conversation at the same path fails
+// here, and capture falls back to storing a new session, so an append can never
+// splice unrelated turns onto an existing record.
+func turnsExtend(stored []string, parsed []session.Turn) bool {
+	if len(parsed) < len(stored) {
+		return false
+	}
+	for i, s := range stored {
+		if parsed[i].Content != s {
+			return false
+		}
+	}
+	return true
 }
 
 func sha256Hex(data []byte) string {

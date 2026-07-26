@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
@@ -279,6 +280,14 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		return err
 	}
 
+	// Collapse re-captures of one conversation: before capture learned to
+	// append, every commit during a session stored the whole transcript again.
+	// Must run before facets/reach so neither is computed for a session that
+	// is about to be dropped.
+	if err := PurgeSupersededSessionsFromIndex(d); err != nil {
+		return err
+	}
+
 	// session_reach — L1 recall citation-graph aggregate, derived from
 	// data.db.recall_edges.
 	if err := PopulateSessionReach(d); err != nil {
@@ -323,6 +332,113 @@ func PurgeBenchSessionsFromIndex(d *sql.DB) error {
 		list = append(list, id)
 	}
 	return deleteSessionsFromIndex(d, list)
+}
+
+// PurgeSupersededSessionsFromIndex removes sessions whose turn sequence is a
+// strict prefix of a longer session's — the same conversation captured again at
+// a later commit, before capture learned to append (see checkpoint.go).
+//
+// Capture used to key dedup on the transcript's content hash, so a session that
+// grew by even one turn between commits was stored again in full. The ledger
+// keeps every copy (append-only, and already on the wire), so the collapse has
+// to happen here, in the derived index, where it is legal and reversible.
+//
+// Only strict prefixes are purged: same source and author, fewer turns, and
+// every stored turn identical to the longer session's turn at the same index.
+// Two distinct conversations that merely open alike are never merged.
+func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
+	type sess struct {
+		id     string
+		key    string
+		nTurns int
+	}
+	// Only sessions from the same agent, author and parent can be re-captures
+	// of one conversation; turn 0 must match too, since any true prefix shares
+	// it. Different agents legitimately produce sessions with identical opening
+	// turns, so source is part of the key, not an afterthought.
+	rows, err := d.Query(`
+		SELECT t.session_id,
+		       COALESCE(MAX(s.source), '') || '\x1f' ||
+		       COALESCE(MAX(s.user_email), '') || '\x1f' ||
+		       COALESCE(MAX(s.parent_session_id), '') || '\x1f' ||
+		       COALESCE(MAX(CASE WHEN t.turn_index = 0 THEN t.content END), ''),
+		       count(*)
+		FROM turns_ft t
+		LEFT JOIN data_db.sessions s ON s.id = t.session_id
+		GROUP BY t.session_id`)
+	if err != nil {
+		// The data DB is only attached during PopulateIndex. Without it the
+		// discriminators are unavailable, and collapsing on turn 0 alone would
+		// merge unrelated conversations — so do nothing.
+		return nil //nolint:nilerr
+	}
+	var all []sess
+	for rows.Next() {
+		var s sess
+		if err := rows.Scan(&s.id, &s.key, &s.nTurns); err != nil {
+			rows.Close() //nolint:errcheck
+			return fmt.Errorf("scan session: %w", err)
+		}
+		all = append(all, s)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close() //nolint:errcheck
+		return err
+	}
+	rows.Close() //nolint:errcheck
+
+	// Only sessions sharing turn 0 can stand in a prefix relation.
+	groups := map[string][]sess{}
+	for _, s := range all {
+		if s.key == "" {
+			continue // no turn 0 indexed — cannot be judged a prefix
+		}
+		groups[s.key] = append(groups[s.key], s)
+	}
+
+	var superseded []string
+	for _, g := range groups {
+		if len(g) < 2 {
+			continue
+		}
+		sort.Slice(g, func(i, j int) bool { return g[i].nTurns < g[j].nTurns })
+		// Compare each session against every strictly longer one, shortest
+		// first, so a chain (39 → 40 → 144 → 172) collapses to its longest.
+		for i := 0; i < len(g); i++ {
+			for j := len(g) - 1; j > i; j-- {
+				if g[j].nTurns <= g[i].nTurns {
+					continue
+				}
+				isPrefix, err := turnsArePrefix(d, g[i].id, g[j].id, g[i].nTurns)
+				if err != nil {
+					return err
+				}
+				if isPrefix {
+					superseded = append(superseded, g[i].id)
+					break
+				}
+			}
+		}
+	}
+	return deleteSessionsFromIndex(d, superseded)
+}
+
+// turnsArePrefix reports whether shortID's first n turns are identical to
+// longID's turns at the same indices.
+func turnsArePrefix(d *sql.DB, shortID, longID string, n int) (bool, error) {
+	var mismatches int
+	err := d.QueryRow(`
+		SELECT count(*) FROM turns_ft a
+		FULL OUTER JOIN turns_ft b
+		  ON b.session_id = $2 AND b.turn_index = a.turn_index
+		WHERE a.session_id = $1 AND a.turn_index < $3
+		  AND (b.content IS NULL OR a.content IS DISTINCT FROM b.content
+		       OR a.role IS DISTINCT FROM b.role)`,
+		shortID, longID, n).Scan(&mismatches)
+	if err != nil {
+		return false, fmt.Errorf("prefix check: %w", err)
+	}
+	return mismatches == 0, nil
 }
 
 func deleteSessionsFromIndex(d *sql.DB, sessionIDs []string) error {

@@ -192,6 +192,23 @@ func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 		return false, nil
 	}
 
+	// One conversation spanning several commits is linked to several
+	// checkpoints, and each checkpoint frame carries it — with identical turns,
+	// since export reads a session's turns by ID rather than per checkpoint. So
+	// the second frame is a repeat, and inserting it again violates
+	// session_facets' primary key and aborts the whole import. Skipping is
+	// lossless. (Before capture learned to append, every checkpoint carried a
+	// distinct session and this could not arise.)
+	var already int
+	if err := indexDB.QueryRow(
+		`SELECT count(*) FROM session_facets WHERE session_id = $1`, sessionID,
+	).Scan(&already); err != nil {
+		return false, fmt.Errorf("check session_facet: %w", err)
+	}
+	if already > 0 {
+		return false, nil
+	}
+
 	email, _ := dict.Get(codec.NSEmails, sf.EmailRef)
 	actorType := "human"
 	agentID := ""

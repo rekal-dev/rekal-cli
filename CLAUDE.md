@@ -117,7 +117,13 @@ session discovery keep using the invoking worktree.
   `db.RefreshSessionReach` on that path so the graph never stalls; otherwise the
   incremental index refresh rebuilds `session_reach`
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
-- `sync.go`: Sync team context (wire decode/import lives in `transport/`)
+- `sync.go`: Sync team context (wire decode/import lives in `transport/`).
+  `indexSessionFrame` skips a session already in `session_facets`: one
+  conversation spanning several commits links to several checkpoints and rides
+  in each one's frame with identical turns (export reads turns by session ID,
+  not per checkpoint), so the repeat would violate the primary key and abort the
+  whole import. Could not arise before capture learned to append, when every
+  checkpoint carried a distinct session
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
   (the whole DX: init, done; `clean` removes the line, refresh replaces it in

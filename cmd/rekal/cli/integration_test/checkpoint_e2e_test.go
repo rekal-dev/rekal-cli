@@ -158,6 +158,27 @@ func TestCheckpoint_E2E_FullPipeline(t *testing.T) {
 		t.Error("idempotent checkpoint should not capture new sessions")
 	}
 
+	// --- Re-capture after the conversation GREW ---
+	//
+	// The unchanged case above is the trivial half: the size+hash fast-skip
+	// short-circuits before any dedup logic runs. The half that mattered — and
+	// that went unasserted while a duplicate-session bug lived here — is a
+	// transcript that gained turns between two commits, which is what happens
+	// whenever a session spans more than one commit. It must extend the existing
+	// session, not store the conversation a second time.
+	grown := testSessionJSONL +
+		`{"type":"user","parentMessageId":"m8","isSidechain":false,"message":{"role":"user","content":[{"type":"text","text":"one more thing before we ship"}]},"timestamp":"2026-02-25T10:03:00Z"}` + "\n"
+	writeSessionFile(t, env.RepoDir, "session1.jsonl", grown)
+	gitCommit(t, env.RepoDir, "second commit, same conversation")
+
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint after growth: %v", err)
+	}
+	assertQueryContains(t, env,
+		"SELECT count(*) AS n FROM sessions", `"n":1`)
+	assertQueryContains(t, env,
+		"SELECT content FROM turns ORDER BY turn_index DESC LIMIT 1", "one more thing before we ship")
+
 	// --- Second checkpoint ---
 
 	cleanup2 := writeSessionFile(t, env.RepoDir, "session2.jsonl", testSessionJSONL2)
@@ -176,9 +197,13 @@ func TestCheckpoint_E2E_FullPipeline(t *testing.T) {
 		t.Errorf("expected '1 session(s) captured', got: %q", stderr3)
 	}
 
+	// Two conversations, three commits: session1 was captured, grew, and was
+	// captured again. The extra checkpoint is expected — a commit happened — but
+	// the session count is the load-bearing number here. It stays at 2 because
+	// growth extends a session rather than storing the conversation again.
 	assertQueryContains(t, env, "SELECT count(*) as n FROM sessions", `"n":2`)
-	assertQueryContains(t, env, "SELECT count(*) as n FROM checkpoints", `"n":2`)
-	assertQueryContains(t, env, "SELECT count(*) as n FROM checkpoint_sessions", `"n":2`)
+	assertQueryContains(t, env, "SELECT count(*) as n FROM checkpoints", `"n":3`)
+	assertQueryContains(t, env, "SELECT count(*) as n FROM checkpoint_sessions", `"n":3`)
 }
 
 func TestPush_E2E_ExportAndPush(t *testing.T) {

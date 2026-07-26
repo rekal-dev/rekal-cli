@@ -6,6 +6,7 @@ package gitx
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -62,6 +63,36 @@ func HeadSHA(gitRoot string) string {
 		return strings.Repeat("0", 40)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// RebaseInProgress reports whether git is midway through a rebase.
+//
+// git runs post-commit for every commit a rebase replays, so without this a
+// ten-commit rebase fires ten captures. That is not just wasted work: a replayed
+// commit is old reasoning re-parented, and if the agent's own transcript happens
+// to be growing while it rebases, each replay links the current session to a
+// commit it did not produce — false edges in checkpoint_sessions, which is the
+// commit-to-session ground truth the benchmark labels itself from.
+//
+// Detected by git's own state directories. GIT_REFLOG_ACTION is *not* usable
+// here: it is empty in the post-commit environment during a rebase.
+// --amend and cherry-pick are deliberately not covered — those are real
+// authoring moments and should capture.
+func RebaseInProgress(gitRoot string) bool {
+	out, err := exec.Command("git", "-C", gitRoot, "rev-parse", "--git-dir").Output()
+	if err != nil {
+		return false
+	}
+	gitDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(gitRoot, gitDir)
+	}
+	for _, name := range []string{"rebase-merge", "rebase-apply"} {
+		if info, err := os.Stat(filepath.Join(gitDir, name)); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // CurrentBranch returns the current branch name, or "unknown" on error.

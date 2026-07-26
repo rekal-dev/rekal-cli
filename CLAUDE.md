@@ -87,7 +87,15 @@ session discovery keep using the invoking worktree.
   re-chunk; commit-SHA watermark (`knowledge_head_sha`) makes the steady
   state one rev-parse. Called by `index` (full) and recall (incremental,
   best-effort). See `docs/design/knowledge-layer.md`
-- `checkpoint.go`: Capture session after commit. A re-captured transcript
+- `checkpoint.go`: Capture session after commit — **no-op while a rebase is in
+  progress** (`gitx.RebaseInProgress`, which reads git's `rebase-merge`/
+  `rebase-apply` state dirs; `GIT_REFLOG_ACTION` is empty in the post-commit
+  environment and cannot be used). git fires post-commit for every replayed
+  commit, so a ten-commit rebase would run ten captures, and any whose transcript
+  grew mid-rebase would link the live session to commits it never produced —
+  false `checkpoint_sessions` edges, the commit↔session ground truth the
+  benchmark labels itself from. `--amend`/cherry-pick are deliberately not
+  covered: those are real authoring moments. A re-captured transcript
   **appends** to its existing session instead of storing the conversation again:
   a live conversation has different content at every commit, so keying dedup on
   content made each commit a brand-new session (measured 2.07× amplification and

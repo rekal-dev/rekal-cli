@@ -50,6 +50,20 @@ func runCheckpoint(cmd *cobra.Command, gitRoot string) error {
 // doCheckpoint captures the current session after a commit.
 // Extracted so sync can call it without a cobra.Command.
 func doCheckpoint(gitRoot string, w io.Writer) error {
+	// A rebase replays commits, and git fires post-commit for every one. Those
+	// are not new reasoning — the work already happened and was already
+	// captured under its original SHA. Capturing again costs a full pass per
+	// replayed commit and, when the agent's own transcript is growing while it
+	// rebases, links the live session to commits it never produced. Skip; the
+	// next real commit sweeps up everything, since capture reads the whole
+	// transcript rather than a delta.
+	if gitx.RebaseInProgress(gitRoot) {
+		return nil
+	}
+	return doCheckpointNow(gitRoot, w)
+}
+
+func doCheckpointNow(gitRoot string, w io.Writer) error {
 	// Open data DB. Closed explicitly before index work (below) so
 	// PopulateIndexIncremental's migrate/ATTACH does not open a second
 	// connection to the same DuckDB file — a known go-duckdb SIGSEGV hazard.

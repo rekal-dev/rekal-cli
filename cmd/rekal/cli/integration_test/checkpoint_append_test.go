@@ -5,12 +5,18 @@ package integration
 import (
 	"database/sql"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 )
+
+// gitxRebaseInProgress is the production probe, used here to assert the test
+// actually reached the state it means to test.
+func gitxRebaseInProgress(dir string) bool { return gitx.RebaseInProgress(dir) }
 
 // sessionDirFor returns (creating if needed) the agent session directory the
 // adapters discover for this repo.
@@ -203,5 +209,79 @@ func TestCheckpoint_SessionHashStaysContentAddressed(t *testing.T) {
 	}
 	if !mapped.Valid || mapped.String == "" {
 		t.Error("checkpoint_state.session_id not recorded — the next capture would duplicate instead of appending")
+	}
+}
+
+// TestCheckpoint_SkipsDuringRebase pins the rebase no-op. git fires post-commit
+// for every commit a rebase replays, so without the guard a ten-commit rebase
+// runs ten full captures — and when the agent's own transcript is growing while
+// it rebases, each replay writes a checkpoint linking the live session to a
+// commit it never produced. Those false commit-to-session edges are the ground
+// truth the benchmark labels itself from, so they matter more than the wasted
+// work does.
+func TestCheckpoint_SkipsDuringRebase(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	if err := os.WriteFile(filepath.Join(env.RepoDir, "base.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, env.RepoDir, "base")
+
+	sessionDir := sessionDirFor(t, env.RepoDir)
+	if err := os.WriteFile(filepath.Join(sessionDir, "r.jsonl"),
+		[]byte(transcript("some reasoning")), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	// Put the repo mid-rebase by starting one that conflicts.
+	runGit := func(args ...string) {
+		env2 := append(os.Environ(), "HOME=/nonexistent", "PATH=/usr/bin:/bin")
+		c := exec.Command("git", append([]string{"-C", env.RepoDir}, args...)...)
+		c.Env = env2
+		_ = c.Run()
+	}
+	// Don't assume the default branch is named "main".
+	baseOut, err := exec.Command("git", "-C", env.RepoDir, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("read current branch: %v", err)
+	}
+	base := strings.TrimSpace(string(baseOut))
+
+	runGit("checkout", "-q", "-b", "feature")
+	os.WriteFile(filepath.Join(env.RepoDir, "shared.txt"), []byte("feature\n"), 0o644) //nolint:errcheck
+	gitCommit(t, env.RepoDir, "feature edit")
+	runGit("checkout", "-q", base)
+	os.WriteFile(filepath.Join(env.RepoDir, "shared.txt"), []byte("main\n"), 0o644) //nolint:errcheck
+	gitCommit(t, env.RepoDir, "main edit")
+	runGit("checkout", "-q", "feature")
+	runGit("rebase", base) // conflicts, leaving rebase state in place
+
+	if !gitxRebaseInProgress(env.RepoDir) {
+		t.Fatal("test setup failed: repo is not mid-rebase, so the guard is not being exercised")
+	}
+
+	// Capture must no-op while the rebase is unresolved.
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint during rebase: %v", err)
+	}
+	d := openStore(t, env.RepoDir)
+	if got := countRows(t, d, "SELECT count(*) FROM sessions"); got != 0 {
+		t.Errorf("captured %d sessions mid-rebase, want 0", got)
+	}
+	if got := countRows(t, d, "SELECT count(*) FROM checkpoints"); got != 0 {
+		t.Errorf("wrote %d checkpoints mid-rebase, want 0 — these would be false commit-to-session edges", got)
+	}
+	d.Close() //nolint:errcheck
+
+	// Once the rebase is resolved, the next capture picks everything up.
+	runGit("rebase", "--abort")
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint after rebase: %v", err)
+	}
+	d = openStore(t, env.RepoDir)
+	defer d.Close() //nolint:errcheck
+	if got := countRows(t, d, "SELECT count(*) FROM sessions"); got != 1 {
+		t.Errorf("after rebase ended: %d sessions, want 1 — the skip must defer capture, not drop it", got)
 	}
 }

@@ -4,6 +4,7 @@ package integration
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -270,5 +271,96 @@ func TestCheckpoint_TurnsStaySearchableAfterRegrowth(t *testing.T) {
 	after, _, _ := env.RunCLI("--json", needle)
 	if !strings.Contains(after, needle) {
 		t.Errorf("a turn searchable before the session grew is no longer findable — re-indexing dropped it from the FTS snapshot:\n%s", after)
+	}
+}
+
+// TestCheckpoint_AppendedTurnIsSearchable closes the last cell in the
+// session-invariant enumeration: derived state must be a function of a session's
+// *current* content, and turns_ft's BM25 index is a static snapshot built only by
+// a full index/sync. The incremental path writes rows into turns_ft directly, so
+// a turn appended at a later commit could sit in the table while being invisible
+// to match_bm25 — present in the ledger, unfindable by recall, with nothing to
+// signal the gap.
+//
+// Checks the table and the FTS snapshot separately, because only the second is
+// what recall actually queries.
+func TestCheckpoint_AppendedTurnIsSearchable(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	if err := os.WriteFile(filepath.Join(env.RepoDir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, env.RepoDir, "initial")
+
+	sessionDir := sessionDirFor(t, env.RepoDir)
+	path := filepath.Join(sessionDir, "s.jsonl")
+	write := func(turns ...string) {
+		if err := os.WriteFile(path, []byte(transcript(turns...)), 0o644); err != nil {
+			t.Fatalf("write transcript: %v", err)
+		}
+	}
+
+	write("alpha original content", "filler turn")
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint 1: %v", err)
+	}
+	if _, _, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("index: %v", err)
+	}
+
+	// A term that exists only in the turn added at the second commit.
+	const needle = "zephyr"
+	write("alpha original content", "filler turn", needle+" appended only here")
+	gitCommit(t, env.RepoDir, "second commit")
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint 2: %v", err)
+	}
+
+	idx, err := sql.Open("duckdb", filepath.Join(env.RepoDir, ".rekal", "index.db")+"?access_mode=read_only")
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	var inTable int
+	if err := idx.QueryRow(
+		`SELECT count(*) FROM turns_ft WHERE content LIKE '%' || $1 || '%'`, needle,
+	).Scan(&inTable); err != nil {
+		t.Fatalf("scan turns_ft: %v", err)
+	}
+	idx.Close() //nolint:errcheck
+	if inTable == 0 {
+		t.Fatalf("the appended turn never reached turns_ft — the incremental index did not re-derive the grown session")
+	}
+
+	// Whether recall can retrieve it, which is the property that matters. Parse
+	// the JSON rather than grepping it: the payload echoes the query string, so a
+	// substring match reports success even when nothing was found.
+	stdout, _, _ := env.RunCLI("--json", needle)
+	var out struct {
+		Results []struct {
+			SessionID string `json:"session_id"`
+			Snippet   string `json:"snippet"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("parse recall json: %v\n%s", err, stdout)
+	}
+	if len(out.Results) == 0 {
+		// Distinguish "unsearchable until a full rebuild" from "never indexed".
+		if _, _, err := env.RunCLI("index"); err != nil {
+			t.Fatalf("index: %v", err)
+		}
+		after, _, _ := env.RunCLI("--json", needle)
+		var out2 struct {
+			Results []struct {
+				SessionID string `json:"session_id"`
+			} `json:"results"`
+		}
+		_ = json.Unmarshal([]byte(after), &out2)
+		if len(out2.Results) > 0 {
+			t.Errorf("the appended turn is only findable after a full index — every commit after the first leaves its new turns unsearchable, present in the ledger and invisible to recall")
+		} else {
+			t.Errorf("the appended turn is in turns_ft but recall never finds it, even after a full index")
+		}
 	}
 }

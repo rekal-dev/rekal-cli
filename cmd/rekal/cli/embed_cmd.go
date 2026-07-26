@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
@@ -152,6 +153,15 @@ func startBackgroundEmbed(w io.Writer, gitRoot string) {
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Fprintf(w, "rekal: warning: could not start background embed: %v\n", err)
+		return
+	}
+	// Never self-invoke from a test binary. `go test` ignores the unrecognised
+	// "embed" argument and runs the whole suite again, and each of those runs
+	// reaches this line and spawns more — a fork bomb that made the integration
+	// suite roughly forty times slower and, before the timeout was raised, got it
+	// killed mid-run with a goroutine dump that read like a hang. nomic's
+	// spawnDaemon has carried the same guard for the same reason.
+	if strings.HasSuffix(exe, ".test") || strings.Contains(exe, "/_test/") {
 		return
 	}
 	logPath := filepath.Join(RekalDir(gitRoot), "embed.log")

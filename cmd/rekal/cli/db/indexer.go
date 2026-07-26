@@ -243,8 +243,15 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 			s.description,
 			s.spawn_depth
 		FROM data_db.sessions s
-		LEFT JOIN data_db.checkpoint_sessions cs ON cs.session_id = s.id
-		LEFT JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id
+		-- One session spans several checkpoints once capture appends to it, so
+		-- joining checkpoint_sessions directly would emit a row per checkpoint
+		-- and violate session_facets' one-row-per-session key. Take the latest.
+		LEFT JOIN (
+			SELECT cs.session_id, c.id, c.git_sha, c.git_branch, c.ts,
+			       row_number() OVER (PARTITION BY cs.session_id ORDER BY c.ts DESC) AS rn
+			FROM data_db.checkpoint_sessions cs
+			JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id
+		) c ON c.session_id = s.id AND c.rn = 1
 		LEFT JOIN (
 			SELECT cs2.session_id, count(DISTINCT ft.file_path) AS file_count
 			FROM data_db.checkpoint_sessions cs2
@@ -731,6 +738,19 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 	defer d.Exec("DETACH data_db") //nolint:errcheck
 
 	for _, sid := range sessionIDs {
+		// Clear this session's derived rows before re-inserting. A session that
+		// grew since its last checkpoint is indexed again, and blind inserts
+		// collide on the primary key — aborting the incremental update and
+		// leaving the index behind until a full rebuild. Re-deriving one
+		// session's slice is always safe: the index is derived data, and
+		// data.db remains the source of truth. session_embeddings is left
+		// alone; it is keyed separately and recomputed by the embed pass.
+		for _, tbl := range []string{"turns_ft", "tool_calls_index", "session_facets", "files_index"} {
+			if _, err := d.Exec(fmt.Sprintf("DELETE FROM %s WHERE session_id = $1", tbl), sid); err != nil {
+				return fmt.Errorf("clear %s for reindex: %w", tbl, err)
+			}
+		}
+
 		// turns_ft
 		if _, err := d.Exec(`
 			INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
@@ -770,8 +790,14 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 				s.parent_session_id, s.team_name, s.workflow_name,
 				s.agent_type, s.description, s.spawn_depth
 			FROM data_db.sessions s
-			LEFT JOIN data_db.checkpoint_sessions cs ON cs.session_id = s.id
-			LEFT JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id
+			-- See PopulateIndex: latest checkpoint only, one row per session.
+			LEFT JOIN (
+				SELECT cs.session_id, c.id, c.git_sha, c.git_branch, c.ts,
+				       row_number() OVER (PARTITION BY cs.session_id ORDER BY c.ts DESC) AS rn
+				FROM data_db.checkpoint_sessions cs
+				JOIN data_db.checkpoints c ON c.id = cs.checkpoint_id
+				WHERE cs.session_id = $1
+			) c ON c.session_id = s.id AND c.rn = 1
 			LEFT JOIN (
 				SELECT cs2.session_id, count(DISTINCT ft.file_path) AS cnt
 				FROM data_db.checkpoint_sessions cs2

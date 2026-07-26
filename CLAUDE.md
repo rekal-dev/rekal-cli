@@ -118,12 +118,14 @@ session discovery keep using the invoking worktree.
   incremental index refresh rebuilds `session_reach`
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`).
-  `indexSessionFrame` skips a session already in `session_facets`: one
-  conversation spanning several commits links to several checkpoints and rides
-  in each one's frame with identical turns (export reads turns by session ID,
-  not per checkpoint), so the repeat would violate the primary key and abort the
-  whole import. Could not arise before capture learned to append, when every
-  checkpoint carried a distinct session
+  `indexSessionFrame` dedups an arriving session by **keeping the longest**: one
+  conversation spanning several commits links to several checkpoints and rides in
+  each one's frame, so the repeat would violate `session_facets`' primary key and
+  abort the whole import. Frames from one export carry identical turns, but
+  frames from *different pushes* do not — the author kept talking between them —
+  so skipping the repeat would strand the reader on a truncated conversation;
+  a longer arrival replaces the indexed rows. Could not arise before capture
+  learned to append, when every checkpoint carried a distinct session
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
   (the whole DX: init, done; `clean` removes the line, refresh replaces it in

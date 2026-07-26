@@ -193,20 +193,33 @@ func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 	}
 
 	// One conversation spanning several commits is linked to several
-	// checkpoints, and each checkpoint frame carries it — with identical turns,
-	// since export reads a session's turns by ID rather than per checkpoint. So
-	// the second frame is a repeat, and inserting it again violates
-	// session_facets' primary key and aborts the whole import. Skipping is
-	// lossless. (Before capture learned to append, every checkpoint carried a
-	// distinct session and this could not arise.)
-	var already int
+	// checkpoints and rides in each one's frame, so the same session arrives
+	// more than once; inserting it twice violates session_facets' primary key
+	// and aborts the whole import. (Before capture learned to append, every
+	// checkpoint carried a distinct session and this could not arise.)
+	//
+	// Which copy wins matters. Frames from a single export carry identical
+	// turns, but frames written by *different* pushes do not: the author
+	// checkpointed at one commit, pushed, kept talking, and pushed again. The
+	// later frame is longer, and skipping it would leave the reader holding a
+	// truncated conversation forever. Keep the longest, never the first.
+	var indexedTurns int
 	if err := indexDB.QueryRow(
-		`SELECT count(*) FROM session_facets WHERE session_id = $1`, sessionID,
-	).Scan(&already); err != nil {
-		return false, fmt.Errorf("check session_facet: %w", err)
+		`SELECT count(*) FROM turns_ft WHERE session_id = $1`, sessionID,
+	).Scan(&indexedTurns); err != nil {
+		return false, fmt.Errorf("check indexed turns: %w", err)
 	}
-	if already > 0 {
-		return false, nil
+	if indexedTurns > 0 {
+		if len(sf.Turns) <= indexedTurns {
+			return false, nil
+		}
+		for _, tbl := range []string{"turns_ft", "session_facets"} {
+			if _, err := indexDB.Exec(
+				fmt.Sprintf("DELETE FROM %s WHERE session_id = $1", tbl), sessionID,
+			); err != nil {
+				return false, fmt.Errorf("replace stale %s: %w", tbl, err)
+			}
+		}
 	}
 
 	email, _ := dict.Get(codec.NSEmails, sf.EmailRef)

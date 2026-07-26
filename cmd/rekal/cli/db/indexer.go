@@ -353,8 +353,22 @@ func PurgeBenchSessionsFromIndex(d *sql.DB) error {
 // Only strict prefixes are purged: same source and author, fewer turns, and
 // every stored turn identical to the longer session's turn at the same index.
 // Two distinct conversations that merely open alike are never merged.
+// PurgeSupersededSessionsWithData runs the supersession pass with data_db
+// attached for the duration. PopulateIndex detaches data_db when it returns,
+// so a later caller — sync, once the remote branches have been imported — has
+// no session metadata to group by and the pass silently does nothing. Callers
+// outside PopulateIndex should use this rather than the bare purge.
+func PurgeSupersededSessionsWithData(d *sql.DB, gitRoot string) error {
+	dataPath := filepath.Join(StoreDir(gitRoot), "data.db")
+	if _, err := d.Exec(fmt.Sprintf("ATTACH '%s' AS data_db (READ_ONLY)", dataPath)); err != nil {
+		return fmt.Errorf("attach data_db: %w", err)
+	}
+	defer d.Exec("DETACH data_db") //nolint:errcheck
+	return PurgeSupersededSessionsFromIndex(d)
+}
+
 func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
-	superseded, err := supersededSessions(d, "turns_ft", "data_db.sessions")
+	superseded, err := supersededSessions(d, "turns_ft", "data_db.sessions", "session_facets")
 	if err != nil {
 		return err
 	}
@@ -415,7 +429,7 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 // keeps every copy, but the orphan branch is derived data (see push --re-export)
 // and there is no reason to ship the same conversation several times.
 func SupersededSessionIDs(d *sql.DB) (map[string]bool, error) {
-	m, err := supersededSessions(d, "turns", "sessions")
+	m, err := supersededSessions(d, "turns", "sessions", "")
 	if err != nil {
 		return nil, err
 	}
@@ -430,13 +444,23 @@ func SupersededSessionIDs(d *sql.DB) (map[string]bool, error) {
 // that replaces it. Export uses it to re-point a subagent whose trunk is not
 // being shipped, so the teammate does not receive a dangling parent.
 func SupersededSessionSurvivors(d *sql.DB) (map[string]string, error) {
-	return supersededSessions(d, "turns", "sessions")
+	return supersededSessions(d, "turns", "sessions", "")
 }
 
 // supersededSessions finds sessions whose turn sequence is a strict prefix of a
 // longer session's, reading turns from turnsTbl and session metadata from
 // sessTbl (which differ between the derived index and the data DB).
-func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) (map[string]string, error) {
+//
+// facetsTbl, when non-empty, supplies metadata for sessions that sessTbl does
+// not know about. In the index that is every synced teammate session: the wire
+// import writes turns_ft and session_facets directly and never touches data.db,
+// so a LEFT JOIN to data_db.sessions misses them and source/author/parent all
+// read as empty. The group key still carries turn 0, so those sessions would be
+// grouped on opening turn alone — which is precisely what the comment on the
+// query below refuses to do, since two people who start from the same plan
+// prompt are not the same conversation. Reading the discriminators from
+// session_facets keeps the key honest for sessions the data DB never saw.
+func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[string]string, error) {
 	type sess struct {
 		id     string
 		key    string
@@ -446,21 +470,43 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) (map[string]string,
 	// of one conversation; turn 0 must match too, since any true prefix shares
 	// it. Different agents legitimately produce sessions with identical opening
 	// turns, so source is part of the key, not an afterthought.
+	facetJoin, facetOrigin, facetEmail, facetParent := "", "", "", ""
+	if facetsTbl != "" {
+		facetJoin = fmt.Sprintf("LEFT JOIN %s f ON f.session_id = t.session_id", facetsTbl)
+		// origin labels cross-repo local imports, which are also absent from
+		// the data DB; without it a session imported from another repo could
+		// group with a wire-imported one that opens the same way.
+		facetOrigin = "COALESCE(MAX(f.origin), '') || '\x1f' ||"
+		facetEmail = "COALESCE(MAX(f.user_email), '') ||"
+		facetParent = "COALESCE(MAX(f.parent_session_id), '') ||"
+	}
 	rows, err := d.Query(fmt.Sprintf(`
 		SELECT t.session_id,
 		       COALESCE(MAX(s.source), '') || '\x1f' ||
-		       COALESCE(MAX(s.user_email), '') || '\x1f' ||
-		       COALESCE(MAX(s.parent_session_id), '') || '\x1f' ||
+		       %[4]s
+		       COALESCE(MAX(s.user_email), %[5]s '') || '\x1f' ||
+		       COALESCE(MAX(s.parent_session_id), %[6]s '') || '\x1f' ||
 		       COALESCE(MAX(CASE WHEN t.turn_index = 0 THEN t.content END), ''),
 		       count(*)
-		FROM %s t
-		LEFT JOIN %s s ON s.id = t.session_id
-		GROUP BY t.session_id`, turnsTbl, sessTbl))
+		FROM %[1]s t
+		LEFT JOIN %[2]s s ON s.id = t.session_id
+		%[3]s
+		GROUP BY t.session_id`,
+		turnsTbl, sessTbl, facetJoin, facetOrigin, facetEmail, facetParent))
 	if err != nil {
 		// In the index path the data DB is only attached during PopulateIndex.
 		// Without it the discriminators are unavailable, and collapsing on turn
 		// 0 alone would merge unrelated conversations — so do nothing.
-		return nil, nil //nolint:nilerr
+		//
+		// Only that one case is benign. Swallowing every error here also hides
+		// a malformed query, and the symptom is indistinguishable from "no
+		// duplicates found" — the pass silently stops collapsing anything and
+		// nothing says so. Narrow the catch to the missing attachment.
+		if strings.Contains(err.Error(), "does not exist") ||
+			strings.Contains(err.Error(), "not found") {
+			return nil, nil //nolint:nilerr
+		}
+		return nil, fmt.Errorf("group sessions for supersession: %w", err)
 	}
 	var all []sess
 	for rows.Next() {

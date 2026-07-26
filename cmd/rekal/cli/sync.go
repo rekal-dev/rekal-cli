@@ -161,6 +161,18 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		}
 	}
 
+	// Collapse re-captures again, now that the arrivals are in. PopulateIndex
+	// ran its own pass above, but that was before a single remote session
+	// existed in this index — it only ever saw what data.db holds. A teammate
+	// whose store predates append-on-recapture ships one conversation as a
+	// chain of growing prefixes, and every link lands here as a separate
+	// session, crowding the recall digest with copies of one conversation.
+	// Runs before the counts and before facets/reach so nothing downstream is
+	// computed for a session about to be dropped.
+	if err := db.PurgeSupersededSessionsWithData(indexDB, gitRoot); err != nil {
+		return fmt.Errorf("collapse superseded sessions: %w", err)
+	}
+
 	// Count totals.
 	var sessionCount, turnCount int
 	if err := indexDB.QueryRow("SELECT count(*) FROM session_facets").Scan(&sessionCount); err != nil {

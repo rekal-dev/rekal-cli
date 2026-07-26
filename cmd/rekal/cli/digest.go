@@ -125,6 +125,29 @@ func reachHint(r *search.ReachInfo) string {
 	return fmt.Sprintf(" [reached %d×· %q]", r.Count, q)
 }
 
+// withEvidence drops seeds the engine scored as carrying no absolute evidence
+// at all — zero confidence and zero BM25 mass together. Such a seed reaches the
+// digest only on max-normalized score, which is relative by construction: when
+// the whole candidate set is weak, something still normalizes to the top. On a
+// real store these are harness echoes ("Reply with exactly: OK") occupying
+// slots in a 20-seed window that the agent pays for and cannot use.
+//
+// This is not a confidence floor. It gates on exact zero — a property of the
+// engine's own absolute scoring, corpus-invariant by construction — never on a
+// cutoff read off a corpus. The soul forbids the second, not the first. Seeds
+// with any evidence at all, however small, still render and the agent judges
+// them from `conf=`. Digest only: --json stays raw.
+func withEvidence(results []search.Result) []search.Result {
+	kept := make([]search.Result, 0, len(results))
+	for _, r := range results {
+		if r.Confidence == 0 && r.Mass == 0 {
+			continue
+		}
+		kept = append(kept, r)
+	}
+	return kept
+}
+
 func writeDigestRows(b *strings.Builder, results []search.Result) {
 	n := len(results)
 	if n > digestWindow {
@@ -162,12 +185,16 @@ func formatDigest(out *search.Output) (string, int) {
 	}
 
 	if kind == "pass" {
-		shown := len(out.Results)
+		// The verdict above is computed on the full result set — the gate's
+		// job is unchanged. Only what the digest spends its window on is
+		// filtered.
+		seeds := withEvidence(out.Results)
+		shown := len(seeds)
 		if shown > digestWindow {
 			shown = digestWindow
 		}
 		fmt.Fprintf(&b, "INJECT top=%.2f gap=%.2f %d seeds\n", top, gap, shown)
-		writeDigestRows(&b, out.Results)
+		writeDigestRows(&b, seeds)
 		if h := knowledgeHits(out.Knowledge); h != "" {
 			fmt.Fprintf(&b, "KNOWLEDGE %s\n", h)
 		}

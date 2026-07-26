@@ -253,3 +253,96 @@ func TestPurgeSuperseded_CarriesReachToSurvivor(t *testing.T) {
 		t.Errorf("survivor reach = %d, want 2 — recalls made against the collapsed copy must follow the conversation, or a well-used memory reads as never used", reach)
 	}
 }
+
+// seedIndexOnlySession writes a session that exists only in the index — turns_ft
+// plus session_facets, never data.db. That is exactly what `rekal sync` produces
+// for a teammate's conversation arriving over the wire.
+func seedIndexOnlySession(t *testing.T, d *sql.DB, id, email string, body []string) {
+	t.Helper()
+	for i, c := range body {
+		if _, err := d.Exec(
+			`INSERT INTO turns_ft (id, session_id, turn_index, role, content, ts)
+			 VALUES ($1, $2, $3, 'human', $4, '')`,
+			fmt.Sprintf("%s:%d", id, i), id, i, c,
+		); err != nil {
+			t.Fatalf("insert turn_ft %s:%d: %v", id, i, err)
+		}
+	}
+	if _, err := d.Exec(
+		`INSERT INTO session_facets (session_id, user_email, turn_count, captured_at, actor_type)
+		 VALUES ($1, $2, $3, $4, 'human')`,
+		id, email, len(body), "2026-07-11T00:00:00Z",
+	); err != nil {
+		t.Fatalf("insert session_facets %s: %v", id, err)
+	}
+}
+
+// TestPurgeSuperseded_CollapsesSyncedSessions covers the sync path. A teammate
+// whose store predates append-on-recapture ships one conversation as a chain of
+// growing prefixes; every link arrives as its own session and lands in the index
+// only. PopulateIndex's own pass runs before any of them exist, so without a
+// second pass after import the reader keeps all of them and the recall digest
+// fills with copies of one conversation.
+//
+// The discriminators must still hold: these sessions are absent from
+// data.db.sessions, so the key has to come from session_facets or two people
+// who opened with the same prompt would be merged into one.
+func TestPurgeSuperseded_CollapsesSyncedSessions(t *testing.T) {
+	t.Parallel()
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+	dataDB.Close() //nolint:errcheck
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close() //nolint:errcheck
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+
+	// Arrivals: one conversation as a prefix chain, plus a different author
+	// who opened with the identical prompt and must not be folded in.
+	grow := []string{"implement the plan", "next step", "and done"}
+	seedIndexOnlySession(t, indexDB, "remote1", "teammate@x.dev", grow[:1])
+	seedIndexOnlySession(t, indexDB, "remote2", "teammate@x.dev", grow[:2])
+	seedIndexOnlySession(t, indexDB, "remote3", "teammate@x.dev", grow)
+	seedIndexOnlySession(t, indexDB, "someone", "other@x.dev", grow[:1])
+
+	if err := PurgeSupersededSessionsWithData(indexDB, dir); err != nil {
+		t.Fatalf("PurgeSupersededSessionsWithData: %v", err)
+	}
+
+	live := map[string]bool{}
+	rows, err := indexDB.Query(`SELECT DISTINCT session_id FROM turns_ft`)
+	if err != nil {
+		t.Fatalf("query turns_ft: %v", err)
+	}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		live[id] = true
+	}
+	rows.Close() //nolint:errcheck
+
+	for _, gone := range []string{"remote1", "remote2"} {
+		if live[gone] {
+			t.Errorf("%s is a strict prefix of remote3 and should have been collapsed", gone)
+		}
+	}
+	for _, kept := range []string{"remote3", "someone"} {
+		if !live[kept] {
+			t.Errorf("%s must survive: longest capture, or a different author's conversation", kept)
+		}
+	}
+}

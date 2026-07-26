@@ -75,7 +75,13 @@ session discovery keep using the invoking worktree.
   (golden-tested). Super-low env-overridable floor (`REKAL_HUNT_*`),
   recommendation not decision; SILENCE exits 1. Per-seed `reachHint` suffix
   (`[reached N×· "query"]`) is empty for unreached seeds, so cold-store output
-  stays byte-identical.
+  stays byte-identical. `withEvidence` drops seeds carrying **zero confidence
+  and zero mass together** before the window is spent — ranking is
+  max-normalized, so on a weak candidate set something always floats up with no
+  absolute evidence behind it (harness echoes like "Reply with exactly: OK").
+  Exact zero on the engine's own absolute measures, corpus-invariant by
+  construction — not a confidence floor, which the soul forbids. The verdict is
+  still computed on the full set, and `--json` stays raw.
 - `view.go`: in-binary port of the old view.py — `viewSession` (drill →
   readable turns) and `viewRows` (SQL → TSV). The default query output;
   `--json` gives raw. Session view is golden-tested byte-identical
@@ -125,7 +131,13 @@ session discovery keep using the invoking worktree.
   frames from *different pushes* do not — the author kept talking between them —
   so skipping the repeat would strand the reader on a truncated conversation;
   a longer arrival replaces the indexed rows. Could not arise before capture
-  learned to append, when every checkpoint carried a distinct session
+  learned to append, when every checkpoint carried a distinct session.
+  That dedup only catches the *same* session id arriving twice. A teammate
+  whose store predates append-on-recapture ships one conversation as a chain of
+  growing prefixes under **different** ids, so sync runs
+  `db.PurgeSupersededSessionsWithData` after the import loop (before the counts,
+  facets, FTS and reach) to collapse them — `PopulateIndex`'s own pass ran
+  before any arrival existed
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
   (the whole DX: init, done; `clean` removes the line, refresh replaces it in
@@ -315,7 +327,16 @@ session discovery keep using the invoking worktree.
   every copy, since the ledger is append-only and those rows are already on the
   wire. Grouped by source + author + parent + turn 0 so different agents that
   open alike are never merged; runs before facets/reach so neither is computed
-  for a session about to be dropped. `knowledge.go` holds the knowledge layer's tables
+  for a session about to be dropped. Sessions the data DB never saw — every
+  **synced teammate session**, which the wire import writes straight to
+  `turns_ft` + `session_facets` — take their discriminators from
+  `session_facets` (+ `origin`, which labels cross-repo local imports),
+  otherwise the key degrades to turn 0 alone and two people who opened with the
+  same prompt get merged. `PurgeSupersededSessionsWithData` is the entry point
+  for callers **outside** `PopulateIndex`: that function detaches `data_db` when
+  it returns, so a bare purge afterwards finds no metadata and silently collapses
+  nothing. `sync` uses it after the remote imports — `PopulateIndex`'s own pass
+  runs before a single arrival exists. `knowledge.go` holds the knowledge layer's tables
   (`knowledge_chunks` + `knowledge_embeddings`, created on demand by
   `EnsureKnowledgeSchema` so old index DBs upgrade in place), the guarded
   `CreateKnowledgeFTSIndex`, and the chunk-vector helpers (missing-vectors

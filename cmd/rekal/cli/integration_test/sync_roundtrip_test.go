@@ -218,3 +218,57 @@ func TestCheckpoint_GrownSessionInvalidatesEmbedding(t *testing.T) {
 		t.Error("the pre-growth vector survived: semantic recall would keep answering this conversation from its truncated content")
 	}
 }
+
+// TestCheckpoint_TurnsStaySearchableAfterRegrowth guards a hazard introduced by
+// making the incremental index idempotent: it now deletes a session's turns_ft
+// rows and re-inserts them. DuckDB's FTS index is a static snapshot built at full
+// index/sync time and is not maintained across those writes, so a careless
+// delete/re-insert could leave turns that were findable a moment ago
+// unsearchable until the next full rebuild — recall quietly losing history that
+// is still sitting in the ledger.
+func TestCheckpoint_TurnsStaySearchableAfterRegrowth(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	if err := os.WriteFile(filepath.Join(env.RepoDir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, env.RepoDir, "initial")
+
+	sessionDir := sessionDirFor(t, env.RepoDir)
+	path := filepath.Join(sessionDir, "s.jsonl")
+	write := func(turns ...string) {
+		if err := os.WriteFile(path, []byte(transcript(turns...)), 0o644); err != nil {
+			t.Fatalf("write transcript: %v", err)
+		}
+	}
+
+	const needle = "quicksilver"
+	write("we rejected the "+needle+" approach for retries", "second turn")
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint 1: %v", err)
+	}
+	if _, _, err := env.RunCLI("index"); err != nil {
+		t.Fatalf("index: %v", err)
+	}
+
+	// Assert on raw results, not the digest verdict: a small corpus silences a
+	// lone hit on confidence, which says nothing about whether FTS found it.
+	// SILENCE also exits non-zero by design, so the exit code is not a signal.
+	stdout, _, _ := env.RunCLI("--json", needle)
+	if !strings.Contains(stdout, needle) {
+		t.Fatalf("setup failed: the term is not findable before growth, so the test proves nothing:\n%s", stdout)
+	}
+
+	// The conversation continues; the incremental index re-derives this session.
+	write("we rejected the "+needle+" approach for retries", "second turn", "and a third")
+	gitCommit(t, env.RepoDir, "more work")
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint 2: %v", err)
+	}
+
+	after, _, _ := env.RunCLI("--json", needle)
+	if !strings.Contains(after, needle) {
+		t.Errorf("a turn searchable before the session grew is no longer findable — re-indexing dropped it from the FTS snapshot:\n%s", after)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +22,17 @@ import (
 // shouldn't spool an unbounded batch. Reaching past the digest window is still
 // a real "surfaced" signal, so the cap is generous.
 const reachLogCap = 50
+
+// supersededNomicModels are embedded-nomic model ids written by older binaries.
+// The context window is part of the model identity (see nomic.ModelName), so a
+// window change retires an id rather than reusing it. An index still carrying
+// one of these needs `rekal embed`, not an embedding config — distinguishing
+// the two is the difference between an actionable message and a confusing one.
+var supersededNomicModels = map[string]bool{
+	"nomic-v1.5": true, // 2048-token window; superseded by nomic-v1.5-c8k
+}
+
+func isSupersededNomicModel(model string) bool { return supersededNomicModels[model] }
 
 // attachReach fills each result's Reached hint from the derived session_reach
 // aggregate (index.db). Best-effort and display-only: on any error the results
@@ -310,7 +322,12 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 	}
 	if embedModel, ok, _ := db.ReadIndexState(indexDB, "embed_model"); ok && embedModel != "" {
 		switch {
-		case qe == nil && embedModel != "nomic-v1.5":
+		// A store built by an older binary carries a superseded nomic model id
+		// (the context window is part of the identity). That is an upgrade to
+		// finish, not a missing config — say so, and say what to run.
+		case qe == nil && isSupersededNomicModel(embedModel):
+			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: index was embedded by an older model (%q, now %q) — run `rekal embed` to rebuild the semantic layer\n", embedModel, nomic.ModelName)
+		case qe == nil && embedModel != nomic.ModelName:
 			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: index embed_model is %q but no embedding config is set — semantic layer will skip\n", embedModel)
 		case qe != nil && qe.ModelName() != embedModel:
 			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: query embedder model %q != index embed_model %q — semantic layer may skip\n", qe.ModelName(), embedModel)

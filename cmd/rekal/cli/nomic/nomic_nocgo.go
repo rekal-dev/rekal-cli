@@ -4,7 +4,9 @@ package nomic
 
 const (
 	// ModelName identifies the embedding model for the session_embeddings table.
-	ModelName = "nomic-v1.5"
+	// Must stay in lockstep with the cgo build's ModelName — see the note there
+	// on why the context window is part of the identity.
+	ModelName = "nomic-v1.5-c8k"
 	// EmbedDim is the output dimensionality of nomic-embed-text-v1.5.
 	EmbedDim = 768
 )

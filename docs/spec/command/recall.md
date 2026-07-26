@@ -302,7 +302,7 @@ Each hybrid recall emits, in order:
 
 The hybrid weight / timing / skip key `nomic` is the historical name of the
 deep semantic *layer*, not the model. Prefer `semantic.model` /
-`embedder_model` for the real identity (`nomic-v1.5`, Cohere, …).
+`embedder_model` for the real identity (`nomic-v1.5-c8k`, Cohere, …).
 
 Stdout JSON is unchanged (agents keep parsing it). Lineage is a separate
 stream from `--explain` (which adds thin `layers`/`related` fields on

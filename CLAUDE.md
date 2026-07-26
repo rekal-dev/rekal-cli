@@ -346,7 +346,19 @@ session discovery keep using the invoking worktree.
   `wait=false` (degrade to keyword/LSA now, daemon warms for next call);
   `rekal embed` passes `wait=true` (block for the model, bounded). Cache
   extraction is flock-serialized; spawns are cooldown-rate-limited. This is the
-  fix for the concurrent-recall model-load crash
+  fix for the concurrent-recall model-load crash.
+  `embed.c`'s `MAX_TOKENS` (8192, the model's trained window) is the hard
+  truncation point: a session is embedded as one concatenated document, so
+  anything past the cap is **discarded, not blurred** — and decisions land late
+  in a conversation. It was 2048, which meant the neural layer never saw the
+  end of any real session. **`MAX_TOKENS` and `ModelName` move together**:
+  `session_embeddings` and `embed_cache` are both keyed by model, so bumping
+  the window without bumping the name leaves old vectors matching and the
+  change is a silent no-op on every existing store (and mixes two vector
+  spaces in one column if anything does re-embed). `ModelName` is duplicated
+  across the cgo/nocgo build-tag files — change both, and add the retired id to
+  `supersededNomicModels` (recall.go) so an index still carrying it warns
+  "run `rekal embed`" instead of the misleading "no embedding config is set"
 - `skill/`: One Claude Code skill, **scriptless** for retrieval/navigation —
   those moved into the binary as commands (`docs/design/skill-into-command.md`).
   `skills/rekal/` embeds `SKILL.md` (thin route: 4-substrate triage —

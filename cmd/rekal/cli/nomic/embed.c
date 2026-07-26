@@ -11,7 +11,18 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#define MAX_TOKENS 2048
+// nomic-embed-text-v1.5 is trained for 8192 tokens. Sessions are embedded as
+// one concatenated document, and anything past this cap is discarded by the
+// truncation below — so a short window does not blur the tail of a
+// conversation, it deletes it. Decisions, rejected alternatives and
+// resolutions land late in a conversation, which is exactly the material the
+// ledger exists to retrieve, so the cap is set to what the model supports.
+//
+// Changing this changes every vector the model produces. It must be paired
+// with a bump to nomic.ModelName — session_embeddings and embed_cache are both
+// keyed by model, so without it the old truncated vectors keep matching and
+// the change is a silent no-op on any existing store.
+#define MAX_TOKENS 8192
 
 struct nomic_embedder {
     struct llama_model   *model;

@@ -86,7 +86,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `files_index` | Files per checkpoint (checkpoint_id, session_id, file_path, change_type) |
 | `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, parent_session_id, team_name, workflow_name, agent_type, description, spawn_depth, origin, facet_text) |
 | `file_cooccurrence` | Files that change together (file_a, file_b, count) |
-| `session_embeddings` | LSA + Nomic vectors (session_id, embedding, model, generated_at); models `lsa-v1`, `nomic-v1.5` |
+| `session_embeddings` | LSA + Nomic vectors (session_id, embedding, model, generated_at); models `lsa-v1`, `nomic-v1.5-c8k` |
 | `knowledge_chunks` | Heading-anchored prose sections of tracked files at HEAD (id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha) |
 | `knowledge_embeddings` | Chunk vectors (content_hash, model, embedding) |
 | `session_reach` | L1 reach aggregate derived from data.db.recall_edges (target_session_id, reach_count, last_query, last_ts) |

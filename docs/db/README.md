@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS session_embeddings (
 |--------|-------------|
 | `session_id` | FK → session being embedded |
 | `embedding` | Vector as FLOAT array. Dimension depends on model |
-| `model` | Model identifier: `"lsa-v1"` (variable dim) or `"nomic-v1.5"` (768 dim) |
+| `model` | Model identifier: `"lsa-v1"` (variable dim) or `"nomic-v1.5-c8k"` (768 dim) |
 | `generated_at` | When the embedding was computed |
 
 **Scoring weights:**

@@ -93,7 +93,7 @@ INDEX DB SCHEMA (.rekal/index.db):
                        origin, facet_text
   file_cooccurrence    file_a, file_b, count
   session_embeddings   session_id, embedding, model, generated_at
-                       PK: (session_id, model). Models: lsa-v1, nomic-v1.5
+                       PK: (session_id, model). Models: lsa-v1, nomic-v1.5-c8k
   knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
                        content, content_hash, blob_sha
                        (heading-anchored prose sections of tracked files at HEAD)

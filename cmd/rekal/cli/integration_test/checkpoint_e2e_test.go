@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 )
 
@@ -756,12 +757,12 @@ func TestCheckpoint_SubagentEmbeddingDeferred(t *testing.T) {
 	// Only the trunk session (null parent_session_id) should have a nomic
 	// embedding after this checkpoint; the subagent's is deferred.
 	trunkStdout, _, err := env.RunCLI("query", "--index", "--json",
-		"SELECT count(*) as n FROM session_embeddings e JOIN session_facets f ON f.session_id = e.session_id WHERE f.parent_session_id IS NULL AND e.model = 'nomic-v1.5'")
+		"SELECT count(*) as n FROM session_embeddings e JOIN session_facets f ON f.session_id = e.session_id WHERE f.parent_session_id IS NULL AND e.model = '"+nomic.ModelName+"'")
 	if err != nil {
 		t.Fatalf("query trunk embeddings: %v", err)
 	}
 	subStdout, _, err := env.RunCLI("query", "--index", "--json",
-		"SELECT count(*) as n FROM session_embeddings e JOIN session_facets f ON f.session_id = e.session_id WHERE f.parent_session_id IS NOT NULL AND e.model = 'nomic-v1.5'")
+		"SELECT count(*) as n FROM session_embeddings e JOIN session_facets f ON f.session_id = e.session_id WHERE f.parent_session_id IS NOT NULL AND e.model = '"+nomic.ModelName+"'")
 	if err != nil {
 		t.Fatalf("query subagent embeddings: %v", err)
 	}

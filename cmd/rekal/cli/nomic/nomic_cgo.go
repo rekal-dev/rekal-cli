@@ -32,7 +32,12 @@ import (
 
 const (
 	// ModelName identifies the embedding model for the session_embeddings table.
-	ModelName = "nomic-v1.5"
+	// The context window is part of the identity: session_embeddings and
+	// embed_cache are keyed by (model, ...), so a vector produced under a
+	// different MAX_TOKENS is not interchangeable with one produced under this
+	// one. Bump this whenever embed.c's MAX_TOKENS changes, or stores keep
+	// serving vectors from the old window and the change silently does nothing.
+	ModelName = "nomic-v1.5-c8k"
 	// EmbedDim is the output dimensionality of nomic-embed-text-v1.5.
 	EmbedDim = 768
 )

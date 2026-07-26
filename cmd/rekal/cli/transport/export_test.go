@@ -144,3 +144,24 @@ func TestShareableCheckpoints_SquashDoesNotLeakSiblings(t *testing.T) {
 		t.Fatalf("kept %v, want [tip] only — feat-c3 is not part of the landed state", g)
 	}
 }
+
+// TestShareableCheckpoints_ExportedSurvivesRepair covers the data-loss bug in
+// `push --re-export`. The repair re-runs the merged-only gate over every
+// checkpoint, but a commit rebased or squashed away after capture leaves an
+// orphaned git_sha: ancestry fails, and once the branch ref has moved to match
+// the mainline its cumulative diff is empty, which the squash probe rejects by
+// design. Re-proving is impossible, so a repair that dropped those checkpoints
+// would silently delete already-shared conversations from the branch.
+func TestShareableCheckpoints_ExportedSurvivesRepair(t *testing.T) {
+	t.Parallel()
+
+	f := gateFakes{} // nothing provable: no ancestors, no squashes, no tips
+	got := f.run([]db.CheckpointRow{
+		{ID: "shared-then-rebased-away", GitSHA: "deadbeef", GitBranch: "gone", Exported: true},
+		{ID: "new-and-unproven", GitSHA: "cafebabe", GitBranch: "wip"},
+	})
+
+	if ids := cpIDs(got); len(ids) != 1 || ids[0] != "shared-then-rebased-away" {
+		t.Errorf("shareableCheckpoints = %v, want only the already-exported one: a repair must keep what it already shared, and must still withhold unproven work", ids)
+	}
+}

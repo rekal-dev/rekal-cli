@@ -85,3 +85,42 @@ func TestPurgeSuperseded_CollapsesRecaptures(t *testing.T) {
 		}
 	}
 }
+
+// TestSupersededSessionIDs_DataDB covers the export-side use of the same
+// detection. It reads the data DB's own tables rather than the index's, and a
+// silent failure there is worse than a loud one: export would ship the
+// duplicates the filter exists to withhold, onto a branch other people fetch.
+func TestSupersededSessionIDs_DataDB(t *testing.T) {
+	t.Parallel()
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	defer dataDB.Close() //nolint:errcheck
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	grow := []string{"opening turn", "second", "third"}
+	seedSession(t, dataDB, "short", "claude", "a@b.c", grow[:1])
+	seedSession(t, dataDB, "mid", "claude", "a@b.c", grow[:2])
+	seedSession(t, dataDB, "full", "claude", "a@b.c", grow)
+	seedSession(t, dataDB, "elsewhere", "codex", "a@b.c", grow[:1])
+
+	got, err := SupersededSessionIDs(dataDB)
+	if err != nil {
+		t.Fatalf("SupersededSessionIDs: %v", err)
+	}
+	for _, id := range []string{"short", "mid"} {
+		if !got[id] {
+			t.Errorf("%s is a strict prefix of full and must be withheld from the wire", id)
+		}
+	}
+	for _, id := range []string{"full", "elsewhere"} {
+		if got[id] {
+			t.Errorf("%s must be shipped: it is the longest capture or a different agent's session", id)
+		}
+	}
+}

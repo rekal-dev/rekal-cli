@@ -347,6 +347,33 @@ func PurgeBenchSessionsFromIndex(d *sql.DB) error {
 // every stored turn identical to the longer session's turn at the same index.
 // Two distinct conversations that merely open alike are never merged.
 func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
+	superseded, err := supersededSessions(d, "turns_ft", "data_db.sessions")
+	if err != nil {
+		return err
+	}
+	return deleteSessionsFromIndex(d, superseded)
+}
+
+// SupersededSessionIDs reports, for a data DB, the sessions that are re-captures
+// of a longer one. Export uses it to keep duplicates off the wire: the ledger
+// keeps every copy, but the orphan branch is derived data (see push --re-export)
+// and there is no reason to ship the same conversation several times.
+func SupersededSessionIDs(d *sql.DB) (map[string]bool, error) {
+	ids, err := supersededSessions(d, "turns", "sessions")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
+// supersededSessions finds sessions whose turn sequence is a strict prefix of a
+// longer session's, reading turns from turnsTbl and session metadata from
+// sessTbl (which differ between the derived index and the data DB).
+func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) ([]string, error) {
 	type sess struct {
 		id     string
 		key    string
@@ -356,34 +383,34 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 	// of one conversation; turn 0 must match too, since any true prefix shares
 	// it. Different agents legitimately produce sessions with identical opening
 	// turns, so source is part of the key, not an afterthought.
-	rows, err := d.Query(`
+	rows, err := d.Query(fmt.Sprintf(`
 		SELECT t.session_id,
 		       COALESCE(MAX(s.source), '') || '\x1f' ||
 		       COALESCE(MAX(s.user_email), '') || '\x1f' ||
 		       COALESCE(MAX(s.parent_session_id), '') || '\x1f' ||
 		       COALESCE(MAX(CASE WHEN t.turn_index = 0 THEN t.content END), ''),
 		       count(*)
-		FROM turns_ft t
-		LEFT JOIN data_db.sessions s ON s.id = t.session_id
-		GROUP BY t.session_id`)
+		FROM %s t
+		LEFT JOIN %s s ON s.id = t.session_id
+		GROUP BY t.session_id`, turnsTbl, sessTbl))
 	if err != nil {
-		// The data DB is only attached during PopulateIndex. Without it the
-		// discriminators are unavailable, and collapsing on turn 0 alone would
-		// merge unrelated conversations — so do nothing.
-		return nil //nolint:nilerr
+		// In the index path the data DB is only attached during PopulateIndex.
+		// Without it the discriminators are unavailable, and collapsing on turn
+		// 0 alone would merge unrelated conversations — so do nothing.
+		return nil, nil //nolint:nilerr
 	}
 	var all []sess
 	for rows.Next() {
 		var s sess
 		if err := rows.Scan(&s.id, &s.key, &s.nTurns); err != nil {
 			rows.Close() //nolint:errcheck
-			return fmt.Errorf("scan session: %w", err)
+			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		all = append(all, s)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close() //nolint:errcheck
-		return err
+		return nil, err
 	}
 	rows.Close() //nolint:errcheck
 
@@ -409,9 +436,9 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 				if g[j].nTurns <= g[i].nTurns {
 					continue
 				}
-				isPrefix, err := turnsArePrefix(d, g[i].id, g[j].id, g[i].nTurns)
+				isPrefix, err := turnsArePrefix(d, turnsTbl, g[i].id, g[j].id, g[i].nTurns)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				if isPrefix {
 					superseded = append(superseded, g[i].id)
@@ -420,20 +447,20 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 			}
 		}
 	}
-	return deleteSessionsFromIndex(d, superseded)
+	return superseded, nil
 }
 
 // turnsArePrefix reports whether shortID's first n turns are identical to
 // longID's turns at the same indices.
-func turnsArePrefix(d *sql.DB, shortID, longID string, n int) (bool, error) {
+func turnsArePrefix(d *sql.DB, turnsTbl, shortID, longID string, n int) (bool, error) {
 	var mismatches int
-	err := d.QueryRow(`
-		SELECT count(*) FROM turns_ft a
-		FULL OUTER JOIN turns_ft b
+	err := d.QueryRow(fmt.Sprintf(`
+		SELECT count(*) FROM %[1]s a
+		FULL OUTER JOIN %[1]s b
 		  ON b.session_id = $2 AND b.turn_index = a.turn_index
 		WHERE a.session_id = $1 AND a.turn_index < $3
 		  AND (b.content IS NULL OR a.content IS DISTINCT FROM b.content
-		       OR a.role IS DISTINCT FROM b.role)`,
+		       OR a.role IS DISTINCT FROM b.role)`, turnsTbl),
 		shortID, longID, n).Scan(&mismatches)
 	if err != nil {
 		return false, fmt.Errorf("prefix check: %w", err)

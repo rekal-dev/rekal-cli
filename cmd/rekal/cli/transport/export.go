@@ -150,6 +150,16 @@ func shareableCheckpoints(
 
 	for i, cp := range checkpoints {
 		switch {
+		case cp.Exported:
+			// Already on the wire, so it passed this gate once. A repair
+			// (push --re-export) must not re-litigate that: a commit rebased or
+			// squashed away after capture leaves an orphaned git_sha, and once
+			// the branch ref moves to match the mainline its cumulative diff is
+			// empty, which isSquashMerged rejects by design. Re-proving is then
+			// impossible and the repair would silently delete already-shared
+			// conversations. Withholding unmerged work is the guarantee;
+			// retracting merged work is not.
+			proven[cp.GitSHA] = true
 		case cp.GitSHA == "":
 			// never shareable
 		case isAncestor(cp.GitSHA):
@@ -225,6 +235,15 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 	}
 	defer enc.Close()
 
+	// Duplicate re-captures of one conversation must not reach the wire. This
+	// fails loud on purpose: swallowing the error would silently ship the
+	// duplicates it exists to prevent, and a failed export is recoverable while
+	// bytes already on a teammate's branch are not.
+	superseded, err := db.SupersededSessionIDs(dataDB)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("supersession filter: %w", err)
+	}
+
 	var exportedIDs []string
 
 	for _, cp := range checkpoints {
@@ -242,6 +261,15 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 		var members []codec.BatchMember
 
 		for _, sid := range sessionIDs {
+			// Skip a session that is a strict prefix of a longer one — the same
+			// conversation captured again at an earlier commit, before capture
+			// learned to append. data.db keeps every copy (it is the ledger),
+			// but the orphan branch is derived data, so there is no reason to
+			// ship one conversation several times. Shipping only the longest
+			// loses nothing: it contains every turn the shorter ones held.
+			if superseded[sid] {
+				continue
+			}
 			sess, err := db.QuerySession(dataDB, sid)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("query session %s: %w", sid, err)

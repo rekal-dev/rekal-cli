@@ -416,6 +416,11 @@ type CheckpointRow struct {
 	Ts        string
 	ActorType string
 	AgentID   string
+	// Exported records whether this checkpoint already reached the wire. A
+	// repair (push --re-export) uses it as standing proof of the merged-only
+	// gate: the checkpoint passed that gate once, and its commit may since
+	// have been rebased or squashed away, leaving nothing to re-prove with.
+	Exported bool
 }
 
 // QueryUnexportedCheckpoints returns checkpoints where exported = FALSE, ordered by ts.
@@ -432,7 +437,7 @@ func QueryAllCheckpoints(d *sql.DB) ([]CheckpointRow, error) {
 
 func queryCheckpoints(d *sql.DB, where string) ([]CheckpointRow, error) {
 	rows, err := d.Query(
-		`SELECT id, git_sha, git_branch, user_email, ts, actor_type, COALESCE(agent_id, '')
+		`SELECT id, git_sha, git_branch, user_email, ts, actor_type, COALESCE(agent_id, ''), COALESCE(exported, FALSE)
 		 FROM checkpoints ` + where + ` ORDER BY ts`,
 	)
 	if err != nil {
@@ -443,7 +448,7 @@ func queryCheckpoints(d *sql.DB, where string) ([]CheckpointRow, error) {
 	var result []CheckpointRow
 	for rows.Next() {
 		var r CheckpointRow
-		if err := rows.Scan(&r.ID, &r.GitSHA, &r.GitBranch, &r.Email, &r.Ts, &r.ActorType, &r.AgentID); err != nil {
+		if err := rows.Scan(&r.ID, &r.GitSHA, &r.GitBranch, &r.Email, &r.Ts, &r.ActorType, &r.AgentID, &r.Exported); err != nil {
 			return nil, fmt.Errorf("scan checkpoint: %w", err)
 		}
 		result = append(result, r)

@@ -204,7 +204,14 @@ session discovery keep using the invoking worktree.
   `export` applies the **merged-only gate** (`filterMerged`): checkpoints reach
   the wire only when their `git_sha` is an ancestor of the default branch or
   their branch landed as a patch-equivalent squash commit — unmerged work
-  stays local (see `docs/design/merged-only-sharing.md`)
+  stays local (see `docs/design/merged-only-sharing.md`). An **already-exported**
+  checkpoint is shareable unconditionally: it passed the gate once, and a commit
+  rebased/squashed away after capture leaves an orphaned `git_sha` that can never
+  re-prove (empty cumulative diff → the squash probe fails closed), so
+  re-running the gate in `push --re-export` would silently delete already-shared
+  conversations from the branch. Export also withholds **superseded** sessions
+  (`db.SupersededSessionIDs`) so one conversation is never shipped several times;
+  it fails loud rather than shipping the duplicates it exists to prevent
 - `gitx/`: Thin git-plumbing helpers (rev-parse, show, hash-object, config,
   `rekal/<email>` branch name, `DefaultBranch`/`IsAncestor`/`IsSquashMergedInto`/
   `BranchTip` for the merged-only export gate, `MainWorktreeRoot` for the

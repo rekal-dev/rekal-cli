@@ -87,17 +87,22 @@ session discovery keep using the invoking worktree.
   re-chunk; commit-SHA watermark (`knowledge_head_sha`) makes the steady
   state one rev-parse. Called by `index` (full) and recall (incremental,
   best-effort). See `docs/design/knowledge-layer.md`
-- `checkpoint.go`: Capture session after commit. Session identity is the
-  **transcript ref**, not its bytes (`refHash = sha256("ref:"+cacheKey)`, stored
-  in `session_hash`): a live conversation has different content at every commit,
-  so the old content hash made each commit a brand-new session and re-stored the
-  whole transcript — measured 2.07× amplification and duplicate seeds crowding
-  out recall. A re-captured transcript now resolves to its existing session and
-  appends only turns/tool-calls past `db.SessionExtent`, gated by `turnsExtend`
-  (the parsed transcript must be the stored turns plus more; a rewritten one
-  falls back to a new session, so an append can never splice unrelated turns
-  into history). Subagent parent lookup keys on the trunk's ref for the same
-  reason. Also drains the L1 recall-graph
+- `checkpoint.go`: Capture session after commit. A re-captured transcript
+  **appends** to its existing session instead of storing the conversation again:
+  a live conversation has different content at every commit, so keying dedup on
+  content made each commit a brand-new session (measured 2.07× amplification and
+  duplicate seeds crowding out recall). The transcript→session mapping lives in
+  `checkpoint_state.session_id` — **local-only, never wired**; `sessions.session_hash`
+  keeps its content-hash meaning because `local_import.go` dedups by comparing
+  `session.ContentHash` against it, and overloading it would silently re-import
+  every session this repo already captured. Appends only turns/tool-calls past
+  `db.SessionExtent`, gated by `turnsExtend`: the parsed transcript must be the
+  stored turns plus more, else capture falls back to a new session, so a
+  rewritten or truncated transcript can never splice unrelated turns into
+  history. Subagent parent lookup prefers the same mapping, falling back to the
+  trunk's content hash for trunks captured before it. Old stores gain the column
+  by migration and pay one extra session row at the boundary, which the index
+  supersession pass then collapses. Also drains the L1 recall-graph
   spool into `data.db.recall_edges` (`drainRecallSpool`) while the data.db
   writer is held — even when no new session is captured (an agent may recall/
   drill inside an already-checkpointed session), refreshing `session_reach` via

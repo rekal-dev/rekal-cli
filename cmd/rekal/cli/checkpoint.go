@@ -140,14 +140,6 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 				}
 			}
 
-			// Session identity is the transcript reference, not its bytes. A
-			// live conversation has different content at every commit, so a
-			// content hash made each commit look like a brand-new session and
-			// stored the whole transcript again (2x-10x amplification, and
-			// duplicate seeds crowding out recall). Keyed by ref, the same
-			// conversation resolves to one session that grows by appending.
-			refHash := sha256Hex([]byte("ref:" + cacheKey))
-
 			payload, err := adapter.Parse(ref)
 			if err != nil || payload == nil {
 				continue
@@ -167,12 +159,17 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			}
 
 			// Resolve to an existing session when this transcript was captured
-			// before and has only grown since. A transcript that was rewritten
-			// rather than extended fails the prefix check and is stored as a
-			// new session, so a mismatch can never corrupt the earlier record.
+			// before and has only grown since — a live conversation has
+			// different content at every commit, so keying on content stored
+			// the whole transcript again each time. The mapping lives in
+			// checkpoint_state (local-only, never wired); sessions.session_hash
+			// keeps its content-hash meaning, which cross-repo local import
+			// depends on. A transcript that was rewritten rather than extended
+			// fails the prefix check below and is stored as a new session, so a
+			// mismatch can never corrupt the earlier record.
 			appendToID := ""
 			startTurn, startToolCall := 0, 0
-			if existingID, qErr := db.QuerySessionIDByHash(dataDB, refHash); qErr == nil && existingID != "" {
+			if existingID, qErr := db.CheckpointStateSessionID(dataDB, cacheKey); qErr == nil && existingID != "" {
 				stored, sErr := db.SessionTurnContents(dataDB, existingID)
 				if sErr != nil {
 					return sErr
@@ -211,11 +208,16 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			if payload.ParentSessionPath != "" {
 				parentSessionID = trunkSessionIDs[payload.ParentSessionPath]
 				if parentSessionID == "" {
-					// Look the trunk up by its ref identity, for the same
-					// reason capture uses one: the trunk keeps growing, so its
-					// content hash changes between commits while its ref does not.
-					if id, qErr := db.QuerySessionIDByHash(dataDB, sha256Hex([]byte("ref:"+payload.ParentSessionPath))); qErr == nil {
+					// The trunk keeps growing, so its content hash changes
+					// between commits. Prefer the checkpoint_state mapping,
+					// which is stable per transcript, and fall back to the
+					// content hash for trunks captured before the mapping.
+					if id, qErr := db.CheckpointStateSessionID(dataDB, payload.ParentSessionPath); qErr == nil && id != "" {
 						parentSessionID = id
+					} else if trunkData, rdErr := os.ReadFile(payload.ParentSessionPath); rdErr == nil && len(trunkData) > 0 {
+						if id, qErr := db.QuerySessionIDByHash(dataDB, sha256Hex(trunkData)); qErr == nil {
+							parentSessionID = id
+						}
 					}
 				}
 			}
@@ -225,7 +227,7 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 			// turns are added, nothing is rewritten).
 			if appendToID == "" {
 				if err := db.InsertSessionMeta(
-					dataDB, sessionID, parentSessionID, refHash,
+					dataDB, sessionID, parentSessionID, hash,
 					payload.ActorType, payload.AgentID, email, payload.Branch, capturedAt.Format(time.RFC3339),
 					payload.Source, db.SessionMetaFields{
 						TeamName:     payload.TeamName,
@@ -284,14 +286,16 @@ func doCheckpoint(gitRoot string, w io.Writer) error {
 				toolCallPaths[rel] = struct{}{}
 			}
 
-			// Update checkpoint state cache.
+			// Update checkpoint state cache, recording which session this
+			// transcript produced so the next capture of it appends rather than
+			// storing the whole conversation again.
 			if ref.Path != "" {
 				info, _ := os.Stat(ref.Path)
 				if info != nil {
-					_ = db.UpsertCheckpointState(dataDB, cacheKey, info.Size(), hash)
+					_ = db.UpsertCheckpointState(dataDB, cacheKey, info.Size(), hash, sessionID)
 				}
 			} else {
-				_ = db.UpsertCheckpointState(dataDB, cacheKey, 0, hash)
+				_ = db.UpsertCheckpointState(dataDB, cacheKey, 0, hash, sessionID)
 			}
 
 			sessionIDs = append(sessionIDs, sessionID)

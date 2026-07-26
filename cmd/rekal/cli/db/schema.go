@@ -104,6 +104,15 @@ func MigrateDataSchema(d *sql.DB) error {
 	if err := addColumnIfMissing(d, "sessions", "spawn_depth", "INTEGER"); err != nil {
 		return err
 	}
+	// Migration: remember which session a captured transcript produced, so a
+	// later checkpoint of the same (still-growing) transcript appends to it
+	// instead of storing the whole conversation again. checkpoint_state is
+	// local-only and never wired, which is why the mapping lives here rather
+	// than overloading sessions.session_hash — that column's content-hash
+	// meaning is depended on by cross-repo local import.
+	if err := addColumnIfMissing(d, "checkpoint_state", "session_id", "VARCHAR"); err != nil {
+		return err
+	}
 
 	return writeSchemaVersion(d, "schema_meta", CurrentDataSchemaVersion)
 }
@@ -357,7 +366,8 @@ CREATE TABLE IF NOT EXISTS checkpoint_sessions (
 CREATE TABLE IF NOT EXISTS checkpoint_state (
 	file_path   VARCHAR PRIMARY KEY,
 	byte_size   BIGINT NOT NULL,
-	file_hash   VARCHAR NOT NULL
+	file_hash   VARCHAR NOT NULL,
+	session_id  VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS schema_meta (

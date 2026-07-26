@@ -360,17 +360,51 @@ func GetCheckpointState(d *sql.DB, filePath string) (byteSize int64, fileHash st
 }
 
 // UpsertCheckpointState inserts or updates the cached state for a session file.
-func UpsertCheckpointState(d *sql.DB, filePath string, byteSize int64, fileHash string) error {
-	_, err := d.Exec(
-		`INSERT INTO checkpoint_state (file_path, byte_size, file_hash)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (file_path) DO UPDATE SET byte_size = $2, file_hash = $3`,
-		filePath, byteSize, fileHash,
-	)
+// A non-empty sessionID records which session that transcript produced; passing
+// "" leaves any previously recorded mapping intact.
+func UpsertCheckpointState(d *sql.DB, filePath string, byteSize int64, fileHash string, sessionID ...string) error {
+	sid := ""
+	if len(sessionID) > 0 {
+		sid = sessionID[0]
+	}
+	var err error
+	if sid == "" {
+		_, err = d.Exec(
+			`INSERT INTO checkpoint_state (file_path, byte_size, file_hash)
+			 VALUES ($1, $2, $3)
+			 ON CONFLICT (file_path) DO UPDATE SET byte_size = $2, file_hash = $3`,
+			filePath, byteSize, fileHash,
+		)
+	} else {
+		_, err = d.Exec(
+			`INSERT INTO checkpoint_state (file_path, byte_size, file_hash, session_id)
+			 VALUES ($1, $2, $3, $4)
+			 ON CONFLICT (file_path) DO UPDATE SET byte_size = $2, file_hash = $3, session_id = $4`,
+			filePath, byteSize, fileHash, sid,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("upsert checkpoint_state: %w", err)
 	}
 	return nil
+}
+
+// CheckpointStateSessionID returns the session a previously captured transcript
+// produced, or "" when the path is unknown or predates the mapping (data.db
+// written by an older rekal). An empty result means capture stores a new
+// session, which is the pre-existing behaviour.
+func CheckpointStateSessionID(d *sql.DB, filePath string) (string, error) {
+	var sid sql.NullString
+	err := d.QueryRow(
+		"SELECT session_id FROM checkpoint_state WHERE file_path = $1", filePath,
+	).Scan(&sid)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read checkpoint_state session_id: %w", err)
+	}
+	return sid.String, nil
 }
 
 // CheckpointRow represents a row from the checkpoints table.

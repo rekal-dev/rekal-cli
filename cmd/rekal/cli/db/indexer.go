@@ -646,9 +646,14 @@ func StoreEmbeddings(d *sql.DB, vectors map[string][]float64, model string) erro
 	for sessionID, vec := range vectors {
 		// Inline the array literal because the database/sql driver cannot
 		// bind a string to a FLOAT[] column, even with a cast.
+		// Upsert: a session's vector is replaced when its content changes (it
+		// grew since the last capture), so this must not fail on the existing
+		// (session_id, model) row.
 		query := fmt.Sprintf(
 			`INSERT INTO session_embeddings (session_id, embedding, model, generated_at)
-			 VALUES ($1, %s::FLOAT[], $2, now())`,
+			 VALUES ($1, %s::FLOAT[], $2, now())
+			 ON CONFLICT (session_id, model) DO UPDATE
+			 SET embedding = EXCLUDED.embedding, generated_at = EXCLUDED.generated_at`,
 			float64SliceToDuckDB(vec),
 		)
 		if _, err := d.Exec(query, sessionID, model); err != nil {
@@ -743,9 +748,17 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		// collide on the primary key — aborting the incremental update and
 		// leaving the index behind until a full rebuild. Re-deriving one
 		// session's slice is always safe: the index is derived data, and
-		// data.db remains the source of truth. session_embeddings is left
-		// alone; it is keyed separately and recomputed by the embed pass.
-		for _, tbl := range []string{"turns_ft", "tool_calls_index", "session_facets", "files_index"} {
+		// data.db remains the source of truth.
+		//
+		// session_embeddings is dropped too, and that matters more than it
+		// looks. The embed pass skips any session that already has a vector, so
+		// a conversation embedded at fifty turns and grown to five hundred would
+		// keep answering semantic recall from the first fifty — no error, no
+		// warning, just quietly worse retrieval on exactly the long sessions
+		// worth retrieving. Dropping it here forces a recompute over the current
+		// content. This costs no more than before capture learned to append,
+		// when every re-capture created a new session and embedded it in full.
+		for _, tbl := range []string{"turns_ft", "tool_calls_index", "session_facets", "files_index", "session_embeddings"} {
 			if _, err := d.Exec(fmt.Sprintf("DELETE FROM %s WHERE session_id = $1", tbl), sid); err != nil {
 				return fmt.Errorf("clear %s for reindex: %w", tbl, err)
 			}

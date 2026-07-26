@@ -228,6 +228,20 @@ func appendBatch(body []byte, enc *codec.Encoder, members []codec.BatchMember) (
 // frame. Returns the updated body, encoded dict, and the checkpoint IDs
 // encoded — which the caller must only mark exported after the bytes are
 // durably committed (see ExportNewFrames' doc comment).
+// withheldSessions is the duplicate filter's decision: a superseded session may
+// be dropped only when the survivor that replaces it is itself going out in this
+// run. A filter whose job is to remove redundancy must never remove the last
+// copy — see the call site for why the two can diverge.
+func withheldSessions(survivors map[string]string, shipping map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(survivors))
+	for id, survivor := range survivors {
+		if shipping[survivor] {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, checkpoints []db.CheckpointRow) ([]byte, []byte, []string, error) {
 	enc, err := codec.NewEncoder()
 	if err != nil {
@@ -243,10 +257,23 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("supersession filter: %w", err)
 	}
-	superseded := make(map[string]bool, len(survivors))
-	for id := range survivors {
-		superseded[id] = true
+	// A superseded session may only be withheld when its survivor is actually
+	// going out in this run. The two can land on different checkpoints, and the
+	// merged-only gate judges those independently — so an older, merged copy can
+	// be shareable while the longer one is still held back on an unmerged
+	// branch. Skipping it blindly would withhold the conversation entirely,
+	// which is the opposite of what a duplicate filter is for.
+	shipping := make(map[string]bool)
+	for _, cp := range checkpoints {
+		ids, err := db.QuerySessionsByCheckpoint(dataDB, cp.ID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("pre-scan sessions for %s: %w", cp.ID, err)
+		}
+		for _, id := range ids {
+			shipping[id] = true
+		}
 	}
+	superseded := withheldSessions(survivors, shipping)
 
 	var exportedIDs []string
 

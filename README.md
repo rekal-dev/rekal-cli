@@ -399,7 +399,9 @@ Full details: [docs/spec/command/](docs/spec/command/).
 | [docs/configuration.md](docs/configuration.md) | `.rekal/config.json` — ranking weights, embedding backends, API-key handling |
 | [docs/spec/command/](docs/spec/command/) | Per-command reference specs |
 | [docs/research/](docs/research/) | The paper, benchmark harness, and evaluation strategy |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, testing, and contributing |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, testing, and releasing |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | What a contribution has to satisfy, and what will be declined |
+| [SECURITY.md](SECURITY.md) | The security model, what's in scope, how to report a vulnerability |
 | [SOUL.md](SOUL.md) | The beliefs behind every design decision |
 
 ## Development
@@ -411,6 +413,18 @@ mise install
 ```
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full development guide.
+
+## Contributing
+
+Read [SOUL.md](SOUL.md) first — it is the review bar, not a mission statement.
+Then [CONTRIBUTING.md](CONTRIBUTING.md) for the checks, the doc-sync rule, and
+the list of changes that will be declined before you spend a weekend on them.
+
+Everyone participating is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+Security vulnerabilities go through [SECURITY.md](SECURITY.md), never a public
+issue.
 
 ## Getting help
 

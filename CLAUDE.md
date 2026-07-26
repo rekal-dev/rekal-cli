@@ -449,6 +449,28 @@ session discovery keep using the invoking worktree.
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, embed, find, index, init, log, push, query, recall, sync
 
+### Community files (repo root)
+
+- `CONTRIBUTING.md`: What a contribution has to satisfy — SOUL.md's eight
+  questions as the review bar, the explicit decline list (server, telemetry,
+  required API key, any mutation/forgetting path over `data.db`, corpus-tuned
+  constants in skill scripts, a rule where a function would do), the
+  fmt/lint/test:ci gate, the doc-sync rule (CLAUDE.md + `--help` +
+  `docs/spec/command/` in the same change), test placement, commit convention
+  (`type(scope): what changed`), and the binding benchmark honesty rules for
+  `scripts/bench/` + `scripts/industry-bench/`
+- `SECURITY.md`: Private reporting via GitHub advisories, and the threat model
+  that follows from the architecture — in scope is anything putting material on
+  the wire that should stay local (redaction/path-anonymization failure, a
+  `filterMerged` bypass, cross-repo import reaching `data.db`, `recall_edges`/
+  `checkpoint_state`/config on the wire), credential handling, untrusted wire
+  frames and transcripts, and local integrity (append-only violations,
+  `.rekal/` state permissions). Out of scope: recall quality, `query --sql`,
+  what an agent does with what it recalls. Also the secret-in-the-ledger
+  remedy: rotate first, branch surgery second, report the redaction gap
+- `CODE_OF_CONDUCT.md`: Contributor Covenant 2.1; reports via GitHub *Report
+  content* or a maintainer DM in Discord
+
 ## Development
 
 ### Running Tests

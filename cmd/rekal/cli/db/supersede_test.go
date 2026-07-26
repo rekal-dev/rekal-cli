@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 )
 
 // seedSession inserts a session and n turns whose contents come from body.
@@ -193,5 +194,62 @@ func TestPurgeSuperseded_RepointsSubagentParents(t *testing.T) {
 
 	if parent != "trunk-full" {
 		t.Errorf("subagent parent = %q, want trunk-full — its trunk was collapsed away, so it must follow the surviving copy or it detaches from its conversation", parent)
+	}
+}
+
+// TestPurgeSuperseded_CarriesReachToSurvivor covers the personalisation signal
+// across the collapse. Reach counts are the "this memory was used N times" hint
+// that nudges load-bearing conversations up the ranking — and they are keyed by
+// the session id that was surfaced at recall time.
+//
+// Under the duplicate bug that was whichever copy existed then, so collapsing the
+// copies strands every recall the user ever made: the surviving conversation
+// shows zero reach and looks brand new, precisely because it was used a lot.
+func TestPurgeSuperseded_CarriesReachToSurvivor(t *testing.T) {
+	t.Parallel()
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	grow := []string{"why we dropped batching", "because of tail latency"}
+	seedSession(t, dataDB, "old-copy", "claude", "a@b.c", grow[:1])
+	seedSession(t, dataDB, "survivor", "claude", "a@b.c", grow)
+
+	// The user reached the earlier copy twice before it was collapsed.
+	ts := time.Date(2026, 7, 11, 0, 0, 0, 0, time.UTC)
+	if err := InsertRecallEdges(dataDB, []RecallEdge{
+		{ID: "e1", TS: ts, Kind: "recall", Query: "batching", Target: "old-copy"},
+		{ID: "e2", TS: ts.Add(time.Hour), Kind: "drill", Query: "batching", Target: "old-copy"},
+	}); err != nil {
+		t.Fatalf("InsertRecallEdges: %v", err)
+	}
+	dataDB.Close() //nolint:errcheck
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close() //nolint:errcheck
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	var reach int
+	if err := indexDB.QueryRow(
+		`SELECT COALESCE(sum(reach_count), 0) FROM session_reach WHERE target_session_id = 'survivor'`,
+	).Scan(&reach); err != nil {
+		t.Fatalf("read reach: %v", err)
+	}
+	if reach != 2 {
+		t.Errorf("survivor reach = %d, want 2 — recalls made against the collapsed copy must follow the conversation, or a well-used memory reads as never used", reach)
 	}
 }

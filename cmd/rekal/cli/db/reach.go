@@ -31,6 +31,17 @@ func EnsureReachSchema(d *sql.DB) error {
 	if _, err := d.Exec(reachDDL); err != nil {
 		return fmt.Errorf("create reach schema: %w", err)
 	}
+	// session_supersedes maps a collapsed re-capture to the surviving copy of
+	// the same conversation. Reach is keyed by whichever session id was
+	// surfaced at recall time, which under the duplicate bug was whatever copy
+	// existed then — so without this fold a heavily used conversation reads as
+	// never used the moment its copies collapse.
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS session_supersedes (
+		old_session_id      VARCHAR PRIMARY KEY,
+		survivor_session_id VARCHAR NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("create session_supersedes: %w", err)
+	}
 	return nil
 }
 
@@ -168,7 +179,12 @@ func PopulateSessionReach(d *sql.DB) error {
 			count(*),
 			arg_max(query, ts) FILTER (WHERE query IS NOT NULL AND query <> ''),
 			max(ts)
-		FROM data_db.recall_edges
+		FROM (
+			SELECT COALESCE(m.survivor_session_id, e.target_session_id) AS target_session_id,
+			       e.query, e.ts
+			FROM data_db.recall_edges e
+			LEFT JOIN session_supersedes m ON m.old_session_id = e.target_session_id
+		)
 		GROUP BY target_session_id
 	`); err != nil {
 		return fmt.Errorf("populate session_reach: %w", err)

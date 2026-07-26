@@ -369,6 +369,23 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 		ids = append(ids, old)
 	}
 	sort.Strings(ids) // deterministic order
+
+	// Record the mapping so downstream derivations can follow the conversation
+	// rather than the collapsed id — reach counts most of all.
+	if err := EnsureReachSchema(d); err != nil {
+		return err
+	}
+	if _, err := d.Exec(`DELETE FROM session_supersedes`); err != nil {
+		return fmt.Errorf("clear session_supersedes: %w", err)
+	}
+	for _, old := range ids {
+		if _, err := d.Exec(
+			`INSERT INTO session_supersedes (old_session_id, survivor_session_id) VALUES ($1, $2)`,
+			old, superseded[old],
+		); err != nil {
+			return fmt.Errorf("record supersession: %w", err)
+		}
+	}
 	for _, old := range ids {
 		// Rewritten as delete-then-insert rather than UPDATE: DuckDB can raise a
 		// spurious duplicate-key error when updating a row on an indexed table,

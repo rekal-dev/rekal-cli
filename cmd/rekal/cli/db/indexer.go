@@ -891,24 +891,6 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		return fmt.Errorf("incremental files_index: %w", err)
 	}
 
-	// Refresh the BM25 snapshot. DuckDB builds the FTS index by PRAGMA over the
-	// table's current contents and does not maintain it as rows are written, so
-	// without this the turns just inserted sit in turns_ft while match_bm25 —
-	// the only turn-level path recall has — scores nothing for them. Every
-	// checkpoint's work stayed invisible to recall until someone happened to run
-	// a full `rekal index`: in the ledger, unfindable, and nothing to signal it.
-	// overwrite=1 makes this a rebuild rather than an error.
-	// The extension must be loaded on this connection first; the full-rebuild
-	// path does it in index_cmd before calling here. Failing soft is deliberate:
-	// a stale BM25 snapshot degrades recall until the next full index, while
-	// returning an error here would abort the whole incremental update and take
-	// facets and reach down with it.
-	if err := LoadFTSExtension(d); err == nil {
-		if ftsErr := CreateFTSIndex(d); ftsErr != nil {
-			return fmt.Errorf("refresh fts after incremental index: %w", ftsErr)
-		}
-	}
-
 	// Facet documents for the new sessions.
 	if len(sessionIDs) > 0 {
 		if err := PopulateFacetText(d, sessionIDs...); err != nil {
@@ -920,6 +902,29 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 	// edges drained into data.db at this checkpoint become visible to recall.
 	if err := PopulateSessionReach(d); err != nil {
 		return err
+	}
+
+	// Refresh the BM25 snapshot. DuckDB builds the FTS index by PRAGMA over the
+	// table's current contents and does not maintain it as rows are written, so
+	// without this the turns just inserted sit in turns_ft while match_bm25 —
+	// the only turn-level path recall has — scores nothing for them. Every
+	// checkpoint's work stayed invisible to recall until someone happened to run
+	// a full `rekal index`: in the ledger, unfindable, and nothing to signal it.
+	// overwrite=1 makes this a rebuild rather than an error.
+	//
+	// Last, and only the extension load fails soft. This work is the one step
+	// here that can be redone from the table alone, so a failure costs a stale
+	// snapshot and nothing else; every step above writes rows keyed to *this*
+	// checkpoint's sessions, and there is no watermark that would bring them
+	// back. Returning early from the middle used to strand exactly those rows —
+	// a conversation that never grew again kept its turns and lost its facets
+	// until someone ran a full `rekal index`. The extension itself is a soft
+	// skip because it is a precondition, not a result: without it there is no
+	// snapshot to refresh, and the full-rebuild path loads it in index_cmd.
+	if err := LoadFTSExtension(d); err == nil {
+		if ftsErr := CreateFTSIndex(d); ftsErr != nil {
+			return fmt.Errorf("refresh fts after incremental index: %w", ftsErr)
+		}
 	}
 
 	return nil

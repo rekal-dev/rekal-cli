@@ -239,9 +239,13 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 	// fails loud on purpose: swallowing the error would silently ship the
 	// duplicates it exists to prevent, and a failed export is recoverable while
 	// bytes already on a teammate's branch are not.
-	superseded, err := db.SupersededSessionIDs(dataDB)
+	survivors, err := db.SupersededSessionSurvivors(dataDB)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("supersession filter: %w", err)
+	}
+	superseded := make(map[string]bool, len(survivors))
+	for id := range survivors {
+		superseded[id] = true
 	}
 
 	var exportedIDs []string
@@ -316,8 +320,15 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 				SpawnDepth:   sess.SpawnDepth,
 			}
 			if sess.ParentSessionID != "" {
+				// A subagent whose trunk is a superseded copy must follow the
+				// survivor, or the teammate receives a parent that was never
+				// shipped and the subagent detaches from its conversation.
+				parent := sess.ParentSessionID
+				if s, ok := survivors[parent]; ok {
+					parent = s
+				}
 				sf.HasParent = true
-				sf.ParentRef = dict.LookupOrAdd(codec.NSSessions, sess.ParentSessionID)
+				sf.ParentRef = dict.LookupOrAdd(codec.NSSessions, parent)
 			}
 
 			// Build turn records with delta timestamps.

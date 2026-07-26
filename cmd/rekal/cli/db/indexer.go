@@ -358,7 +358,39 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	return deleteSessionsFromIndex(d, superseded)
+	// Re-point subagents before dropping their trunk. Under the duplicate bug a
+	// trunk was re-stored at every commit, so a subagent captured mid-conversation
+	// links to whichever copy existed then. Search groups sessions by walking
+	// parent_session_id to the root, so leaving the pointer at a collapsed copy
+	// detaches that subagent's work from its conversation. The survivor is the
+	// same conversation, so children follow it.
+	ids := make([]string, 0, len(superseded))
+	for old := range superseded {
+		ids = append(ids, old)
+	}
+	sort.Strings(ids) // deterministic order
+	for _, old := range ids {
+		// Rewritten as delete-then-insert rather than UPDATE: DuckDB can raise a
+		// spurious duplicate-key error when updating a row on an indexed table,
+		// even though the key column itself is untouched.
+		survivor := superseded[old]
+		if _, err := d.Exec(`CREATE OR REPLACE TEMP TABLE repoint AS
+			SELECT * REPLACE ($1 AS parent_session_id)
+			FROM session_facets WHERE parent_session_id = $2`, survivor, old); err != nil {
+			return fmt.Errorf("stage subagent repoint: %w", err)
+		}
+		if _, err := d.Exec(
+			`DELETE FROM session_facets WHERE parent_session_id = $1`, old); err != nil {
+			return fmt.Errorf("clear stale subagent parents: %w", err)
+		}
+		if _, err := d.Exec(`INSERT INTO session_facets SELECT * FROM repoint`); err != nil {
+			return fmt.Errorf("repoint subagent parents: %w", err)
+		}
+	}
+	if _, err := d.Exec(`DROP TABLE IF EXISTS repoint`); err != nil {
+		return fmt.Errorf("drop repoint temp: %w", err)
+	}
+	return deleteSessionsFromIndex(d, ids)
 }
 
 // SupersededSessionIDs reports, for a data DB, the sessions that are re-captures
@@ -366,21 +398,28 @@ func PurgeSupersededSessionsFromIndex(d *sql.DB) error {
 // keeps every copy, but the orphan branch is derived data (see push --re-export)
 // and there is no reason to ship the same conversation several times.
 func SupersededSessionIDs(d *sql.DB) (map[string]bool, error) {
-	ids, err := supersededSessions(d, "turns", "sessions")
+	m, err := supersededSessions(d, "turns", "sessions")
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]bool, len(ids))
-	for _, id := range ids {
+	out := make(map[string]bool, len(m))
+	for id := range m {
 		out[id] = true
 	}
 	return out, nil
 }
 
+// SupersededSessionSurvivors maps each superseded session to the longer session
+// that replaces it. Export uses it to re-point a subagent whose trunk is not
+// being shipped, so the teammate does not receive a dangling parent.
+func SupersededSessionSurvivors(d *sql.DB) (map[string]string, error) {
+	return supersededSessions(d, "turns", "sessions")
+}
+
 // supersededSessions finds sessions whose turn sequence is a strict prefix of a
 // longer session's, reading turns from turnsTbl and session metadata from
 // sessTbl (which differ between the derived index and the data DB).
-func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) ([]string, error) {
+func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) (map[string]string, error) {
 	type sess struct {
 		id     string
 		key    string
@@ -430,7 +469,7 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) ([]string, error) {
 		groups[s.key] = append(groups[s.key], s)
 	}
 
-	var superseded []string
+	superseded := map[string]string{}
 	for _, g := range groups {
 		if len(g) < 2 {
 			continue
@@ -448,7 +487,7 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl string) ([]string, error) {
 					return nil, err
 				}
 				if isPrefix {
-					superseded = append(superseded, g[i].id)
+					superseded[g[i].id] = g[j].id
 					break
 				}
 			}

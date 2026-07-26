@@ -124,3 +124,74 @@ func TestSupersededSessionIDs_DataDB(t *testing.T) {
 		}
 	}
 }
+
+// TestPurgeSuperseded_RepointsSubagentParents covers the interaction between the
+// supersession collapse and subagent linkage.
+//
+// Under the duplicate-session bug a trunk was re-stored at every commit, so a
+// subagent captured mid-conversation was linked to whichever trunk copy existed
+// at that moment. Collapsing the copies then strands it: search groups sessions
+// by walking parent_session_id to the root, and a parent that is no longer in the
+// index breaks that walk — the subagent's work either detaches into its own
+// result or vanishes from its conversation.
+//
+// The surviving copy is the same conversation, so children must follow it.
+func TestPurgeSuperseded_RepointsSubagentParents(t *testing.T) {
+	t.Parallel()
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	grow := []string{"trunk opening", "trunk continues", "trunk finishes"}
+	seedSession(t, dataDB, "trunk-early", "claude", "a@b.c", grow[:2])
+	seedSession(t, dataDB, "trunk-full", "claude", "a@b.c", grow)
+
+	// A subagent captured while the trunk was still the early copy.
+	if err := InsertSession(dataDB, "kid", "trunk-early", "h-kid", "agent", "",
+		"a@b.c", "main", "2026-07-11T00:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession kid: %v", err)
+	}
+	if err := InsertTurn(dataDB, "kid:0", "kid", 0, "assistant", "subagent did the work", ""); err != nil {
+		t.Fatalf("InsertTurn kid: %v", err)
+	}
+	dataDB.Close() //nolint:errcheck
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close() //nolint:errcheck
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	var parent string
+	if err := indexDB.QueryRow(
+		`SELECT COALESCE(parent_session_id, '') FROM session_facets WHERE session_id = 'kid'`,
+	).Scan(&parent); err != nil {
+		t.Fatalf("read kid's parent: %v", err)
+	}
+
+	var trunkEarlyLives int
+	if err := indexDB.QueryRow(
+		`SELECT count(*) FROM turns_ft WHERE session_id = 'trunk-early'`,
+	).Scan(&trunkEarlyLives); err != nil {
+		t.Fatalf("check purged trunk: %v", err)
+	}
+	if trunkEarlyLives != 0 {
+		t.Fatal("setup: trunk-early should have been collapsed into trunk-full")
+	}
+
+	if parent != "trunk-full" {
+		t.Errorf("subagent parent = %q, want trunk-full — its trunk was collapsed away, so it must follow the surviving copy or it detaches from its conversation", parent)
+	}
+}

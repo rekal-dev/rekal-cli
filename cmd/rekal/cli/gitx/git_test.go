@@ -136,10 +136,20 @@ func TestMainWorktreeRoot(t *testing.T) {
 
 	// Add a linked worktree; from inside it, the resolver must point back at
 	// the main checkout so the .rekal store is shared.
+	//
+	// Compared by directory identity rather than by string: from a linked
+	// worktree there is no caller spelling to preserve, so the answer is git's
+	// own resolved path for the main checkout. On macOS that is /private/var/…
+	// where t.TempDir() handed back /var/… — the same directory under another
+	// name, which is all the store needs to be shared, and a string compare
+	// fails there for no reason that matters.
 	linked := t.TempDir() + "-wt"
 	git(t, main, "worktree", "add", "-b", "feature", linked)
-	if got := MainWorktreeRoot(linked); got != filepath.Clean(main) {
-		t.Fatalf("linked worktree: MainWorktreeRoot(%q) = %q, want main %q", linked, got, filepath.Clean(main))
+	got := MainWorktreeRoot(linked)
+	gi, gErr := os.Stat(got)
+	mi, mErr := os.Stat(main)
+	if gErr != nil || mErr != nil || !os.SameFile(gi, mi) {
+		t.Fatalf("linked worktree: MainWorktreeRoot(%q) = %q, want the main checkout %q", linked, got, main)
 	}
 }
 
@@ -259,5 +269,34 @@ func TestBlobContents_Batch(t *testing.T) {
 	}
 	if _, ok := got["deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"]; ok {
 		t.Fatal("missing SHA should not appear in BlobContents")
+	}
+}
+
+// TestMainWorktreeRoot_ThroughSymlink reproduces, on any platform, the failure
+// that only shows up on macOS: there /var is a symlink to /private/var, so
+// t.TempDir() hands back a path whose real location differs, and
+// `git worktree list` reports the resolved one.
+//
+// The product promise is that the resolver is a no-op in the main checkout —
+// that is what lets .rekal/ stay where it is with no migration. If reaching a
+// repo through a symlinked path changes the answer, that promise is broken for
+// real users too, not only for tests: the store would be looked for somewhere
+// other than where it already sits.
+func TestMainWorktreeRoot_ThroughSymlink(t *testing.T) {
+	t.Parallel()
+	real := t.TempDir()
+	git(t, real, "init", "-b", "main")
+	commit(t, real, "base")
+
+	// A second path that reaches the same directory through a symlink, which is
+	// exactly the shape of macOS's /var -> /private/var.
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("cannot create symlink here: %v", err)
+	}
+
+	if got := MainWorktreeRoot(link); got != filepath.Clean(link) {
+		t.Errorf("MainWorktreeRoot(%q) = %q, want the caller's own path back — "+
+			"the main checkout must resolve to itself however it was reached", link, got)
 	}
 }

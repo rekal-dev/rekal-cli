@@ -41,7 +41,12 @@ git worktree resolves to that one shared store via `gitx.MainWorktreeRoot`
 (a no-op for non-worktree repos, so existing installs need no migration). All
 store-path helpers (`db.StoreDir`, `cli.RekalDir`, and the `Open*`/`*Path`
 functions) funnel through it; git-state helpers (`HeadSHA`/`CurrentBranch`) and
-session discovery keep using the invoking worktree.
+session discovery keep using the invoking worktree. The no-op is enforced by
+identity, not by string: git reports worktree paths with symlinks resolved, so
+a repo reached through a symlinked directory (macOS `/var` → `/private/var`,
+or any symlinked project dir) would otherwise come back under a different name
+for the same place and move `.rekal/` off the store that already exists —
+`preferCallerPath` stats both and hands the caller's own spelling back.
 
 ## Key Directories
 

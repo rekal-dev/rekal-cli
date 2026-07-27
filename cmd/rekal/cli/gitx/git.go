@@ -49,11 +49,36 @@ func resolveMainWorktreeRoot(gitRoot string) string {
 	for _, line := range strings.Split(string(out), "\n") {
 		if rest, ok := strings.CutPrefix(line, "worktree "); ok {
 			if path := strings.TrimSpace(rest); path != "" {
-				return filepath.Clean(path)
+				return preferCallerPath(filepath.Clean(path), gitRoot)
 			}
 		}
 	}
 	return gitRoot
+}
+
+// preferCallerPath returns gitRoot when resolved names the same directory,
+// keeping the caller's own spelling of the path.
+//
+// git reports worktree paths with symlinks resolved, so a repository reached
+// through a symlinked path — macOS's /var -> /private/var is the everyday case,
+// but any symlinked project directory does it — comes back under a different
+// name for the same directory. Returning that name would move .rekal/ somewhere
+// other than where it already sits, breaking the no-op promise that lets
+// worktree support ship without a migration. Comparing by identity rather than
+// by string is the point: only stat can tell that two spellings are one
+// directory. A genuine linked worktree is a different directory, so it still
+// resolves to the main checkout.
+func preferCallerPath(resolved, gitRoot string) string {
+	clean := filepath.Clean(gitRoot)
+	if resolved == clean {
+		return resolved
+	}
+	ri, rErr := os.Stat(resolved)
+	gi, gErr := os.Stat(clean)
+	if rErr == nil && gErr == nil && os.SameFile(ri, gi) {
+		return clean
+	}
+	return resolved
 }
 
 // HeadSHA returns the current HEAD commit SHA, or 40 zeros if it can't be read.

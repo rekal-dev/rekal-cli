@@ -66,7 +66,13 @@ func saturate(raw, tau float64) float64 {
 
 // absoluteConfidence is the silence-gate signal. Ranking still uses
 // max-normalized Score.
-func absoluteConfidence(bm25Raw, lsaRaw, nomicRaw, facetRaw float64, _ bool, w Weights, parent string) float64 {
+//
+// Note there is no "nomic available" argument: an unavailable deep-semantic
+// layer arrives as nomicRaw = 0 and loses the max() on its own. Passing
+// availability separately would imply the gate treats "no model" differently
+// from "the model found nothing", and it does not — both are absence of
+// semantic evidence, and the lexical layer still speaks for itself.
+func absoluteConfidence(bm25Raw, lsaRaw, nomicRaw, facetRaw float64, w Weights, parent string) float64 {
 	lexical := saturate(bm25Raw, bm25Tau)
 	semantic := clamp01(nomicRaw)
 	if l := clamp01(lsaRaw); l > semantic {

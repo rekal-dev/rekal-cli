@@ -540,7 +540,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		if parent != "" {
 			hybrid *= w.SubagentDownweight
 		}
-		conf := absoluteConfidence(sh.bm25Raw, sh.lsaScore, sh.nomicScore, sh.facetScore, useNomic, w, parent)
+		conf := absoluteConfidence(sh.bm25Raw, sh.lsaScore, sh.nomicScore, sh.facetScore, w, parent)
 		sc := scored{sessionID: sid, score: hybrid, confidence: conf, mass: sh.bm25Raw, hit: sh}
 		if filters.Explain {
 			sc.layers = &Layers{BM25: round2(bm25Norm), LSA: round2(lsaNorm), Nomic: round2(nomicNorm), Facet: round2(facetNorm), Recency: round2(recencyNorm), Reach: round2(reachNorm)}

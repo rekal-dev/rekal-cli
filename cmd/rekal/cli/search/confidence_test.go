@@ -67,9 +67,9 @@ func TestAbsoluteConfidence_JunkVsReal(t *testing.T) {
 	t.Parallel()
 	w := DefaultWeights()
 	// Evidence from scoring-lineage: real BM25 ~5.64, junk ~2.59, offtopic ~3.06.
-	real := absoluteConfidence(5.64, 0, 0, 5.99, false, w, "")
-	junk := absoluteConfidence(2.59, 0, 0, 2.40, false, w, "")
-	off := absoluteConfidence(3.06, 0, 0, 2.90, false, w, "")
+	real := absoluteConfidence(5.64, 0, 0, 5.99, w, "")
+	junk := absoluteConfidence(2.59, 0, 0, 2.40, w, "")
+	off := absoluteConfidence(3.06, 0, 0, 2.90, w, "")
 	if real < 0.70 {
 		t.Fatalf("real confidence=%v, want >= 0.70 (got formula max(bm25Abs)+facet)", real)
 	}

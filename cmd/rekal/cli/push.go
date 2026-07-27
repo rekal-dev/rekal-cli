@@ -171,7 +171,7 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 	pushCmd.Stdin = nil // disconnect stdin so git doesn't hang in hook context
 	output, err := pushCmd.CombinedOutput()
 	if err != nil {
-		if isNonFastForward(string(output)) {
+		if isNonFastForward(string(output)) && remoteDiverged(gitRoot, branch) {
 			fmt.Fprintf(w, "rekal: push rejected (non-fast-forward) for origin/%s\n", branch)
 			fmt.Fprintln(w, "rekal: your remote branch has diverged from local — review and run 'rekal push --force' to overwrite remote with local data")
 			return nil
@@ -205,4 +205,33 @@ func isNonFastForward(output string) bool {
 	return strings.Contains(output, "non-fast-forward") ||
 		strings.Contains(output, "[rejected]") ||
 		strings.Contains(output, "fetch first")
+}
+
+// remoteDiverged confirms, against the refs themselves, that the remote branch
+// really does carry work local does not.
+//
+// The push output alone cannot be trusted for this. When the transport fails
+// mid-push — a proxy answering 403, an expired credential, a branch-protection
+// rule — git reports the ref as "[rejected] ... (fetch first)" all the same,
+// and that phrasing is indistinguishable from a genuine divergence. Acting on
+// the text alone told the user their history had diverged and pointed them at
+// 'push --force', which overwrites the shared branch with local data: a
+// destructive answer to what was only ever a failed connection, and the wire is
+// the team's only copy of conversations already shared.
+//
+// So ask git instead. A best-effort fetch first, because the remote-tracking
+// ref may be stale — if that fetch fails there is nothing to diverge from that
+// we can see, and the honest report is the transport error.
+func remoteDiverged(gitRoot, branch string) bool {
+	fetch := exec.Command("git", "-C", gitRoot, "fetch", "origin", branch)
+	fetch.Stdin = nil
+	if err := fetch.Run(); err != nil {
+		return false
+	}
+	remote, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
+	if err != nil {
+		return false
+	}
+	// Diverged exactly when the remote tip is not already contained in local.
+	return !gitx.IsAncestor(gitRoot, strings.TrimSpace(string(remote)), branch)
 }

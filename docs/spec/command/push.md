@@ -27,7 +27,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
    **Merge workflows:** the ancestor test is exact for merge-commit and rebase workflows. Squash merges are covered by a second, equally fail-closed signal (`gitx.IsSquashMergedInto`): a checkpoint's branch counts as merged when its cumulative change (tree vs. merge-base) exists on the default branch as a patch-equivalent commit (`git cherry` on a synthetic probe commit). Mid-branch checkpoints release when they are ancestors of a proven squash point on their branch (a sibling checkpoint or the surviving local branch tip). Abandoned branches never patch-match, and empty cumulative diffs are rejected outright — the failure mode is always "share later," never "leak."
 5. **Commit to orphan branch** — Write `rekal.body` and `dict.bin` via `git hash-object` + `git mktree` + `git commit-tree`. Uses the HEAD commit message from the main branch.
 6. **Compare with remote** — Skip push if local and remote SHAs match.
-7. **Push** — `git push --no-verify origin rekal/<email>`. Handle non-fast-forward with a warning suggesting `--force`.
+7. **Push** — `git push --no-verify origin rekal/<email>`. A rejection is only reported as a divergence once it is confirmed against the refs (`remoteDiverged`: fetch the branch, then check whether the remote tip is already contained in local); otherwise the underlying git error is printed as-is.
 
 ---
 
@@ -38,7 +38,11 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 | `--force`, `-f` | Force push, overwriting the remote branch with local data |
 | `--re-export` | Rebuild the branch's wire data from scratch out of the local data DB, then force push. Implies `--force`. |
 
-When a normal push is rejected (non-fast-forward), push prints a warning and suggests `rekal push --force`. Force push is safe because each user owns their branch and the local DuckDB is the source of truth.
+When a normal push is rejected, push confirms the divergence against the refs before reporting it: it fetches the branch and checks whether the remote tip is already an ancestor of local. Only then does it print the warning and suggest `rekal push --force`; any other failure is reported as the git error it was.
+
+The check matters because a transport failure — a proxy answering 403, an expired credential, a branch-protection rule — makes git print `[rejected] ... (fetch first)` too, which is indistinguishable from a real divergence in the text alone. Suggesting `--force` there answers a failed connection by overwriting the shared branch.
+
+Force push overwrites the remote with local data. That is safe only when local is a superset of what the branch holds. It is **not** safe when the same branch has been pushed from another machine: `sync` imports arriving frames into the **index**, never into `data.db`, so a local re-export cannot reproduce another machine's checkpoints and force-pushing drops those conversations from the wire for good. Reconcile by pushing from the machine that holds the missing checkpoints.
 
 `--re-export` re-encodes every **merged** checkpoint in data.db into a fresh rekal.body and dict.bin, ignoring exported flags and the branch's current contents. Use it to repair a branch whose wire bytes were written by a rekal version with the frame-count bug (sessions with more than 255 turns or tool calls were corrupted on the wire), or to drop stale meta frames accumulated by past pushes. The merged-only gate applies here too, so a repair regenerates the branch as merged-only and never re-leaks unmerged work. The branch is derived data; data.db is the source of truth.
 

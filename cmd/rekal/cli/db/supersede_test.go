@@ -346,3 +346,163 @@ func TestPurgeSuperseded_CollapsesSyncedSessions(t *testing.T) {
 		}
 	}
 }
+
+// TestPurgeSuperseded_CollapsesExactDuplicates covers the copy prefix detection
+// is blind to: two sessions with byte-identical transcripts and the *same*
+// length. The prefix pass compares each session only against strictly longer
+// ones, so equal-length copies never meet and every one of them survives.
+//
+// They arise wherever the same conversation reaches the index by two routes —
+// a wire import landing beside the local capture it came from, a store synced
+// from two peers that both carry it, a cross-repo local import of a repo that
+// already pushed. Recall then spends several of its seed budget on one
+// conversation, which is the whole defect the supersession pass exists to stop.
+func TestPurgeSuperseded_CollapsesExactDuplicates(t *testing.T) {
+	t.Parallel()
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	body := []string{"why we dropped the queue", "because redelivery was silent", "so we made it explicit"}
+	for _, id := range []string{"copy-a", "copy-b", "copy-c"} {
+		seedSession(t, dataDB, id, "claude", "a@b.c", body)
+	}
+	// Same length, same opening turn, genuinely different conversation.
+	seedSession(t, dataDB, "distinct", "claude", "a@b.c",
+		[]string{"why we dropped the queue", "a different reason entirely", "and a different end"})
+	dataDB.Close() //nolint:errcheck
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close() //nolint:errcheck
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	live := map[string]bool{}
+	rows, err := indexDB.Query(`SELECT DISTINCT session_id FROM turns_ft`)
+	if err != nil {
+		t.Fatalf("query turns_ft: %v", err)
+	}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		live[id] = true
+	}
+	rows.Close() //nolint:errcheck
+
+	copies := 0
+	for _, id := range []string{"copy-a", "copy-b", "copy-c"} {
+		if live[id] {
+			copies++
+		}
+	}
+	if copies != 1 {
+		t.Errorf("%d of the 3 identical copies survived, want exactly 1 — recall spends a seed on each", copies)
+	}
+	if !live["distinct"] {
+		t.Error("distinct must survive: same length and same opening turn, but not the same conversation")
+	}
+}
+
+// TestPurgeSuperseded_FlattensAcrossBothPasses pins the seam between the two
+// collapse rules. An exact copy is mapped onto its twin, and that twin is then
+// mapped onto a longer capture that extends it — so the raw result chains.
+//
+// Every consumer reads the map as old → *final* survivor: the index deletes all
+// of the keys, so a value that is itself a key would re-point a subagent's
+// parent or a reach count at a session that is no longer in the index. That is
+// the bug the prefix-only pass could never produce, because it always jumped
+// straight to the longest member of a chain.
+func TestPurgeSuperseded_FlattensAcrossBothPasses(t *testing.T) {
+	t.Parallel()
+	dir, _ := openTempDB(t)
+
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	grow := []string{"the shared opening", "the shared second", "only the long one has this"}
+	// a-copy and b-copy are byte-identical; long extends both.
+	seedSession(t, dataDB, "a-copy", "claude", "a@b.c", grow[:2])
+	seedSession(t, dataDB, "b-copy", "claude", "a@b.c", grow[:2])
+	seedSession(t, dataDB, "long", "claude", "a@b.c", grow)
+
+	// A subagent pinned to the copy that loses both passes.
+	if err := InsertSession(dataDB, "kid", "b-copy", "h-kid", "agent", "",
+		"a@b.c", "main", "2026-07-11T00:00:00Z", "claude"); err != nil {
+		t.Fatalf("InsertSession kid: %v", err)
+	}
+	if err := InsertTurn(dataDB, "kid:0", "kid", 0, "assistant", "subagent output", ""); err != nil {
+		t.Fatalf("InsertTurn kid: %v", err)
+	}
+	dataDB.Close() //nolint:errcheck
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close() //nolint:errcheck
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	if err := PopulateIndex(indexDB, dir); err != nil {
+		t.Fatalf("PopulateIndex: %v", err)
+	}
+
+	// No survivor may itself be superseded.
+	rows, err := indexDB.Query(`SELECT old_session_id, survivor_session_id FROM session_supersedes`)
+	if err != nil {
+		t.Fatalf("query session_supersedes: %v", err)
+	}
+	mapped := map[string]string{}
+	for rows.Next() {
+		var old, survivor string
+		if err := rows.Scan(&old, &survivor); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		mapped[old] = survivor
+	}
+	rows.Close() //nolint:errcheck
+
+	for old, survivor := range mapped {
+		if _, chained := mapped[survivor]; chained {
+			t.Errorf("%s → %s, but %s is itself superseded — the map must point at the final survivor",
+				old, survivor, survivor)
+		}
+		if survivor != "long" {
+			t.Errorf("%s → %s, want long", old, survivor)
+		}
+	}
+	if len(mapped) != 2 {
+		t.Errorf("mapped %d sessions, want 2 (a-copy and b-copy)", len(mapped))
+	}
+
+	// And the subagent follows all the way to the end of the chain.
+	var parent string
+	if err := indexDB.QueryRow(
+		`SELECT COALESCE(parent_session_id, '') FROM session_facets WHERE session_id = 'kid'`,
+	).Scan(&parent); err != nil {
+		t.Fatalf("read kid's parent: %v", err)
+	}
+	if parent != "long" {
+		t.Errorf("subagent parent = %q, want long — a half-resolved chain strands it on a deleted session", parent)
+	}
+}

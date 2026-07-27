@@ -460,12 +460,16 @@ func SupersededSessionSurvivors(d *sql.DB) (map[string]string, error) {
 // query below refuses to do, since two people who start from the same plan
 // prompt are not the same conversation. Reading the discriminators from
 // session_facets keeps the key honest for sessions the data DB never saw.
+// sess is one candidate in the supersession pass: its grouping key, the
+// fingerprint of its whole ordered transcript, and how many turns it has.
+type sess struct {
+	id     string
+	key    string
+	fp     string
+	nTurns int
+}
+
 func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[string]string, error) {
-	type sess struct {
-		id     string
-		key    string
-		nTurns int
-	}
 	// Only sessions from the same agent, author and parent can be re-captures
 	// of one conversation; turn 0 must match too, since any true prefix shares
 	// it. Different agents legitimately produce sessions with identical opening
@@ -480,6 +484,10 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 		facetEmail = "COALESCE(MAX(f.user_email), '') ||"
 		facetParent = "COALESCE(MAX(f.parent_session_id), '') ||"
 	}
+	// The fingerprint is the whole ordered transcript hashed in one pass, so
+	// exact duplicates fall out of a GROUP BY instead of a pairwise comparison
+	// per candidate pair. role is included because a turn reclassified to
+	// 'summary' is not the same turn.
 	rows, err := d.Query(fmt.Sprintf(`
 		SELECT t.session_id,
 		       COALESCE(MAX(s.source), '') || '\x1f' ||
@@ -487,6 +495,9 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 		       COALESCE(MAX(s.user_email), %[5]s '') || '\x1f' ||
 		       COALESCE(MAX(s.parent_session_id), %[6]s '') || '\x1f' ||
 		       COALESCE(MAX(CASE WHEN t.turn_index = 0 THEN t.content END), ''),
+		       md5(string_agg(
+		           COALESCE(t.role, '') || '\x1f' || COALESCE(t.content, ''),
+		           '\x1e' ORDER BY t.turn_index)),
 		       count(*)
 		FROM %[1]s t
 		LEFT JOIN %[2]s s ON s.id = t.session_id
@@ -511,7 +522,7 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 	var all []sess
 	for rows.Next() {
 		var s sess
-		if err := rows.Scan(&s.id, &s.key, &s.nTurns); err != nil {
+		if err := rows.Scan(&s.id, &s.key, &s.fp, &s.nTurns); err != nil {
 			rows.Close() //nolint:errcheck
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
@@ -537,6 +548,17 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 		if len(g) < 2 {
 			continue
 		}
+		// Exact duplicates first. The prefix pass below only ever compares a
+		// session against a *strictly longer* one, so identical copies never
+		// meet it and every one of them survives — the same conversation
+		// reaching the index twice by two routes (a wire import landing beside
+		// the local capture it came from, two peers who both carry it, a
+		// cross-repo import of a repo that already pushed) costs a recall seed
+		// per copy. Equal fingerprint means equal transcript, so the choice of
+		// survivor is arbitrary and only has to be deterministic: the smallest
+		// id, which for ULIDs is the copy that was captured first.
+		g = collapseEqualRecaptures(g, superseded)
+
 		sort.Slice(g, func(i, j int) bool { return g[i].nTurns < g[j].nTurns })
 		// Compare each session against every strictly longer one, shortest
 		// first, so a chain (39 → 40 → 144 → 172) collapses to its longest.
@@ -556,7 +578,66 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 			}
 		}
 	}
-	return superseded, nil
+	// Flatten. The two passes can chain — an exact copy points at its twin,
+	// which the prefix pass then points at a longer capture — and every
+	// consumer treats the map as old → *final* survivor: the index deletes
+	// every key, so a value that is itself a key would re-point a subagent or
+	// a reach count at a session that is no longer there.
+	return flattenSupersession(superseded), nil
+}
+
+// collapseEqualRecaptures maps every session that shares its transcript
+// fingerprint with an earlier one onto that one, recording the result in
+// superseded, and returns the group with those copies removed so the prefix
+// pass sees one representative per distinct transcript.
+func collapseEqualRecaptures(g []sess, superseded map[string]string) []sess {
+	byFP := map[string]string{} // fingerprint → surviving id
+	kept := g[:0:0]
+	for _, s := range g {
+		winner, seen := byFP[s.fp]
+		if !seen {
+			byFP[s.fp] = s.id
+			kept = append(kept, s)
+			continue
+		}
+		// Deterministic and acyclic: the smallest id always wins, so a group
+		// of mutually-identical copies converges on one survivor regardless of
+		// the order the rows arrived in.
+		if s.id < winner {
+			byFP[s.fp] = s.id
+			superseded[winner] = s.id
+			for i := range kept {
+				if kept[i].id == winner {
+					kept[i] = s
+					break
+				}
+			}
+			continue
+		}
+		superseded[s.id] = winner
+	}
+	return kept
+}
+
+// flattenSupersession resolves old → survivor chains so every key maps to a
+// session that is not itself superseded. The cycle guard is a safety net, not
+// an expected case: both passes only ever point at a strictly longer session
+// or a strictly smaller id, so neither can close a loop.
+func flattenSupersession(superseded map[string]string) map[string]string {
+	for old := range superseded {
+		seen := map[string]bool{old: true}
+		final := superseded[old]
+		for {
+			next, ok := superseded[final]
+			if !ok || seen[final] {
+				break
+			}
+			seen[final] = true
+			final = next
+		}
+		superseded[old] = final
+	}
+	return superseded
 }
 
 // turnsArePrefix reports whether shortID's first n turns are identical to

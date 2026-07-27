@@ -322,12 +322,24 @@ session discovery keep using the invoking worktree.
   the index's own tables, full + incremental — and the guarded
   `CreateFacetFTSIndex`, built by `index`/`sync` only when facet material
   exists). `PurgeSupersededSessionsFromIndex` collapses re-captures written
-  before capture keyed on ref identity: a session whose turns are a strict
-  prefix of a longer one's is dropped from the **index only** — data.db keeps
-  every copy, since the ledger is append-only and those rows are already on the
-  wire. Grouped by source + author + parent + turn 0 so different agents that
-  open alike are never merged; runs before facets/reach so neither is computed
-  for a session about to be dropped. Sessions the data DB never saw — every
+  before capture keyed on ref identity, dropping them from the **index only** —
+  data.db keeps every copy, since the ledger is append-only and those rows are
+  already on the wire. Two rules, in order: `collapseEqualRecaptures` maps away
+  sessions whose **whole ordered transcript** hashes identically (one `md5`
+  over `string_agg(role||content ORDER BY turn_index)` in the grouping query,
+  so exact copies fall out of a `GROUP BY` rather than a comparison per pair;
+  smallest id wins, which for ULIDs is the copy captured first), then the
+  prefix pass maps a session whose turns are a strict prefix of a longer one's
+  onto that longer one. The exact rule exists because the prefix pass compares
+  only against **strictly longer** sessions, so identical copies never meet it
+  — the same conversation arriving by two routes (a wire import beside the
+  local capture it came from, two peers that both carry it) cost a recall seed
+  each. `flattenSupersession` then resolves old → **final** survivor: the two
+  rules chain, and every consumer deletes all the keys, so a value that is
+  itself a key would strand a subagent parent or a reach count on a session
+  that is gone. Grouped by source + author + parent + turn 0 so different
+  agents that open alike are never merged; runs before facets/reach so neither
+  is computed for a session about to be dropped. Sessions the data DB never saw — every
   **synced teammate session**, which the wire import writes straight to
   `turns_ft` + `session_facets` — take their discriminators from
   `session_facets` (+ `origin`, which labels cross-repo local imports),

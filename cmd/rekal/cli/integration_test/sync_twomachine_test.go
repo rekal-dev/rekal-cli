@@ -249,17 +249,18 @@ func TestPush_StrandedByRewriteStillShips(t *testing.T) {
 	}
 }
 
-// TestPush_ForceRefusesToDiscardAnotherMachine covers the guard on the most
-// destructive command in the tool.
+// TestPush_ForkNeverDiscardsAnotherMachine covers the append-only guarantee at
+// the point it is easiest to break.
 //
 // Two machines share one rekal/<email> branch, so a genuine fork makes git
 // demand a force — and force is exactly wrong there: each machine's data.db
 // holds only its own checkpoints, and sync imports other branches into the
-// index and never into data.db, so the frames a force would delete cannot be
-// re-exported by anyone. Removing --force would not have fixed this; the
-// capability is one `git push --force` away regardless. Knowing the difference
-// between a safe force and a destructive one is the fix.
-func TestPush_ForceRefusesToDiscardAnotherMachine(t *testing.T) {
+// index and never into data.db, so frames deleted from the branch cannot be
+// re-exported by anyone. rekal push offers no way to do it: the wire format is
+// append-only, and that is structural rather than a policy with an override.
+// --rebuild, the one path that rewrites the body, refuses unless what the
+// branch holds is already contained in what it would write.
+func TestPush_ForkNeverDiscardsAnotherMachine(t *testing.T) {
 	bare := newSharedRemote(t)
 	const email = "guard@dev.example"
 
@@ -276,10 +277,15 @@ func TestPush_ForceRefusesToDiscardAnotherMachine(t *testing.T) {
 	desktop.contribute(t, "desktop.jsonl",
 		[]string{"desktop opening", "desktop rewrote the parser"}, "desktop work")
 
-	stdout, stderr, _ := desktop.env.RunCLI("push", "--force")
+	// There is no rekal-level force at all.
+	if _, stderr, err := desktop.env.RunCLI("push", "--force"); err == nil {
+		t.Errorf("push --force was accepted; the append-only guarantee must not have an override flag: %s", stderr)
+	}
+	// And the one path that rewrites the body refuses to drop what it lacks.
+	stdout, stderr, _ := desktop.env.RunCLI("push", "--rebuild")
 	out := stdout + stderr
-	if !strings.Contains(out, "refusing to force push") {
-		t.Errorf("force was allowed to discard the other machine's frames; output:\n%s", out)
+	if !strings.Contains(out, "refusing to rebuild") {
+		t.Errorf("--rebuild was allowed to discard the other machine's frames; output:\n%s", out)
 	}
 
 	// The laptop's conversation must still be readable from the branch.
@@ -303,23 +309,23 @@ func TestPush_ForceRefusesToDiscardAnotherMachine(t *testing.T) {
 	}
 }
 
-// TestPush_ForceStillWorksWhenNothingIsLost is the other half. A guard that
-// refuses every force is not a guard, it is a removal — and removal is not
-// available here, because the branch is a git ref and `git push --force` is
-// always one command away. Overwriting a branch this machine already contains
-// costs nothing and must still work.
-func TestPush_ForceStillWorksWhenNothingIsLost(t *testing.T) {
+// TestPush_RebuildWorksWhenNothingIsLost is the other half. A guard that
+// refuses every rebuild is not a guard, it is a removal — and --rebuild has a
+// real job: re-encoding a branch whose wire bytes were written by a version
+// with the frame-count bug. Rebuilding a branch this machine already contains
+// loses nothing and must still work.
+func TestPush_RebuildWorksWhenNothingIsLost(t *testing.T) {
 	bare := newSharedRemote(t)
 	solo := newMachine(t, bare, "solo-force@dev.example", "solo")
 	solo.contribute(t, "s.jsonl",
 		[]string{"opening", "the only machine here"}, "work")
 
-	stdout, stderr, err := solo.env.RunCLI("push", "--force")
+	stdout, stderr, err := solo.env.RunCLI("push", "--rebuild")
 	if err != nil {
-		t.Fatalf("push --force: %v\n%s", err, stderr)
+		t.Fatalf("push --rebuild: %v\n%s", err, stderr)
 	}
 	out := stdout + stderr
 	if strings.Contains(out, "refusing") {
-		t.Errorf("force refused although the remote holds nothing this machine lacks; output:\n%s", out)
+		t.Errorf("--rebuild refused although the branch holds nothing this machine lacks; output:\n%s", out)
 	}
 }

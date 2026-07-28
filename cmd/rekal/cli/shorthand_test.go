@@ -31,7 +31,10 @@ func TestFlagShorthands(t *testing.T) {
 		// sync's --self takes no shorthand: -s belongs to --session,
 		// the most-typed flag in the CLI, and one letter means one thing.
 		"sync": {},
-		"push": {"f": "force"},
+		// push has no shorthands: --force was removed (the wire format is
+		// append-only, so overwriting a branch is a git operation, not a rekal
+		// one) and --rebuild is deliberately spelled out.
+		"push": {},
 	}
 
 	root := NewRootCmd()

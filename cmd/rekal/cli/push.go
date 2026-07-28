@@ -15,7 +15,6 @@ import (
 )
 
 func newPushCmd() *cobra.Command {
-	var force bool
 	var rebuild bool
 	var reExportAlias bool
 
@@ -40,11 +39,15 @@ metadata anchored to git commits. They are encoded into a compact binary wire
 format (rekal.body + dict.bin) using zstd compression and string interning —
 a 2-10 MB session compresses to ~300 bytes on the wire.
 
-Use --force to overwrite the remote branch when it has diverged from local
-(e.g. after a rebuild or conflict). Both --force and --rebuild refuse when the
-remote carries commits this machine does not have: those conversations exist
-only there, and no local re-export can reproduce them. Push from the machine
-that holds them instead.
+There is no force flag. The wire format is append-only — no byte is ever
+modified after it is written — and that is a structural guarantee, not a
+policy: 'rekal push' appends checkpoints and can do nothing else. Overwriting a
+ref is a git operation, not a memory operation, so if you truly mean to discard
+what a branch holds, say so in git: git push --force origin rekal/<email>.
+
+When a push is rejected because the branch genuinely diverged, the fix is to
+push from the machine that holds the missing checkpoints; it will append to the
+branch and this one will fast-forward onto it.
 
 Use --rebuild to regenerate the branch's wire data from scratch out of the
 local data DB and force-push it. This repairs a branch whose wire data was
@@ -53,13 +56,10 @@ written by a rekal version with the frame-count bug (sessions with more than
 stale meta frames. The merged-only rule applies here too: the rebuilt branch
 contains only merged checkpoints. Implies --force.
 
---rebuild is the more destructive of the two. --force still pushes a body
-built on top of whatever the branch already held; --rebuild starts from an
-empty body and can only reproduce what this machine's data DB contains. If the
-same branch was ever pushed from another machine, its conversations are not in
-this data DB — sync imports other branches into the index, never into data.db —
-and --rebuild drops them from the wire for good. Run it only when this machine
-holds everything the branch should carry.
+--rebuild is the one exception, and it is bounded: it refuses unless the
+branch's current body is already contained in what this machine would write, so
+it can only ever produce a superset. It repairs derived bytes from data.db,
+which is the source of truth — it never edits the ledger.
 
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
 You do not need to run this manually.`,
@@ -72,11 +72,10 @@ You do not need to run this manually.`,
 			if rebuild || reExportAlias {
 				return doReExport(gitRoot, cmd.ErrOrStderr())
 			}
-			return doPush(gitRoot, cmd.ErrOrStderr(), force)
+			return doPush(gitRoot, cmd.ErrOrStderr())
 		},
 	}
 
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force push (overwrite remote with local data)")
 	cmd.Flags().BoolVar(&rebuild, "rebuild", false, "Rebuild the branch's wire data from the local data DB and force push")
 	// --re-export was the original name. It described the mechanism rather than
 	// the effect, and the effect is what a user has to reason about before
@@ -143,7 +142,7 @@ func doReExport(gitRoot string, w io.Writer) error {
 
 // doPush pushes Rekal data to the remote orphan branch.
 // Extracted so sync can call it without a cobra.Command.
-func doPush(gitRoot string, w io.Writer, force bool) error {
+func doPush(gitRoot string, w io.Writer) error {
 	branch := gitx.RekalBranchName()
 
 	// Check if local branch exists — if not, nothing to push.
@@ -198,25 +197,6 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 	remoteSHA, err := exec.Command("git", "-C", gitRoot, "rev-parse", "origin/"+branch).Output()
 	if err == nil && strings.TrimSpace(string(localSHA)) == strings.TrimSpace(string(remoteSHA)) {
 		fmt.Fprintln(w, "rekal: already up to date")
-		return nil
-	}
-
-	if force {
-		if lost, ok := forceWouldDiscard(gitRoot, branch); ok && lost != "" {
-			fmt.Fprintf(w, "rekal: refusing to force push to origin/%s\n", branch)
-			fmt.Fprintf(w, "rekal: the remote has %s this machine does not have\n", lost)
-			fmt.Fprintln(w, "rekal: those conversations exist only there — sync imports other branches into the index, never into data.db, so this machine cannot re-export them")
-			fmt.Fprintln(w, "rekal: push from the machine that holds them; it will append to this branch")
-			fmt.Fprintf(w, "rekal: to discard them anyway: git push --force origin %s\n", branch)
-			return nil
-		}
-		forceCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "--force", "origin", branch)
-		forceCmd.Stdin = nil
-		if output, err := forceCmd.CombinedOutput(); err != nil {
-			fmt.Fprintf(w, "rekal: force push failed: %s\n", strings.TrimSpace(string(output)))
-			return nil
-		}
-		fmt.Fprintf(w, "rekal: force pushed to origin/%s\n", branch)
 		return nil
 	}
 

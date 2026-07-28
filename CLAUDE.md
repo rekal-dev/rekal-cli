@@ -128,15 +128,18 @@ for the same place and move `.rekal/` off the store that already exists —
   `db.RefreshSessionReach` on that path so the graph never stalls; otherwise the
   incremental index refresh rebuilds `session_reach`
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`).
-  `--rebuild` (was `--re-export`, kept as a deprecated hidden alias) is the
-  **more destructive** of the two repair flags and the naming now says so:
-  `--force` pushes a body `ExportNewFrames` built on top of the branch's own
-  contents, while `--rebuild` runs `ExportAllFrames` from an empty body and can
-  only reproduce this machine's `data.db` — so anything another machine pushed
-  is dropped from the wire. Both refuse via `forceWouldDiscard` when the remote
-  tip is not contained in the local branch; removal was rejected because
-  `git push --force` is always one command away, so it would move the hazard
-  out of the tool's sight instead of removing it
+  **There is no `--force`**: SOUL.md makes the append-only wire format a
+  *structural* guarantee, not a policy, and a flag that overwrites a branch
+  would demote it to the latter. `rekal push` appends and can do nothing else;
+  discarding a ref stays a git operation. `--rebuild` (was `--re-export`, kept
+  as a deprecated hidden alias) is the one path that rewrites the body —
+  `ExportAllFrames` from an empty body, so it carries only this machine's
+  `data.db` — and it refuses via `forceWouldDiscard` unless the branch's
+  current body is already a prefix of what it would write, making it a
+  superset-only repair of derived bytes. The check is on the **body**, not the
+  commit graph: a rewritten tip (amend, re-anchor) diverges history while
+  leaving the body byte-identical, and refusing there would block a repair that
+  loses nothing
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`).
   `indexSessionFrame` dedups an arriving session by **keeping the longest**: one
   conversation spanning several commits links to several checkpoints and rides in

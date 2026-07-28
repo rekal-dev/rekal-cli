@@ -72,7 +72,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	}
 
 	// Step 2: Push (non-fatal).
-	if err := doPush(gitRoot, w, false); err != nil {
+	if err := doPush(gitRoot, w); err != nil {
 		fmt.Fprintf(w, "rekal: warning: push failed: %v\n", err)
 	}
 

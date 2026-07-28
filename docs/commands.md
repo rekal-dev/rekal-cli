@@ -121,8 +121,7 @@ rekal query -i -q "SELECT count(*) FROM turns_ft"
 | Command | Flag | Short | What it does |
 |---|---|---|---|
 | `rekal push` | | | Export merged checkpoints to your `rekal/<email>` branch |
-| | `--force` | `-f` | Overwrite the remote with local data |
-| | `--rebuild` | | Rebuild the branch's wire data from `data.db`, ignoring what the branch holds. Implies `--force`. (`--re-export` is a deprecated alias) |
+| | `--rebuild` | | Re-encode the branch's wire data from `data.db`. Refuses unless the branch's current body is already contained in what it would write. (`--re-export` is a deprecated alias) |
 | `rekal sync` | | | Fetch and import your teammates' branches |
 | | `--self` | | Fetch only your own branch — across your own machines |
 
@@ -131,31 +130,31 @@ an ancestor of the default branch, or its branch landed as a patch-equivalent
 squash. Unmerged work stays local and is re-checked on every push, so it ships
 automatically once the branch merges — and never if it is abandoned.
 
-`--force` and `--rebuild` are **not** the same, and `--rebuild` is the more
-destructive of the two. `--force` still pushes a body built cumulatively on top
-of whatever the branch already held; `--rebuild` starts from an empty body and
-can only reproduce what this machine's `data.db` contains. Anything pushed from
-another machine is not in this `data.db` — `sync` imports other branches into
-the index, never into `data.db` — so `--rebuild` drops it from the wire for
-good. Run it only when this machine holds everything the branch should carry.
+**There is no force flag.** The wire format is append-only — no byte is modified
+after it is written — and that is a structural guarantee, not a policy with an
+override. `rekal push` appends checkpoints and can do nothing else.
 
-Both refuse to run when the remote carries commits this machine lacks, naming
-what would be lost and pointing at the machine that holds it. The guard is not a
-removal — `git push --force origin rekal/<email>` is always one command away, so
-taking the flag out would only move the footgun somewhere the tool cannot warn
-you. Knowing the difference is the fix.
+Discarding what a branch holds is a git operation, not a memory operation. If
+you truly mean it, say so in git:
 
-**When `--force` is safe:** only when local is a superset of what the branch
-holds. It is **not** safe when the same branch has been pushed from another
-machine — `sync` imports arriving frames into the index, never into `data.db`,
-so a local re-export cannot reproduce another machine's checkpoints and forcing
-drops those conversations for good. Push from the machine that holds them
-instead.
+```bash
+git push --force origin rekal/<email>
+```
 
-A rejected push is confirmed against the refs before it is reported as a
-divergence: a proxy 403 or an expired credential makes git print the same
-`[rejected] ... (fetch first)` text, and answering that with `--force` would
-overwrite a shared branch over a failed connection.
+That asymmetry is deliberate. A flag inside `rekal push` would make overwriting
+part of the memory protocol; leaving it in git keeps it what it is — an
+operation on a ref, performed by a person who went looking for it.
+
+**When a push is rejected**, the branch genuinely diverged: another machine
+under the same identity pushed checkpoints this one has never seen. Push from
+*that* machine — it appends to the branch, and this one fast-forwards onto it
+next time. `sync` imports other branches into the index and never into
+`data.db`, so no local re-export can reproduce another machine's checkpoints.
+
+`--rebuild` is the one path that rewrites the body, and it is bounded: it
+refuses unless the branch's current body is already contained in what it would
+write, so it can only ever produce a superset. It repairs *derived* bytes from
+`data.db`, which is the source of truth — it never edits the ledger.
 
 ---
 

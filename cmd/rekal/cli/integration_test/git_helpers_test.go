@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 )
 
 // sanitizedGitEnv is the environment every git command in these tests runs
@@ -69,4 +71,9 @@ func pushMain(t *testing.T, repoDir string) {
 func pullMain(t *testing.T, repoDir string) {
 	t.Helper()
 	gitRun(t, repoDir, "pull", "--rebase", "-q", "origin", currentBranch(t, repoDir))
+}
+
+// gitxIsAncestor reports whether sha is reachable from ref.
+func gitxIsAncestor(dir, sha, ref string) bool {
+	return gitx.IsAncestor(dir, sha, ref)
 }

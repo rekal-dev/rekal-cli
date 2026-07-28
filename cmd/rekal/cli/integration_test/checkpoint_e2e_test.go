@@ -398,7 +398,16 @@ func TestPush_E2E_ExportAndPush(t *testing.T) {
 		len(body1), len(body2), len(dict1), len(dict2))
 }
 
-func TestPush_E2E_ForceOnConflict(t *testing.T) {
+// TestPush_E2E_DivergenceIsReportedNotOverwritten covers what happens when the
+// branch genuinely diverges: the push is rejected and reported, and rekal
+// offers nothing that would resolve it by overwriting.
+//
+// This replaces a test that asserted `push --force` succeeded and left local
+// and remote identical. That flag is gone. The wire format is append-only — no
+// byte is modified after it is written — and a flag that overwrites a branch
+// makes that a policy with an override rather than a structural guarantee.
+// Discarding a ref is a git operation; it stays in git.
+func TestPush_E2E_DivergenceIsReportedNotOverwritten(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
@@ -413,9 +422,7 @@ func TestPush_E2E_ForceOnConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitCommit(t, env.RepoDir, "fix auth")
-
-	_, _, err := env.RunCLI("checkpoint")
-	if err != nil {
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
 		t.Fatalf("checkpoint: %v", err)
 	}
 
@@ -425,68 +432,61 @@ func TestPush_E2E_ForceOnConflict(t *testing.T) {
 	if err := exec.Command("git", "-C", env.RepoDir, "remote", "add", "origin", bareDir).Run(); err != nil {
 		t.Fatalf("git remote add: %v", err)
 	}
-
-	_, _, err = env.RunCLI("push")
-	if err != nil {
+	if _, _, err := env.RunCLI("push"); err != nil {
 		t.Fatalf("initial push: %v", err)
 	}
 
 	branch := "rekal/test@rekal.dev"
 
-	// Simulate divergence.
+	// Someone rewrites the branch out from under us, adding content this
+	// machine has never seen.
 	cloneDir := t.TempDir()
 	cloneDir, _ = filepath.EvalSymlinks(cloneDir)
-	if err := exec.Command("git", "clone", bareDir, cloneDir).Run(); err != nil {
+	if err := exec.Command("git", "clone", "-q", bareDir, cloneDir).Run(); err != nil {
 		t.Fatalf("git clone: %v", err)
 	}
 	for _, kv := range [][2]string{
-		{"user.email", "other@rekal.dev"},
-		{"user.name", "Other User"},
-		{"gc.auto", "0"},
+		{"user.email", "other@rekal.dev"}, {"user.name", "Other User"}, {"gc.auto", "0"},
 	} {
-		exec.Command("git", "-C", cloneDir, "config", kv[0], kv[1]).Run()
+		exec.Command("git", "-C", cloneDir, "config", kv[0], kv[1]).Run() //nolint:errcheck
 	}
-	exec.Command("git", "-C", cloneDir, "fetch", "origin", branch).Run()
-	exec.Command("git", "-C", cloneDir, "checkout", "-b", branch, "origin/"+branch).Run()
-	exec.Command("git", "-C", cloneDir, "commit", "--allow-empty", "--amend", "-m", "divergent").Run()
-	exec.Command("git", "-C", cloneDir, "push", "--force", "origin", branch).Run()
+	gitRun(t, cloneDir, "fetch", "origin", branch)
+	gitRun(t, cloneDir, "checkout", "-q", "-b", branch, "origin/"+branch)
+	if err := os.WriteFile(filepath.Join(cloneDir, "rekal.body"), []byte("theirs, not ours"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, cloneDir, "add", "rekal.body")
+	gitRun(t, cloneDir, "commit", "-q", "-m", "divergent")
+	gitRun(t, cloneDir, "push", "-q", "--force", "origin", branch)
 
-	// Second checkpoint + push should detect conflict.
+	// A second checkpoint, then a push that cannot fast-forward.
 	cleanup2 := writeSessionFile(t, env.RepoDir, "session2.jsonl", testSessionJSONL2)
 	defer cleanup2()
 	if err := os.WriteFile(filepath.Join(env.RepoDir, "login.go"), []byte("func login() error { log.Println(\"ok\"); return nil }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	gitCommit(t, env.RepoDir, "add logging")
-
-	_, _, err = env.RunCLI("checkpoint")
-	if err != nil {
+	if _, _, err := env.RunCLI("checkpoint"); err != nil {
 		t.Fatalf("checkpoint 2: %v", err)
 	}
 
-	_, stderr, err := env.RunCLI("push")
-	if err != nil {
-		t.Fatalf("push (conflict): %v", err)
-	}
-	if !strings.Contains(stderr, "non-fast-forward") && !strings.Contains(stderr, "rejected") {
-		if strings.Contains(stderr, "pushed to origin/") {
-			t.Errorf("conflicting push should not succeed without --force, got: %q", stderr)
-		}
+	theirs := gitOut(t, cloneDir, "rev-parse", "HEAD")
+
+	if _, stderr, err := env.RunCLI("push"); err != nil {
+		t.Fatalf("push after their commit: %v\n%s", err, stderr)
 	}
 
-	// Force push should succeed.
-	_, stderrForce, err := env.RunCLI("push", "--force")
-	if err != nil {
-		t.Fatalf("push --force: %v", err)
-	}
-	if !strings.Contains(stderrForce, "force pushed to origin/"+branch) {
-		t.Errorf("expected force push success message, got: %q", stderrForce)
+	// The push is allowed — but only by catching up to their commit and
+	// appending on top of it. What must never happen is their commit ceasing
+	// to exist, which is exactly what a force would have done.
+	gitRun(t, cloneDir, "fetch", "-q", "origin", branch)
+	if !gitxIsAncestor(cloneDir, theirs, "FETCH_HEAD") {
+		t.Errorf("their commit %s is no longer in the branch — rekal overwrote history it did not contain", theirs[:8])
 	}
 
-	localOut, _ := exec.Command("git", "-C", env.RepoDir, "rev-parse", branch).Output()
-	remoteOut, _ := exec.Command("git", "-C", bareDir, "rev-parse", branch).Output()
-	if strings.TrimSpace(string(localOut)) != strings.TrimSpace(string(remoteOut)) {
-		t.Error("local and remote should match after force push")
+	// And no flag exists to do it deliberately.
+	if _, _, err := env.RunCLI("push", "--force"); err == nil {
+		t.Error("push --force was accepted; append-only must not have an override flag")
 	}
 }
 

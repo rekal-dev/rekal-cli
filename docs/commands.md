@@ -139,6 +139,12 @@ another machine is not in this `data.db` — `sync` imports other branches into
 the index, never into `data.db` — so `--rebuild` drops it from the wire for
 good. Run it only when this machine holds everything the branch should carry.
 
+Both refuse to run when the remote carries commits this machine lacks, naming
+what would be lost and pointing at the machine that holds it. The guard is not a
+removal — `git push --force origin rekal/<email>` is always one command away, so
+taking the flag out would only move the footgun somewhere the tool cannot warn
+you. Knowing the difference is the fix.
+
 **When `--force` is safe:** only when local is a superset of what the branch
 holds. It is **not** safe when the same branch has been pushed from another
 machine — `sync` imports arriving frames into the index, never into `data.db`,

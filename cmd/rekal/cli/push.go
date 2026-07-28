@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os/exec"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"
@@ -39,7 +41,10 @@ format (rekal.body + dict.bin) using zstd compression and string interning —
 a 2-10 MB session compresses to ~300 bytes on the wire.
 
 Use --force to overwrite the remote branch when it has diverged from local
-(e.g. after a rebuild or conflict).
+(e.g. after a rebuild or conflict). Both --force and --rebuild refuse when the
+remote carries commits this machine does not have: those conversations exist
+only there, and no local re-export can reproduce them. Push from the machine
+that holds them instead.
 
 Use --rebuild to regenerate the branch's wire data from scratch out of the
 local data DB and force-push it. This repairs a branch whose wire data was
@@ -87,6 +92,12 @@ You do not need to run this manually.`,
 // source of truth — this heals wire bytes corrupted by the pre-v2 frame-count
 // bug and drops stale meta frames accumulated by past pushes.
 func doReExport(gitRoot string, w io.Writer) error {
+	// Catch up first, so the rebuild commit lands on top of the branch rather
+	// than beside it. Without this a machine that is merely behind looks like a
+	// fork to the guard below and the repair is refused for no real reason.
+	if _, ffErr := transport.FastForwardOrphanBranch(gitRoot); ffErr != nil {
+		fmt.Fprintf(w, "rekal: warning: %v\n", ffErr)
+	}
 	body, dict, exportedIDs, err := transport.ExportAllFrames(gitRoot)
 	if err != nil {
 		return fmt.Errorf("re-export: %w", err)
@@ -110,6 +121,14 @@ func doReExport(gitRoot string, w io.Writer) error {
 	branch := gitx.RekalBranchName()
 	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run(); err != nil {
 		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
+		return nil
+	}
+	// Same guard as --force, and it matters more here: a rebuild starts from an
+	// empty body, so it can only ever carry what this machine's data.db holds.
+	if lost, ok := forceWouldDiscard(gitRoot, branch); ok && lost != "" {
+		fmt.Fprintf(w, "rekal: refusing to rebuild origin/%s\n", branch)
+		fmt.Fprintf(w, "rekal: the remote has %s this machine does not have, and a rebuild carries only this machine's data.db\n", lost)
+		fmt.Fprintln(w, "rekal: push from the machine that holds them first, then rebuild from there")
 		return nil
 	}
 	forceCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "--force", "origin", branch)
@@ -183,6 +202,14 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 	}
 
 	if force {
+		if lost, ok := forceWouldDiscard(gitRoot, branch); ok && lost != "" {
+			fmt.Fprintf(w, "rekal: refusing to force push to origin/%s\n", branch)
+			fmt.Fprintf(w, "rekal: the remote has %s this machine does not have\n", lost)
+			fmt.Fprintln(w, "rekal: those conversations exist only there — sync imports other branches into the index, never into data.db, so this machine cannot re-export them")
+			fmt.Fprintln(w, "rekal: push from the machine that holds them; it will append to this branch")
+			fmt.Fprintf(w, "rekal: to discard them anyway: git push --force origin %s\n", branch)
+			return nil
+		}
 		forceCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "--force", "origin", branch)
 		forceCmd.Stdin = nil
 		if output, err := forceCmd.CombinedOutput(); err != nil {
@@ -232,6 +259,58 @@ func isNonFastForward(output string) bool {
 	return strings.Contains(output, "non-fast-forward") ||
 		strings.Contains(output, "[rejected]") ||
 		strings.Contains(output, "fetch first")
+}
+
+// forceWouldDiscard reports what a force push would delete from the remote
+// branch: the commits it has that this machine does not. lost is a human count
+// ("3 commit(s)"), empty when nothing would be lost. ok is false when the
+// question could not be answered — offline, no such remote branch — in which
+// case the caller must not treat silence as permission.
+//
+// This is the difference between the two forces. Overwriting a branch you are
+// merely ahead of costs nothing; overwriting one that carries another machine's
+// checkpoints destroys them, because sync imports other branches into the index
+// and never into data.db, so no local re-export can reproduce them. Git can
+// answer this in one question and the flag never asked it.
+func forceWouldDiscard(gitRoot, branch string) (lost string, ok bool) {
+	fetch := exec.Command("git", "-C", gitRoot, "fetch", "origin", branch)
+	fetch.Stdin = nil
+	if err := fetch.Run(); err != nil {
+		return "", false
+	}
+	remote, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
+	if err != nil {
+		return "", false
+	}
+	remoteSHA := strings.TrimSpace(string(remote))
+	// Contained in local: a force here only replaces commits local already has.
+	if gitx.IsAncestor(gitRoot, remoteSHA, branch) {
+		return "", true
+	}
+	// Diverged by commit — but commits are not the thing worth protecting, the
+	// frames inside them are. A push appends to the body it found on the
+	// branch, so along any branch the body only ever grows: if the remote's
+	// body is a prefix of this machine's, every frame it holds is already here
+	// and the force costs nothing. Rewriting a commit (an amend, a re-anchored
+	// tip) diverges the history while leaving the body byte-identical, and
+	// refusing there would block a repair that loses nothing.
+	remoteBody := gitx.ShowFile(gitRoot, remoteSHA, codec.BodyFilename)
+	if len(remoteBody) == 0 {
+		return "", true // nothing on the branch to lose
+	}
+	if bytes.HasPrefix(gitx.ShowFile(gitRoot, branch, codec.BodyFilename), remoteBody) {
+		return "", true
+	}
+	out, err := exec.Command("git", "-C", gitRoot,
+		"rev-list", "--count", branch+".."+remoteSHA).Output()
+	if err != nil {
+		return "", false
+	}
+	n := strings.TrimSpace(string(out))
+	if n == "" || n == "0" {
+		return "", true
+	}
+	return n + " commit(s) of wire data", true
 }
 
 // remoteDiverged confirms, against the refs themselves, that the remote branch

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -245,5 +246,80 @@ func TestPush_StrandedByRewriteStillShips(t *testing.T) {
 	}
 	if n == 0 {
 		t.Error("the conversation never reached the wire — its commit was rewritten before the first push, so the gate can no longer prove the work merged even though it plainly did")
+	}
+}
+
+// TestPush_ForceRefusesToDiscardAnotherMachine covers the guard on the most
+// destructive command in the tool.
+//
+// Two machines share one rekal/<email> branch, so a genuine fork makes git
+// demand a force — and force is exactly wrong there: each machine's data.db
+// holds only its own checkpoints, and sync imports other branches into the
+// index and never into data.db, so the frames a force would delete cannot be
+// re-exported by anyone. Removing --force would not have fixed this; the
+// capability is one `git push --force` away regardless. Knowing the difference
+// between a safe force and a destructive one is the fix.
+func TestPush_ForceRefusesToDiscardAnotherMachine(t *testing.T) {
+	bare := newSharedRemote(t)
+	const email = "guard@dev.example"
+
+	// Both machines are set up before either pushes, so each creates its own
+	// orphan branch root and the two genuinely fork — no shared history to
+	// fast-forward across. This is the ordinary shape when someone sets up two
+	// machines in the same afternoon.
+	laptop := newMachine(t, bare, email, "laptop")
+	desktop := newMachine(t, bare, email, "desktop")
+
+	laptop.contribute(t, "laptop.jsonl",
+		[]string{"laptop opening", "laptop found the deadlock"}, "laptop work")
+	pullMain(t, desktop.dir)
+	desktop.contribute(t, "desktop.jsonl",
+		[]string{"desktop opening", "desktop rewrote the parser"}, "desktop work")
+
+	stdout, stderr, _ := desktop.env.RunCLI("push", "--force")
+	out := stdout + stderr
+	if !strings.Contains(out, "refusing to force push") {
+		t.Errorf("force was allowed to discard the other machine's frames; output:\n%s", out)
+	}
+
+	// The laptop's conversation must still be readable from the branch.
+	reader := newMachine(t, bare, email, "reader")
+	if _, stderr, err := reader.env.RunCLI("sync", "--self"); err != nil {
+		t.Fatalf("reader sync --self: %v\n%s", err, stderr)
+	}
+	data, err := sql.Open("duckdb", filepath.Join(reader.dir, ".rekal", "data.db")+"?access_mode=read_only")
+	if err != nil {
+		t.Fatalf("open reader data.db: %v", err)
+	}
+	defer data.Close() //nolint:errcheck
+	var n int
+	if err := data.QueryRow(
+		`SELECT count(*) FROM turns WHERE content LIKE '%laptop found the deadlock%'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("query turns: %v", err)
+	}
+	if n == 0 {
+		t.Error("the other machine's conversation is gone from the wire — nothing can restore it, since no data.db on any machine holds it")
+	}
+}
+
+// TestPush_ForceStillWorksWhenNothingIsLost is the other half. A guard that
+// refuses every force is not a guard, it is a removal — and removal is not
+// available here, because the branch is a git ref and `git push --force` is
+// always one command away. Overwriting a branch this machine already contains
+// costs nothing and must still work.
+func TestPush_ForceStillWorksWhenNothingIsLost(t *testing.T) {
+	bare := newSharedRemote(t)
+	solo := newMachine(t, bare, "solo-force@dev.example", "solo")
+	solo.contribute(t, "s.jsonl",
+		[]string{"opening", "the only machine here"}, "work")
+
+	stdout, stderr, err := solo.env.RunCLI("push", "--force")
+	if err != nil {
+		t.Fatalf("push --force: %v\n%s", err, stderr)
+	}
+	out := stdout + stderr
+	if strings.Contains(out, "refusing") {
+		t.Errorf("force refused although the remote holds nothing this machine lacks; output:\n%s", out)
 	}
 }

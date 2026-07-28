@@ -133,7 +133,10 @@ for the same place and move `.rekal/` off the store that already exists —
   `--force` pushes a body `ExportNewFrames` built on top of the branch's own
   contents, while `--rebuild` runs `ExportAllFrames` from an empty body and can
   only reproduce this machine's `data.db` — so anything another machine pushed
-  is dropped from the wire
+  is dropped from the wire. Both refuse via `forceWouldDiscard` when the remote
+  tip is not contained in the local branch; removal was rejected because
+  `git push --force` is always one command away, so it would move the hazard
+  out of the tool's sight instead of removing it
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`).
   `indexSessionFrame` dedups an arriving session by **keeping the longest**: one
   conversation spanning several commits links to several checkpoints and rides in

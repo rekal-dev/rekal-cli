@@ -77,3 +77,30 @@ func TestFlagShorthands(t *testing.T) {
 		}
 	}
 }
+
+// TestPushRebuildAlias pins that --re-export keeps working after the rename.
+//
+// It was renamed because "re-export" names the mechanism while --rebuild names
+// the effect, and the effect is what someone has to weigh before running the
+// most destructive command in the tool. A rename that silently dropped the old
+// name would break the one flag people reach for while repairing a branch —
+// exactly the wrong moment to hand them an unknown-flag error.
+func TestPushRebuildAlias(t *testing.T) {
+	t.Parallel()
+	cmd := newPushCmd()
+
+	rebuild := cmd.Flags().Lookup("rebuild")
+	if rebuild == nil {
+		t.Fatal("--rebuild is missing")
+	}
+	alias := cmd.Flags().Lookup("re-export")
+	if alias == nil {
+		t.Fatal("--re-export must survive as an alias: it is what existing scripts and muscle memory invoke")
+	}
+	if alias.Deprecated == "" {
+		t.Error("--re-export should be marked deprecated so it stays out of --help while still working")
+	}
+	if !alias.Hidden {
+		t.Error("a deprecated flag should be hidden from --help")
+	}
+}

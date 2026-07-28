@@ -122,7 +122,7 @@ rekal query -i -q "SELECT count(*) FROM turns_ft"
 |---|---|---|---|
 | `rekal push` | | | Export merged checkpoints to your `rekal/<email>` branch |
 | | `--force` | `-f` | Overwrite the remote with local data |
-| | `--re-export` | | Rebuild the branch's wire data from `data.db`. Implies `--force` |
+| | `--rebuild` | | Rebuild the branch's wire data from `data.db`, ignoring what the branch holds. Implies `--force`. (`--re-export` is a deprecated alias) |
 | `rekal sync` | | | Fetch and import your teammates' branches |
 | | `--self` | | Fetch only your own branch — across your own machines |
 
@@ -130,6 +130,14 @@ rekal query -i -q "SELECT count(*) FROM turns_ft"
 an ancestor of the default branch, or its branch landed as a patch-equivalent
 squash. Unmerged work stays local and is re-checked on every push, so it ships
 automatically once the branch merges — and never if it is abandoned.
+
+`--force` and `--rebuild` are **not** the same, and `--rebuild` is the more
+destructive of the two. `--force` still pushes a body built cumulatively on top
+of whatever the branch already held; `--rebuild` starts from an empty body and
+can only reproduce what this machine's `data.db` contains. Anything pushed from
+another machine is not in this `data.db` — `sync` imports other branches into
+the index, never into `data.db` — so `--rebuild` drops it from the wire for
+good. Run it only when this machine holds everything the branch should carry.
 
 **When `--force` is safe:** only when local is a superset of what the branch
 holds. It is **not** safe when the same branch has been pushed from another

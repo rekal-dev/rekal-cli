@@ -127,7 +127,13 @@ for the same place and move `.rekal/` off the store that already exists —
   drill inside an already-checkpointed session), refreshing `session_reach` via
   `db.RefreshSessionReach` on that path so the graph never stalls; otherwise the
   incremental index refresh rebuilds `session_reach`
-- `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`)
+- `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`).
+  `--rebuild` (was `--re-export`, kept as a deprecated hidden alias) is the
+  **more destructive** of the two repair flags and the naming now says so:
+  `--force` pushes a body `ExportNewFrames` built on top of the branch's own
+  contents, while `--rebuild` runs `ExportAllFrames` from an empty body and can
+  only reproduce this machine's `data.db` — so anything another machine pushed
+  is dropped from the wire
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`).
   `indexSessionFrame` dedups an arriving session by **keeping the longest**: one
   conversation spanning several commits links to several checkpoints and rides in
@@ -248,7 +254,7 @@ for the same place and move `.rekal/` off the store that already exists —
   checkpoint is shareable unconditionally: it passed the gate once, and a commit
   rebased/squashed away after capture leaves an orphaned `git_sha` that can never
   re-prove (empty cumulative diff → the squash probe fails closed), so
-  re-running the gate in `push --re-export` would silently delete already-shared
+  re-running the gate in `push --rebuild` would silently delete already-shared
   conversations from the branch. Export also withholds **superseded** sessions
   (`db.SupersededSessionIDs`) so one conversation is never shipped several times;
   it fails loud rather than shipping the duplicates it exists to prevent

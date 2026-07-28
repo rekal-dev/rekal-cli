@@ -380,7 +380,7 @@ never committed. See **[docs/configuration.md](docs/configuration.md)**.
 | `rekal clean` | Remove Rekal setup from this repository |
 | `rekal version` | Print the CLI version |
 | `rekal checkpoint` | Capture the current session after a commit |
-| `rekal push [--force] [--re-export]` | Push Rekal data to the remote branch (merged work only) |
+| `rekal push [--force] [--rebuild]` | Push Rekal data to the remote branch (merged work only) |
 | `rekal sync [--self]` | Sync team context from remote rekal branches |
 | `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB (atomic temp→rename); optionally fold in cross-repo local sessions |
 | `rekal embed` | Fill missing semantic embeddings (resumable; also started after index/sync) |

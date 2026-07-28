@@ -14,7 +14,8 @@ import (
 
 func newPushCmd() *cobra.Command {
 	var force bool
-	var reExport bool
+	var rebuild bool
+	var reExportAlias bool
 
 	cmd := &cobra.Command{
 		Use:   "push",
@@ -40,12 +41,20 @@ a 2-10 MB session compresses to ~300 bytes on the wire.
 Use --force to overwrite the remote branch when it has diverged from local
 (e.g. after a rebuild or conflict).
 
-Use --re-export to regenerate the branch's wire data from scratch out of the
+Use --rebuild to regenerate the branch's wire data from scratch out of the
 local data DB and force-push it. This repairs a branch whose wire data was
 written by a rekal version with the frame-count bug (sessions with more than
 255 turns or tool calls were corrupted on the wire) and drops accumulated
 stale meta frames. The merged-only rule applies here too: the rebuilt branch
 contains only merged checkpoints. Implies --force.
+
+--rebuild is the more destructive of the two. --force still pushes a body
+built on top of whatever the branch already held; --rebuild starts from an
+empty body and can only reproduce what this machine's data DB contains. If the
+same branch was ever pushed from another machine, its conversations are not in
+this data DB — sync imports other branches into the index, never into data.db —
+and --rebuild drops them from the wire for good. Run it only when this machine
+holds everything the branch should carry.
 
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
 You do not need to run this manually.`,
@@ -55,7 +64,7 @@ You do not need to run this manually.`,
 				return err
 			}
 
-			if reExport {
+			if rebuild || reExportAlias {
 				return doReExport(gitRoot, cmd.ErrOrStderr())
 			}
 			return doPush(gitRoot, cmd.ErrOrStderr(), force)
@@ -63,7 +72,13 @@ You do not need to run this manually.`,
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force push (overwrite remote with local data)")
-	cmd.Flags().BoolVar(&reExport, "re-export", false, "Rebuild the branch's wire data from the local data DB and force push")
+	cmd.Flags().BoolVar(&rebuild, "rebuild", false, "Rebuild the branch's wire data from the local data DB and force push")
+	// --re-export was the original name. It described the mechanism rather than
+	// the effect, and the effect is what a user has to reason about before
+	// running something this destructive. Kept as a deprecated alias so nothing
+	// that already invokes it breaks.
+	cmd.Flags().BoolVar(&reExportAlias, "re-export", false, "Deprecated alias for --rebuild")
+	_ = cmd.Flags().MarkDeprecated("re-export", "use --rebuild")
 	return cmd
 }
 

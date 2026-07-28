@@ -4,7 +4,9 @@
 
 **Role:** Push local Rekal data to the remote branch. Exports unexported checkpoints from DuckDB to wire format, commits to the orphan branch, and pushes to origin.
 
-**Invocation:** `rekal push`, `rekal push --force`, or `rekal push --re-export`.
+**Invocation:** `rekal push`, `rekal push --force`, or `rekal push --rebuild` (`--re-export` is a deprecated alias).
+
+**Short form:** `-f` force
 
 ---
 
@@ -38,7 +40,8 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 | Flag | Description |
 |------|-------------|
 | `--force`, `-f` | Force push, overwriting the remote branch with local data |
-| `--re-export` | Rebuild the branch's wire data from scratch out of the local data DB, then force push. Implies `--force`. |
+| `--rebuild` | Rebuild the branch's wire data from scratch out of the local data DB, then force push. Implies `--force`. |
+| `--re-export` | Deprecated alias for `--rebuild`; still works, hidden from `--help`. |
 
 When a normal push is rejected, push confirms the divergence against the refs before reporting it: it fetches the branch and checks whether the remote tip is already an ancestor of local. Only then does it print the warning and suggest `rekal push --force`; any other failure is reported as the git error it was.
 
@@ -46,7 +49,7 @@ The check matters because a transport failure — a proxy answering 403, an expi
 
 Force push overwrites the remote with local data. That is safe only when local is a superset of what the branch holds. It is **not** safe when the same branch has been pushed from another machine: `sync` imports arriving frames into the **index**, never into `data.db`, so a local re-export cannot reproduce another machine's checkpoints and force-pushing drops those conversations from the wire for good. Reconcile by pushing from the machine that holds the missing checkpoints.
 
-`--re-export` re-encodes every **merged** checkpoint in data.db into a fresh rekal.body and dict.bin, ignoring exported flags and the branch's current contents. Use it to repair a branch whose wire bytes were written by a rekal version with the frame-count bug (sessions with more than 255 turns or tool calls were corrupted on the wire), or to drop stale meta frames accumulated by past pushes. The merged-only gate applies here too, so a repair regenerates the branch as merged-only and never re-leaks unmerged work. The branch is derived data; data.db is the source of truth.
+`--rebuild` re-encodes every **merged** checkpoint in data.db into a fresh rekal.body and dict.bin, ignoring exported flags and the branch's current contents. Use it to repair a branch whose wire bytes were written by a rekal version with the frame-count bug (sessions with more than 255 turns or tool calls were corrupted on the wire), or to drop stale meta frames accumulated by past pushes. The merged-only gate applies here too, so a repair regenerates the branch as merged-only and never re-leaks unmerged work. The branch is derived data; data.db is the source of truth.
 
 ---
 

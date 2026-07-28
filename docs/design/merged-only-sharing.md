@@ -1,7 +1,7 @@
 # Merged-only sharing (and worktree-shared state)
 
 **Status:** implemented (2026-07). **Mechanism 1 (merged-only export gate)** —
-`push`/`--re-export` share only checkpoints whose `git_sha` is an ancestor of
+`push`/`--rebuild` share only checkpoints whose `git_sha` is an ancestor of
 the default branch or whose branch landed as a patch-equivalent squash commit
 (both fail-closed). **Mechanism 2 (worktree-shared store)** — every linked
 worktree resolves the one shared `.rekal/` store in the main checkout

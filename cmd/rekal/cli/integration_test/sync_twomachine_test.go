@@ -199,3 +199,95 @@ func TestSync_TwoMachines_GrownSessionIsNotTruncated(t *testing.T) {
 		t.Errorf("opening turn stored %d times, want 1 — the grown frame must append past what exists, not restore the whole transcript", opening)
 	}
 }
+
+// TestPush_StrandedByRewriteStillShips covers the checkpoint whose commit is
+// rewritten between capture and its first push.
+//
+// The post-commit hook anchors a checkpoint to the sha that exists at that
+// moment. Amending the message, or rebasing onto an updated mainline before
+// merging, replaces that commit — the sha survives as an object but stops being
+// reachable from the branch, so the merged-only gate's ancestor test fails and
+// keeps failing. The work is on the mainline under a new name; the checkpoint is
+// withheld on every future push, with nothing to retry and nothing reported. If
+// no later checkpoint happens to cover the same session, that conversation never
+// reaches the team at all.
+func TestPush_StrandedByRewriteStillShips(t *testing.T) {
+	bare := newSharedRemote(t)
+	dev := newMachine(t, bare, "rewrite@dev.example", "dev")
+
+	// The default branch name is whatever git init produced here, not
+	// necessarily "main".
+	mainBranch := gitOut(t, dev.dir, "rev-parse", "--abbrev-ref", "HEAD")
+
+	// Work captured on a branch, so the sha can be rewritten before it lands.
+	gitRun(t, dev.dir, "checkout", "-q", "-b", "feature")
+	sessionDir := sessionDirFor(t, dev.dir)
+	if err := os.WriteFile(filepath.Join(sessionDir, "s.jsonl"),
+		[]byte(transcript("why the retry loop backs off", "because the gateway rate-limits bursts")), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dev.dir, "feature.go"), []byte("package main // feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dev.dir, "feature work")
+	if _, stderr, err := dev.env.RunCLI("checkpoint"); err != nil {
+		t.Fatalf("checkpoint: %v\n%s", err, stderr)
+	}
+
+	// Rewrite it — an amended message is the mildest possible case, and it is
+	// enough to orphan the sha the checkpoint points at.
+	gitRun(t, dev.dir, "commit", "--amend", "-q", "-m", "feature work (reworded)")
+
+	// It lands on the mainline under the new sha.
+	gitRun(t, dev.dir, "checkout", "-q", mainBranch)
+	gitRun(t, dev.dir, "merge", "-q", "--ff-only", "feature")
+	pushMain(t, dev.dir)
+
+	if _, stderr, err := dev.env.RunCLI("push"); err != nil {
+		t.Fatalf("push: %v\n%s", err, stderr)
+	}
+
+	// The conversation must be on the wire, readable by anyone who syncs.
+	reader := newMachine(t, bare, "rewrite@dev.example", "reader")
+	if _, stderr, err := reader.env.RunCLI("sync", "--self"); err != nil {
+		t.Fatalf("reader sync --self: %v\n%s", err, stderr)
+	}
+	data, err := sql.Open("duckdb", filepath.Join(reader.dir, ".rekal", "data.db")+"?access_mode=read_only")
+	if err != nil {
+		t.Fatalf("open reader data.db: %v", err)
+	}
+	defer data.Close() //nolint:errcheck
+
+	var n int
+	if err := data.QueryRow(
+		`SELECT count(*) FROM turns WHERE content LIKE '%gateway rate-limits bursts%'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("query turns: %v", err)
+	}
+	if n == 0 {
+		t.Error("the conversation never reached the wire — its commit was rewritten before the first push, so the gate can no longer prove the work merged even though it plainly did")
+	}
+}
+
+// gitOut runs a git command and returns its trimmed stdout.
+func gitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+	if err != nil {
+		t.Fatalf("git %s: %v", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// gitRun runs a git command in dir, failing the test on error.
+func gitRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}

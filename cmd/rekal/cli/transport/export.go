@@ -115,6 +115,11 @@ func filterMerged(gitRoot string, checkpoints []db.CheckpointRow) []db.Checkpoin
 	}
 	return shareableCheckpoints(checkpoints,
 		func(sha string) bool { return gitx.IsAncestor(gitRoot, sha, defaultRef) },
+		// Landed on the mainline under a different sha. This is tree- and
+		// patch-based, not name-based, so it also covers a commit rewritten
+		// after capture — a rebase or an amended message orphans the sha the
+		// checkpoint was anchored to, and comparing patches still proves the
+		// work landed.
 		func(sha string) bool { return gitx.IsSquashMergedInto(gitRoot, sha, defaultRef) },
 		func(branch string) string { return gitx.BranchTip(gitRoot, branch) },
 		func(sha, tip string) bool { return gitx.IsAncestor(gitRoot, sha, tip) },

@@ -131,10 +131,12 @@ for the same place and move `.rekal/` off the store that already exists —
   **There is no `--force`**: SOUL.md makes the append-only wire format a
   *structural* guarantee, not a policy, and a flag that overwrites a branch
   would demote it to the latter. `rekal push` appends and can do nothing else;
-  discarding a ref stays a git operation. `--rebuild` (was `--re-export`, kept
+  discarding a ref stays a git operation. No code path force-pushes at all —
+  `--rebuild` parents its commit on the tip it fast-forwarded to, so its push is
+  an ordinary fast-forward; `TestNoForcePushInSource` pins the absence. `--rebuild` (was `--re-export`, kept
   as a deprecated hidden alias) is the one path that rewrites the body —
   `ExportAllFrames` from an empty body, so it carries only this machine's
-  `data.db` — and it refuses via `forceWouldDiscard` unless the branch's
+  `data.db` — and it refuses via `wouldDiscardRemoteFrames` unless the branch's
   current body is already a prefix of what it would write, making it a
   superset-only repair of derived bytes. The check is on the **body**, not the
   commit graph: a rewritten tip (amend, re-anchor) diverges history while

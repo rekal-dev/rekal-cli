@@ -130,7 +130,7 @@ an ancestor of the default branch, or its branch landed as a patch-equivalent
 squash. Unmerged work stays local and is re-checked on every push, so it ships
 automatically once the branch merges — and never if it is abandoned.
 
-**There is no force flag.** The wire format is append-only — no byte is modified
+**There is no force flag, and nothing in rekal force-pushes.** The wire format is append-only — no byte is modified
 after it is written — and that is a structural guarantee, not a policy with an
 override. `rekal push` appends checkpoints and can do nothing else.
 

@@ -1,6 +1,10 @@
 package cli
 
 import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -105,5 +109,45 @@ func TestPushRebuildAlias(t *testing.T) {
 	}
 	if !alias.Hidden {
 		t.Error("a deprecated flag should be hidden from --help")
+	}
+}
+
+// TestNoForcePushInSource pins the append-only guarantee at the level SOUL.md
+// states it: "No byte is ever modified after written. Immutability is a
+// structural guarantee, not a policy."
+//
+// A guarantee that lives only in review comments is a policy. This is the
+// mechanical form of it — no code path in rekal may invoke git with --force.
+// Discarding a ref stays a git operation the user performs deliberately;
+// nothing in the memory protocol does it on their behalf.
+func TestNoForcePushInSource(t *testing.T) {
+	t.Parallel()
+
+	root := ".."
+	var offenders []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		src, readErr := os.ReadFile(path) //nolint:gosec // test walks its own package tree
+		if readErr != nil {
+			return readErr
+		}
+		for _, line := range strings.Split(string(src), "\n") {
+			code, _, _ := strings.Cut(line, "//")
+			if strings.Contains(code, `"--force"`) || strings.Contains(code, `"-f"`) && strings.Contains(code, "push") {
+				offenders = append(offenders, path+": "+strings.TrimSpace(line))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	for _, o := range offenders {
+		t.Errorf("a git force invocation is present — append-only must be structural, not a rule the code keeps by habit:\n  %s", o)
 	}
 }

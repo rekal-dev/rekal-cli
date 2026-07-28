@@ -44,11 +44,11 @@ When a normal push is rejected, push confirms the divergence against the refs be
 
 The check matters because a transport failure — a proxy answering 403, an expired credential, a branch-protection rule — makes git print `[rejected] ... (fetch first)` too, which is indistinguishable from a real divergence in the text alone. Suggesting `--force` there answers a failed connection by overwriting the shared branch.
 
-There is no `--force`. The wire format is append-only — no byte is modified after it is written — and SOUL.md states that as a structural guarantee rather than a policy. A flag that overwrites a branch would make it a policy with an override, so `rekal push` appends checkpoints and can do nothing else. Discarding a ref stays a git operation: `git push --force origin rekal/<email>`.
+There is no `--force`, and no code path invokes `git push --force` either — `TestNoForcePushInSource` pins that. The wire format is append-only — no byte is modified after it is written — and SOUL.md states that as a structural guarantee rather than a policy. A flag that overwrites a branch would make it a policy with an override, so `rekal push` appends checkpoints and can do nothing else. Discarding a ref stays a git operation: `git push --force origin rekal/<email>`.
 
 A rejected push means the branch genuinely diverged — another machine under the same identity pushed checkpoints this one has never seen. Reconcile by pushing from that machine; it appends, and this one fast-forwards onto it. `sync` imports other branches into the **index**, never into `data.db`, so no local re-export can reproduce them.
 
-`--rebuild` is the one path that rewrites the body. It refuses (`forceWouldDiscard`) unless the branch's current body is already contained in what it would write, so it can only ever produce a superset — a repair of derived bytes from `data.db`, never an edit to the ledger.
+`--rebuild` is the one path that rewrites the body. It refuses (`wouldDiscardRemoteFrames`) unless the branch's current body is already contained in what it would write, so it can only ever produce a superset — a repair of derived bytes from `data.db`, never an edit to the ledger.
 
 `--rebuild` re-encodes every **merged** checkpoint in data.db into a fresh rekal.body and dict.bin, ignoring exported flags and the branch's current contents. Use it to repair a branch whose wire bytes were written by a rekal version with the frame-count bug (sessions with more than 255 turns or tool calls were corrupted on the wire), or to drop stale meta frames accumulated by past pushes. The merged-only gate applies here too, so a repair regenerates the branch as merged-only and never re-leaks unmerged work. The branch is derived data; data.db is the source of truth.
 

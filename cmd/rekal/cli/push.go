@@ -50,11 +50,11 @@ push from the machine that holds the missing checkpoints; it will append to the
 branch and this one will fast-forward onto it.
 
 Use --rebuild to regenerate the branch's wire data from scratch out of the
-local data DB and force-push it. This repairs a branch whose wire data was
+local data DB and push it. This repairs a branch whose wire data was
 written by a rekal version with the frame-count bug (sessions with more than
 255 turns or tool calls were corrupted on the wire) and drops accumulated
 stale meta frames. The merged-only rule applies here too: the rebuilt branch
-contains only merged checkpoints. Implies --force.
+contains only merged checkpoints.
 
 --rebuild is the one exception, and it is bounded: it refuses unless the
 branch's current body is already contained in what this machine would write, so
@@ -76,7 +76,7 @@ You do not need to run this manually.`,
 		},
 	}
 
-	cmd.Flags().BoolVar(&rebuild, "rebuild", false, "Rebuild the branch's wire data from the local data DB and force push")
+	cmd.Flags().BoolVar(&rebuild, "rebuild", false, "Re-encode the branch's wire data from the local data DB (superset-only)")
 	// --re-export was the original name. It described the mechanism rather than
 	// the effect, and the effect is what a user has to reason about before
 	// running something this destructive. Kept as a deprecated alias so nothing
@@ -86,10 +86,15 @@ You do not need to run this manually.`,
 	return cmd
 }
 
-// doReExport regenerates the orphan branch's wire data from every checkpoint
-// in data.db and force-pushes it. The branch is derived data; data.db is the
-// source of truth — this heals wire bytes corrupted by the pre-v2 frame-count
-// bug and drops stale meta frames accumulated by past pushes.
+// doReExport regenerates the orphan branch's wire data from every checkpoint in
+// data.db and pushes it. The branch is derived data; data.db is the source of
+// truth — this heals wire bytes corrupted by the pre-v2 frame-count bug and
+// drops stale meta frames accumulated by past pushes.
+//
+// It is the only path that rewrites the body rather than appending to it, which
+// is why it is bounded by wouldDiscardRemoteFrames: it may only ever produce a
+// superset of what the branch already holds. Repairing derived bytes from the
+// ledger is not the same as editing the ledger.
 func doReExport(gitRoot string, w io.Writer) error {
 	// Catch up first, so the rebuild commit lands on top of the branch rather
 	// than beside it. Without this a machine that is merely behind looks like a
@@ -122,21 +127,28 @@ func doReExport(gitRoot string, w io.Writer) error {
 		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
 		return nil
 	}
-	// Same guard as --force, and it matters more here: a rebuild starts from an
-	// empty body, so it can only ever carry what this machine's data.db holds.
-	if lost, ok := forceWouldDiscard(gitRoot, branch); ok && lost != "" {
+	// A rebuild starts from an empty body, so it can only ever carry what this
+	// machine's data.db holds. Anything another machine put on the branch is
+	// not in there and could not be reconstructed by anyone.
+	if lost, ok := wouldDiscardRemoteFrames(gitRoot, branch); ok && lost != "" {
 		fmt.Fprintf(w, "rekal: refusing to rebuild origin/%s\n", branch)
 		fmt.Fprintf(w, "rekal: the remote has %s this machine does not have, and a rebuild carries only this machine's data.db\n", lost)
 		fmt.Fprintln(w, "rekal: push from the machine that holds them first, then rebuild from there")
 		return nil
 	}
-	forceCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "--force", "origin", branch)
-	forceCmd.Stdin = nil
-	if output, err := forceCmd.CombinedOutput(); err != nil {
-		fmt.Fprintf(w, "rekal: force push failed: %s\n", strings.TrimSpace(string(output)))
+	// A plain push, like every other path. The rebuild commit was parented on
+	// the branch tip this run fast-forwarded to, so it is a descendant and the
+	// push is an ordinary fast-forward. Nothing in rekal force-pushes: that is
+	// what makes the append-only wire format structural rather than a rule the
+	// code keeps only when it feels like it.
+	pushCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "origin", branch)
+	pushCmd.Stdin = nil
+	if output, err := pushCmd.CombinedOutput(); err != nil {
+		fmt.Fprintf(w, "rekal: rebuild push failed: %s\n", strings.TrimSpace(string(output)))
+		fmt.Fprintln(w, "rekal: the branch moved while rebuilding — re-run, or push from the machine holding the newer checkpoints")
 		return nil
 	}
-	fmt.Fprintf(w, "rekal: force pushed to origin/%s\n", branch)
+	fmt.Fprintf(w, "rekal: rebuilt origin/%s\n", branch)
 	return nil
 }
 
@@ -241,8 +253,8 @@ func isNonFastForward(output string) bool {
 		strings.Contains(output, "fetch first")
 }
 
-// forceWouldDiscard reports what a force push would delete from the remote
-// branch: the commits it has that this machine does not. lost is a human count
+// wouldDiscardRemoteFrames reports what replacing the remote branch's body
+// would delete: wire data it holds that this machine does not. lost is a human count
 // ("3 commit(s)"), empty when nothing would be lost. ok is false when the
 // question could not be answered — offline, no such remote branch — in which
 // case the caller must not treat silence as permission.
@@ -252,7 +264,7 @@ func isNonFastForward(output string) bool {
 // checkpoints destroys them, because sync imports other branches into the index
 // and never into data.db, so no local re-export can reproduce them. Git can
 // answer this in one question and the flag never asked it.
-func forceWouldDiscard(gitRoot, branch string) (lost string, ok bool) {
+func wouldDiscardRemoteFrames(gitRoot, branch string) (lost string, ok bool) {
 	fetch := exec.Command("git", "-C", gitRoot, "fetch", "origin", branch)
 	fetch.Stdin = nil
 	if err := fetch.Run(); err != nil {

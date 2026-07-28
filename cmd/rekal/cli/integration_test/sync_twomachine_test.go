@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -18,26 +17,6 @@ import (
 func newMachine(t *testing.T, bare, email, name string) *peerRepo {
 	t.Helper()
 	return newPeer(t, bare, email, name)
-}
-
-// pullMain brings a machine's main branch up to date, as anyone working from a
-// second machine would before starting again.
-func pullMain(t *testing.T, repoDir string) {
-	t.Helper()
-	branch, err := exec.Command("git", "-C", repoDir, "rev-parse", "--abbrev-ref", "HEAD").Output()
-	if err != nil {
-		t.Fatalf("read branch: %v", err)
-	}
-	b := strings.TrimSpace(string(branch))
-	cmd := exec.Command("git", "-C", repoDir, "pull", "--rebase", "-q", "origin", b)
-	cmd.Env = append(os.Environ(),
-		"HOME=/nonexistent", "PATH=/usr/bin:/bin",
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("pull %s in %s: %v\n%s", b, repoDir, err, out)
-	}
 }
 
 // newSharedRemote builds a bare remote with one commit on main, which the
@@ -217,7 +196,7 @@ func TestPush_StrandedByRewriteStillShips(t *testing.T) {
 
 	// The default branch name is whatever git init produced here, not
 	// necessarily "main".
-	mainBranch := gitOut(t, dev.dir, "rev-parse", "--abbrev-ref", "HEAD")
+	mainBranch := currentBranch(t, dev.dir)
 
 	// Work captured on a branch, so the sha can be rewritten before it lands.
 	gitRun(t, dev.dir, "checkout", "-q", "-b", "feature")
@@ -266,28 +245,5 @@ func TestPush_StrandedByRewriteStillShips(t *testing.T) {
 	}
 	if n == 0 {
 		t.Error("the conversation never reached the wire — its commit was rewritten before the first push, so the gate can no longer prove the work merged even though it plainly did")
-	}
-}
-
-// gitOut runs a git command and returns its trimmed stdout.
-func gitOut(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
-	if err != nil {
-		t.Fatalf("git %s: %v", strings.Join(args, " "), err)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// gitRun runs a git command in dir, failing the test on error.
-func gitRun(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 }

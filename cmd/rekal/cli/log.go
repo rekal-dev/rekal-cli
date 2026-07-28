@@ -28,7 +28,7 @@ how many entries are shown.`,
 		},
 	}
 
-	cmd.Flags().IntVar(&limit, "limit", 20, "Max entries to show")
+	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Max entries to show")
 	return cmd
 }
 

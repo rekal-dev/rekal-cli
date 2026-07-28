@@ -462,6 +462,10 @@ for the same place and move `.rekal/` off the store that already exists —
 ### Docs (`docs/`)
 
 - `DEVELOPMENT.md`: Dev process, testing, CI/CD
+- `commands.md`: Flat CLI reference — the four routes (tree/knowledge/ledger/map),
+  every command with its full flag table incl. **short forms**, digest header
+  semantics (`top`/`gap`/`reached`), exit codes, and when `--force` is safe.
+  `--help` stays authoritative; a disagreement is a bug
 - `usage.md`: Operational guide the README links out to — two databases,
   orphan branches & merged-work-only sharing, worktrees, the full agent
   command surface + skill, cross-repo recall

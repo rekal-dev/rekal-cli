@@ -1,0 +1,176 @@
+# Command reference
+
+Every command, every flag, and which of the four substrates each one reaches.
+Per-command behavioural specs live in [`spec/command/`](spec/command/); this
+page is the flat reference you scan when you already know what you want.
+
+`rekal --help` is always authoritative. If this page and `--help` disagree,
+`--help` is right and this page is a bug.
+
+---
+
+## The four routes
+
+Rekal answers from four different places. Picking the wrong one is the most
+expensive mistake available, because three of them will still return something.
+
+| Substrate | Question it answers | Reach it with |
+|---|---|---|
+| **Tree** | What does the code do *now*? | `grep` / `rg` — not Rekal |
+| **Knowledge** | What does the prose say *now*, at HEAD? | `rekal "<q>"` → `KNOWLEDGE` line |
+| **Ledger** | What did we decide, try, reject — and why? | `rekal "<q>"`, `rekal find`, `rekal query` |
+| **Map** | How is the repo structured? | `rekal query --sql` over `files_index` |
+
+Only the **ledger** holds intent. The tree holds present-tense fact, and it is
+always cheaper to grep than to recall. Rekal's own skill (`SKILL.md`, shipped
+inside the binary) routes this automatically for agents.
+
+---
+
+## Retrieval
+
+### `rekal "<query>"` — recall
+
+Recall is the **default action**, not a subcommand — the usage line is
+`rekal [filters...] [query]`. There is no `rekal recall`. It returns the **seed
+digest** (a compact ranked verdict), not raw rows.
+
+| Flag | Short | Default | Meaning |
+|---|---|---|---|
+| `--limit` | `-n` | 20 | Results per framing. `0` = none, negative rejected. Soft: the RRF-fused union across framings may exceed it |
+| `--json` | `-j` | off | Raw structured JSON instead of the digest |
+| `--explain` | `-e` | off | Per-layer scores + related-session joins |
+| `--file` | `-p` | — | Filter by file path (regex) |
+| `--commit` | `-c` | — | Filter by git commit SHA |
+| `--author` | `-a` | — | Filter by author email |
+| `--actor` | `-A` | — | Filter by actor type (`human`\|`agent`) |
+
+**Exit code 1 means SILENCE** — Rekal found nothing it can stand behind. That
+is a real answer, not an error. Treat it as "the ledger does not know", and go
+look at the tree.
+
+Digest header: `INJECT top=0.71 gap=0.21 15 seeds`
+
+- `top` — highest **absolute** confidence in the result set. Corpus-independent,
+  unlike the max-normalized `score` used for ranking.
+- `gap` — `top` minus the runner-up's confidence. Only load-bearing in the
+  middle band: `top ≥ 0.25` passes on its own; `0.20–0.25` needs `gap ≥ 0.02`;
+  below `0.20` is silence. One clearly-best answer is signal, several bunched
+  together is noise.
+- `[reached N×· "query"]` — this memory has been recalled before. Ranking hint
+  only; deliberately excluded from the silence gate, because popular is not the
+  same as relevant.
+
+`SEMANTIC warming` means the embedding model is still loading and you got
+keyword+LSA only. Re-run with backoff for full quality.
+
+### `rekal find "<term>" [role]` — enumeration
+
+Complete, time-ordered sweep over every turn. No ranking, no silence gate, no
+cutoff. Use it when you need *all* occurrences and recall's top-N would lie by
+omission — counting, auditing, "did we ever mention X". `role` is optional:
+`human`, `assistant`, `human_steering`, `summary`.
+
+### `rekal query` — drill-down and SQL
+
+Two mutually exclusive modes. `--sql`, a bare positional statement, and
+`--session` cannot be combined.
+
+| Flag | Short | Default | Meaning |
+|---|---|---|---|
+| `--session` | `-s` | — | Drill into one session by short handle (`s3`) or ULID |
+| `--sql` | `-q` | — | SQL SELECT to run (a bare positional is accepted as shorthand) |
+| `--index` | `-i` | off | Run SQL against `index.db` instead of `data.db` |
+| `--full` | `-F` | off | Include tool calls and files in session output |
+| `--offset` | `-o` | 0 | Skip first N turns (with `--session`) |
+| `--limit` | `-n` | 0 | Max turns, `0` = no limit (with `--session`) |
+| `--role` | `-r` | — | Filter turns by role (with `--session`) |
+| `--json` | `-j` | off | JSON instead of text/TSV |
+
+SQL is **read-only** — non-SELECT statements are rejected. The full queryable
+schema is in `rekal query --help`.
+
+```bash
+rekal query -s s3                     # readable turns
+rekal query -s s3 -r summary          # just the compaction summaries
+rekal query -s s3 -o 200 -n 50        # a window deep into a long session
+rekal query -i -q "SELECT count(*) FROM turns_ft"
+```
+
+---
+
+## Lifecycle
+
+| Command | What it does |
+|---|---|
+| `rekal init` | Bootstrap: store, hooks, orphan branch, skill, one CLAUDE.md line. Re-running refreshes managed assets. |
+| `rekal checkpoint` | Capture the session against the current commit. Runs automatically via post-commit; no-ops during a rebase. |
+| `rekal index` | Rebuild `index.db` from `data.db`. Structural only — vectors fill via background `rekal embed`. |
+| `rekal embed` | Fill missing semantic vectors in budgeted bites. Resumable, safe to interrupt. |
+| `rekal log` | Recent checkpoints. `--limit` / `-n`, default 20. |
+| `rekal clean` | Remove Rekal setup completely, no residue. |
+
+`rekal index` also carries the cross-repo import preference, which persists:
+`--include-all`, `--include <path>`, `--no-local`. Imported sessions are
+**index-only** and can never be pushed.
+
+---
+
+## Sharing
+
+| Command | Flag | Short | What it does |
+|---|---|---|---|
+| `rekal push` | | | Export merged checkpoints to your `rekal/<email>` branch |
+| | `--force` | `-f` | Overwrite the remote with local data |
+| | `--re-export` | | Rebuild the branch's wire data from `data.db`. Implies `--force` |
+| `rekal sync` | | | Fetch and import your teammates' branches |
+| | `--self` | | Fetch only your own branch — across your own machines |
+
+**Only merged work is shared.** A checkpoint reaches the wire when its commit is
+an ancestor of the default branch, or its branch landed as a patch-equivalent
+squash. Unmerged work stays local and is re-checked on every push, so it ships
+automatically once the branch merges — and never if it is abandoned.
+
+**When `--force` is safe:** only when local is a superset of what the branch
+holds. It is **not** safe when the same branch has been pushed from another
+machine — `sync` imports arriving frames into the index, never into `data.db`,
+so a local re-export cannot reproduce another machine's checkpoints and forcing
+drops those conversations for good. Push from the machine that holds them
+instead.
+
+A rejected push is confirmed against the refs before it is reported as a
+divergence: a proxy 403 or an expired credential makes git print the same
+`[rejected] ... (fetch first)` text, and answering that with `--force` would
+overwrite a shared branch over a failed connection.
+
+---
+
+## Conventions
+
+**One letter, one meaning.** A shorthand means the same thing in every command
+that has it, which is why `--self` has none: `-s` belongs to `--session`, and
+`-f` to `--force`. A test pins the whole table (`shorthand_test.go`) — a
+shorthand is a contract the moment it ships, and silently moving one breaks
+callers in the worst way, by still running with a different meaning.
+
+**Text by default, JSON on request.** Every retrieval command returns compact
+agent-readable text; `--json` / `-j` gives the raw structure. The default is the
+useful form, not the machine form.
+
+**Exit codes.** `0` success (including a recall that found nothing to say but
+had knowledge hits), `1` SILENCE or error.
+
+**Two databases.** `data.db` is the append-only ledger and the source of truth —
+it only ever gains rows. `index.db` is derived and disposable; anything
+corrective (duplicate collapse, role reclassification) happens there, never in
+the ledger. Delete `index.db` and `rekal index` rebuilds it.
+
+**Store location.** `.rekal/` lives in the repository's main worktree. Every
+linked worktree resolves to that one shared store.
+
+## See also
+
+- [`usage.md`](usage.md) — the operational guide
+- [`configuration.md`](configuration.md) — ranking weights, embedding backends
+- [`spec/command/`](spec/command/) — per-command behavioural specs
+- [`design/skill-router.md`](design/skill-router.md) — how the skill routes

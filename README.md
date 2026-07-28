@@ -353,6 +353,7 @@ flowchart TB
 ```
 
 Full skill reference: **[docs/usage.md#the-agent-skill](docs/usage.md#the-agent-skill)** ·
+every command and flag: **[docs/commands.md](docs/commands.md)** ·
 design: [docs/design/skill-router.md](docs/design/skill-router.md).
 
 ### Under the hood

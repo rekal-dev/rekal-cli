@@ -1,5 +1,7 @@
 # rekal log
 
+**Short form:** `-n` limit
+
 **Role:** Show recent checkpoints, like `git log`. Lists checkpoints from the data DB with session counts.
 
 **Invocation:** `rekal log [--limit N]`.

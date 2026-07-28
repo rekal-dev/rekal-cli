@@ -1,5 +1,7 @@
 # rekal push
 
+**Short form:** `-f` force
+
 **Role:** Push local Rekal data to the remote branch. Exports unexported checkpoints from DuckDB to wire format, commits to the orphan branch, and pushes to origin.
 
 **Invocation:** `rekal push`, `rekal push --force`, or `rekal push --re-export`.

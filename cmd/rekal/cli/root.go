@@ -107,13 +107,13 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	// Recall filter flags on root command.
-	cmd.Flags().StringVar(&fileFilter, "file", "", "Filter by file path (regex)")
-	cmd.Flags().StringVar(&commitFilter, "commit", "", "Filter by git commit SHA")
-	cmd.Flags().StringVar(&authorFilter, "author", "", "Filter by author email")
-	cmd.Flags().StringVar(&actorFilter, "actor", "", "Filter by actor type (human|agent)")
+	cmd.Flags().StringVarP(&fileFilter, "file", "p", "", "Filter by file path (regex)")
+	cmd.Flags().StringVarP(&commitFilter, "commit", "c", "", "Filter by git commit SHA")
+	cmd.Flags().StringVarP(&authorFilter, "author", "a", "", "Filter by author email")
+	cmd.Flags().StringVarP(&actorFilter, "actor", "A", "", "Filter by actor type (human|agent)")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Results per framing (default 20; 0 = none; negative rejected). Soft: the RRF-fused union across framings may exceed it")
-	cmd.Flags().BoolVar(&explainFlag, "explain", false, "Add per-layer scores and related-session joins to results")
-	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
+	cmd.Flags().BoolVarP(&explainFlag, "explain", "e", false, "Add per-layer scores and related-session joins to results")
+	cmd.Flags().BoolVarP(&jsonFlag, "json", "j", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
 
 	cmd.SetVersionTemplate("rekal {{.Version}}\n")
 	cmd.Version = Version

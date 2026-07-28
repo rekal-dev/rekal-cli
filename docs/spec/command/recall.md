@@ -2,6 +2,8 @@
 
 **Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. Default stdout is a compact **seed digest** (INJECT / KNOWLEDGE / SILENCE + per-seed confidence and drill pointers) — just enough for the agent to decide what matters. Use `--json` for the structured payload. For full session content, use `rekal query --session <session_id>`.
 
+**Short forms:** `-n` limit · `-j` json · `-e` explain · `-p` file · `-c` commit · `-a` author · `-A` actor
+
 **Invocation:** `rekal [filters...] [query]`. Subcommands (init, clean, checkpoint, etc.) take precedence when present.
 
 **Progressive loading:** Recall is the first step in a two-step context loading model. The agent calls `rekal <query>` to get lightweight results (snippets + metadata), then calls `rekal query --session <id>` for full turns on the sessions that matter. This keeps token usage tight — the agent controls how much context it loads.

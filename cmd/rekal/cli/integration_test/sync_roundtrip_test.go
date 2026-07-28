@@ -132,19 +132,6 @@ func TestSync_RoundTrip_GrownSessionArrivesOnce(t *testing.T) {
 
 // pushMain publishes the working branch so the merged-only gate can see that the
 // commits landed on the mainline.
-func pushMain(t *testing.T, repoDir string) {
-	t.Helper()
-	branch, err := exec.Command("git", "-C", repoDir, "rev-parse", "--abbrev-ref", "HEAD").Output()
-	if err != nil {
-		t.Fatalf("read branch: %v", err)
-	}
-	b := strings.TrimSpace(string(branch))
-	cmd := exec.Command("git", "-C", repoDir, "push", "--no-verify", "-q", "origin", b)
-	cmd.Env = append(os.Environ(), "HOME=/nonexistent", "PATH=/usr/bin:/bin")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("push %s: %v\n%s", b, err, out)
-	}
-}
 
 // TestCheckpoint_GrownSessionInvalidatesEmbedding pins the quietest failure in
 // the append change. The embed pass skips any session that already has a vector,

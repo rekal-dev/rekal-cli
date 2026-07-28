@@ -191,14 +191,14 @@ raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
 		},
 	}
 
-	cmd.Flags().StringVar(&sqlFlag, "sql", "", "SQL SELECT statement to run (explicit SQL mode; a bare positional statement is accepted as shorthand)")
-	cmd.Flags().BoolVar(&useIndex, "index", false, "Run SQL against the index DB instead of the data DB")
-	cmd.Flags().StringVar(&sessionID, "session", "", "Show session conversation by short handle (s3) or ULID")
-	cmd.Flags().BoolVar(&full, "full", false, "Include tool calls and files in session output")
-	cmd.Flags().IntVar(&offset, "offset", 0, "Skip first N turns (requires --session)")
-	cmd.Flags().IntVar(&limit, "limit", 0, "Max turns to return, 0 = no limit (requires --session)")
-	cmd.Flags().StringVar(&role, "role", "", "Filter turns by role: human, assistant, human_steering, or summary (requires --session)")
-	cmd.Flags().BoolVar(&jsonFlag, "json", false, "JSON instead of the default text/TSV (session → one object; SQL → NDJSON)")
+	cmd.Flags().StringVarP(&sqlFlag, "sql", "q", "", "SQL SELECT statement to run (explicit SQL mode; a bare positional statement is accepted as shorthand)")
+	cmd.Flags().BoolVarP(&useIndex, "index", "i", false, "Run SQL against the index DB instead of the data DB")
+	cmd.Flags().StringVarP(&sessionID, "session", "s", "", "Show session conversation by short handle (s3) or ULID")
+	cmd.Flags().BoolVarP(&full, "full", "F", false, "Include tool calls and files in session output")
+	cmd.Flags().IntVarP(&offset, "offset", "o", 0, "Skip first N turns (requires --session)")
+	cmd.Flags().IntVarP(&limit, "limit", "n", 0, "Max turns to return, 0 = no limit (requires --session)")
+	cmd.Flags().StringVarP(&role, "role", "r", "", "Filter turns by role: human, assistant, human_steering, or summary (requires --session)")
+	cmd.Flags().BoolVarP(&jsonFlag, "json", "j", false, "JSON instead of the default text/TSV (session → one object; SQL → NDJSON)")
 	return cmd
 }
 

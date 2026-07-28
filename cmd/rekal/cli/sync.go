@@ -302,6 +302,17 @@ func runSyncSelf(cmd *cobra.Command, gitRoot string) error {
 	}
 	fmt.Fprintf(w, "rekal: imported %d session(s) from %s\n", n, remoteBranch)
 
+	// Catch the local orphan branch up too. Pulling the data down without
+	// moving the ref left this machine still unable to push: the next export
+	// would append to a stale body and be rejected all the same, which made
+	// 'sync --self' look like it had reconciled the two machines when it had
+	// only reconciled half of the state.
+	if moved, ffErr := transport.FastForwardOrphanBranch(gitRoot); ffErr != nil {
+		fmt.Fprintf(w, "rekal: warning: %v\n", ffErr)
+	} else if moved {
+		fmt.Fprintf(w, "rekal: caught local %s up to origin\n", branch)
+	}
+
 	// Step 3: Full index rebuild.
 	return runIndex(cmd, gitRoot)
 }

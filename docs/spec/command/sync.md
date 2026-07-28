@@ -76,3 +76,11 @@ Fetches your own remote branch and imports into `data.db` — useful for syncing
 ## When to run
 
 Run `rekal sync` when you want to pull teammates' context. After sync, `rekal` recall and `rekal log` see both local and team sessions. Run `rekal sync --self` to pull your own context from another machine.
+
+### Two machines, one identity
+
+Both machines push to the same `rekal/<email>` branch, and the wire body is cumulative along the **local** orphan branch — export appends to the body at the local tip. A machine whose branch is behind would therefore build a body missing everything the other machine pushed.
+
+`push` and `sync --self` both fast-forward the local orphan branch to the remote first, when the remote strictly contains it (`FastForwardOrphanBranch`). Never a rewind, never a merge: a genuine fork is left alone so the push is rejected and reported honestly rather than resolved by guessing.
+
+`sync --self` imports the branch into `data.db` (team sync imports other people's branches into the **index** only). A session that already exists is **extended**, not skipped: a later frame carries every turn of the earlier one plus more, and skipping it left the reader permanently truncated. Turns are appended past the stored extent only, and only when the stored turns are a prefix of the arriving ones — a divergent frame is refused whole. Imported checkpoints are marked exported, since they arrived off the branch and are already on it.

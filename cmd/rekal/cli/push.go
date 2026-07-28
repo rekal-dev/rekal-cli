@@ -124,6 +124,18 @@ func doPush(gitRoot string, w io.Writer, force bool) error {
 		return nil
 	}
 
+	// Catch the local branch up to the remote before exporting. The body is
+	// built by appending to whatever the local tip holds, so a stale tip would
+	// produce a snapshot missing everything another machine on this identity
+	// already pushed — and a push that is then rejected with no way forward
+	// except a destructive force. Fast-forward only; a real fork is left alone
+	// for the rejection path below to report.
+	if moved, ffErr := transport.FastForwardOrphanBranch(gitRoot); ffErr != nil {
+		fmt.Fprintf(w, "rekal: warning: %v\n", ffErr)
+	} else if moved {
+		fmt.Fprintf(w, "rekal: caught local %s up to origin\n", branch)
+	}
+
 	// Export unexported checkpoints from DuckDB → wire format → orphan branch.
 	body, dict, exportedIDs, err := transport.ExportNewFrames(gitRoot)
 	if err != nil {

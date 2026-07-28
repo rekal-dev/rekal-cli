@@ -551,6 +551,52 @@ func CommitWireFormat(gitRoot string, bodyData, dictData []byte) (string, error)
 // If the branch exists locally, it's left as-is.
 // If it exists on the remote, it's fetched.
 // Otherwise, a new orphan branch is created with empty rekal.body and dict.bin.
+// FastForwardOrphanBranch advances the local orphan branch to the remote tip
+// when the remote strictly contains it. Reports whether the ref moved.
+//
+// Without this, one identity on two machines is a dead end. The wire body is
+// cumulative along the *local* branch — ExportNewFrames reads the body at the
+// local tip and appends — so a machine whose branch is behind builds a body
+// missing everything the other machine added, and its push is rejected. Nothing
+// else moves the ref: EnsureOrphanBranch seeds it from the remote only at
+// first creation, and neither sync nor push touches it afterwards. The only
+// exits were a manual reset or a --force that overwrites the other machine's
+// conversations.
+//
+// Strictly a fast-forward: if the local tip is not an ancestor of the remote,
+// the branches have genuinely forked and this does nothing, leaving the push to
+// be rejected and remoteDiverged to report it honestly. Never rewinds, never
+// merges, never discards a local commit.
+func FastForwardOrphanBranch(gitRoot string) (bool, error) {
+	branch := gitx.RekalBranchName()
+	local, err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branch).Output()
+	if err != nil {
+		return false, nil // no local branch yet — EnsureOrphanBranch seeds it
+	}
+	fetch := exec.Command("git", "-C", gitRoot, "fetch", "origin", branch)
+	fetch.Stdin = nil
+	if err := fetch.Run(); err != nil {
+		return false, nil // offline or no such remote branch: nothing to do
+	}
+	remote, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
+	if err != nil {
+		return false, nil
+	}
+	localSHA := strings.TrimSpace(string(local))
+	remoteSHA := strings.TrimSpace(string(remote))
+	if localSHA == remoteSHA {
+		return false, nil
+	}
+	if !gitx.IsAncestor(gitRoot, localSHA, remoteSHA) {
+		return false, nil // forked — not ours to resolve
+	}
+	if err := exec.Command("git", "-C", gitRoot,
+		"update-ref", "refs/heads/"+branch, remoteSHA, localSHA).Run(); err != nil {
+		return false, fmt.Errorf("fast-forward %s: %w", branch, err)
+	}
+	return true, nil
+}
+
 func EnsureOrphanBranch(gitRoot string) error {
 	branch := gitx.RekalBranchName()
 

@@ -142,7 +142,22 @@ for the same place and move `.rekal/` off the store that already exists —
   growing prefixes under **different** ids, so sync runs
   `db.PurgeSupersededSessionsWithData` after the import loop (before the counts,
   facets, FTS and reach) to collapse them — `PopulateIndex`'s own pass ran
-  before any arrival existed
+  before any arrival existed.
+  `--self` is the **one identity, two machines** path: it imports the user's own
+  branch into **data.db** (team sync writes other people's branches to the index
+  only). It **extends** an existing session rather than skipping it — a later
+  frame is the same conversation grown, and skip-if-exists left the reader
+  truncated at whatever length synced first, permanently; `appendGrownSession`
+  appends past the stored extent under the same stored-turns-are-a-prefix guard
+  capture uses, so a rewritten frame is refused whole. Imported checkpoints are
+  marked **exported** (they arrived off the branch, so they are already on it;
+  the schema default of FALSE made every self-sync hand the next push frames the
+  body already carried). Both `--self` and `push` call
+  `transport.FastForwardOrphanBranch`: the body is appended to the **local**
+  branch tip, and that ref never moved after creation, so a machine that was
+  behind built a body missing the other machine's frames and could only get past
+  the rejection by hand or by a `--force` that deletes those frames.
+  Fast-forward only — a genuine fork is left for `remoteDiverged` to report
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
   (the whole DX: init, done; `clean` removes the line, refresh replaces it in

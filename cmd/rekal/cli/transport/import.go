@@ -131,7 +131,18 @@ func importSessionFrame(dataDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 		return false, fmt.Errorf("check session: %w", err)
 	}
 	if exists {
-		return false, nil
+		// The same conversation arrives again, longer. This is the ordinary
+		// shape of one identity on two machines: the other machine pushed at
+		// one commit, kept talking, and pushed again, so the second frame
+		// carries every turn of the first plus more. Skipping it outright — as
+		// this did — left the reader permanently truncated at whatever length
+		// happened to arrive first, and no amount of re-syncing recovered it.
+		//
+		// Only ever append past what is stored. data.db is append-only, and
+		// the guard is the same one capture uses: the stored turns must be a
+		// prefix of the arriving ones, so a rewritten or unrelated frame can
+		// never splice itself into an existing conversation.
+		return false, appendGrownSession(dataDB, dict, sessionID, sf, newID)
 	}
 
 	email, _ := dict.Get(codec.NSEmails, sf.EmailRef)
@@ -199,6 +210,72 @@ func importSessionFrame(dataDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 	return true, nil
 }
 
+// wireTurnRole maps a codec role byte to the stored role string.
+func wireTurnRole(r byte) string {
+	switch r {
+	case codec.RoleAssistant:
+		return "assistant"
+	case codec.RoleHumanSteering:
+		return "human_steering"
+	case codec.RoleSummary:
+		return "summary"
+	default:
+		return "human"
+	}
+}
+
+// appendGrownSession extends an already-imported session with the turns a later
+// frame carries beyond it. Returns nil (no-op) when the frame is not strictly
+// longer, or when the stored turns are not a prefix of it.
+//
+// The prefix check is what makes this safe on an append-only store: a frame
+// that merely shares a session id but diverges in content is refused outright
+// rather than half-applied, so the worst case stays "no update" instead of a
+// spliced conversation that never happened.
+func appendGrownSession(dataDB *sql.DB, dict *codec.Dict, sessionID string, sf *codec.SessionFrame, newID func() string) error {
+	stored, err := db.SessionTurnContents(dataDB, sessionID)
+	if err != nil {
+		return fmt.Errorf("read stored turns: %w", err)
+	}
+	if len(sf.Turns) <= len(stored) {
+		return nil // nothing new — the common case for a repeated frame
+	}
+	for i, s := range stored {
+		if sf.Turns[i].Text != s {
+			return nil // diverges: not the same conversation grown
+		}
+	}
+
+	nTurns, nToolCalls, err := db.SessionExtent(dataDB, sessionID)
+	if err != nil {
+		return fmt.Errorf("session extent: %w", err)
+	}
+	for i := nTurns; i < len(sf.Turns); i++ {
+		if err := db.InsertTurn(dataDB, newID(), sessionID, i,
+			wireTurnRole(sf.Turns[i].Role), sf.Turns[i].Text, ""); err != nil {
+			return fmt.Errorf("append turn: %w", err)
+		}
+	}
+	// Tool calls ride the same frame and grow the same way. Guarded on count
+	// alone: the wire carries no content to compare, and a frame whose turns
+	// already proved to be an extension is the same conversation.
+	for i := nToolCalls; i < len(sf.ToolCalls); i++ {
+		tc := sf.ToolCalls[i]
+		path := ""
+		switch tc.PathFlag {
+		case codec.PathDictRef:
+			path, _ = dict.Get(codec.NSPaths, tc.PathRef)
+		case codec.PathInline:
+			path = tc.PathInline
+		}
+		if err := db.InsertToolCall(dataDB, newID(), sessionID, i,
+			codec.ToolName(tc.Tool), path, tc.CmdPrefix); err != nil {
+			return fmt.Errorf("append tool_call: %w", err)
+		}
+	}
+	return nil
+}
+
 // importCheckpointFrame inserts a decoded checkpoint (and its files_touched and
 // checkpoint_sessions rows) into data.db, deduplicating by checkpoint ID.
 func importCheckpointFrame(dataDB *sql.DB, dict *codec.Dict, cf *codec.CheckpointFrame, newID func() string) error {
@@ -227,6 +304,14 @@ func importCheckpointFrame(dataDB *sql.DB, dict *codec.Dict, cf *codec.Checkpoin
 	ts := cf.Timestamp.UTC().Format(time.RFC3339)
 	if err := db.InsertCheckpoint(dataDB, checkpointID, cf.GitSHA, branchName, email, ts, actorType, agentID); err != nil {
 		return fmt.Errorf("insert checkpoint: %w", err)
+	}
+	// It arrived off the branch, so it is by definition already on the branch.
+	// The exported column defaults to FALSE, which made every self-sync hand
+	// the next push a pile of checkpoints to re-encode and re-append — frames
+	// the body already carried. Readers dedup by id so nothing was logically
+	// duplicated, but the body grew on every sync-then-push cycle.
+	if err := db.MarkCheckpointsExported(dataDB, []string{checkpointID}); err != nil {
+		return fmt.Errorf("mark imported checkpoint exported: %w", err)
 	}
 
 	for _, f := range cf.Files {

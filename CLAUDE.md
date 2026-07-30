@@ -354,7 +354,10 @@ for the same place and move `.rekal/` off the store that already exists —
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) before any DB insert — sessions (`checkpoint` / cross-repo import after parse) and knowledge chunks (`knowledge.ChunkFile` + `db.InsertKnowledgeChunks`). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter` (prose `.txt` dumps with binary/truncated runes used to abort the whole knowledge-layer transaction).
-- `db/`: DuckDB backend — open, close, schema, insert helpers, index
+- `db/`: DuckDB backend — open, close, schema (incl. the
+  `(session_id, turn_index)` index on `turns`/`turns_ft`, created in
+  `MigrateDataSchema` as well as the DDL so long-lived stores — the ones that
+  need it most — gain it in place), insert helpers, index
   population (incl. `PopulateFacetText` — per-session facet documents from
   the index's own tables, full + incremental, and now including each session's
   **full commit message** via `PopulateCommitMessages` — subject *and* body,
@@ -373,7 +376,12 @@ for the same place and move `.rekal/` off the store that already exists —
   exists). `PurgeSupersededSessionsFromIndex` collapses re-captures written
   before capture keyed on ref identity, dropping them from the **index only** —
   data.db keeps every copy, since the ledger is append-only and those rows are
-  already on the wire. Two rules, in order: `collapseEqualRecaptures` maps away
+  already on the wire. Prefix comparison is one bulk read of per-turn
+  hashes (`loadTurnHashes`) followed by in-memory set comparison — it was a
+  `FULL OUTER JOIN` over the turns table **per candidate pair**, and pairs grow
+  quadratically inside a group: measured at 1.19 s per join on a 100-session
+  fixture, so ~4,950 pairs was over an hour of joins with data.db held open,
+  against 28 ms for the whole pass now. Two rules, in order: `collapseEqualRecaptures` maps away
   sessions whose **whole ordered transcript** hashes identically (one `md5`
   over `string_agg(role||content ORDER BY turn_index)` in the grouping query,
   so exact copies fall out of a `GROUP BY` rather than a comparison per pair;

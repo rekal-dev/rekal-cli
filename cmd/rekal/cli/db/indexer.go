@@ -548,6 +548,13 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 	}
 
 	superseded := map[string]string{}
+
+	// Collapse exact duplicates first — in memory, from the fingerprints the
+	// grouping query already returned — so the prefix pass below sees one
+	// representative per distinct transcript and the candidate set is as small
+	// as it can be before any turn content is loaded.
+	candidates := make([]sess, 0, len(all))
+	pending := make([][]sess, 0, len(groups))
 	for _, g := range groups {
 		if len(g) < 2 {
 			continue
@@ -562,8 +569,32 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 		// survivor is arbitrary and only has to be deterministic: the smallest
 		// id, which for ULIDs is the copy that was captured first.
 		g = collapseEqualRecaptures(g, superseded)
-
+		if len(g) < 2 {
+			continue
+		}
 		sort.Slice(g, func(i, j int) bool { return g[i].nTurns < g[j].nTurns })
+		pending = append(pending, g)
+		candidates = append(candidates, g...)
+	}
+
+	// One bulk read of per-turn hashes for every remaining candidate, then all
+	// prefix comparison in memory.
+	//
+	// This was a FULL OUTER JOIN over the turns table per candidate *pair*.
+	// Pairs grow quadratically inside a group, so a store with a few hundred
+	// duplicate candidates issued thousands of joins — measured at seconds
+	// each on a real store, with data.db held open throughout, blocking every
+	// other rekal process. The comparison never needed the database: it is a
+	// prefix test over two ordered lists.
+	//
+	// Hashes rather than content keep the transfer and the resident set bounded
+	// — a turn is often kilobytes, its hash is not — and role is folded in
+	// because a turn reclassified to 'summary' is not the same turn.
+	hashes, err := loadTurnHashes(d, turnsTbl, candidates)
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range pending {
 		// Compare each session against every strictly longer one, shortest
 		// first, so a chain (39 → 40 → 144 → 172) collapses to its longest.
 		for i := 0; i < len(g); i++ {
@@ -571,11 +602,7 @@ func supersededSessions(d *sql.DB, turnsTbl, sessTbl, facetsTbl string) (map[str
 				if g[j].nTurns <= g[i].nTurns {
 					continue
 				}
-				isPrefix, err := turnsArePrefix(d, turnsTbl, g[i].id, g[j].id, g[i].nTurns)
-				if err != nil {
-					return nil, err
-				}
-				if isPrefix {
+				if turnsArePrefix(hashes[g[i].id], hashes[g[j].id], g[i].nTurns) {
 					superseded[g[i].id] = g[j].id
 					break
 				}
@@ -644,22 +671,66 @@ func flattenSupersession(superseded map[string]string) map[string]string {
 	return superseded
 }
 
-// turnsArePrefix reports whether shortID's first n turns are identical to
-// longID's turns at the same indices.
-func turnsArePrefix(d *sql.DB, turnsTbl, shortID, longID string, n int) (bool, error) {
-	var mismatches int
-	err := d.QueryRow(fmt.Sprintf(`
-		SELECT count(*) FROM %[1]s a
-		FULL OUTER JOIN %[1]s b
-		  ON b.session_id = $2 AND b.turn_index = a.turn_index
-		WHERE a.session_id = $1 AND a.turn_index < $3
-		  AND (b.content IS NULL OR a.content IS DISTINCT FROM b.content
-		       OR a.role IS DISTINCT FROM b.role)`, turnsTbl),
-		shortID, longID, n).Scan(&mismatches)
-	if err != nil {
-		return false, fmt.Errorf("prefix check: %w", err)
+// loadTurnHashes reads turn_index → hash for every candidate session in one
+// query, so the prefix pass needs no further database work.
+func loadTurnHashes(d *sql.DB, turnsTbl string, candidates []sess) (map[string]map[int]string, error) {
+	if len(candidates) == 0 {
+		return map[string]map[int]string{}, nil
 	}
-	return mismatches == 0, nil
+	ids := make([]string, 0, len(candidates))
+	seen := make(map[string]bool, len(candidates))
+	for _, c := range candidates {
+		if !seen[c.id] {
+			seen[c.id] = true
+			ids = append(ids, c.id)
+		}
+	}
+	in, args := sqlPlaceholders(ids)
+	rows, err := d.Query(fmt.Sprintf(`
+		SELECT session_id, turn_index,
+		       md5(COALESCE(role, '') || '\x1f' || COALESCE(content, ''))
+		FROM %s WHERE session_id IN (%s)`, turnsTbl, in), args...)
+	if err != nil {
+		return nil, fmt.Errorf("load turn hashes: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	out := make(map[string]map[int]string, len(ids))
+	for rows.Next() {
+		var sid, hash string
+		var idx int
+		if err := rows.Scan(&sid, &idx, &hash); err != nil {
+			return nil, fmt.Errorf("scan turn hash: %w", err)
+		}
+		m := out[sid]
+		if m == nil {
+			m = map[int]string{}
+			out[sid] = m
+		}
+		m[idx] = hash
+	}
+	return out, rows.Err()
+}
+
+// turnsArePrefix reports whether short's first n turns are identical to long's
+// turns at the same indices. Keyed by turn_index rather than position so a gap
+// in either sequence can never silently align two different turns.
+func turnsArePrefix(short, long map[int]string, n int) bool {
+	if len(short) == 0 || len(long) == 0 {
+		return false
+	}
+	matched := 0
+	for idx, h := range short {
+		if idx >= n {
+			continue
+		}
+		lh, ok := long[idx]
+		if !ok || lh != h {
+			return false
+		}
+		matched++
+	}
+	return matched == n
 }
 
 func deleteSessionsFromIndex(d *sql.DB, sessionIDs []string) error {

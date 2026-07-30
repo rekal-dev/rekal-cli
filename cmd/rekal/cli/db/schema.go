@@ -68,6 +68,27 @@ func MigrateDataSchema(d *sql.DB) error {
 	// Ensure the L1 recall_edges table on every open — additive, so a data.db
 	// written by an older rekal (which never ran the newer dataDDL) gains it in
 	// place. IF NOT EXISTS makes this idempotent for fresh stores too.
+	// Index turns by (session_id, turn_index) on every open, for the same
+	// reason: a data.db written by an older rekal never ran the newer dataDDL,
+	// and this is the index every conversation read depends on — the drill, the
+	// supersession candidate load, the facet build. Creating it only in the
+	// fresh-store DDL would leave exactly the large, long-lived stores that
+	// need it most scanning every turn in the store.
+	// Guarded on the table existing: MigrateDataSchema runs against data.db
+	// files written by any past rekal, including ones from before `turns`
+	// existed, and CREATE INDEX has no IF-the-table-exists form.
+	turnsExist, err := tableExists(d, "turns")
+	if err != nil {
+		return fmt.Errorf("check turns table: %w", err)
+	}
+	if turnsExist {
+		if _, err := d.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_turns_session_turn ON turns(session_id, turn_index)`,
+		); err != nil {
+			return fmt.Errorf("create turns session/turn index: %w", err)
+		}
+	}
+
 	if _, err := d.Exec(recallEdgesDDL); err != nil {
 		return fmt.Errorf("create recall_edges table: %w", err)
 	}
@@ -336,6 +357,11 @@ CREATE TABLE IF NOT EXISTS turns (
 	ts              TIMESTAMP
 );
 
+-- Every read of a conversation is "this session, in turn order": the drill, the
+-- supersession candidate load, the facet build. Without this each one is a
+-- full scan of every turn in the store.
+CREATE INDEX IF NOT EXISTS idx_turns_session_turn ON turns(session_id, turn_index);
+
 CREATE TABLE IF NOT EXISTS tool_calls (
 	id              VARCHAR PRIMARY KEY,
 	session_id      VARCHAR NOT NULL REFERENCES sessions(id),
@@ -392,6 +418,9 @@ CREATE TABLE IF NOT EXISTS turns_ft (
 	content         VARCHAR NOT NULL,
 	ts              VARCHAR
 );
+
+-- Same access pattern as data.db's turns: always one session, in turn order.
+CREATE INDEX IF NOT EXISTS idx_turns_ft_session_turn ON turns_ft(session_id, turn_index);
 
 CREATE TABLE IF NOT EXISTS tool_calls_index (
 	id              VARCHAR PRIMARY KEY,

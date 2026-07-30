@@ -1,6 +1,8 @@
 # Merged-only sharing (and worktree-shared state)
 
 **Status:** implemented (2026-07). **Mechanism 1 (merged-only export gate)** —
+Gate verdicts are cached per mainline tip (`data.db.merge_gate_cache`, local-only, never wired) so a held checkpoint is not re-probed on every push; the key includes the target tip and a gate version, so a later merge or a rule change re-evaluates. The cache only ever skips a repeat — it cannot let through anything the gate itself would refuse.
+
 `push`/`--rebuild` share only checkpoints whose `git_sha` is an ancestor of
 the default branch or whose branch landed as a patch-equivalent squash commit
 (both fail-closed). **Mechanism 2 (worktree-shared store)** — every linked

@@ -268,7 +268,14 @@ for the same place and move `.rekal/` off the store that already exists —
 - `transport/`: Git-side sync — encode checkpoints to the orphan-branch wire
   format and decode them back (`export`/`import`/remote-sync glue, orphan-branch
   commit). Sits above `codec`, `db`, and `gitx`; called by `push`/`sync`/`init`.
-  `export` applies the **merged-only gate** (`filterMerged`): checkpoints reach
+  `export` applies the **merged-only gate** (`filterMerged`), memoized against
+  the mainline tip in `data.db.merge_gate_cache` (**local-only, never wired**,
+  like `recall_edges` and `checkpoint_state`): a checkpoint held back because
+  its branch was abandoned was re-litigating a commit-tree plus a `git cherry`
+  on every push to reach the same answer. Keyed on git_sha + target tip +
+  `MergeGateVersion`, so work that lands later re-evaluates and a rule change
+  invalidates; strictly an accelerator, since every failure path falls through
+  to the real predicates and the cache must never widen what leaves the machine: checkpoints reach
   the wire only when their `git_sha` is an ancestor of the default branch or
   their branch landed as a patch-equivalent squash commit — unmerged work
   stays local (see `docs/design/merged-only-sharing.md`). An **already-exported**

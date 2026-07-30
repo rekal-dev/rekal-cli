@@ -55,8 +55,8 @@ format is append-only. Anything that reaches it is durable and distributed.
   index-only and structurally unpushable. A path that lets imported material
   reach `data.db` would put *other repositories'* conversations on this repo's
   shared branch.
-- **Local-only records reaching the wire.** `recall_edges` and
-  `checkpoint_state` are deliberately never wired. `recall_edges` holds query
+- **Local-only records reaching the wire.** `recall_edges`,
+  `checkpoint_state` and `merge_gate_cache` are deliberately never wired. `recall_edges` holds query
   text and access patterns; exporting it would publish what each developer
   searched for.
 - **Config on the wire.** `.rekal/config.json` and

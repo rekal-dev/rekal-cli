@@ -36,7 +36,7 @@ func ExportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 	// so unmerged/abandoned work never reaches teammates. Held-back checkpoints
 	// stay unexported and re-evaluate on the next push, releasing automatically
 	// once their branch merges. See docs/design/merged-only-sharing.md.
-	checkpoints = filterMerged(gitRoot, checkpoints)
+	checkpoints = filterMerged(dataDB, gitRoot, checkpoints)
 	if len(checkpoints) == 0 {
 		return nil, nil, nil, nil
 	}
@@ -85,7 +85,7 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		return nil, nil, nil, nil
 	}
 
-	checkpoints = filterMerged(gitRoot, checkpoints)
+	checkpoints = filterMerged(dataDB, gitRoot, checkpoints)
 	if len(checkpoints) == 0 {
 		return nil, nil, nil, nil
 	}
@@ -106,24 +106,68 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 //   - squash: the branch's cumulative change landed as a patch-equivalent
 //     commit (gitx.IsSquashMergedInto) — covering squash-merge workflows,
 //     where the original commits never become ancestors
-func filterMerged(gitRoot string, checkpoints []db.CheckpointRow) []db.CheckpointRow {
+func filterMerged(dataDB *sql.DB, gitRoot string, checkpoints []db.CheckpointRow) []db.CheckpointRow {
 	defaultRef := gitx.DefaultBranch(gitRoot)
 	if defaultRef == "" {
 		// No resolvable mainline — nothing is provably merged, so share
 		// nothing (fail closed).
 		return nil
 	}
-	return shareableCheckpoints(checkpoints,
-		func(sha string) bool { return gitx.IsAncestor(gitRoot, sha, defaultRef) },
+
+	// Memoize the gate against the mainline tip. A checkpoint held back because
+	// its branch was abandoned is re-litigated on every push otherwise, and the
+	// squash probe is not cheap: a commit-tree plus a git cherry per held
+	// checkpoint, forever, to reach the same answer.
+	//
+	// The cache is strictly an accelerator. Every failure path below falls
+	// through to the real predicates, because the gate decides what leaves the
+	// machine and a cache must never be able to widen that.
+	targetTip := gitx.BranchTip(gitRoot, defaultRef)
+	if targetTip == "" {
+		if out, err := exec.Command("git", "-C", gitRoot, "rev-parse", defaultRef).Output(); err == nil {
+			targetTip = strings.TrimSpace(string(out))
+		}
+	}
+	cached := map[string]bool{}
+	if dataDB != nil && targetTip != "" {
+		if v, err := db.LoadMergeGateVerdicts(dataDB, targetTip); err == nil {
+			cached = v
+		}
+	}
+	fresh := map[string]bool{}
+	memo := func(name string, sha string, probe func() bool) bool {
+		key := name + "\x1f" + sha
+		if v, ok := cached[key]; ok {
+			return v
+		}
+		v := probe()
+		fresh[key] = v
+		return v
+	}
+
+	result := shareableCheckpoints(checkpoints,
+		func(sha string) bool {
+			return memo("anc", sha, func() bool { return gitx.IsAncestor(gitRoot, sha, defaultRef) })
+		},
 		// Landed on the mainline under a different sha. This is tree- and
 		// patch-based, not name-based, so it also covers a commit rewritten
 		// after capture — a rebase or an amended message orphans the sha the
 		// checkpoint was anchored to, and comparing patches still proves the
 		// work landed.
-		func(sha string) bool { return gitx.IsSquashMergedInto(gitRoot, sha, defaultRef) },
+		func(sha string) bool {
+			return memo("squash", sha, func() bool { return gitx.IsSquashMergedInto(gitRoot, sha, defaultRef) })
+		},
 		func(branch string) string { return gitx.BranchTip(gitRoot, branch) },
 		func(sha, tip string) bool { return gitx.IsAncestor(gitRoot, sha, tip) },
 	)
+
+	if dataDB != nil && targetTip != "" && len(fresh) > 0 {
+		// Best-effort: a cache that cannot be written costs a repeat, not a
+		// wrong answer.
+		_ = db.SaveMergeGateVerdicts(dataDB, targetTip, fresh)
+		_ = db.PruneMergeGateCache(dataDB, targetTip)
+	}
+	return result
 }
 
 // shareableCheckpoints keeps only checkpoints whose code has merged into the

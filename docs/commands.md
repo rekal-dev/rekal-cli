@@ -25,6 +25,13 @@ Only the **ledger** holds intent. The tree holds present-tense fact, and it is
 always cheaper to grep than to recall. Rekal's own skill (`SKILL.md`, shipped
 inside the binary) routes this automatically for agents.
 
+A session's **commit message** — subject and body — is folded into its facet
+document, so wording that only ever appeared in a commit still points at the
+conversation that produced it. The body is the point: a subject is a label,
+the body is where the reasoning is written down. Derived locally from your own
+clone at index time — never stored in `data.db`, never on the wire, because
+every clone already has it.
+
 ---
 
 ## Retrieval

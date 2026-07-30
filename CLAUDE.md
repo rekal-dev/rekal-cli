@@ -353,7 +353,19 @@ for the same place and move `.rekal/` off the store that already exists —
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) before any DB insert — sessions (`checkpoint` / cross-repo import after parse) and knowledge chunks (`knowledge.ChunkFile` + `db.InsertKnowledgeChunks`). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter` (prose `.txt` dumps with binary/truncated runes used to abort the whole knowledge-layer transaction).
 - `db/`: DuckDB backend — open, close, schema, insert helpers, index
   population (incl. `PopulateFacetText` — per-session facet documents from
-  the index's own tables, full + incremental — and the guarded
+  the index's own tables, full + incremental, and now including each session's
+  **full commit message** via `PopulateCommitMessages` — subject *and* body,
+  resolved from the reader's own clone by the batched `gitx.CommitMessages`.
+  Index-only and never in `data.db`: SOUL.md's "strip what git already has"
+  rules it off the wire, which is also what makes it free for teammates — the
+  wire ships only the SHA and each reader resolves the text locally. It rides
+  the existing `facet_boost`, so `0` disables it and an empty column is
+  byte-identical to before. Its prerequisite was a real bug: the wire import
+  wrote the checkpoint anchor with an `UPDATE`, which DuckDB rejects with a
+  spurious duplicate-key error on this PRIMARY KEY table, and the error was
+  swallowed — so **no synced session had a `git_sha` at all** (2 of 35 on a
+  real store) and `--commit` was blind to the whole team. Now delete-then-
+  reinsert, and loud on failure — and the guarded
   `CreateFacetFTSIndex`, built by `index`/`sync` only when facet material
   exists). `PurgeSupersededSessionsFromIndex` collapses re-captures written
   before capture keyed on ref identity, dropping them from the **index only** —

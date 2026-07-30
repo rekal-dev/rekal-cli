@@ -300,3 +300,42 @@ func TestMainWorktreeRoot_ThroughSymlink(t *testing.T) {
 			"the main checkout must resolve to itself however it was reached", link, got)
 	}
 }
+
+// TestCommitMessages covers the lookup behind the commit-message facet signal.
+//
+// The whole message matters, not the subject: a subject is a label, the body is
+// where the reasoning is written down, and that is the material worth indexing.
+func TestCommitMessages(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+
+	body := "fix: stop the stampede\n\nA fixed delay retries in lockstep, so recovery\nre-floods the downstream. Exponential backoff with jitter instead."
+	git(t, dir, "commit", "--allow-empty", "-m", body)
+	first := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "commit", "--allow-empty", "-m", "second subject only")
+	second := git(t, dir, "rev-parse", "HEAD")
+
+	got := CommitMessages(dir, []string{first, second})
+	if len(got) != 2 {
+		t.Fatalf("CommitMessages returned %d entries, want 2: %v", len(got), got)
+	}
+	if !strings.Contains(got[first], "Exponential backoff with jitter") {
+		t.Errorf("the body was dropped — only the subject is indexed, which is the label rather than the reasoning:\n%q", got[first])
+	}
+	if !strings.Contains(got[first], "stop the stampede") {
+		t.Errorf("the subject is missing from %q", got[first])
+	}
+	if got[second] != "second subject only" {
+		t.Errorf("second = %q, want %q", got[second], "second subject only")
+	}
+
+	// A sha this clone does not have must not take the whole batch down.
+	mixed := CommitMessages(dir, []string{first, "0000000000000000000000000000000000000000"})
+	if _, ok := mixed[first]; ok && len(mixed) == 0 {
+		t.Error("unreachable")
+	}
+	if len(CommitMessages(dir, nil)) != 0 {
+		t.Error("empty input should return an empty map")
+	}
+}

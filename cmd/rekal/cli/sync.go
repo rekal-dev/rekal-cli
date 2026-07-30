@@ -193,6 +193,9 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	// Facet documents + facet FTS index (guarded — skipped when no session
 	// has facet material). Covers synced teammate sessions too: the facet
 	// doc is derived from the index's own tables.
+	if err := db.PopulateCommitMessages(indexDB, gitRoot); err != nil {
+		return fmt.Errorf("populate commit messages: %w", err)
+	}
 	if err := db.PopulateFacetText(indexDB); err != nil {
 		return err
 	}

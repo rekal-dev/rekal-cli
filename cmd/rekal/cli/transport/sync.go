@@ -159,15 +159,32 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 		}
 	}
 
-	// Update session_facets with checkpoint info.
+	// Anchor each imported session to the commit it was captured at.
+	//
+	// Written as delete-then-reinsert, not UPDATE. DuckDB raises a spurious
+	// duplicate-key error when updating a row on an indexed table even though
+	// the key column is untouched, and session_facets.session_id is a PRIMARY
+	// KEY — the same defect already worked around in
+	// db.PurgeSupersededSessionsFromIndex. Observed here as:
+	//
+	//	Constraint Error: Duplicate key "session_id: 01K…" violates primary key
+	//
+	// Every one of these failed, and the error was swallowed as "the session may
+	// not have been imported", so no synced session ever carried a git_sha:
+	// --commit filtering and everything keyed on the commit silently saw only
+	// this machine's own sessions.
 	for sid, cp := range sessionCheckpoints {
-		if _, err := indexDB.Exec(
-			`UPDATE session_facets SET checkpoint_id = $1, git_sha = $2, file_count = $3
-			 WHERE session_id = $4`,
-			cp.checkpointID, cp.gitSHA, cp.fileCount, sid,
-		); err != nil {
-			// Non-fatal: session may not have been imported (already existed).
-			continue
+		if _, err := indexDB.Exec(`CREATE OR REPLACE TEMP TABLE anchor AS
+			SELECT * REPLACE ($1 AS checkpoint_id, $2 AS git_sha, $3 AS file_count)
+			FROM session_facets WHERE session_id = $4`,
+			cp.checkpointID, cp.gitSHA, cp.fileCount, sid); err != nil {
+			return imported, fmt.Errorf("stage checkpoint anchor for %s: %w", sid, err)
+		}
+		if _, err := indexDB.Exec(`DELETE FROM session_facets WHERE session_id = $1`, sid); err != nil {
+			return imported, fmt.Errorf("clear session facet %s: %w", sid, err)
+		}
+		if _, err := indexDB.Exec(`INSERT INTO session_facets SELECT * FROM anchor`); err != nil {
+			return imported, fmt.Errorf("anchor session facet %s: %w", sid, err)
 		}
 	}
 

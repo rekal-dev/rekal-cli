@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 )
 
@@ -277,6 +278,9 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 
 	// Facet documents for the optional facet ranking layer — derived from
 	// the index tables populated above.
+	if err := PopulateCommitMessages(d, gitRoot); err != nil {
+		return err
+	}
 	if err := PopulateFacetText(d); err != nil {
 		return err
 	}
@@ -724,7 +728,8 @@ func PopulateFacetText(d *sql.DB, sessionIDs ...string) error {
 			(SELECT string_agg(t.content, ' ' ORDER BY t.turn_index)
 			 FROM turns_ft t
 			 WHERE t.session_id = session_facets.session_id
-			   AND t.role = 'human_steering')
+			   AND t.role = 'human_steering'),
+			session_facets.commit_message
 		), 1, %d)`, facetTextCap)
 
 	var args []interface{}
@@ -1020,6 +1025,9 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 
 	// Facet documents for the new sessions.
 	if len(sessionIDs) > 0 {
+		if err := PopulateCommitMessages(d, gitRoot); err != nil {
+			return err
+		}
 		if err := PopulateFacetText(d, sessionIDs...); err != nil {
 			return err
 		}
@@ -1099,4 +1107,65 @@ func QuerySessionContent(d *sql.DB) (map[string]string, error) {
 		result[id] = content
 	}
 	return result, rows.Err()
+}
+
+// PopulateCommitMessages fills session_facets.commit_message from this clone's
+// git history, for every session anchored to a commit.
+//
+// The message is derived, never stored: SOUL.md's "strip what git already has"
+// rules it out of data.db and off the wire, because every clone carries it
+// already. That is also what makes it work for teammates — the wire ships only
+// the SHA, and each reader resolves the text against their own git, for zero
+// added bytes.
+//
+// Fails soft. A SHA this clone has not fetched simply yields no text, and the
+// facet document is built from whatever else the session has.
+func PopulateCommitMessages(d *sql.DB, gitRoot string) error {
+	rows, err := d.Query(`SELECT DISTINCT git_sha FROM session_facets
+		WHERE git_sha IS NOT NULL AND git_sha <> ''`)
+	if err != nil {
+		return fmt.Errorf("list anchored commits: %w", err)
+	}
+	var shas []string
+	for rows.Next() {
+		var sha string
+		if err := rows.Scan(&sha); err != nil {
+			rows.Close() //nolint:errcheck
+			return fmt.Errorf("scan git_sha: %w", err)
+		}
+		shas = append(shas, sha)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close() //nolint:errcheck
+		return err
+	}
+	rows.Close() //nolint:errcheck
+	if len(shas) == 0 {
+		return nil
+	}
+
+	messages := gitx.CommitMessages(gitRoot, shas)
+	if len(messages) == 0 {
+		return nil
+	}
+
+	if _, err := d.Exec(`CREATE OR REPLACE TEMP TABLE commit_msgs (
+		git_sha VARCHAR, message VARCHAR)`); err != nil {
+		return fmt.Errorf("stage commit messages: %w", err)
+	}
+	for sha, msg := range messages {
+		if _, err := d.Exec(`INSERT INTO commit_msgs VALUES ($1, $2)`, sha, msg); err != nil {
+			return fmt.Errorf("stage commit message: %w", err)
+		}
+	}
+	// One set-based UPDATE, the same shape PopulateFacetText uses. A per-row
+	// UPDATE keyed on the primary key is what trips DuckDB's spurious
+	// duplicate-key error (see the anchor write in transport/sync.go).
+	if _, err := d.Exec(`UPDATE session_facets
+		SET commit_message = (SELECT m.message FROM commit_msgs m
+			WHERE m.git_sha = session_facets.git_sha)
+		WHERE git_sha IS NOT NULL AND git_sha <> ''`); err != nil {
+		return fmt.Errorf("apply commit messages: %w", err)
+	}
+	return nil
 }

@@ -181,6 +181,12 @@ func MigrateIndexSchema(d *sql.DB) error {
 		// command prefixes + steering text, capped (PopulateFacetText). The
 		// optional facet ranking layer BM25-searches it (weights.facet_boost).
 		{"facet_text", "VARCHAR"},
+		// commit_message is the full message (subject and body) of the commit
+		// this session was captured at, derived locally from git — never
+		// stored in data.db and never on the wire, because every clone already
+		// has it. The body is the point: a subject is a label, the body is
+		// where the reasoning is written down. Folded into facet_text.
+		{"commit_message", "VARCHAR"},
 	} {
 		if err := addColumnIfMissing(d, "session_facets", col.name, col.typ); err != nil {
 			return err
@@ -427,7 +433,8 @@ CREATE TABLE IF NOT EXISTS session_facets (
 	description       VARCHAR,
 	spawn_depth       INTEGER,
 	origin            VARCHAR,
-	facet_text        VARCHAR
+	facet_text        VARCHAR,
+	commit_message    VARCHAR
 );
 CREATE INDEX IF NOT EXISTS idx_sf_email ON session_facets(user_email);
 CREATE INDEX IF NOT EXISTS idx_sf_actor ON session_facets(actor_type);

@@ -370,3 +370,44 @@ func IsSquashMergedInto(gitRoot, tip, ref string) bool {
 	line := strings.TrimSpace(string(cherryOut))
 	return strings.HasPrefix(line, "-")
 }
+
+// CommitMessages returns sha → full commit message (subject and body) for the
+// given commits, in one git invocation.
+//
+// The whole message, not just the subject: a subject is a label, while the body
+// is where the reasoning is written down — the rejected alternative, the reason
+// a constraint exists. That is the same material the ledger exists to keep, and
+// git already has it in every clone, so it is derived here rather than stored.
+//
+// Batched for the same reason as BlobContents: one spawn regardless of how many
+// sessions the index holds. Records are NUL-separated because a commit message
+// contains newlines, and sha and message are split on a unit separator that
+// cannot occur in either. SHAs this clone does not have are simply absent from
+// the result — a teammate can reference a commit that was never fetched.
+func CommitMessages(gitRoot string, shas []string) map[string]string {
+	if len(shas) == 0 {
+		return map[string]string{}
+	}
+	args := append([]string{"-C", gitRoot, "log", "--no-walk=unsorted",
+		"--format=%H%x1f%B%x00"}, shas...)
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		// Any unknown sha fails the whole invocation, which is common on a
+		// shallow or partially-fetched clone. Fail soft: the facet layer simply
+		// carries no commit text.
+		return map[string]string{}
+	}
+	result := make(map[string]string, len(shas))
+	for _, rec := range strings.Split(string(out), "\x00") {
+		sha, msg, ok := strings.Cut(rec, "\x1f")
+		if !ok {
+			continue
+		}
+		sha = strings.TrimSpace(sha)
+		if sha == "" {
+			continue
+		}
+		result[sha] = strings.TrimSpace(msg)
+	}
+	return result
+}

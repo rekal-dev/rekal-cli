@@ -100,6 +100,26 @@ func viewSession(s *sessionOutput) string {
 		}
 		lines = append(lines, strings.Join(head, " ")+": "+content)
 	}
+	// The commits this conversation produced — the way back to the diff.
+	// Rendered before tools/files because it is the pointer most worth having:
+	// with a sha the agent can run git show and see what the reasoning became.
+	if len(s.Commits) > 0 {
+		const maxCommits = 10
+		lines = append(lines, "commits:")
+		for i, c := range s.Commits {
+			if i >= maxCommits {
+				break
+			}
+			sha := c.SHA
+			if len(sha) > 8 {
+				sha = sha[:8]
+			}
+			lines = append(lines, strings.TrimRight("  "+sha+" "+c.Subject, " "))
+		}
+		if len(s.Commits) > maxCommits {
+			lines = append(lines, fmt.Sprintf("  (+%d more commits)", len(s.Commits)-maxCommits))
+		}
+	}
 	if len(s.ToolCalls) > 0 {
 		lines = append(lines, "tools:")
 		for i, tc := range s.ToolCalls {

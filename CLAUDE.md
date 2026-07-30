@@ -88,7 +88,10 @@ for the same place and move `.rekal/` off the store that already exists —
   construction — not a confidence floor, which the soul forbids. The verdict is
   still computed on the full set, and `--json` stays raw.
 - `view.go`: in-binary port of the old view.py — `viewSession` (drill →
-  readable turns) and `viewRows` (SQL → TSV). The default query output;
+  readable turns, plus a `commits:` block naming the commits the conversation
+  produced — the reverse of recall's `--commit`, so the drill points back at
+  the diff instead of dead-ending at the reasoning; additive and emitted only
+  when the session has commits, which is why the golden view is unchanged) and `viewRows` (SQL → TSV). The default query output;
   `--json` gives raw. Session view is golden-tested byte-identical
 - `find.go`: `rekal find "<term>" [role]` — complete, time-ordered enumeration
   sweep over `turns` (port of find.py, diff-identical)

@@ -2,6 +2,8 @@
 
 **Role:** Two modes: raw SQL over the Rekal data model, or session drill-down. The `--session` flag is the second step in progressive context loading — after recall returns snippets, the agent drills into specific sessions for full turns.
 
+**Session drill output** carries a `commits:` block — the commits that conversation produced, abbreviated sha plus subject, capped at 10. It is the reverse of recall's `--commit` filter: commit → session was already possible, session → commit was not, so the drill dead-ended at the reasoning with no pointer to the diff. Subjects are resolved from this clone at query time and are absent for a sha it has not fetched.
+
 **Short forms:** `-q` sql · `-i` index · `-s` session · `-F` full · `-o` offset · `-n` limit · `-r` role · `-j` json
 
 **Invocation:** `rekal query --sql "<sql>"` (explicit SQL mode; a bare positional `rekal query "<sql>"` is accepted as shorthand), `rekal query --index --sql "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]`. `--sql`, a positional statement, and `--session` are mutually exclusive.

@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +50,53 @@ func TestViewRows(t *testing.T) {
 	}
 	if viewRows(cols, nil) != "(no rows)" {
 		t.Error("empty rows should be (no rows)")
+	}
+}
+
+// TestViewSession_CommitsBlock covers the reverse link in the drill.
+//
+// Recall has gone commit → session for a long time (--commit). The drill was
+// one-way: it handed the agent the reasoning with no pointer to the diff that
+// reasoning became, so closing the loop meant a SQL query the agent had to
+// know to write. The block is additive and appears only when the session
+// actually produced commits, which is why adding it left the golden session
+// view byte-identical.
+func TestViewSession_CommitsBlock(t *testing.T) {
+	t.Parallel()
+
+	base := sessionOutput{
+		Sid:   "s1",
+		Turns: []turnOutput{{Index: 0, Role: "human", Content: "why did we drop batching"}},
+	}
+
+	// No commits: nothing added, and no stray heading.
+	if got := viewSession(&base); strings.Contains(got, "commits:") {
+		t.Errorf("a session with no commits must not grow a commits block:\n%s", got)
+	}
+
+	withCommits := base
+	withCommits.Commits = []commitRef{
+		{SHA: "abcdef1234567890", Subject: "fix: drop batching"},
+		{SHA: "1234567890abcdef", Subject: "test: pin the retry path"},
+	}
+	got := viewSession(&withCommits)
+	if !strings.Contains(got, "commits:") {
+		t.Fatalf("commits block missing:\n%s", got)
+	}
+	if !strings.Contains(got, "abcdef12 fix: drop batching") {
+		t.Errorf("want an abbreviated sha and its subject — the sha to run git show with, the subject to tell them apart without running it:\n%s", got)
+	}
+	if strings.Contains(got, "abcdef1234567890") {
+		t.Errorf("the full sha is noise in a drill header; abbreviate it:\n%s", got)
+	}
+
+	// Many commits are capped rather than flooding the drill.
+	many := base
+	for i := 0; i < 14; i++ {
+		many.Commits = append(many.Commits, commitRef{SHA: fmt.Sprintf("%08dxxxx", i), Subject: "c"})
+	}
+	gotMany := viewSession(&many)
+	if !strings.Contains(gotMany, "(+4 more commits)") {
+		t.Errorf("a 14-commit session must be capped with a remainder count, not listed in full:\n%s", gotMany)
 	}
 }

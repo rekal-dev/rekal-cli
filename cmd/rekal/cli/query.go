@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
 	"github.com/spf13/cobra"
 )
@@ -232,13 +233,17 @@ type sessionOutput struct {
 	// transcripts. Empty when this session has no children.
 	ChildSessionIDs []string `json:"child_session_ids,omitempty"`
 
-	TotalTurns int              `json:"total_turns"`
-	Offset     int              `json:"offset,omitempty"`
-	Limit      int              `json:"limit,omitempty"`
-	HasMore    bool             `json:"has_more,omitempty"`
-	Turns      []turnOutput     `json:"turns"`
-	ToolCalls  []toolCallOutput `json:"tool_calls,omitempty"`
-	Files      []string         `json:"files_touched,omitempty"`
+	TotalTurns int          `json:"total_turns"`
+	Offset     int          `json:"offset,omitempty"`
+	Limit      int          `json:"limit,omitempty"`
+	HasMore    bool         `json:"has_more,omitempty"`
+	Turns      []turnOutput `json:"turns"`
+	// Commits closes the loop back to the code. Recall already goes commit →
+	// session (--commit); without this the drill is one-way, handing the agent
+	// the reasoning with no pointer to the diff it produced.
+	Commits   []commitRef      `json:"commits,omitempty"`
+	ToolCalls []toolCallOutput `json:"tool_calls,omitempty"`
+	Files     []string         `json:"files_touched,omitempty"`
 }
 
 type turnOutput struct {
@@ -261,13 +266,23 @@ type drilldownSource struct {
 	turns     func(*sql.DB, string, db.TurnPageOptions) ([]db.TurnRow, int, error)
 	toolCalls func(*sql.DB, string) ([]db.ToolCallRow, error)
 	files     func(*sql.DB, string) ([]string, error)
+	commits   func(*sql.DB, string) ([]string, error)
 	children  func(*sql.DB, string) ([]string, error)
+}
+
+// commitRef is one commit a session produced: the short sha to hand to
+// git show, and the subject line so the agent can tell them apart without
+// running it.
+type commitRef struct {
+	SHA     string `json:"sha"`
+	Subject string `json:"subject,omitempty"`
 }
 
 var dataDrilldownSource = drilldownSource{
 	turns:     db.QueryTurnsPage,
 	toolCalls: db.QueryToolCalls,
 	files:     querySessionFilesFromData,
+	commits:   querySessionCommitsFromData,
 	children:  db.QueryChildSessionIDs,
 }
 
@@ -275,6 +290,7 @@ var indexDrilldownSource = drilldownSource{
 	turns:     db.QueryTurnsPageFromIndex,
 	toolCalls: db.QueryToolCallsFromIndex,
 	files:     querySessionFilesFromIndex,
+	commits:   querySessionCommitsFromIndex,
 	children:  db.QueryChildSessionIDsFromIndex,
 }
 
@@ -323,7 +339,7 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 		// used" signal. Spool a drill edge for the checkpoint drain (no query
 		// context — the recall that led here is a separate process).
 		logDrillEdge(gitRoot, sessionID)
-		return renderSessionDrilldown(cmd, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
+		return renderSessionDrilldown(cmd, gitRoot, dataDB, session, dataDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 	}
 
 	// Not in the data DB — fall back to the index DB, where teammate
@@ -336,10 +352,10 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 		return fmt.Errorf("session not found: %w", dataErr)
 	}
 	logDrillEdge(gitRoot, sessionID)
-	return renderSessionDrilldown(cmd, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
+	return renderSessionDrilldown(cmd, gitRoot, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)
 }
 
-func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string, jsonCompact bool) error {
+func renderSessionDrilldown(cmd *cobra.Command, gitRoot string, d *sql.DB, session *db.SessionRow, src drilldownSource, full bool, offset, limit int, role, shortSid string, jsonCompact bool) error {
 	sessionID := session.ID
 
 	turns, total, err := src.turns(d, sessionID, db.TurnPageOptions{
@@ -414,6 +430,17 @@ func renderSessionDrilldown(cmd *cobra.Command, d *sql.DB, session *db.SessionRo
 			return fmt.Errorf("query files: %w", err)
 		}
 		output.Files = files
+	}
+
+	if shas, err := src.commits(d, sessionID); err == nil && len(shas) > 0 {
+		subjects := gitx.CommitMessages(gitRoot, shas)
+		for _, sha := range shas {
+			ref := commitRef{SHA: sha}
+			if msg, ok := subjects[sha]; ok {
+				ref.Subject, _, _ = strings.Cut(msg, "\n")
+			}
+			output.Commits = append(output.Commits, ref)
+		}
 	}
 
 	if !jsonCompact {
@@ -555,4 +582,51 @@ func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex, jsonOut bool)
 	// column order).
 	fmt.Fprintln(out, viewRows(cols, collected))
 	return nil
+}
+
+// querySessionCommitsFromData returns the git SHAs a session produced, oldest
+// first, from the data DB.
+func querySessionCommitsFromData(dataDB *sql.DB, sessionID string) ([]string, error) {
+	return scanCommitSHAs(dataDB, `
+		SELECT DISTINCT c.git_sha, min(c.ts) AS first_ts
+		FROM checkpoint_sessions cs
+		JOIN checkpoints c ON c.id = cs.checkpoint_id
+		WHERE cs.session_id = $1 AND c.git_sha IS NOT NULL AND c.git_sha <> ''
+		GROUP BY c.git_sha ORDER BY first_ts`, sessionID)
+}
+
+// querySessionCommitsFromIndex is the same for a teammate session that exists
+// only in the index, where the anchor lives on session_facets.
+func querySessionCommitsFromIndex(indexDB *sql.DB, sessionID string) ([]string, error) {
+	return scanCommitSHAs(indexDB, `
+		SELECT git_sha FROM session_facets
+		WHERE session_id = $1 AND git_sha IS NOT NULL AND git_sha <> ''`, sessionID)
+}
+
+func scanCommitSHAs(d *sql.DB, query, sessionID string) ([]string, error) {
+	rows, err := d.Query(query, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck
+	var shas []string
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var sha string
+		if len(cols) == 1 {
+			if err := rows.Scan(&sha); err != nil {
+				return nil, err
+			}
+		} else {
+			var ignored interface{}
+			if err := rows.Scan(&sha, &ignored); err != nil {
+				return nil, err
+			}
+		}
+		shas = append(shas, sha)
+	}
+	return shas, rows.Err()
 }

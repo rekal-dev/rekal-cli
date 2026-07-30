@@ -4,6 +4,8 @@
 
 **Role:** Push local Rekal data to the remote branch. Exports unexported checkpoints from DuckDB to wire format, commits to the orphan branch, and pushes to origin.
 
+**Flags:** `--remote <name>` (default `origin`; the pre-push hook forwards the remote git is pushing to), `--best-effort` (publication failure becomes a warning and exit 0 — the hook uses it), `--progress` (timed stages), `--timeout` (deadline per git network call, default 2m).
+
 **Invocation:** `rekal push` or `rekal push --rebuild` (`--re-export` is a deprecated alias). There is no `--force`.
 
 ---

@@ -251,14 +251,33 @@ func installHooks(gitRoot string, w io.Writer) error {
 }
 
 // hookScript generates a shell hook that resolves the rekal binary at runtime.
-// Checks PATH first, then falls back to ~/.local/bin/rekal (the default install location).
+// Checks PATH first, then falls back to ~/.local/bin/rekal (the default install
+// location).
+//
+// The pre-push hook forwards the remote git is actually pushing to, and runs
+// best-effort. Two things were wrong before: it ignored git's arguments and
+// published to origin regardless — so pushing to a fork or a second remote sent
+// memory to the wrong place — and rekal suppressed recursion with --no-verify,
+// which disables *every* pre-push hook in the repository, other tools' included,
+// to solve a problem that is only rekal's. The guard is now an environment
+// variable rekal sets on its own git push, so unrelated hooks still run.
 func hookScript(subcommand string) string {
+	args := " " + subcommand
+	guard := ""
+	if subcommand == "push" {
+		// $1 remote name, $2 remote URL (git's pre-push contract).
+		args = ` push --best-effort --remote "${1:-origin}"`
+		guard = `
+# Rekal's own publish pushes with ` + internalPushEnv + ` set; do not recurse.
+[ -n "$` + internalPushEnv + `" ] && exit 0
+`
+	}
 	return `#!/bin/sh
-` + rekalHookMarker + `
+` + rekalHookMarker + guard + `
 if command -v rekal >/dev/null 2>&1; then
-  rekal ` + subcommand + `
+  rekal` + args + `
 elif [ -x "$HOME/.local/bin/rekal" ]; then
-  "$HOME/.local/bin/rekal" ` + subcommand + `
+  "$HOME/.local/bin/rekal"` + args + `
 fi
 `
 }

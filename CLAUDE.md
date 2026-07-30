@@ -131,6 +131,16 @@ for the same place and move `.rekal/` off the store that already exists —
   `db.RefreshSessionReach` on that path so the graph never stalls; otherwise the
   incremental index refresh rebuilds `session_reach`
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`).
+  Publishes to `--remote` (default `origin`) — the pre-push hook forwards the
+  remote git is actually pushing to, so a push to a fork no longer sends memory
+  to `origin`. Recursion is guarded by the `REKAL_INTERNAL_PUSH` env var rekal
+  sets on its own git calls, replacing `--no-verify`, which suppressed *every*
+  pre-push hook in the repo to solve a problem that is only rekal's. Each git
+  network call runs under a deadline (`runGitDeadline`, `--timeout`, default 2m)
+  with `cmd.WaitDelay` set — killing git is not enough, because a stuck remote
+  helper or ssh child keeps the output pipe open and `CombinedOutput` blocks on
+  it. `--best-effort` (hook mode) turns a publication failure into a warning;
+  a hand-run push exits non-zero, so a failure is never silent.
   **There is no `--force`**: SOUL.md makes the append-only wire format a
   *structural* guarantee, not a policy, and a flag that overwrites a branch
   would demote it to the latter. `rekal push` appends and can do nothing else;

@@ -2,10 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
@@ -17,6 +20,10 @@ import (
 func newPushCmd() *cobra.Command {
 	var rebuild bool
 	var reExportAlias bool
+	var remote string
+	var bestEffort bool
+	var progress bool
+	var timeout time.Duration
 
 	cmd := &cobra.Command{
 		Use:   "push",
@@ -72,7 +79,12 @@ You do not need to run this manually.`,
 			if rebuild || reExportAlias {
 				return doReExport(gitRoot, cmd.ErrOrStderr())
 			}
-			return doPush(gitRoot, cmd.ErrOrStderr())
+			return doPush(gitRoot, cmd.ErrOrStderr(), pushOptions{
+				Remote:     remote,
+				BestEffort: bestEffort,
+				Timeout:    timeout,
+				Progress:   progress,
+			})
 		},
 	}
 
@@ -83,6 +95,10 @@ You do not need to run this manually.`,
 	// that already invokes it breaks.
 	cmd.Flags().BoolVar(&reExportAlias, "re-export", false, "Deprecated alias for --rebuild")
 	_ = cmd.Flags().MarkDeprecated("re-export", "use --rebuild")
+	cmd.Flags().StringVar(&remote, "remote", "origin", "Remote to publish to (the pre-push hook passes the remote git is pushing to)")
+	cmd.Flags().BoolVar(&bestEffort, "best-effort", false, "Report publication failures as warnings and exit 0 (used by the git hook)")
+	cmd.Flags().BoolVar(&progress, "progress", false, "Print timed stages")
+	cmd.Flags().DurationVar(&timeout, "timeout", defaultGitTimeout, "Deadline for each git network call")
 	return cmd
 }
 
@@ -130,7 +146,7 @@ func doReExport(gitRoot string, w io.Writer) error {
 	// A rebuild starts from an empty body, so it can only ever carry what this
 	// machine's data.db holds. Anything another machine put on the branch is
 	// not in there and could not be reconstructed by anyone.
-	if lost, ok := wouldDiscardRemoteFrames(gitRoot, branch); ok && lost != "" {
+	if lost, ok := wouldDiscardRemoteFrames(gitRoot, "origin", branch); ok && lost != "" {
 		fmt.Fprintf(w, "rekal: refusing to rebuild origin/%s\n", branch)
 		fmt.Fprintf(w, "rekal: the remote has %s this machine does not have, and a rebuild carries only this machine's data.db\n", lost)
 		fmt.Fprintln(w, "rekal: push from the machine that holds them first, then rebuild from there")
@@ -141,9 +157,9 @@ func doReExport(gitRoot string, w io.Writer) error {
 	// push is an ordinary fast-forward. Nothing in rekal force-pushes: that is
 	// what makes the append-only wire format structural rather than a rule the
 	// code keeps only when it feels like it.
-	pushCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "origin", branch)
-	pushCmd.Stdin = nil
-	if output, err := pushCmd.CombinedOutput(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGitTimeout)
+	defer cancel()
+	if output, err := runGitDeadline(ctx, gitRoot, "push", "origin", branch); err != nil {
 		fmt.Fprintf(w, "rekal: rebuild push failed: %s\n", strings.TrimSpace(string(output)))
 		fmt.Fprintln(w, "rekal: the branch moved while rebuilding — re-run, or push from the machine holding the newer checkpoints")
 		return nil
@@ -152,10 +168,83 @@ func doReExport(gitRoot string, w io.Writer) error {
 	return nil
 }
 
+// pushOptions carries what the caller knows that doPush cannot infer.
+type pushOptions struct {
+	// Remote is the git remote to publish to. The pre-push hook passes the
+	// remote git is actually pushing to; everything else defaults to origin.
+	Remote string
+	// BestEffort makes a publication failure a warning rather than an error.
+	// The hook sets it — a memory push must never fail someone's git push —
+	// and a hand-run push does not, so a person gets a non-zero exit.
+	BestEffort bool
+	// Timeout bounds each git network call.
+	Timeout time.Duration
+	// Progress prints timed stages.
+	Progress bool
+}
+
+func (o pushOptions) remote() string {
+	if o.Remote == "" {
+		return "origin"
+	}
+	return o.Remote
+}
+
+func (o pushOptions) timeout() time.Duration {
+	if o.Timeout <= 0 {
+		return defaultGitTimeout
+	}
+	return o.Timeout
+}
+
+// defaultGitTimeout bounds a single git network call. A push that hangs on an
+// unreachable remote used to hang the commit that triggered it, with nothing
+// printed to say which stage was stuck.
+const defaultGitTimeout = 2 * time.Minute
+
+// internalPushEnv marks the git push rekal makes itself, so the pre-push hook
+// can decline to recurse. This replaces --no-verify, which suppressed *every*
+// pre-push hook in the repository — other tools' included — to solve rekal's
+// own recursion.
+const internalPushEnv = "REKAL_INTERNAL_PUSH"
+
+// stage prints a timed progress line. Publishing is several seconds of work in
+// stages that fail differently; without naming them a stall is indistinguishable
+// from a hang.
+func stage(w io.Writer, on bool, start time.Time, format string, args ...any) {
+	if !on {
+		return
+	}
+	fmt.Fprintf(w, "rekal: [%4.1fs] %s\n", time.Since(start).Seconds(), fmt.Sprintf(format, args...))
+}
+
+// runGitDeadline runs a git command under a deadline, returning its combined
+// output. The environment carries internalPushEnv so rekal's own pushes do not
+// re-enter the pre-push hook.
+func runGitDeadline(ctx context.Context, gitRoot string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", gitRoot}, args...)...)
+	cmd.Stdin = nil
+	cmd.Env = append(os.Environ(), internalPushEnv+"=1")
+	// WaitDelay is what actually makes the deadline bite. Killing git on
+	// context expiry is not enough: git spawns its own children — a remote
+	// helper, ssh, a credential prompt — and CombinedOutput blocks until every
+	// writer closes the pipe, so a stuck grandchild kept the caller hanging
+	// long after the parent was dead. WaitDelay bounds that wait and closes the
+	// pipes, which is the difference between a bounded failure and a hang.
+	cmd.WaitDelay = 5 * time.Second
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return out, fmt.Errorf("git %s timed out after %s: %w", args[0], defaultGitTimeout, ctx.Err())
+	}
+	return out, err
+}
+
 // doPush pushes Rekal data to the remote orphan branch.
 // Extracted so sync can call it without a cobra.Command.
-func doPush(gitRoot string, w io.Writer) error {
+func doPush(gitRoot string, w io.Writer, opts pushOptions) error {
 	branch := gitx.RekalBranchName()
+	remote := opts.remote()
+	started := time.Now()
 
 	// Check if local branch exists — if not, nothing to push.
 	if err := exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", branch).Run(); err != nil {
@@ -163,9 +252,9 @@ func doPush(gitRoot string, w io.Writer) error {
 		return nil
 	}
 
-	// Check if remote is configured.
-	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run(); err != nil {
-		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
+	// Check the target remote is configured.
+	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", remote).Run(); err != nil {
+		fmt.Fprintf(w, "rekal: no remote %q configured — skipping push\n", remote)
 		return nil
 	}
 
@@ -181,7 +270,9 @@ func doPush(gitRoot string, w io.Writer) error {
 		fmt.Fprintf(w, "rekal: caught local %s up to origin\n", branch)
 	}
 
+	stage(w, opts.Progress, started, "resolving %s against %s", branch, remote)
 	// Export unexported checkpoints from DuckDB → wire format → orphan branch.
+	stage(w, opts.Progress, started, "selecting and encoding checkpoints")
 	body, dict, exportedIDs, err := transport.ExportNewFrames(gitRoot)
 	if err != nil {
 		return fmt.Errorf("export: %w", err)
@@ -197,6 +288,7 @@ func doPush(gitRoot string, w io.Writer) error {
 		if err := markCheckpointsExported(gitRoot, exportedIDs); err != nil {
 			return fmt.Errorf("mark checkpoints exported: %w", err)
 		}
+		stage(w, opts.Progress, started, "encoded %d checkpoint(s)", len(exportedIDs))
 	} else {
 		fmt.Fprintln(w, "rekal: no new checkpoints to export")
 	}
@@ -206,28 +298,43 @@ func doPush(gitRoot string, w io.Writer) error {
 	if err != nil {
 		return nil
 	}
-	remoteSHA, err := exec.Command("git", "-C", gitRoot, "rev-parse", "origin/"+branch).Output()
+	remoteSHA, err := exec.Command("git", "-C", gitRoot, "rev-parse", remote+"/"+branch).Output()
 	if err == nil && strings.TrimSpace(string(localSHA)) == strings.TrimSpace(string(remoteSHA)) {
 		fmt.Fprintln(w, "rekal: already up to date")
 		return nil
 	}
 
-	// Push with --no-verify to prevent recursive pre-push hook.
-	pushCmd := exec.Command("git", "-C", gitRoot, "push", "--no-verify", "origin", branch)
-	pushCmd.Stdin = nil // disconnect stdin so git doesn't hang in hook context
-	output, err := pushCmd.CombinedOutput()
+	// Recursion is prevented by internalPushEnv rather than --no-verify: the
+	// flag suppressed every pre-push hook in the repository, other tools'
+	// included, to solve a problem that is only rekal's.
+	stage(w, opts.Progress, started, "publishing %s to %s", branch, remote)
+	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout())
+	defer cancel()
+	output, err := runGitDeadline(ctx, gitRoot, "push", remote, branch)
 	if err != nil {
-		if isNonFastForward(string(output)) && remoteDiverged(gitRoot, branch) {
-			fmt.Fprintf(w, "rekal: push rejected (non-fast-forward) for origin/%s\n", branch)
-			fmt.Fprintln(w, "rekal: your remote branch has diverged from local — review and run 'rekal push --force' to overwrite remote with local data")
-			return nil
+		if isNonFastForward(string(output)) && remoteDiverged(gitRoot, remote, branch) {
+			fmt.Fprintf(w, "rekal: push rejected (non-fast-forward) for %s/%s\n", remote, branch)
+			fmt.Fprintln(w, "rekal: the branch diverged — push from the machine holding the missing checkpoints; it will append and this one will fast-forward onto it")
+			return pushFailure(opts, fmt.Errorf("push rejected: %s/%s diverged", remote, branch))
 		}
 		fmt.Fprintf(w, "rekal: push failed: %s\n", strings.TrimSpace(string(output)))
-		return nil
+		return pushFailure(opts, fmt.Errorf("push to %s/%s failed: %w", remote, branch, err))
 	}
 
-	fmt.Fprintf(w, "rekal: pushed to origin/%s\n", branch)
+	stage(w, opts.Progress, started, "published")
+	fmt.Fprintf(w, "rekal: pushed to %s/%s\n", remote, branch)
 	return nil
+}
+
+// pushFailure reports a publication failure as an error, or swallows it in
+// best-effort mode. The hook runs best-effort so a memory push can never fail
+// somebody's git push; a person running it by hand gets a non-zero exit,
+// because silently doing nothing is the worse answer there.
+func pushFailure(opts pushOptions, err error) error {
+	if opts.BestEffort {
+		return nil
+	}
+	return NewSilentError(err)
 }
 
 // markCheckpointsExported opens data.db and flags the given checkpoint IDs as
@@ -264,17 +371,17 @@ func isNonFastForward(output string) bool {
 // checkpoints destroys them, because sync imports other branches into the index
 // and never into data.db, so no local re-export can reproduce them. Git can
 // answer this in one question and the flag never asked it.
-func wouldDiscardRemoteFrames(gitRoot, branch string) (lost string, ok bool) {
-	fetch := exec.Command("git", "-C", gitRoot, "fetch", "origin", branch)
+func wouldDiscardRemoteFrames(gitRoot, remote, branch string) (lost string, ok bool) {
+	fetch := exec.Command("git", "-C", gitRoot, "fetch", remote, branch)
 	fetch.Stdin = nil
 	if err := fetch.Run(); err != nil {
 		return "", false
 	}
-	remote, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
+	head, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
 	if err != nil {
 		return "", false
 	}
-	remoteSHA := strings.TrimSpace(string(remote))
+	remoteSHA := strings.TrimSpace(string(head))
 	// Contained in local: a force here only replaces commits local already has.
 	if gitx.IsAncestor(gitRoot, remoteSHA, branch) {
 		return "", true
@@ -320,16 +427,16 @@ func wouldDiscardRemoteFrames(gitRoot, branch string) (lost string, ok bool) {
 // So ask git instead. A best-effort fetch first, because the remote-tracking
 // ref may be stale — if that fetch fails there is nothing to diverge from that
 // we can see, and the honest report is the transport error.
-func remoteDiverged(gitRoot, branch string) bool {
-	fetch := exec.Command("git", "-C", gitRoot, "fetch", "origin", branch)
+func remoteDiverged(gitRoot, remote, branch string) bool {
+	fetch := exec.Command("git", "-C", gitRoot, "fetch", remote, branch)
 	fetch.Stdin = nil
 	if err := fetch.Run(); err != nil {
 		return false
 	}
-	remote, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
+	head, err := exec.Command("git", "-C", gitRoot, "rev-parse", "FETCH_HEAD").Output()
 	if err != nil {
 		return false
 	}
 	// Diverged exactly when the remote tip is not already contained in local.
-	return !gitx.IsAncestor(gitRoot, strings.TrimSpace(string(remote)), branch)
+	return !gitx.IsAncestor(gitRoot, strings.TrimSpace(string(head)), branch)
 }

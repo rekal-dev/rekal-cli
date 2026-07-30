@@ -39,7 +39,7 @@ error: failed to push some refs`
 	run(t, dir, "commit", "--allow-empty", "-m", "base")
 	run(t, dir, "remote", "add", "origin", filepath.Join(dir, "nonexistent.git"))
 
-	if remoteDiverged(dir, "main") {
+	if remoteDiverged(dir, "origin", "main") {
 		t.Error("remoteDiverged = true with an unreachable remote — a connection that never happened cannot prove history diverged")
 	}
 }
@@ -68,7 +68,7 @@ func TestRemoteDiverged_RealDivergenceIsReported(t *testing.T) {
 	// Local rewrites its own history instead of pulling.
 	run(t, local, "commit", "--allow-empty", "--amend", "-m", "mine")
 
-	if !remoteDiverged(local, "main") {
+	if !remoteDiverged(local, "origin", "main") {
 		t.Error("remoteDiverged = false, want true — the remote holds a commit local does not, which is the case --force exists for")
 	}
 }

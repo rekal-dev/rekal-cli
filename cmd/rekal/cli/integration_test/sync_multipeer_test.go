@@ -38,8 +38,20 @@ func newPeer(t *testing.T, bare, email, name string) *peerRepo {
 	return &peerRepo{env: env, dir: dir, email: email}
 }
 
-// contribute writes a transcript, commits, checkpoints and pushes it.
+// contribute writes a transcript, commits, checkpoints and pushes it, requiring
+// the push to succeed.
 func (p *peerRepo) contribute(t *testing.T, file string, turns []string, commitMsg string) {
+	t.Helper()
+	if err := p.tryContribute(t, file, turns, commitMsg); err != nil {
+		t.Fatalf("%s push: %v", p.email, err)
+	}
+}
+
+// tryContribute is contribute for callers that expect the publish to fail — a
+// diverged branch, an unreachable remote. A hand-run push now exits non-zero
+// when publication fails (the hook runs --best-effort instead), so the failure
+// is the assertion rather than an aborted test.
+func (p *peerRepo) tryContribute(t *testing.T, file string, turns []string, commitMsg string) error {
 	t.Helper()
 	sessionDir := sessionDirFor(t, p.dir)
 	if err := os.WriteFile(filepath.Join(sessionDir, file), []byte(transcript(turns...)), 0o644); err != nil {
@@ -54,8 +66,9 @@ func (p *peerRepo) contribute(t *testing.T, file string, turns []string, commitM
 		t.Fatalf("%s checkpoint: %v\n%s", p.email, err, stderr)
 	}
 	if _, stderr, err := p.env.RunCLI("push"); err != nil {
-		t.Fatalf("%s push: %v\n%s", p.email, err, stderr)
+		return fmt.Errorf("%v\n%s", err, stderr)
 	}
+	return nil
 }
 
 // TestSync_MultiPeer_BranchesStayDistinct exercises the real team shape: several

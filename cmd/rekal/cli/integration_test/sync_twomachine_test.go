@@ -274,8 +274,12 @@ func TestPush_ForkNeverDiscardsAnotherMachine(t *testing.T) {
 	laptop.contribute(t, "laptop.jsonl",
 		[]string{"laptop opening", "laptop found the deadlock"}, "laptop work")
 	pullMain(t, desktop.dir)
-	desktop.contribute(t, "desktop.jsonl",
-		[]string{"desktop opening", "desktop rewrote the parser"}, "desktop work")
+	// The desktop's branch forked, so publishing legitimately fails — that is
+	// the situation under test, not a broken fixture.
+	if err := desktop.tryContribute(t, "desktop.jsonl",
+		[]string{"desktop opening", "desktop rewrote the parser"}, "desktop work"); err == nil {
+		t.Error("a push onto a forked branch reported success; it cannot append without discarding the other machine's frames")
+	}
 
 	// There is no rekal-level force at all.
 	if _, stderr, err := desktop.env.RunCLI("push", "--force"); err == nil {

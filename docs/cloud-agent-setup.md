@@ -19,6 +19,12 @@ it encodes the setup mistakes that cost real time:
    without it. The daemon dies, recall degrades to keyword+LSA, and the agent
    is told `SEMANTIC warming — retry with backoff` forever. Always pass
    **`-DGGML_NATIVE=OFF`** (what CI and the release workflow now use).
+   A native build is safe on the machine that built it, so this only bites
+   when the artifact travels — a published release, or **a `.deps/llama.cpp`
+   left over from an earlier container**. The second is the common one here:
+   the cache outlives the container, the next session lands on a different
+   CPU model, and the same tree that worked yesterday takes SIGILL today.
+   If you inherit a `.deps` you did not build, rebuild it rather than trust it.
 4. **A deeply nested repo path breaks the daemon socket.** `sockaddr_un` bounds
    the whole path, so `<gitroot>/.rekal/nomic/daemon.sock` over ~103 bytes
    fails `bind: invalid argument`. Rekal falls back to a short runtime path

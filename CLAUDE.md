@@ -457,7 +457,17 @@ for the same place and move `.rekal/` off the store that already exists —
   Portkey/Bedrock gateways that 400 before server-side truncate still work)
   and `bedrock` (Amazon Bedrock runtime, Cohere Embed models, bearer API key,
   no SigV4 — asymmetry via Cohere `input_type` not text prefixes)
-- `lsa/`: Latent Semantic Analysis embeddings
+- `lsa/`: Latent Semantic Analysis embeddings. `Embed` truncates at the
+  **numerical** rank, not just exactly-zero singular values: the projection
+  divides by each one, and `actualDim` is capped at `nDocs`, so any store with
+  fewer sessions than `DefaultDimension` (128) factorizes to full rank with
+  trailing singular values zero to within rounding. Dividing by 1e-16 turns
+  rounding error into a ~1e16 coefficient that owns the vector's norm and every
+  cosine against it — measured at a squared norm of 1.2e30, with every
+  document's cosine collapsing to 0 (the layer silently returning nothing).
+  The cutoff is relative to the largest singular value (the standard
+  pseudo-inverse rule), a floating-point tolerance rather than a ranking
+  weight, and it is inert on a corpus of genuinely independent sessions
 - `nomic/`: Nomic-embed-text deep semantic embeddings (platform build tags).
   Model loading is isolated in a **single-flight daemon** (`daemon.lock` flock,
   one per store) that loads the model **before** opening its socket — so a

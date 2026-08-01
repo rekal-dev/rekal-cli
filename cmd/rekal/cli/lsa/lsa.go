@@ -204,10 +204,28 @@ func (m *Model) Embed(text string) []float64 {
 	}
 
 	// Project: q_k = q^T * U_k * S_k^{-1}
+	//
+	// Skip directions below the numerical rank, not just exactly-zero ones. The
+	// projection divides by each singular value, so a direction whose singular
+	// value is numerical noise — 1e-16 against a leading value of 1 — returns a
+	// coefficient of ~1e16 built entirely out of rounding error, and that one
+	// component then dominates the vector's norm and every cosine taken against
+	// it. Truncation is guaranteed to bite: actualDim is capped at nDocs, so any
+	// store with fewer sessions than DefaultDimension (128) factorizes to full
+	// rank and the trailing singular values are zero to within rounding.
+	// Measured on a 7-session corpus before this: the query vector's squared
+	// norm came back as 1.2e30 and every document's cosine collapsed to 0.
+	//
+	// The relative cutoff is the standard pseudo-inverse rule, scaled to the
+	// largest singular value — a floating-point tolerance, not a ranking weight.
+	var tol float64
+	if len(m.Sk) > 0 {
+		tol = 1e-12 * m.Sk[0]
+	}
 	result := make([]float64, m.Dim)
 	nTerms := len(m.Vocabulary)
 	for j := 0; j < m.Dim; j++ {
-		if m.Sk[j] == 0 {
+		if m.Sk[j] <= tol {
 			continue
 		}
 		var dot float64

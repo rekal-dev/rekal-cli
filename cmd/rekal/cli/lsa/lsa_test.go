@@ -184,3 +184,71 @@ func TestSimpleStem(t *testing.T) {
 		}
 	}
 }
+
+// TestEmbed_RankDeficientCorpusDoesNotBlowUpTheQueryVector pins the numerical
+// rank cutoff in Embed.
+//
+// The projection divides by each singular value. actualDim is capped at nDocs,
+// so a store with fewer sessions than DefaultDimension factorizes to full rank
+// and its trailing singular values are zero to within rounding — dividing by
+// 1e-16 turns rounding error into a coefficient of ~1e16, which then owns the
+// vector's norm and every cosine taken against it. Guarding on Sk[j] == 0 alone
+// does not catch that: near-zero is not zero.
+//
+// Before the cutoff this corpus produced a query vector whose squared norm was
+// 1.2e30, and every document's cosine collapsed to 0 — the LSA layer returning
+// nothing at all, silently.
+func TestEmbed_RankDeficientCorpusDoesNotBlowUpTheQueryVector(t *testing.T) {
+	t.Parallel()
+
+	rep := func(s string, n int) string {
+		out := ""
+		for i := 0; i < n; i++ {
+			out += s
+		}
+		return out
+	}
+	// Two sessions per topic: a term has to appear in minTermFreq (2) sessions
+	// to enter the vocabulary at all, so a corpus of one-off topics factorizes
+	// to rank 1 and proves nothing.
+	const base = "session commit branch repo change file line test build run "
+	topics := map[string]string{
+		"gate":   "export gate merged ancestor squash checkpoint wire filter predicate ",
+		"duck":   "duckdb storage engine append ledger rows columns pragma attach ",
+		"zstd":   "zstd dictionary compression frames body decode encode preset ",
+		"nomic":  "nomic embedding daemon socket model load vectors cosine tokens ",
+		"search": "search ranking bm25 hybrid weights normalize confidence digest ",
+	}
+	sessions := map[string]string{}
+	for name, terms := range topics {
+		sessions[name] = rep(base+terms, 8)
+		sessions[name+"2"] = rep(base+terms, 6)
+	}
+
+	m, err := Build(sessions, 0)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if m == nil {
+		t.Fatal("Build returned nil model")
+	}
+
+	q := m.Embed("how does the merged export gate work")
+	var sq float64
+	for _, x := range q {
+		sq += x * x
+	}
+	if math.IsNaN(sq) || math.IsInf(sq, 0) || sq > 1e6 {
+		t.Fatalf("query vector squared norm is %g — a direction below the numerical rank was inverted", sq)
+	}
+
+	// And the layer must still discriminate: the session about the gate has to
+	// beat every unrelated one. A blown-up component makes them indistinguishable.
+	vecs := m.Vectors()
+	gateSim := CosineSimilarity(q, vecs["gate"])
+	for _, id := range []string{"duck", "zstd", "nomic", "search"} {
+		if got := CosineSimilarity(q, vecs[id]); got >= gateSim {
+			t.Errorf("%s scores %.4f against a query about the export gate, at or above the gate session's %.4f", id, got, gateSim)
+		}
+	}
+}

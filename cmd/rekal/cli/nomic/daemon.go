@@ -65,18 +65,33 @@ const maxUnixSocketPath = 103
 //
 // Past the ceiling the socket moves to a short runtime directory under a name
 // derived from the store root, so daemon and client still agree on one
-// rendezvous per store. The single-flight guarantee is unaffected: it comes
-// from the flock on .rekal/nomic/daemon.lock, which is a regular file and has
-// no length limit.
+// rendezvous per store. The fallback path itself is length-checked: macOS
+// TempDir() and a deep XDG_RUNTIME_DIR can still exceed the bound, so those
+// land under /tmp/rekal-nomic-<hash>/ instead. The single-flight guarantee is
+// unaffected: it comes from the flock on .rekal/nomic/daemon.lock, which is a
+// regular file and has no length limit.
 func socketPath(gitRoot string) string {
 	p := filepath.Join(gitRoot, ".rekal", "nomic", "daemon.sock")
 	if len(p) <= maxUnixSocketPath {
 		return p
 	}
 	sum := sha256.Sum256([]byte(gitRoot))
-	dir := filepath.Join(runtimeDir(), "rekal-nomic")
-	_ = os.MkdirAll(dir, 0o700) //nolint:errcheck
-	return filepath.Join(dir, fmt.Sprintf("%x.sock", sum[:8]))
+	hex := fmt.Sprintf("%x", sum[:8])
+	candidates := []string{
+		filepath.Join(runtimeDir(), "rekal-nomic", hex+".sock"),
+		filepath.Join("/tmp", "rekal-nomic-"+hex, "d.sock"),
+	}
+	for _, c := range candidates {
+		if len(c) > maxUnixSocketPath {
+			continue
+		}
+		_ = os.MkdirAll(filepath.Dir(c), 0o700) //nolint:errcheck
+		return c
+	}
+	// Unreachable: /tmp/rekal-nomic-<16 hex>/d.sock is ~36 bytes.
+	p = candidates[len(candidates)-1]
+	_ = os.MkdirAll(filepath.Dir(p), 0o700) //nolint:errcheck
+	return p
 }
 
 // runtimeDir prefers the per-user runtime directory when the platform provides

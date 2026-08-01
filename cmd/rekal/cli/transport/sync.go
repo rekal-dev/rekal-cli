@@ -230,7 +230,7 @@ func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 		if len(sf.Turns) <= indexedTurns {
 			return false, nil
 		}
-		for _, tbl := range []string{"turns_ft", "session_facets"} {
+		for _, tbl := range []string{"turns_ft", "tool_calls_index", "session_facets"} {
 			if _, err := indexDB.Exec(
 				fmt.Sprintf("DELETE FROM %s WHERE session_id = $1", tbl), sessionID,
 			); err != nil {
@@ -283,6 +283,32 @@ func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 		}
 	}
 
+	// Tool calls, which the frame has been carrying all along.
+	//
+	// The wire pays for these on every push — 30k of them across two teammates
+	// on one real store — and the reader decoded them and dropped them on the
+	// floor. Everything downstream that reads tool_calls_index therefore saw
+	// only this machine's own sessions: the facet document loses each
+	// teammate's file paths and command prefixes (PopulateFacetText builds it
+	// from this table), and file_cooccurrence learns nothing from their work.
+	// The --self path has always stored them; only the team path did not.
+	for i, tc := range sf.ToolCalls {
+		path := ""
+		switch tc.PathFlag {
+		case codec.PathDictRef:
+			path, _ = dict.Get(codec.NSPaths, tc.PathRef)
+		case codec.PathInline:
+			path = tc.PathInline
+		}
+		if _, err := indexDB.Exec(
+			`INSERT INTO tool_calls_index (id, session_id, call_order, tool, path, cmd_prefix)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			newID(), sessionID, i, codec.ToolName(tc.Tool), path, tc.CmdPrefix,
+		); err != nil {
+			return false, fmt.Errorf("insert tool_call_index: %w", err)
+		}
+	}
+
 	// Harness metadata is only present on v2 frames; for v1 frames every field
 	// is zero and stored as NULL.
 	parentID := ""
@@ -298,7 +324,7 @@ func indexSessionFrame(indexDB *sql.DB, dict *codec.Dict, sf *codec.SessionFrame
 			agent_type, description, spawn_depth
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		sessionID, email, branch, actorType, agentID,
-		capturedAt, len(sf.Turns), 0, 0,
+		capturedAt, len(sf.Turns), len(sf.ToolCalls), 0,
 		db.NullIfEmpty(parentID), db.NullIfEmpty(sf.TeamName), db.NullIfEmpty(sf.WorkflowName),
 		db.NullIfEmpty(sf.AgentType), db.NullIfEmpty(sf.Description), db.NullIfZero(sf.SpawnDepth),
 	); err != nil {

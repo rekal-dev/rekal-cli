@@ -176,7 +176,13 @@ for the same place and move `.rekal/` off the store that already exists —
   the same reason: `session.SkipCapture` guards *capture*, not import, so a
   teammate whose ledger predates it carries RekalBench fixtures that ride the
   wire forever (append-only), and the reader is the only one who can decline
-  them.
+  them. `indexSessionFrame` also writes each frame's **tool calls** to
+  `tool_calls_index` (and the real `tool_call_count`): they have always ridden
+  the wire — 30k across two teammates on one real store — and the team path
+  decoded and dropped them, so everything built from that table saw only this
+  machine's sessions. The facet document lost every teammate's file paths and
+  command prefixes (`PopulateFacetText` reads it), and `file_cooccurrence`
+  learned nothing from their work. The `--self` path always stored them.
   `--self` is the **one identity, two machines** path: it imports the user's own
   branch into **data.db** (team sync writes other people's branches to the index
   only). It **extends** an existing session rather than skipping it — a later

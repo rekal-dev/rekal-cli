@@ -547,7 +547,10 @@ for the same place and move `.rekal/` off the store that already exists —
   tracks `main`, an installed binary does not), why the binary cannot ship
   inside it, self-hosted marketplace vs. the community marketplace's
   form-not-PR submission path, and the non-goals
-- `db/`: Database schema and design
+- `db/`: Database schema and design — `overview.md` is the map (`.tables` for
+  both DBs, a mermaid flow of data.db → index.db → wire, which four tables are
+  local-only and why, the lifecycle, and what losing each DB costs);
+  `README.md` is the column-by-column detail for all 21 tables
 - `research/`: Memory-research program — positioning claim + evidence ladder,
   18-paper literature map, RekalBench spec (self-labeled repo-grounded intent
   recall), local-corpus data plan, literature-derived product roadmap,

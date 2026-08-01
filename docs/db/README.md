@@ -1,5 +1,10 @@
 # Rekal Data DB Schema
 
+> For the map — what `.tables` shows in each database, how the two relate, and
+> which tables reach the wire — start with [overview.md](overview.md). This
+> page is the column-by-column detail.
+
+
 Data DB (`.rekal/data.db`) is the source of truth. Append-only, never rebuilt. Committed to the rekal orphan branch for sharing via push/sync.
 
 Engine: DuckDB.
@@ -160,6 +165,79 @@ CREATE TABLE IF NOT EXISTS checkpoint_sessions (
 
 ---
 
+## Local-only tables
+
+These four live in `data.db` but are **never encoded onto the wire**. Nothing
+in `transport/` reads them, and that is deliberate — see
+[SECURITY.md](../../SECURITY.md).
+
+### `checkpoint_state`
+
+Maps a transcript file to the session it was captured as, so a re-capture
+**appends** to that conversation instead of storing it again. A live
+conversation has different content at every commit, so keying dedup on content
+made each commit a brand-new session.
+
+```sql
+CREATE TABLE IF NOT EXISTS checkpoint_state (
+    file_path   VARCHAR PRIMARY KEY,
+    byte_size   BIGINT,
+    file_hash   VARCHAR,
+    session_id  VARCHAR          -- the conversation this transcript became
+);
+```
+
+`byte_size` + `file_hash` are the cheap skip: unchanged transcript, no work.
+
+### `recall_edges`
+
+The L1 recall citation graph — one row per session surfaced by a recall or
+opened by a drill. Aggregated into `index.db.session_reach`, which produces the
+`[reached N×]` hint.
+
+```sql
+CREATE TABLE IF NOT EXISTS recall_edges (
+    id                 VARCHAR PRIMARY KEY,
+    ts                 TIMESTAMP,
+    kind               VARCHAR,   -- 'recall' | 'drill'
+    query              VARCHAR,
+    target_session_id  VARCHAR
+);
+```
+
+This holds **query text**. Exporting it would publish what each developer
+searched for, which is why it never leaves the machine.
+
+### `merge_gate_cache`
+
+Memoized merged-only verdicts, created on demand at first push.
+
+```sql
+CREATE TABLE IF NOT EXISTS merge_gate_cache (
+    git_sha      VARCHAR NOT NULL,
+    target_tip   VARCHAR NOT NULL,   -- mainline tip the verdict was made against
+    gate_version INTEGER NOT NULL,   -- db.MergeGateVersion
+    shareable    BOOLEAN NOT NULL,
+    PRIMARY KEY (git_sha, target_tip, gate_version)
+);
+```
+
+The tip is in the key because the answer changes when the mainline moves: work
+unmerged at one tip may have landed by the next. The version is in the key
+because the answer also changes when the rule does. Strictly an accelerator —
+it can only skip a repeat, never let through anything the gate would refuse.
+
+### `schema_meta`
+
+Stamped schema version, so an older rekal opening a newer store detects the
+mismatch rather than misreading columns it predates.
+
+```sql
+CREATE TABLE IF NOT EXISTS schema_meta (key VARCHAR PRIMARY KEY, value VARCHAR);
+```
+
+---
+
 ## `role` vs `actor_type`
 
 These are orthogonal concepts:
@@ -192,16 +270,20 @@ Cross-user relationships are handled by `user_email` + `rekal sync`. Each user's
 
 ---
 
-## Implementation status
+## Who writes what
 
-| Table | Populated by | Status |
-|-------|-------------|--------|
-| `sessions` | `rekal checkpoint` | Done |
-| `turns` | `rekal checkpoint` | Done |
-| `tool_calls` | `rekal checkpoint` | Done |
-| `checkpoints` | `rekal checkpoint` | TODO — insert after orphan branch commit |
-| `files_touched` | `rekal checkpoint` | TODO — from `git diff --name-status` |
-| `checkpoint_sessions` | `rekal checkpoint` | TODO — link checkpoint to sessions |
+| Table | Populated by |
+|-------|-------------|
+| `sessions` | `rekal checkpoint` |
+| `turns` | `rekal checkpoint` |
+| `tool_calls` | `rekal checkpoint` |
+| `checkpoints` | `rekal checkpoint` |
+| `files_touched` | `rekal checkpoint` (git diff + Write/Edit tool paths) |
+| `checkpoint_sessions` | `rekal checkpoint` |
+| `checkpoint_state` | `rekal checkpoint` |
+| `recall_edges` | recall/drill spool, drained at checkpoint |
+| `merge_gate_cache` | `rekal push` |
+| `schema_meta` | schema migration |
 
 ---
 
@@ -387,3 +469,43 @@ CREATE TABLE IF NOT EXISTS index_state (
     last_indexed_at TIMESTAMP
 );
 ```
+
+---
+
+## `session_supersedes`
+
+Maps a collapsed duplicate to the conversation that survived it, so consumers
+follow the conversation rather than an id that is no longer in the index.
+
+```sql
+CREATE TABLE IF NOT EXISTS session_supersedes (
+    old_session_id       VARCHAR PRIMARY KEY,
+    survivor_session_id  VARCHAR NOT NULL
+);
+```
+
+Flattened before it is stored: a value is never itself a key. The index deletes
+every key, so a half-resolved chain would strand a subagent's parent or a reach
+count on a session that is gone.
+
+---
+
+## `session_reach`
+
+The derived L1 aggregate over `data.db.recall_edges` — how often each session
+has been surfaced, and the most recent query that reached it.
+
+```sql
+CREATE TABLE IF NOT EXISTS session_reach (
+    target_session_id  VARCHAR PRIMARY KEY,
+    reach_count        INTEGER NOT NULL,
+    last_query         VARCHAR,
+    last_ts            TIMESTAMP
+);
+```
+
+Feeds the optional `reach_boost` ranking layer and the `[reached N×· "query"]`
+display hint. Ranking only — deliberately excluded from the silence gate,
+because popular is not the same as relevant. Counts follow
+`session_supersedes`, so collapsing a duplicate does not reset a well-used
+conversation to zero.

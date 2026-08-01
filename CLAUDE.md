@@ -480,7 +480,19 @@ for the same place and move `.rekal/` off the store that already exists —
   Model loading is isolated in a **single-flight daemon** (`daemon.lock` flock,
   one per store) that loads the model **before** opening its socket — so a
   connectable socket means "ready", and a native model-load crash kills the
-  disposable daemon, never the caller. `NewClient(gitRoot, wait)`: recall passes
+  disposable daemon, never the caller. The spawned daemon's stderr goes to
+  `.rekal/nomic/daemon.log` (truncated per spawn): a daemon that can *never*
+  start is otherwise indistinguishable from one still warming, and recall tells
+  the agent to retry with backoff forever. `socketPath` falls back to a private
+  runtime dir keyed by a hash of the store root when
+  `<gitroot>/.rekal/nomic/daemon.sock` would exceed 103 bytes — `sockaddr_un`
+  bounds the whole path (108 Linux / 104 macOS incl. NUL), so a deep checkout
+  made the daemon load the model and then die on `bind: invalid argument`,
+  every spawn. Single-flight is unaffected: it comes from the flock on a
+  regular file, which has no length limit. **Build llama.cpp with
+  `-DGGML_NATIVE=OFF`** (CI, release, and `docs/cloud-agent-setup.md` all do):
+  ggml defaults it ON, which is `-march=native`, so a binary built on a runner
+  with AVX512-VBMI takes SIGILL loading the model on a CPU without it. `NewClient(gitRoot, wait)`: recall passes
   `wait=false` (degrade to keyword/LSA now, daemon warms for next call);
   `rekal embed` passes `wait=true` (block for the model, bounded). Cache
   extraction is flock-serialized; spawns are cooldown-rate-limited. This is the

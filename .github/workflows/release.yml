@@ -24,7 +24,7 @@ jobs:
           cmake -B build \
             -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF
           cmake --build build --config Release -j$(nproc) --target llama --target ggml --target common
       # Lint before the race suite so golangci-lint still has a warm, lightly
       # loaded runner — after test:ci, package load has been hitting the
@@ -69,7 +69,7 @@ jobs:
         run: |
           git clone --depth 1 --branch b8157 https://github.com/ggml-org/llama.cpp .deps/llama.cpp
           cd .deps/llama.cpp
-          CMAKE_ARGS="-DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release"
+          CMAKE_ARGS="-DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF"
           if [ "${{ matrix.goos }}" = "darwin" ]; then
             CMAKE_ARGS="$CMAKE_ARGS -DLLAMA_METAL=ON"
           fi

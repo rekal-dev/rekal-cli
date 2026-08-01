@@ -1,6 +1,7 @@
 package nomic
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -46,12 +47,55 @@ func nomicDir(gitRoot string) (string, error) {
 	return dir, nil
 }
 
+// maxUnixSocketPath is the portable ceiling for a Unix socket path. sockaddr_un
+// holds 108 bytes on Linux and 104 on macOS/BSD, each including the terminating
+// NUL — 103 is the largest length that binds everywhere.
+const maxUnixSocketPath = 103
+
+// socketPath is where the daemon listens for a store.
+//
+// It normally lives beside the lock, in the store. But a Unix socket path is
+// bounded by sockaddr_un, and the bound counts the *whole* absolute path — so a
+// repo nested deeply enough (a CI workspace, a container mount, an iCloud
+// path) pushes it past the limit and bind fails with EINVAL, "invalid
+// argument". The daemon would load the model, then die on listen, on every
+// spawn forever. Nothing surfaced: the caller only ever saw "daemon did not
+// become ready", which recall reports as `SEMANTIC warming — retry with
+// backoff` — advice that can never succeed on such a repo.
+//
+// Past the ceiling the socket moves to a short runtime directory under a name
+// derived from the store root, so daemon and client still agree on one
+// rendezvous per store. The single-flight guarantee is unaffected: it comes
+// from the flock on .rekal/nomic/daemon.lock, which is a regular file and has
+// no length limit.
 func socketPath(gitRoot string) string {
-	return filepath.Join(gitRoot, ".rekal", "nomic", "daemon.sock")
+	p := filepath.Join(gitRoot, ".rekal", "nomic", "daemon.sock")
+	if len(p) <= maxUnixSocketPath {
+		return p
+	}
+	sum := sha256.Sum256([]byte(gitRoot))
+	dir := filepath.Join(runtimeDir(), "rekal-nomic")
+	_ = os.MkdirAll(dir, 0o700) //nolint:errcheck
+	return filepath.Join(dir, fmt.Sprintf("%x.sock", sum[:8]))
+}
+
+// runtimeDir prefers the per-user runtime directory when the platform provides
+// one; it is already private, where the temp dir is shared.
+func runtimeDir() string {
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+		return d
+	}
+	return os.TempDir()
 }
 
 func pidPath(gitRoot string) string {
 	return filepath.Join(gitRoot, ".rekal", "nomic", "daemon.pid")
+}
+
+// daemonLogPath is where a spawned daemon's stderr lands, so a start-up failure
+// leaves a trace instead of presenting as a daemon that never warms.
+func daemonLogPath(gitRoot string) string {
+	return filepath.Join(gitRoot, ".rekal", "nomic", "daemon.log")
 }
 
 // writeMsg writes a length-prefixed JSON message to a connection.
@@ -353,7 +397,18 @@ func spawnDaemon(gitRoot string) {
 
 	cmd := exec.Command(exe, "_nomic-daemon", "--git-root", gitRoot)
 	cmd.Stdout = nil
-	cmd.Stderr = nil
+	// Keep the child's stderr. A daemon that can never start is
+	// indistinguishable from one still warming up: the caller times out, recall
+	// says `SEMANTIC warming — retry with backoff`, and the agent retries
+	// forever against a machine where the model will never load. Discarding the
+	// one place the reason exists made two real failures — an illegal
+	// instruction from a mismatched CPU build, and a socket path over the
+	// sockaddr_un limit — invisible on a working install. Truncated per spawn,
+	// so it holds the latest attempt and cannot grow.
+	if f, err := os.OpenFile(daemonLogPath(gitRoot), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+		cmd.Stderr = f
+		defer f.Close() //nolint:errcheck
+	}
 	cmd.Stdin = nil
 	setSysProcAttr(cmd)
 	if err := cmd.Start(); err != nil {

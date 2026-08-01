@@ -22,7 +22,7 @@ jobs:
           cmake -B build \
             -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF
           cmake --build build --config Release -j$(nproc) --target llama --target ggml --target common
       - name: Tests
         run: mise run test:ci

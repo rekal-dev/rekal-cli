@@ -172,7 +172,11 @@ for the same place and move `.rekal/` off the store that already exists —
   growing prefixes under **different** ids, so sync runs
   `db.PurgeSupersededSessionsWithData` after the import loop (before the counts,
   facets, FTS and reach) to collapse them — `PopulateIndex`'s own pass ran
-  before any arrival existed.
+  before any arrival existed. `db.PurgeBenchSessionsFromIndex` runs there for
+  the same reason: `session.SkipCapture` guards *capture*, not import, so a
+  teammate whose ledger predates it carries RekalBench fixtures that ride the
+  wire forever (append-only), and the reader is the only one who can decline
+  them.
   `--self` is the **one identity, two machines** path: it imports the user's own
   branch into **data.db** (team sync writes other people's branches to the index
   only). It **extends** an existing session rather than skipping it — a later

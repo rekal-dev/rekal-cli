@@ -161,6 +161,16 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		}
 	}
 
+	// Drop RekalBench harness sessions that arrived over the wire. PopulateIndex
+	// runs this pass too, but it ran above — before a single remote session
+	// existed in this index, so it only ever saw what data.db holds. A teammate
+	// whose store predates session.SkipCapture ships synthetic fixtures along
+	// with real work, and a two-turn harness echo outranks real conversations
+	// on a thin query. Index-only; their data.db keeps them, ours never had them.
+	if err := db.PurgeBenchSessionsFromIndex(indexDB); err != nil {
+		return fmt.Errorf("purge bench sessions: %w", err)
+	}
+
 	// Collapse re-captures again, now that the arrivals are in. PopulateIndex
 	// ran its own pass above, but that was before a single remote session
 	// existed in this index — it only ever saw what data.db holds. A teammate

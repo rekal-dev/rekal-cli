@@ -54,6 +54,22 @@ Both are additive terms applied before the subagent discount, exactly like
 gate (a newer or oft-reached session is not inherently more relevant). Set
 either to `0` to disable it (byte-identical), or tune per corpus.
 
+### The layer mix when there are no semantic vectors
+
+`bm25`/`lsa`/`nomic` are normalized to sum to 1. When the deep semantic layer
+has no vectors — the daemon still warming, `rekal embed` never run, a build
+without a model — its share falls to `lsa`, the remaining semantic signal, and
+the pair renormalizes to `0.35`/`0.65`. So on a store without vectors LSA
+carries roughly six times the weight it has when nomic is available. That is
+deliberate, but worth knowing before you read a ranking.
+
+`0` disables a layer, and that holds in the fallback too: setting `lsa` to `0`
+leaves keyword search carrying the whole mix rather than handing it the share a
+disabled layer would otherwise absorb. On a store with no vectors and a corpus
+containing very short sessions, that is a useful knob — LSA cosine over a
+40-character session is structurally generous, and at `0.65` it decides
+rankings.
+
 ## `embedding`
 
 Switches deep semantic embeddings from the embedded nomic model to any

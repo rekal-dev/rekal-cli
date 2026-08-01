@@ -109,8 +109,27 @@ func (w Weights) layers3() (bm25, lsa, nomic float64) {
 // vectors are available: the semantic layer's share falls back to LSA (the
 // remaining semantic signal), then the pair is normalized. With the defaults
 // this yields 0.35/0.65.
+//
+// An LSA weight of exactly 0 is honored, not overridden. Everywhere else in the
+// engine a weight of 0 turns its layer off — facet_boost, recency_boost,
+// reach_boost all document it — and handing the semantic share to a layer the
+// operator switched off inverts that: setting lsa to 0 used to leave LSA
+// carrying 61% of the ranking, more than it has when enabled. The share goes to
+// the only other active layer instead. Byte-identical for any store that has
+// not zeroed LSA, which is every store using the defaults.
 func (w Weights) layers2() (bm25, lsa float64) {
 	b, l, n := w.layers3()
+	switch {
+	case l == 0 && b == 0:
+		// Only the semantic layer was configured and it has no vectors: there
+		// is nothing left to rank on. Fall back to keyword rather than scoring
+		// every candidate zero.
+		return 1, 0
+	case l == 0:
+		return 1, 0
+	case b == 0:
+		return 0, 1
+	}
 	l += n
 	sum := b + l
 	return b / sum, l / sum

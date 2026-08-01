@@ -628,7 +628,8 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 				Backend: sem.Backend,
 				Model:   sem.Model,
 			},
-			Tokens: tokens,
+			WeightsEffective: effectiveMix(w, useNomic),
+			Tokens:           tokens,
 			Counts: map[string]int{
 				"bm25_hits":      len(bm25Hits),
 				"lsa_sessions":   len(lsaScores),
@@ -654,6 +655,17 @@ type candidateLineage struct {
 	bm25C, lsaC, nomicC, facetC             float64
 	hybridPreSub                            float64
 	parent                                  string
+}
+
+// effectiveMix is the layer mix the scoring loop actually used, which is the
+// 2-way fallback whenever the semantic layer produced no vectors.
+func effectiveMix(w Weights, useNomic bool) LineageNormWeights {
+	if useNomic {
+		b, l, n := w.layers3()
+		return LineageNormWeights{BM25: b, LSA: l, Nomic: n}
+	}
+	b, l := w.layers2()
+	return LineageNormWeights{BM25: b, LSA: l}
 }
 
 func emitCandidateLineage(lin Lineage, scoredResults []scored, w Weights, useNomic bool) {

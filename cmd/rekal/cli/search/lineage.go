@@ -168,7 +168,15 @@ type LineageWeights struct {
 	FacetBoost         float64 `json:"facet_boost"`
 }
 
-// LineageNormWeights is the effective layer mix actually applied.
+// LineageNormWeights is a normalized layer mix.
+//
+// On the query event this is the 3-way mix, emitted before the semantic layer
+// has reported whether it has vectors — it is the mix the engine intends, not
+// necessarily the one it applies. The mix actually applied is on the result
+// event as weights_effective, which is the only one to trust when
+// semantic.used is false: the 2-way fallback reassigns the semantic share, so
+// the two disagree by design and reading the wrong one has sent debugging in
+// the wrong direction.
 type LineageNormWeights struct {
 	BM25  float64 `json:"bm25"`
 	LSA   float64 `json:"lsa"`
@@ -214,13 +222,14 @@ type LineageSubagent struct {
 // LineageResult is the end-of-run event: final returned set, pool counts,
 // stage timings, deep-semantic layer outcome, and token/byte cost.
 type LineageResult struct {
-	Returned  []LineageReturned     `json:"returned"`
-	Knowledge []LineageKnowledgeHit `json:"knowledge,omitempty"`
-	Counts    map[string]int        `json:"counts"`
-	TimingsMS map[string]int64      `json:"timings_ms"`
-	Semantic  LineageSemantic       `json:"semantic"`
-	Tokens    *LineageTokens        `json:"tokens,omitempty"`
-	Skipped   map[string]string     `json:"skipped,omitempty"`
+	Returned         []LineageReturned     `json:"returned"`
+	Knowledge        []LineageKnowledgeHit `json:"knowledge,omitempty"`
+	Counts           map[string]int        `json:"counts"`
+	TimingsMS        map[string]int64      `json:"timings_ms"`
+	Semantic         LineageSemantic       `json:"semantic"`
+	WeightsEffective LineageNormWeights    `json:"weights_effective"`
+	Tokens           *LineageTokens        `json:"tokens,omitempty"`
+	Skipped          map[string]string     `json:"skipped,omitempty"`
 }
 
 // LineageKnowledgeHit is one file-level knowledge hit with the winning

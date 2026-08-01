@@ -247,7 +247,11 @@ for the same place and move `.rekal/` off the store that already exists —
   so global values are never baked in); `readMergedConfig` is the
   consumption view (recall weights, index embedding, scoring lineage). Holds
   the cross-repo `local_import` preference,
-  the recall-tuning `weights` (BM25/LSA/nomic layer mix, steering boost,
+  the recall-tuning `weights` (BM25/LSA/nomic layer mix — normalized to sum to
+  1, and when the semantic layer has no vectors its share falls to LSA
+  (`layers2`, 0.35/0.65), so LSA carries ~6× its enabled weight on a store that
+  has never embedded; a weight of **0 disables its layer there too**, rather
+  than having a switched-off LSA absorb the semantic share — steering boost,
   summary boost, subagent discount, facet boost, plus the opt-in
   `recency_boost` and `reach_boost` additive layers — recency over
   `session_facets.captured_at` (default 0.15, inert when candidates share a
@@ -345,7 +349,11 @@ for the same place and move `.rekal/` off the store that already exists —
   + `result.knowledge` file hits with winning-chunk bm25/semantic;
   `result.semantic{used,backend,model}` names the real embedder —
   `http`|`embedded` + model id — distinct from the historical layer key
-  `nomic` in weights/timings/skipped; observe-only, ranking unchanged), and
+  `nomic` in weights/timings/skipped. `query.weights_normalized` is the 3-way
+  mix the engine *intends* — it is emitted before the semantic layer reports
+  whether it has vectors — so `result.weights_effective` is the one to read
+  when `semantic.used` is false: the 2-way fallback reassigns the semantic
+  share and the two disagree by design. Observe-only, ranking unchanged), and
   the **knowledge layer** (`knowledge.go` — hybrid
   BM25 + chunk-vector cosine over prose-file chunks at HEAD, blended with the
   `layers2` keyword/semantic split, query vector shared from the session

@@ -139,8 +139,11 @@ for the same place and move `.rekal/` off the store that already exists —
   network call runs under a deadline (`runGitDeadline`, `--timeout`, default 2m)
   with `cmd.WaitDelay` set — killing git is not enough, because a stuck remote
   helper or ssh child keeps the output pipe open and `CombinedOutput` blocks on
-  it. `--best-effort` (hook mode) turns a publication failure into a warning;
-  a hand-run push exits non-zero, so a failure is never silent.
+  it. A publication failure is a **warning** by default and an error only under
+  `--strict`: every pre-push hook already installed runs a bare `rekal push`,
+  so exiting non-zero there would abort the user's git push over a diverged
+  memory branch. `--best-effort` is accepted as a hidden no-op so a hook from
+  either version works against a binary from the other.
   **There is no `--force`**: SOUL.md makes the append-only wire format a
   *structural* guarantee, not a policy, and a flag that overwrites a branch
   would demote it to the latter. `rekal push` appends and can do nothing else;

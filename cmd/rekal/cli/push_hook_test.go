@@ -24,8 +24,11 @@ func TestHookScript_PrePushContract(t *testing.T) {
 	if !strings.Contains(got, `--remote "${1:-origin}"`) {
 		t.Errorf("the hook must forward git's remote ($1), not assume origin:\n%s", got)
 	}
+	// The hook says it explicitly even though it is now the default: a hook
+	// written by this version may be read by a person, and the intent should
+	// not depend on knowing the default.
 	if !strings.Contains(got, "--best-effort") {
-		t.Errorf("the hook must run best-effort — a memory push must never fail somebody's git push:\n%s", got)
+		t.Errorf("the hook should state best-effort explicitly:\n%s", got)
 	}
 	if !strings.Contains(got, internalPushEnv) {
 		t.Errorf("recursion must be guarded by %s so unrelated pre-push hooks still run:\n%s", internalPushEnv, got)
@@ -44,17 +47,19 @@ func TestHookScript_PrePushContract(t *testing.T) {
 	}
 }
 
-// TestPushFailure_BestEffort covers the exit-code split. A hook must not fail
-// the user's git push; a person running it by hand must not be told nothing
-// happened when publication failed.
-func TestPushFailure_BestEffort(t *testing.T) {
+// TestPushFailure_DefaultsToWarning covers the exit-code split, and which side
+// of it the default sits on.
+func TestPushFailure_DefaultsToWarning(t *testing.T) {
 	t.Parallel()
 	boom := os.ErrClosed
-	if err := pushFailure(pushOptions{BestEffort: true}, boom); err != nil {
-		t.Errorf("best-effort must swallow a publication failure, got %v", err)
+	// The default must be safe, because it is what every pre-push hook already
+	// installed in the wild invokes. Exiting non-zero there aborts the user's
+	// git push — memory failing must never stop code from leaving the machine.
+	if err := pushFailure(pushOptions{}, boom); err != nil {
+		t.Errorf("the default must warn, not fail: an already-installed hook runs a bare `rekal push` and its status aborts the git push, got %v", err)
 	}
-	if err := pushFailure(pushOptions{}, boom); err == nil {
-		t.Error("a hand-run push must exit non-zero when publication fails, or the failure is invisible")
+	if err := pushFailure(pushOptions{Strict: true}, boom); err == nil {
+		t.Error("--strict must exit non-zero, or a script that needs publication to succeed cannot tell that it did not")
 	}
 }
 

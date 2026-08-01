@@ -21,7 +21,7 @@ func newPushCmd() *cobra.Command {
 	var rebuild bool
 	var reExportAlias bool
 	var remote string
-	var bestEffort bool
+	var strict bool
 	var progress bool
 	var timeout time.Duration
 
@@ -80,10 +80,10 @@ You do not need to run this manually.`,
 				return doReExport(gitRoot, cmd.ErrOrStderr())
 			}
 			return doPush(gitRoot, cmd.ErrOrStderr(), pushOptions{
-				Remote:     remote,
-				BestEffort: bestEffort,
-				Timeout:    timeout,
-				Progress:   progress,
+				Remote:   remote,
+				Strict:   strict,
+				Timeout:  timeout,
+				Progress: progress,
 			})
 		},
 	}
@@ -96,7 +96,12 @@ You do not need to run this manually.`,
 	cmd.Flags().BoolVar(&reExportAlias, "re-export", false, "Deprecated alias for --rebuild")
 	_ = cmd.Flags().MarkDeprecated("re-export", "use --rebuild")
 	cmd.Flags().StringVar(&remote, "remote", "origin", "Remote to publish to (the pre-push hook passes the remote git is pushing to)")
-	cmd.Flags().BoolVar(&bestEffort, "best-effort", false, "Report publication failures as warnings and exit 0 (used by the git hook)")
+	cmd.Flags().BoolVar(&strict, "strict", false, "Exit non-zero when publication fails (default: warn and exit 0, so a memory push never fails your git push)")
+	// Accepted and ignored: the installed hook passes it, and a hook written by
+	// a newer rekal must keep working against an older binary and the reverse.
+	var bestEffortCompat bool
+	cmd.Flags().BoolVar(&bestEffortCompat, "best-effort", false, "No-op; warning-on-failure is the default")
+	_ = cmd.Flags().MarkHidden("best-effort")
 	cmd.Flags().BoolVar(&progress, "progress", false, "Print timed stages")
 	cmd.Flags().DurationVar(&timeout, "timeout", defaultGitTimeout, "Deadline for each git network call")
 	return cmd
@@ -173,10 +178,15 @@ type pushOptions struct {
 	// Remote is the git remote to publish to. The pre-push hook passes the
 	// remote git is actually pushing to; everything else defaults to origin.
 	Remote string
-	// BestEffort makes a publication failure a warning rather than an error.
-	// The hook sets it — a memory push must never fail someone's git push —
-	// and a hand-run push does not, so a person gets a non-zero exit.
-	BestEffort bool
+	// Strict makes a publication failure a non-zero exit. Off by default, and
+	// that asymmetry is deliberate: every pre-push hook already installed in
+	// the wild invokes a bare `rekal push`, so a failure that exits non-zero
+	// there aborts the user's git push. Someone upgrading the binary without
+	// re-running `rekal init` would find a diverged memory branch blocking
+	// their code — memory failing must never stop work from leaving the
+	// machine. --strict opts into the louder behaviour for a script that wants
+	// publication treated as required.
+	Strict bool
 	// Timeout bounds each git network call.
 	Timeout time.Duration
 	// Progress prints timed stages.
@@ -326,12 +336,11 @@ func doPush(gitRoot string, w io.Writer, opts pushOptions) error {
 	return nil
 }
 
-// pushFailure reports a publication failure as an error, or swallows it in
-// best-effort mode. The hook runs best-effort so a memory push can never fail
-// somebody's git push; a person running it by hand gets a non-zero exit,
-// because silently doing nothing is the worse answer there.
+// pushFailure reports a publication failure. It is a warning by default and an
+// error only under --strict, because the default is what every already-installed
+// hook invokes: a memory push must never fail somebody's git push.
 func pushFailure(opts pushOptions, err error) error {
-	if opts.BestEffort {
+	if !opts.Strict {
 		return nil
 	}
 	return NewSilentError(err)

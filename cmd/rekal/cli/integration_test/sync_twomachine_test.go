@@ -274,11 +274,12 @@ func TestPush_ForkNeverDiscardsAnotherMachine(t *testing.T) {
 	laptop.contribute(t, "laptop.jsonl",
 		[]string{"laptop opening", "laptop found the deadlock"}, "laptop work")
 	pullMain(t, desktop.dir)
-	// The desktop's branch forked, so publishing legitimately fails — that is
-	// the situation under test, not a broken fixture.
+	// The desktop's branch forked, so publishing cannot succeed. It exits 0 all
+	// the same — a bare `rekal push` is what every installed pre-push hook runs,
+	// and failing there would abort the user's git push over a memory branch.
 	if err := desktop.tryContribute(t, "desktop.jsonl",
-		[]string{"desktop opening", "desktop rewrote the parser"}, "desktop work"); err == nil {
-		t.Error("a push onto a forked branch reported success; it cannot append without discarding the other machine's frames")
+		[]string{"desktop opening", "desktop rewrote the parser"}, "desktop work"); err != nil {
+		t.Errorf("a forked publish must warn rather than fail the caller: %v", err)
 	}
 
 	// There is no rekal-level force at all.

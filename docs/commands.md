@@ -129,7 +129,7 @@ rekal query -i -q "SELECT count(*) FROM turns_ft"
 |---|---|---|---|
 | `rekal push` | | | Export merged checkpoints to your `rekal/<email>` branch |
 | | `--remote` | | Remote to publish to (default `origin`; the hook forwards git's) |
-| | `--best-effort` | | Publication failure becomes a warning, exit 0 (hook mode) |
+| | `--strict` | | Exit non-zero when publication fails (default: warn, exit 0) |
 | | `--progress` | | Print timed stages |
 | | `--timeout` | | Deadline per git network call (default 2m) |
 | | `--rebuild` | | Re-encode the branch's wire data from `data.db`. Refuses unless the branch's current body is already contained in what it would write. (`--re-export` is a deprecated alias) |

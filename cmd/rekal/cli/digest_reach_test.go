@@ -24,6 +24,15 @@ func TestReachHint(t *testing.T) {
 			&search.ReachInfo{Count: 1, Query: "a very long question that certainly exceeds the cap"},
 			` [reached 1×· "a very long question that cert…"]`,
 		},
+		// Drills are the signal an agent acted on; they are shown separately so
+		// "the ranker keeps offering this" cannot read as "people read this".
+		{"drills shown when present", &search.ReachInfo{Count: 9, Drills: 2}, " [reached 9× drilled 2×]"},
+		{
+			"drills with query",
+			&search.ReachInfo{Count: 9, Drills: 2, Query: "jwt expiry"},
+			` [reached 9× drilled 2×· "jwt expiry"]`,
+		},
+		{"no drills stays as before", &search.ReachInfo{Count: 9, Drills: 0}, " [reached 9×]"},
 	}
 	for _, c := range cases {
 		if got := reachHint(c.in); got != c.want {

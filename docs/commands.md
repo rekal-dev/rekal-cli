@@ -64,7 +64,10 @@ Digest header: `INJECT top=0.71 gap=0.21 15 seeds`
   middle band: `top ≥ 0.25` passes on its own; `0.20–0.25` needs `gap ≥ 0.02`;
   below `0.20` is silence. One clearly-best answer is signal, several bunched
   together is noise.
-- `[reached N×· "query"]` — this memory has been recalled before. Ranking hint
+- `[reached N× drilled M×· "query"]` — usage history. `reached` is how often
+  search surfaced this memory (the engine quoting itself — high on any small
+  store); `drilled` is how often an agent opened it, and is the half that feeds
+  `reach_boost`. The query is the one that surfaced it most often. Ranking hint
   only; deliberately excluded from the silence gate, because popular is not the
   same as relevant.
 

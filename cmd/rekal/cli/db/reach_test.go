@@ -86,9 +86,135 @@ func TestRecallEdgesReachAggregate(t *testing.T) {
 		t.Errorf("S2 = %+v, want count 1 query 'token refresh'", reach["S2"])
 	}
 
+	// S1 has one drill among its two edges; S2 has none.
+	if s1.Drills != 1 {
+		t.Errorf("S1 drills = %d, want 1", s1.Drills)
+	}
+	if reach["S2"].Drills != 0 {
+		t.Errorf("S2 drills = %d, want 0", reach["S2"].Drills)
+	}
+
 	// S3: never reached — absent.
 	if _, ok := reach["S3"]; ok {
 		t.Error("S3 should be absent from reach map")
+	}
+}
+
+// TestReachTopQueryIsTheMostFrequent covers the provenance half of the hint.
+// The query shown to an agent is described as how the need was framed, so it is
+// the query that reached the session most often, not whichever ran last — one
+// stray recall used to relabel every row in the corpus.
+func TestReachTopQueryIsTheMostFrequent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dataDB, err := OpenData(dir)
+	if err != nil {
+		t.Fatalf("OpenData: %v", err)
+	}
+	if err := InitDataSchema(dataDB); err != nil {
+		t.Fatalf("InitDataSchema: %v", err)
+	}
+
+	base := time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC)
+	edges := []RecallEdge{
+		{ID: "e1", TS: base, Kind: "recall", Query: "merge gate", Target: "S1"},
+		{ID: "e2", TS: base.Add(time.Hour), Kind: "recall", Query: "merge gate", Target: "S1"},
+		{ID: "e3", TS: base.Add(2 * time.Hour), Kind: "recall", Query: "merge gate", Target: "S1"},
+		// Newest, but a one-off: it must not become the session's label.
+		{ID: "e4", TS: base.Add(3 * time.Hour), Kind: "recall", Query: "zzz nonsense", Target: "S1"},
+	}
+	if err := InsertRecallEdges(dataDB, edges); err != nil {
+		t.Fatalf("InsertRecallEdges: %v", err)
+	}
+	if err := dataDB.Close(); err != nil {
+		t.Fatalf("close data: %v", err)
+	}
+
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close()
+	if err := InitIndexSchema(indexDB); err != nil {
+		t.Fatalf("InitIndexSchema: %v", err)
+	}
+	dataPath := filepath.Join(StoreDir(dir), "data.db")
+	if _, err := indexDB.Exec(fmt.Sprintf("ATTACH '%s' AS data_db (READ_ONLY)", dataPath)); err != nil {
+		t.Fatalf("attach data_db: %v", err)
+	}
+	if err := PopulateSessionReach(indexDB); err != nil {
+		t.Fatalf("PopulateSessionReach: %v", err)
+	}
+	if _, err := indexDB.Exec("DETACH data_db"); err != nil {
+		t.Fatalf("detach: %v", err)
+	}
+
+	reach, err := LoadReach(indexDB, []string{"S1"})
+	if err != nil {
+		t.Fatalf("LoadReach: %v", err)
+	}
+	if got := reach["S1"].Query; got != "merge gate" {
+		t.Errorf("displayed query = %q, want the most frequent one (%q)", got, "merge gate")
+	}
+
+	// last_query keeps its literal meaning for anyone querying the table.
+	var last string
+	if err := indexDB.QueryRow(`SELECT last_query FROM session_reach WHERE target_session_id = 'S1'`).Scan(&last); err != nil {
+		t.Fatalf("read last_query: %v", err)
+	}
+	if last != "zzz nonsense" {
+		t.Errorf("last_query = %q, want the newest query", last)
+	}
+}
+
+// TestReachSchemaUpgrade covers an index.db created before drill_count and
+// top_query existed: the columns are added in place, since session_reach is
+// created on demand rather than by a versioned migration.
+func TestReachSchemaUpgrade(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	indexDB, err := OpenIndex(dir)
+	if err != nil {
+		t.Fatalf("OpenIndex: %v", err)
+	}
+	defer indexDB.Close()
+
+	if _, err := indexDB.Exec(`CREATE TABLE session_reach (
+		target_session_id VARCHAR PRIMARY KEY,
+		reach_count       INTEGER NOT NULL DEFAULT 0,
+		last_query        VARCHAR,
+		last_ts           TIMESTAMP
+	)`); err != nil {
+		t.Fatalf("create legacy table: %v", err)
+	}
+	if _, err := indexDB.Exec(
+		`INSERT INTO session_reach VALUES ('S1', 5, 'jwt expiry', TIMESTAMP '2026-07-20 10:00:00')`,
+	); err != nil {
+		t.Fatalf("seed legacy row: %v", err)
+	}
+
+	if err := EnsureReachSchema(indexDB); err != nil {
+		t.Fatalf("EnsureReachSchema: %v", err)
+	}
+
+	reach, err := LoadReach(indexDB, []string{"S1"})
+	if err != nil {
+		t.Fatalf("LoadReach: %v", err)
+	}
+	if reach["S1"].Count != 5 || reach["S1"].Drills != 0 {
+		t.Errorf("upgraded row = %+v, want count 5 drills 0", reach["S1"])
+	}
+	// top_query is NULL until the next rebuild; the hint falls back to last_query.
+	if reach["S1"].Query != "jwt expiry" {
+		t.Errorf("query = %q, want the legacy last_query", reach["S1"].Query)
 	}
 }
 

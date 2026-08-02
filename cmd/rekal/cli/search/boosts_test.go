@@ -75,9 +75,9 @@ func TestRecencyBoost(t *testing.T) {
 	}
 }
 
-// TestReachBoost: with reach_boost > 0 the more-reached of two equally-relevant
-// sessions (same captured_at) ranks first, the reach layer shows under
-// --explain, and at boost 0 the layer is inert.
+// TestReachBoost: with reach_boost > 0 the session an agent has actually
+// drilled ranks ahead of an equally-relevant one (same captured_at), the reach
+// layer shows under --explain, and at boost 0 the layer is inert.
 func TestReachBoost(t *testing.T) {
 	t.Parallel()
 	indexDB := seedEqualPair(t, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z") // equal recency
@@ -85,8 +85,8 @@ func TestReachBoost(t *testing.T) {
 		t.Fatalf("ensure reach schema: %v", err)
 	}
 	if _, err := indexDB.Exec(
-		`INSERT INTO session_reach (target_session_id, reach_count, last_query, last_ts)
-		 VALUES ('s-b', 7, 'q', '2026-01-02T00:00:00Z')`,
+		`INSERT INTO session_reach (target_session_id, reach_count, drill_count, last_query, last_ts)
+		 VALUES ('s-b', 7, 2, 'q', '2026-01-02T00:00:00Z')`,
 	); err != nil {
 		t.Fatalf("seed session_reach: %v", err)
 	}
@@ -115,6 +115,38 @@ func TestReachBoost(t *testing.T) {
 	for _, r := range run(0) {
 		if r.Layers != nil && r.Layers.Reach != 0 {
 			t.Fatalf("reach_boost=0: %s reach layer = %v, want 0", r.SessionID, r.Layers.Reach)
+		}
+	}
+}
+
+// TestReachBoost_SurfacingAloneDoesNotRank pins the distinction the layer now
+// makes. A recall edge says only that this engine already ranked the session
+// into some window — boosting on it is the ranker rewarding its own output, and
+// with 20 seeds per call it marks most of a small corpus. Only a drill, an
+// agent's decision to open the session, moves ranking.
+func TestReachBoost_SurfacingAloneDoesNotRank(t *testing.T) {
+	t.Parallel()
+	indexDB := seedEqualPair(t, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z")
+	if err := db.EnsureReachSchema(indexDB); err != nil {
+		t.Fatalf("ensure reach schema: %v", err)
+	}
+	// Surfaced 99 times, never opened.
+	if _, err := indexDB.Exec(
+		`INSERT INTO session_reach (target_session_id, reach_count, drill_count, last_query, last_ts)
+		 VALUES ('s-b', 99, 0, 'q', '2026-01-02T00:00:00Z')`,
+	); err != nil {
+		t.Fatalf("seed session_reach: %v", err)
+	}
+
+	w := DefaultWeights()
+	w.ReachBoost = 1.0
+	out, err := Run(indexDB, Filters{Query: "auth token expiry", Explain: true}, t.TempDir(), w, stubEmbedder{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, r := range out.Results {
+		if r.Layers != nil && r.Layers.Reach != 0 {
+			t.Errorf("%s: surfacing alone produced a reach layer of %v, want 0", r.SessionID, r.Layers.Reach)
 		}
 	}
 }

@@ -43,11 +43,15 @@ Two more additive ranking layers ship on at gentle defaults (both below
 - **`recency_boost`** (default `0.15`) — nudges more recently captured sessions
   up the ranking (min-max over the candidate set: newest → +boost, oldest →
   +0). Contributes nothing when the candidates share a timestamp (span 0).
-- **`reach_boost`** (default `0.2`) — nudges sessions the L1 recall graph has
-  reached before up the ranking (max-normalized `session_reach.reach_count`),
-  turning the `[reached N×]` usage hint from display-only into ranking.
-  Self-activating: a cold store has no reach edges, so it is byte-identical
-  until the graph accumulates; fails soft on an index with no reach data.
+- **`reach_boost`** (default `0.2`) — nudges sessions an agent has actually
+  **drilled** up the ranking (max-normalized `session_reach.drill_count`),
+  turning the usage half of the `[reached N× drilled M×]` hint into ranking.
+  Merely being surfaced does not count: a recall edge records that the engine
+  ranked the session into some window, so boosting on it is the ranker
+  rewarding its own output, and one call surfaces ~20 seeds — most of a small
+  corpus. Self-activating: a cold store has no drill edges, so it is
+  byte-identical until agents start drilling; fails soft on an index with no
+  reach data.
 
 Both are additive terms applied before the subagent discount, exactly like
 `facet_boost`; both reorder *within* a result set and **never** feed the silence

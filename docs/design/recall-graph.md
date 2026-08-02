@@ -58,9 +58,15 @@ graph.Append  ──►  .rekal/recall-log.ndjson  ──► graph.Drain ──�
   written by an older rekal never re-runs the full DDL, so a table added to
   `dataDDL` alone would never appear there. Additive, so no schema-version bump.
 - **`index.db.session_reach`** is the derived aggregate the hot read path uses:
-  `(target_session_id, reach_count, last_query, last_ts)`, rebuilt from
-  `recall_edges` in `PopulateIndex` / `PopulateIndexIncremental`. Created on
-  demand (`EnsureReachSchema`) so old index DBs upgrade in place.
+  `(target_session_id, reach_count, drill_count, last_query, top_query,
+  last_ts)`, rebuilt from `recall_edges` in `PopulateIndex` /
+  `PopulateIndexIncremental`. Created on demand (`EnsureReachSchema`) so old
+  index DBs upgrade in place, columns included.
+  The two counts stay apart because they are different evidence. A **recall
+  edge** says only that this engine ranked the session into some window — its
+  own past output. A **drill edge** says an agent chose to open it. `top_query`
+  is the query that reached the session most often (ties broken by recency);
+  `last_query` keeps its literal meaning for anyone querying the table.
 - **The spool** (`.rekal/recall-log.ndjson`, gitignored) exists only so the hot
   recall path never grabs data.db's single writer — that would re-couple recall
   to checkpoint/embed. It is a transient write-ahead buffer, drained at
@@ -79,20 +85,35 @@ now), and attaches it as a display-only field. In the digest:
 
 ```
 INJECT top=0.62 gap=0.05 12 seeds
-  s5 conf=0.50 t12 [reached 4×· "jwt expiry"] "…snippet…"
+  s5 conf=0.50 t12 [reached 9× drilled 2×· "jwt expiry"] "…snippet…"
+  s6 conf=0.47 t3 [reached 4×· "jwt expiry"] "…snippet…"   ← surfaced, never opened
   s8 conf=0.44 t7 "…snippet…"          ← never reached: no suffix
 ```
 
-`--json` carries a `reached: {count, query}` field (omitempty). On a cold store
-every seed is unreached, so the digest is byte-identical to before the feature.
+The drill count is printed separately, and only when there is one: "the ranker
+keeps offering this" is not the same recommendation as "an agent read this".
+`--json` carries a `reached: {count, drills, query}` field (omitempty). On a
+cold store every seed is unreached, so the digest is byte-identical to before
+the feature.
 
 **Display-only by default.** The reach signal ships as a hint — no silence-gate
-change, no retune — and the agent judges. A ranking layer now sits on the same
-signal: `weights.reach_boost` (default `0.2`) adds a max-normalized reach term
-to the hybrid score (`hybrid += reach_boost × reachNorm`, before the subagent
-discount, ranking-only — never `absoluteConfidence`). It is self-activating — a
-cold store has no reach edges, so ranking is byte-identical until the graph
-accumulates — and set it to `0` to disable the `session_reach` lookup entirely. This is the first realized step of the
+change, no retune — and the agent judges. A ranking layer now sits on the
+**drill** half of that signal: `weights.reach_boost` (default `0.2`) adds a
+max-normalized `drill_count` term to the hybrid score (`hybrid += reach_boost ×
+reachNorm`, before the subagent discount, ranking-only — never
+`absoluteConfidence`).
+
+Ranking on drills rather than on every edge is deliberate. Recall returns ~20
+seeds per call, so on any store smaller than a few hundred sessions a single
+query marks most of the corpus: measured on a 37-session store, 36 sessions
+carried reach (median 22.5), the top slot was a three-turn session and an empty
+session sat at 36 — while the corpus held 741 recall edges against 6 drills.
+Boosting on that is the ranker rewarding whatever it surfaced before, noise
+included. A drill is evidence from outside the ranker.
+
+The layer is self-activating — a cold store has no drill edges, so ranking is
+byte-identical until agents start drilling — and `0` disables the
+`session_reach` lookup entirely. This is the first realized step of the
 authority-ranking direction below; the full session↔session PageRank remains a
 later layer.
 

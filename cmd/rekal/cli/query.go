@@ -101,8 +101,11 @@ INDEX DB SCHEMA (.rekal/index.db):
                        content, content_hash, blob_sha
                        (heading-anchored prose sections of tracked files at HEAD)
   knowledge_embeddings content_hash, model, embedding
-  session_reach        target_session_id, reach_count, last_query, last_ts
-                       (L1 reach aggregate, derived from data.db.recall_edges)
+  session_reach        target_session_id, reach_count, drill_count, last_query,
+                       top_query, last_ts
+                       (L1 reach aggregate, derived from data.db.recall_edges.
+                       reach_count is every edge, drill_count only the ones
+                       where an agent opened the session)
 
 Note: turns.ts is a TIMESTAMP, not text. "ts LIKE '2023-05%'" raises a Binder
 error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01', or

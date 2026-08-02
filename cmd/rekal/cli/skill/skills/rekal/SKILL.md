@@ -42,12 +42,14 @@ a program needs to parse it.
   reformulations of your query (keyword-only, clause splits, a temporal variant)
   so you get the full picture in one go; still reformulate *by hand* only when
   the answer needs a genuinely different angle the mechanical variants miss.
-  A seed may carry `[reached N×· "past query"]` before its snippet — a **usage**
-  hint: this memory was reached (recalled or drilled) N times before, last for
-  that query. High reach = load-bearing, well-trodden memory, a good first
-  drill; the echoed query shows how the need was framed. It never raises
-  `conf=` — judge relevance from `conf=` + content as always. No tag just means
-  newly surfaced, not worse.
+  A seed may carry `[reached N× drilled M×· "past query"]` before its snippet —
+  a **usage** hint. `reached` counts how often the search surfaced it, which is
+  the engine quoting itself: on a small store nearly everything is reached, so
+  a bare high count means little. `drilled` counts how often an agent opened
+  it — that is the load-bearing signal and a good first drill. The echoed query
+  is the one that most often surfaced this memory, so it shows how the need is
+  usually framed. Neither raises `conf=` — judge relevance from `conf=` +
+  content as always. No tag just means newly surfaced, not worse.
 - `rekal find "<term>" [role]` — every ledger mention of a term, complete and in
   time order (the "all / every / how many" sweep). A partial list is a wrong
   answer to a set question — this is the set.

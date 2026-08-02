@@ -76,7 +76,7 @@ func attachReach(indexDB *sql.DB, results []search.Result) {
 	}
 	for i := range results {
 		if rc, ok := reach[results[i].SessionID]; ok && rc.Count > 0 {
-			results[i].Reached = &search.ReachInfo{Count: rc.Count, Query: rc.Query}
+			results[i].Reached = &search.ReachInfo{Count: rc.Count, Drills: rc.Drills, Query: rc.Query}
 		}
 	}
 }

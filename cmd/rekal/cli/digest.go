@@ -109,20 +109,31 @@ func knowledgeHits(k []search.KnowledgeHit) string {
 const reachQueryCap = 30
 
 // reachHint renders the L1 recall-graph suffix for a seed: how often it was
-// reached and a representative past query. Empty when the seed has no reach
-// history, so a cold store's digest is byte-identical to before the feature.
+// surfaced, how often an agent actually opened it, and the query that surfaced
+// it most often. Empty when the seed has no reach history, so a cold store's
+// digest is byte-identical to before the feature.
+//
+// The drill count is printed separately, and only when there is one, because
+// the two numbers are different evidence: being surfaced is this engine's own
+// past output, while being opened is an agent's judgment. A high reach with no
+// drills means "the ranker keeps offering this", which is not the same
+// recommendation as "people read this".
 func reachHint(r *search.ReachInfo) string {
 	if r == nil || r.Count <= 0 {
 		return ""
 	}
+	counts := fmt.Sprintf("reached %d×", r.Count)
+	if r.Drills > 0 {
+		counts += fmt.Sprintf(" drilled %d×", r.Drills)
+	}
 	q := strings.TrimSpace(r.Query)
 	if q == "" {
-		return fmt.Sprintf(" [reached %d×]", r.Count)
+		return fmt.Sprintf(" [%s]", counts)
 	}
 	if rs := []rune(q); len(rs) > reachQueryCap {
 		q = string(rs[:reachQueryCap]) + "…"
 	}
-	return fmt.Sprintf(" [reached %d×· %q]", r.Count, q)
+	return fmt.Sprintf(" [%s· %q]", counts, q)
 }
 
 // withEvidence drops seeds the engine scored as carrying no absolute evidence

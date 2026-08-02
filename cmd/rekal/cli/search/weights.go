@@ -56,17 +56,24 @@ type Weights struct {
 	// relevant.
 	RecencyBoost float64
 
-	// ReachBoost scales the L1 recall-graph layer: sessions past recalls and
-	// drills have reached (index session_reach.reach_count) get a
-	// max-normalized additive boost — hybrid += ReachBoost * reachNorm —
-	// before the subagent discount. This turns the citation-graph signal
-	// ("load-bearing memory ranks higher") from a display-only hint into
-	// ranking (the L1→L2 seam in docs/design/recall-graph.md). Ships 0.2 —
-	// self-activating: a cold store has no reach edges, so reachNorm is 0 for
-	// every session and ranking is byte-identical until the graph accumulates.
-	// The layer fails soft on an index with no reach table. Set 0 to disable
-	// the lookup entirely. Never feeds absolute confidence — a well-trodden
-	// session is not inherently more relevant.
+	// ReachBoost scales the L1 recall-graph layer: sessions an agent has
+	// actually opened (index session_reach.drill_count) get a max-normalized
+	// additive boost — hybrid += ReachBoost * reachNorm — before the subagent
+	// discount. This turns the citation-graph signal ("load-bearing memory
+	// ranks higher") from a display-only hint into ranking (the L1→L2 seam in
+	// docs/design/recall-graph.md). Ships 0.2 — self-activating: a cold store
+	// has no drill edges, so reachNorm is 0 for every session and ranking is
+	// byte-identical until agents start drilling.
+	//
+	// Drills rather than every edge: a recall edge only says this engine
+	// already ranked the session into some window, so boosting on it is the
+	// ranker rewarding its own past output, and with 20 seeds per call it
+	// marks most of a small corpus anyway. A drill is an agent's decision to
+	// read the session — evidence the ranker did not manufacture.
+	//
+	// The layer fails soft on an index with no reach table or column. Set 0 to
+	// disable the lookup entirely. Never feeds absolute confidence — a
+	// well-trodden session is not inherently more relevant.
 	ReachBoost float64
 }
 

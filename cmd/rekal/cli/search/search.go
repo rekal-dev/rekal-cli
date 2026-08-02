@@ -138,18 +138,20 @@ type Result struct {
 	Related []Related `json:"related,omitempty"`
 
 	// Reached is the L1 recall citation-graph hint: how often this session has
-	// been reached (recalled or drilled) by past work, and a representative
-	// query that reached it. Attached by the recall command from the derived
+	// been surfaced, how often an agent opened it, and the query that surfaced
+	// it most often. Attached by the recall command from the derived
 	// session_reach aggregate — nil when the session has no reach history, so
-	// output is unchanged on a cold store. The ranking engine never reads it
-	// (display-only). See docs/design/recall-graph.md.
+	// output is unchanged on a cold store. The ranking engine never reads this
+	// struct (display-only); the reach layer reads drill counts straight from
+	// the index. See docs/design/recall-graph.md.
 	Reached *ReachInfo `json:"reached,omitempty"`
 }
 
 // ReachInfo is the display-only recall-graph hint carried on a Result.
 type ReachInfo struct {
-	Count int    `json:"count"`
-	Query string `json:"query,omitempty"`
+	Count  int    `json:"count"`
+	Drills int    `json:"drills,omitempty"`
+	Query  string `json:"query,omitempty"`
 }
 
 type SessionDetail struct {
@@ -1438,11 +1440,23 @@ func loadCapturedAt(indexDB *sql.DB, sessionIDs []string) map[string]time.Time {
 	return result
 }
 
-// loadReachCounts batch-loads recall-graph reach_count for candidate sessions
-// from the derived session_reach table, feeding the reach layer. Best-effort: a
-// missing table (older index.db with no reach schema) or query error yields an
-// empty map, so the layer fails soft to a no-op. Only invoked when
-// weights.reach_boost > 0.
+// loadReachCounts batch-loads the recall-graph usage signal for candidate
+// sessions from the derived session_reach table, feeding the reach layer.
+//
+// It reads drill_count, not reach_count. A recall edge only records that this
+// engine already ranked the session into some window, so ranking on it feeds
+// the engine its own past output: whatever surfaced once surfaces higher next
+// time, including noise. It also barely discriminates — a recall returns 20
+// seeds, so on any store smaller than a few hundred sessions one query marks
+// most of the corpus (measured: 36 of 37 sessions reached, top slot a
+// three-turn session, an empty session at 36). A drill edge records that an
+// agent read the session, which is evidence from outside the ranker and is what
+// SKILL.md means by load-bearing memory. reach_count stays in the table and in
+// the display hint.
+//
+// Best-effort: a missing table or column (an index.db this binary has not
+// rebuilt) yields an empty map, so the layer fails soft to a no-op. Only
+// invoked when weights.reach_boost > 0.
 func loadReachCounts(indexDB *sql.DB, sessionIDs []string) map[string]int {
 	result := make(map[string]int, len(sessionIDs))
 	if len(sessionIDs) == 0 {
@@ -1450,11 +1464,11 @@ func loadReachCounts(indexDB *sql.DB, sessionIDs []string) map[string]int {
 	}
 	inClause, args := sqlInClause(sessionIDs)
 	rows, err := indexDB.Query(
-		"SELECT target_session_id, reach_count FROM session_reach WHERE target_session_id IN ("+inClause+")",
+		"SELECT target_session_id, COALESCE(drill_count, 0) FROM session_reach WHERE target_session_id IN ("+inClause+")",
 		args...,
 	)
 	if err != nil {
-		return result // fail soft — no session_reach table or query error
+		return result // fail soft — no session_reach table/column or query error
 	}
 	defer rows.Close() //nolint:errcheck
 	for rows.Next() {

@@ -493,19 +493,25 @@ count on a session that is gone.
 ## `session_reach`
 
 The derived L1 aggregate over `data.db.recall_edges` — how often each session
-has been surfaced, and the most recent query that reached it.
+has been surfaced, how often an agent opened it, and the query that reached it
+most often.
 
 ```sql
 CREATE TABLE IF NOT EXISTS session_reach (
     target_session_id  VARCHAR PRIMARY KEY,
-    reach_count        INTEGER NOT NULL,
-    last_query         VARCHAR,
+    reach_count        INTEGER NOT NULL,   -- every edge
+    drill_count        INTEGER NOT NULL,   -- edges where an agent opened it
+    last_query         VARCHAR,            -- newest non-empty query
+    top_query          VARCHAR,            -- most frequent, ties by recency
     last_ts            TIMESTAMP
 );
 ```
 
-Feeds the optional `reach_boost` ranking layer and the `[reached N×· "query"]`
-display hint. Ranking only — deliberately excluded from the silence gate,
-because popular is not the same as relevant. Counts follow
-`session_supersedes`, so collapsing a duplicate does not reset a well-used
-conversation to zero.
+`drill_count` feeds the optional `reach_boost` ranking layer; `reach_count` and
+`top_query` feed the `[reached N× drilled M×· "query"]` display hint. The split
+matters: a recall edge only records that the engine ranked the session into some
+window, so ranking on it feeds the engine its own output — and with ~20 seeds a
+call it marks most of a small corpus anyway. Ranking only either way —
+deliberately excluded from the silence gate, because popular is not the same as
+relevant. Counts follow `session_supersedes`, so collapsing a duplicate does not
+reset a well-used conversation to zero.

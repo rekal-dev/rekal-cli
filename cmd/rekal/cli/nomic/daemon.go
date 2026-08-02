@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -200,6 +201,27 @@ func RunDaemon(gitRoot string) error {
 	}
 
 	var mu sync.Mutex
+
+	// Idle shutdown is measured from the last completed request, and never
+	// fires while one is in flight.
+	//
+	// It used to be a timer that handleConn reset when it *read* a request.
+	// Embedding a batch of 8192-token documents on CPU takes minutes, so a
+	// single long request outlived the timeout: the loop below hit <-idle.C
+	// mid-request and returned, running the deferred embedder.Close() and
+	// ln.Close() while a handler goroutine was still inside the model. The
+	// client saw its connection vanish — 353 "broken pipe" warnings in one
+	// embed run, each one a batch of work thrown away — and freeing a llama
+	// context out from under an in-flight inference is the most likely source
+	// of the one segfault observed.
+	//
+	// Only this goroutine touches the timer now; handlers publish activity
+	// through the counter and timestamp instead, which also removes a
+	// concurrent Timer.Reset from every connection.
+	var inFlight atomic.Int64
+	var lastActive atomic.Int64
+	lastActive.Store(time.Now().UnixNano())
+
 	idle := time.NewTimer(idleTimeout)
 	defer idle.Stop()
 
@@ -220,10 +242,16 @@ func RunDaemon(gitRoot string) error {
 	for {
 		select {
 		case conn := <-connCh:
+			lastActive.Store(time.Now().UnixNano())
 			idle.Reset(idleTimeout)
-			go handleConn(conn, embedder, &mu, idle)
+			go handleConn(conn, embedder, &mu, &inFlight, &lastActive)
 
 		case <-idle.C:
+			done, wait := idleVerdict(inFlight.Load(), time.Unix(0, lastActive.Load()), time.Now(), idleTimeout)
+			if !done {
+				idle.Reset(wait)
+				continue
+			}
 			return nil // clean shutdown
 
 		case err := <-errCh:
@@ -235,7 +263,26 @@ func RunDaemon(gitRoot string) error {
 	}
 }
 
-func handleConn(conn net.Conn, embedder *Embedder, mu *sync.Mutex, idle *time.Timer) {
+// idleVerdict decides whether the daemon may shut down when its idle timer
+// fires, and how long to wait if not.
+//
+// Two rules, and the first is the one that was missing. A request in flight
+// forbids shutdown however long it has been running: the timer used to be reset
+// when a request was *read*, so a single batch of 8192-token documents — minutes
+// of CPU — outlived it, and the daemon tore down the model while a handler was
+// still inside it. Second, the clock runs from the last *completed* request, so
+// a burst of long requests cannot accumulate into a shutdown either.
+func idleVerdict(inFlight int64, lastActive, now time.Time, timeout time.Duration) (shutdown bool, wait time.Duration) {
+	if inFlight > 0 {
+		return false, timeout
+	}
+	if since := now.Sub(lastActive); since < timeout {
+		return false, timeout - since
+	}
+	return true, 0
+}
+
+func handleConn(conn net.Conn, embedder *Embedder, mu *sync.Mutex, inFlight *atomic.Int64, lastActive *atomic.Int64) {
 	defer conn.Close() //nolint:errcheck
 
 	// Handle multiple requests on the same connection.
@@ -245,9 +292,13 @@ func handleConn(conn net.Conn, embedder *Embedder, mu *sync.Mutex, idle *time.Ti
 			return // connection closed or read error
 		}
 
-		idle.Reset(idleTimeout)
-
+		// Held for the whole request, so idle shutdown cannot land in the
+		// middle of one however long it runs.
+		inFlight.Add(1)
 		resp := handleRequest(req, embedder, mu)
+		lastActive.Store(time.Now().UnixNano())
+		inFlight.Add(-1)
+
 		if err := writeMsg(conn, resp); err != nil {
 			return
 		}

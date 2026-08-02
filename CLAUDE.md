@@ -480,7 +480,14 @@ for the same place and move `.rekal/` off the store that already exists —
   Model loading is isolated in a **single-flight daemon** (`daemon.lock` flock,
   one per store) that loads the model **before** opening its socket — so a
   connectable socket means "ready", and a native model-load crash kills the
-  disposable daemon, never the caller. The daemon calls `SetVerbose(true)` so
+  disposable daemon, never the caller. Idle shutdown is measured from the last
+  **completed** request and never fires while one is in flight (`idleVerdict`):
+  the timer used to be reset when a request was *read*, so a single batch of
+  8192-token documents — minutes of CPU — outlived the 5-minute timeout and the
+  loop returned mid-request, running the deferred `embedder.Close()` while a
+  handler was still inside the model (353 discarded batches in one embed run,
+  and the likeliest source of an observed segfault). The daemon calls
+  `SetVerbose(true)` so
   llama.cpp's own diagnostics survive — `suppress_stderr` in `embed.c` sends
   them to `/dev/null` around load *and* inference, which is right for a
   terminal and wrong for the daemon, whose stderr is a file. It is why a SIGILL

@@ -37,7 +37,7 @@ Flags:
   rekal log -n 50
 
   # From a commit seen here, read the conversation behind it
-  rekal --commit f2d7660 "what were we fixing"`,
+  rekal -c f2d7660 "what were we fixing"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

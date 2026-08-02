@@ -132,24 +132,24 @@ instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
   rekal query -i -q "SELECT count(*) FROM turns_ft"
 
   # Explicit SQL mode
-  rekal query --sql "SELECT id, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
+  rekal query -q "SELECT id, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
 
   # Positional shorthand (same as --sql)
   rekal query "SELECT count(*) FROM turns WHERE role = 'human'"
 
   # Drill into a session (turns only)
-  rekal query --session 01JNQX...
+  rekal query -s 01JNQX...
 
   # Drill into a session (turns + tool calls + files)
-  rekal query --session 01JNQX... --full
+  rekal query -s 01JNQX... -F
 
   # Paginate through turns
-  rekal query --session 01JNQX... --limit 5
-  rekal query --session 01JNQX... --offset 5 --limit 5
+  rekal query -s 01JNQX... -n 5
+  rekal query -s 01JNQX... -o 5 -n 5
 
   # Filter by role
-  rekal query --session 01JNQX... --role human
-  rekal query --session 01JNQX... --role human --limit 5
+  rekal query -s 01JNQX... -r human
+  rekal query -s 01JNQX... -r human -n 5
 
   # Recent sessions
   rekal query "SELECT id, user_email, branch, captured_at FROM sessions ORDER BY captured_at DESC LIMIT 5"
@@ -161,16 +161,16 @@ instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
   rekal query "SELECT path, count(*) as n FROM tool_calls WHERE tool IN ('Write','Edit') AND path IS NOT NULL GROUP BY path ORDER BY n DESC LIMIT 10"
 
   # File co-occurrence (index DB)
-  rekal query --index "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC LIMIT 10"
+  rekal query -i "SELECT * FROM file_cooccurrence WHERE file_a LIKE '%auth%' ORDER BY count DESC LIMIT 10"
 
   # Transcripts of one dynamic workflow, grouped under their trunk session (index DB)
-  rekal query --index "SELECT session_id, agent_id, parent_session_id FROM session_facets WHERE workflow_name = 'release-flow'"
+  rekal query -i "SELECT session_id, agent_id, parent_session_id FROM session_facets WHERE workflow_name = 'release-flow'"
 
   # Embedding model counts
-  rekal query --index "SELECT model, count(*) FROM session_embeddings GROUP BY model"
+  rekal query -i "SELECT model, count(*) FROM session_embeddings GROUP BY model"
 
   # Prose knowledge chunks matching a term (index DB, knowledge layer)
-  rekal query --index "SELECT path, anchor, start_line, end_line FROM knowledge_chunks WHERE content ILIKE '%merged-only%' ORDER BY path"
+  rekal query -i "SELECT path, anchor, start_line, end_line FROM knowledge_chunks WHERE content ILIKE '%merged-only%' ORDER BY path"
 
   # Turns in a date window (ts is TIMESTAMP — use BETWEEN, not LIKE)
   rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01' AND role='human' ORDER BY ts"`,

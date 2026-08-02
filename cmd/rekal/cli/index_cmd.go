@@ -96,8 +96,8 @@ structural, not a policy: your other clients' work cannot leak to this team.`,
   rekal index
 
   # Confirm what came in, and that it stays local
-  rekal query --index --sql "SELECT origin, count(*) FROM session_facets GROUP BY 1"
-  rekal query --sql "SELECT count(*) FROM sessions"   # data.db is unchanged
+  rekal query -i -q "SELECT origin, count(*) FROM session_facets GROUP BY 1"
+  rekal query -q "SELECT count(*) FROM sessions"   # data.db is unchanged
 
   # After a rebuild, pull teammates back in
   rekal sync`,

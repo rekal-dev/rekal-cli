@@ -29,9 +29,9 @@ Reading the seed digest:
     gap=        top minus the runner-up, so one clear answer reads apart from a tie
 
   Seed line
-    s35         short id for this call; pass it to 'rekal query --session s35'
+    s35         short id for this call; pass it to 'rekal query -s s35'
     conf=0.87   absolute confidence — judge relevance from this plus the snippet
-    t262        turn index of the match; drill around it with --offset 260 --limit 5
+    t262        turn index of the match; drill around it with -o 260 -n 5
     [reached…]  usage history: how often search surfaced it, how often an agent
                 opened it. A drill is the load-bearing signal; surfacing is not.
 
@@ -51,13 +51,13 @@ Filters and flags (short forms are the cheapest to type and to emit):
   line is prose at HEAD and ignores them.
 
 Workflow:
-  rekal "keyword"                   Search sessions → seed digest (use --json for raw)
-  rekal --file auth "token refresh" Filter by file path
-  rekal find "auth middleware"      Every ledger mention of a term (complete, time order)
-  rekal query --session <id>        Drill into a session (readable turns; --json for raw)
-  rekal query --session <id> --full Include tool calls and files
-  rekal query "SELECT ..."          Raw SQL → TSV rows (complete-set / temporal / analytical;
-                                    --json for NDJSON; see 'rekal query --help' for schema)
+  rekal "keyword"                Search sessions → seed digest (-j for raw)
+  rekal -p auth "token refresh"  Filter by file path
+  rekal find "auth middleware"   Every ledger mention of a term (complete, time order)
+  rekal query -s <id>            Drill into a session (readable turns; -j for raw)
+  rekal query -s <id> -F         Include tool calls and files
+  rekal query "SELECT ..."       Raw SQL → TSV rows (complete-set / temporal / analytical;
+                                 -j for NDJSON; see 'rekal query --help' for schema)
 
 Getting Started:
   rekal init                        Initialize Rekal in a git repository
@@ -115,7 +115,7 @@ func NewRootCmd() *cobra.Command {
   rekal -j "merge gate"
   rekal -j -e "merge gate"
 
-  # Long forms work identically — use them when writing scripts to read later
+  # Long forms work identically — clearer in scripts someone reads later
   rekal --file "search/" --limit 5 "ranking weights"`,
 		SilenceErrors: true,
 		SilenceUsage:  true,

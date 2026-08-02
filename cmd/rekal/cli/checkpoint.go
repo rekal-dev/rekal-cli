@@ -48,8 +48,8 @@ already exists rather than storing a second copy of it.`,
   rekal checkpoint
 
   # See what it recorded
-  rekal log --limit 1
-  rekal query --sql "SELECT count(*) FROM turns"`,
+  rekal log -n 1
+  rekal query -q "SELECT count(*) FROM turns"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

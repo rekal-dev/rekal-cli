@@ -111,7 +111,7 @@ list is a wrong answer. Output is one compact line per mention:
   <session_id> t<turn> <ts> <role>: …context around the match…
 
 then a total. Drill a mention with:
-  rekal query --session <session_id> --offset <turn-2> --limit 5
+  rekal query -s <session_id> -o <turn-2> -n 5
 
 The sweep is complete (no limit) and covers the whole ledger — this machine's
 capture plus every teammate session pulled in by 'rekal sync'. The agent judges
@@ -138,7 +138,7 @@ tell "we never discussed this" from "the ranking buried it".`,
   rekal find "kubernetes"
 
   # Drill a mention from the sweep
-  rekal query --session 01KYF3M5VK… --offset 840 --limit 5`,
+  rekal query -s 01KYF3M5VK… -o 840 -n 5`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

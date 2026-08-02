@@ -55,8 +55,8 @@ says so. Filling them improves ranking; it is never required for an answer.`,
     rekal: embed already running (or lock busy)
 
   # Check coverage yourself
-  rekal query --index --sql "SELECT model, count(*) FROM session_embeddings GROUP BY 1"
-  rekal query --index --sql "SELECT count(*) FROM knowledge_embeddings"
+  rekal query -i -q "SELECT model, count(*) FROM session_embeddings GROUP BY 1"
+  rekal query -i -q "SELECT count(*) FROM knowledge_embeddings"
 
   # When it stalls, the reason is in the log
   cat .rekal/embed.log

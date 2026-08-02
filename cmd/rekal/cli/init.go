@@ -78,7 +78,7 @@ Safe to re-run. It never touches captured data.`,
 
   # Then pull the team's history and check it landed
   rekal sync
-  rekal log --limit 3
+  rekal log -n 3
 
   # Undo everything init did (asks first)
   rekal clean`,

@@ -114,7 +114,7 @@ There is deliberately no --force.`,
   rekal push --rebuild
 
   # Check what is still held back, and why
-  rekal query --sql "SELECT git_sha, git_branch, exported FROM checkpoints WHERE NOT exported"`,
+  rekal query -q "SELECT git_sha, git_branch, exported FROM checkpoints WHERE NOT exported"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

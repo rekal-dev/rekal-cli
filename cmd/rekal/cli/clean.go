@@ -43,7 +43,7 @@ followed by init restores them.`,
     Rekal cleaned. Run ` + "`rekal init`" + ` to reinitialize.
 
   # Scripts, hooks, agents: no terminal to answer at, so confirm explicitly
-  rekal clean --yes
+  rekal clean -y
 
   # Refused without consent, and nothing is removed
   rekal clean < /dev/null
@@ -51,7 +51,7 @@ followed by init restores them.`,
 
   # Keep a copy of unpushed work before cleaning
   rekal push
-  rekal clean --yes`,
+  rekal clean -y`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

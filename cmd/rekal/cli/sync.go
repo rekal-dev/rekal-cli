@@ -63,7 +63,7 @@ Options:
   rekal sync --self
 
   # Confirm what arrived, and from whom
-  rekal query --index --sql "SELECT user_email, count(*) FROM session_facets GROUP BY 1"
+  rekal query -i -q "SELECT user_email, count(*) FROM session_facets GROUP BY 1"
 
   # The count above can be smaller than the number sync reported: duplicate
   # captures of one conversation are collapsed on import.`,

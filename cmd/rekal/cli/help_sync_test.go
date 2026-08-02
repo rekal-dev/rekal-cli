@@ -73,9 +73,11 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 			mustNot:  []string{"Drop and rebuild the index DB"},
 		},
 		{
-			name:     "find",
-			cmdPath:  []string{"find"},
-			mustHave: []string{"complete, time-ordered", "rekal query --session", "teammate session"},
+			name:    "find",
+			cmdPath: []string{"find"},
+			// The drill pointer is pinned in its short form: examples across the
+			// CLI lead with short flags, since that is what an agent emits.
+			mustHave: []string{"complete, time-ordered", "rekal query -s", "teammate session"},
 		},
 		{
 			name:     "clean",

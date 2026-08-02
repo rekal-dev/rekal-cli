@@ -110,7 +110,16 @@ for the same place and move `.rekal/` off the store that already exists —
   when the session has commits, which is why the golden view is unchanged) and `viewRows` (SQL → TSV). The default query output;
   `--json` gives raw. Session view is golden-tested byte-identical
 - `find.go`: `rekal find "<term>" [role]` — complete, time-ordered enumeration
-  sweep over `turns` (port of find.py, diff-identical)
+  sweep over the **index** (`turns_ft`), falling back to `data.db.turns` only
+  when there is no index to read. The index is the whole ledger: local capture
+  plus every synced teammate session (which never touches data.db) minus the
+  duplicate captures supersession collapsed — sweeping data.db answered "every
+  mention" with one member's share of the corpus (measured: 10 of 30 on a
+  two-person store), and a complete-set command that silently returns a subset
+  is worse than none. `docs/spec/command/find.md` always specified the index;
+  the code had drifted. `turns.ts` is a TIMESTAMP and `turns_ft.ts` a VARCHAR,
+  so the sweep casts and normalizes (`findTimestamp`) rather than scanning a
+  type that depends on which table it landed on
 - `knowledge_index.go`: Knowledge-layer build/refresh — chunk the repo's
   tracked prose files at HEAD into `index.db` (`knowledge_chunks`), diffing
   stored git blob SHAs against `git ls-tree -r HEAD` so only changed files
@@ -239,7 +248,13 @@ for the same place and move `.rekal/` off the store that already exists —
   strips the marker line from CLAUDE.md and every detected-agent file (AGENTS.md
   / GEMINI.md / .github/copilot-instructions.md / .kiro/steering/rekal.md),
   deleting a file that was ours and pruning emptied `.github` / `.kiro/steering`
-  / `.kiro`
+  / `.kiro`. Asks before deleting anything (`confirmClean`, `--yes`/`-y` to
+  skip): a bare word reaches cobra as a command whether the caller quoted it or
+  not, so `rekal "clean"` and `rekal clean` are the same argv — an agent
+  recalling a user's phrasing could delete the store, and unpushed capture has
+  no other copy. Consent is read, not inferred from a terminal check: `/dev/null`
+  is a character device, so the usual is-a-tty heuristic calls a script's empty
+  stdin interactive. EOF is a refusal
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
   knowledge chunks). Deep-semantic session + knowledge vectors are deferred
   to background `rekal embed` after the atomic rename. Also carries the
@@ -297,6 +312,14 @@ for the same place and move `.rekal/` off the store that already exists —
   schema (all tables + columns; FTS-internal/state tables noted as ignore). A
   successful `--session` drill spools an L1 recall-graph drill edge
   (`logDrillEdge` → `graph.Append`) — the strong "this memory was used" signal.
+  SQL runs on a **read-only** handle (`db.OpenDataReadOnly`/`OpenIndexReadOnly`)
+  and is limited to **one statement** (`hasTrailingStatement`). The leading
+  `SELECT` check alone was not a guard: the driver executes every statement in
+  the string it is handed, so `SELECT 1; DELETE FROM turns` emptied the
+  append-only ledger and reported the delete count as a result. The statement
+  check is only there to produce a plain sentence instead of a driver error —
+  read-only is what makes it structural, per SOUL.md. A `;` inside a string
+  literal, quoted identifier or comment is data, not a separator
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +

@@ -20,7 +20,11 @@ See [preconditions.md](../preconditions.md): git repo, init done.
 
 1. **Run shared preconditions** — Git root, init done.
 2. **Open the index DB** — ILIKE sweep over `turns_ft.content` (and role filter
-   when set). No BM25 ranking, no limit — every matching turn.
+   when set). No BM25 ranking, no limit — every matching turn. The index is the
+   whole ledger: local capture plus every synced teammate session (which never
+   reaches `data.db`), minus the duplicate captures supersession collapsed. When
+   there is no index to read — never built, or built empty — the sweep falls
+   back to `data.db.turns` so a fresh store still answers.
 3. **Output** — One compact text line per mention:
 
    ```text

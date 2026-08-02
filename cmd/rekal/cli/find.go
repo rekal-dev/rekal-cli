@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/spf13/cobra"
@@ -112,8 +113,10 @@ list is a wrong answer. Output is one compact line per mention:
 then a total. Drill a mention with:
   rekal query --session <session_id> --offset <turn-2> --limit 5
 
-The sweep is complete (no limit); the agent judges class-mapping, set size, and
-the other speaker's uptake. Optional role ∈ human|assistant|human_steering|summary.`,
+The sweep is complete (no limit) and covers the whole ledger — this machine's
+capture plus every teammate session pulled in by 'rekal sync'. The agent judges
+class-mapping, set size, and the other speaker's uptake.
+Optional role ∈ human|assistant|human_steering|summary.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -145,14 +148,75 @@ the other speaker's uptake. Optional role ∈ human|assistant|human_steering|sum
 	return cmd
 }
 
-func runFind(cmd *cobra.Command, gitRoot, term, role string) error {
-	d, err := db.OpenData(gitRoot)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
+// findSource picks the table find sweeps.
+//
+// The index is the whole ledger: this machine's capture plus every teammate
+// session that arrived over the wire (which never touches data.db) minus the
+// duplicate captures supersession collapsed. data.db holds only what this
+// machine recorded, so sweeping it answered "every mention" with one member's
+// share of the corpus — on a two-person store, a third of it. A complete-set
+// command that quietly returns a subset is worse than no command, so find
+// reads the index and falls back to data.db only when there is no index to
+// read (never built, or built empty).
+type findSource struct {
+	db    *sql.DB
+	table string
+}
+
+func openFindSource(gitRoot string) (*findSource, error) {
+	if d, err := db.OpenIndexReadOnly(gitRoot); err == nil {
+		var n int
+		if err := d.QueryRow(`SELECT COUNT(*) FROM turns_ft`).Scan(&n); err == nil && n > 0 {
+			return &findSource{db: d, table: "turns_ft"}, nil
+		}
+		d.Close()
 	}
+	d, err := db.OpenDataReadOnly(gitRoot)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	return &findSource{db: d, table: "turns"}, nil
+}
+
+// findTimestampLayouts covers what the two tables can hold: DuckDB's cast of a
+// TIMESTAMP (data.db) and the ISO-8601 strings written into the index.
+var findTimestampLayouts = []string{
+	"2006-01-02 15:04:05",
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+}
+
+// findTimestamp renders a stored timestamp as the minute-precision stamp the
+// sweep prints. An unparseable value is truncated rather than dropped — a
+// mention is still a mention when its timestamp is odd.
+func findTimestamp(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	for _, layout := range findTimestampLayouts {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t.Format("2006-01-02T15:04")
+		}
+	}
+	if len(raw) > 16 {
+		return raw[:16]
+	}
+	return raw
+}
+
+func runFind(cmd *cobra.Command, gitRoot, term, role string) error {
+	src, err := openFindSource(gitRoot)
+	if err != nil {
+		return err
+	}
+	d := src.db
 	defer d.Close()
 
-	query := `SELECT session_id, turn_index, ts, role, content FROM turns
+	// turns.ts is a TIMESTAMP and turns_ft.ts is a VARCHAR, so the sweep casts
+	// and normalizes rather than scanning a type that depends on which table it
+	// landed on.
+	query := `SELECT session_id, turn_index, CAST(ts AS VARCHAR), role, content FROM ` + src.table + `
 		WHERE content ILIKE ? ESCAPE '\'`
 	params := []interface{}{"%" + escapeLike(term) + "%"}
 	if role != "" {
@@ -175,7 +239,7 @@ func runFind(cmd *cobra.Command, gitRoot, term, role string) error {
 		var (
 			sid     sql.NullString
 			turn    sql.NullInt64
-			ts      sql.NullTime
+			ts      sql.NullString
 			rrole   sql.NullString
 			content sql.NullString
 		)
@@ -190,7 +254,7 @@ func runFind(cmd *cobra.Command, gitRoot, term, role string) error {
 		sessions[s] = struct{}{}
 		ts16 := ""
 		if ts.Valid {
-			ts16 = ts.Time.Format("2006-01-02T15:04")
+			ts16 = findTimestamp(ts.String)
 		}
 		rl := rrole.String
 		if rl == "" {

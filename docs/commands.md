@@ -94,8 +94,11 @@ Two mutually exclusive modes. `--sql`, a bare positional statement, and
 | `--role` | `-r` | — | Filter turns by role (with `--session`) |
 | `--json` | `-j` | off | JSON instead of text/TSV |
 
-SQL is **read-only** — non-SELECT statements are rejected. The full queryable
-schema is in `rekal query --help`.
+SQL is **read-only** — one SELECT per call, on a connection opened in DuckDB's
+read-only mode. A non-SELECT statement is rejected, and so is a second statement
+after a `;` (a semicolon inside a literal or comment is data and stays legal).
+The append-only ledger is protected by the handle, not by the parse. The full
+queryable schema is in `rekal query --help`.
 
 ```bash
 rekal query -s s3                     # readable turns
@@ -115,7 +118,7 @@ rekal query -i -q "SELECT count(*) FROM turns_ft"
 | `rekal index` | Rebuild `index.db` from `data.db`. Structural only — vectors fill via background `rekal embed`. |
 | `rekal embed` | Fill missing semantic vectors in budgeted bites. Resumable, safe to interrupt. |
 | `rekal log` | Recent checkpoints. `--limit` / `-n`, default 20. |
-| `rekal clean` | Remove Rekal setup completely, no residue. |
+| `rekal clean` | Remove Rekal setup completely, no residue. Asks first: prompts at a terminal, refuses without `-y` / `--yes` anywhere else. |
 
 `rekal index` also carries the cross-repo import preference, which persists:
 `--include-all`, `--include <path>`, `--no-local`. Imported sessions are

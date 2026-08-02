@@ -57,6 +57,8 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 				"TSV by default",
 				"NDJSON with --json",
 				"JSON instead of the default text/TSV",
+				"One SELECT per call",
+				"read-only connection",
 			},
 			mustNot: []string{
 				"returns the full conversation as JSON",
@@ -73,7 +75,12 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 		{
 			name:     "find",
 			cmdPath:  []string{"find"},
-			mustHave: []string{"complete, time-ordered", "rekal query --session"},
+			mustHave: []string{"complete, time-ordered", "rekal query --session", "teammate session"},
+		},
+		{
+			name:     "clean",
+			cmdPath:  []string{"clean"},
+			mustHave: []string{"--yes", "deletes local data"},
 		},
 		{
 			name:     "embed",

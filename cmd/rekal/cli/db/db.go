@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -59,14 +60,55 @@ func OpenIndexAt(path string) (*sql.DB, error) {
 	return open(path)
 }
 
+// OpenDataReadOnly opens the data DB with DuckDB's read-only access mode.
+//
+// data.db is the append-only ledger, so a read path must not be able to write
+// to it at all — the guarantee belongs in the handle, not in whatever parsing
+// the caller does first. `rekal query` hands user (and agent) SQL straight to
+// the driver, and the driver executes every statement in the string it is
+// given: a statement guard that inspects only the leading keyword lets
+// "SELECT 1; DELETE FROM turns" through. Read-only makes that structural
+// instead of a rule to keep getting right.
+func OpenDataReadOnly(gitRoot string) (*sql.DB, error) {
+	return openReadOnly(DataPath(gitRoot))
+}
+
+// OpenIndexReadOnly opens the index DB read-only. The index is derived and
+// rebuildable, but the same reasoning applies: a query path has no business
+// holding a writable handle.
+func OpenIndexReadOnly(gitRoot string) (*sql.DB, error) {
+	return openReadOnly(IndexPath(gitRoot))
+}
+
+// DataPath returns the path to the data DB for gitRoot (in the shared store).
+func DataPath(gitRoot string) string {
+	return filepath.Join(StoreDir(gitRoot), "data.db")
+}
+
+// openReadOnly opens an existing DB file in DuckDB's read-only access mode.
+// DuckDB cannot create a database read-only, so a missing file is reported as
+// such rather than surfacing as a driver error.
+func openReadOnly(path string) (*sql.DB, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("open database %s: %w", path, err)
+	}
+	return openDSN(path+"?access_mode=read_only", path)
+}
+
 func open(path string) (*sql.DB, error) {
+	return openDSN(path, path)
+}
+
+// openDSN opens dsn, reporting failures against the plain file path so the
+// user never sees the connection-string decoration in an error message.
+func openDSN(dsn, path string) (*sql.DB, error) {
 	deadline := time.Now().Add(openLockRetryBudget)
 	wait := openLockRetryMin
 	for {
 		// The single-writer lock conflict can surface either at sql.Open (the
 		// go-duckdb connector opens the file eagerly) or at Ping — handle both
 		// through one retry path.
-		db, err := sql.Open("duckdb", path)
+		db, err := sql.Open("duckdb", dsn)
 		if err == nil {
 			if err = db.Ping(); err == nil {
 				// DuckDB + go-duckdb are not safe with database/sql's default

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,9 @@ import (
 )
 
 func newCleanCmd() *cobra.Command {
-	return &cobra.Command{
+	var yes bool
+
+	cmd := &cobra.Command{
 		Use:   "clean",
 		Short: "Remove Rekal setup from this repository (local only)",
 		Long: `Remove Rekal setup from this repository. Local only — does not touch
@@ -24,6 +27,10 @@ Removes:
   agent skill        .claude/skills/rekal/ (+ legacy rekal-* dirs)
   CLAUDE.md line     Only the marker-tagged sentence injected by 'rekal init'
 
+This deletes local data. Anything captured but never pushed is gone with it,
+so clean asks first: it prompts at a terminal and refuses without --yes
+anywhere else (a script, a hook, an agent).
+
 Run 'rekal init' to reinitialize after cleaning.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
@@ -32,6 +39,13 @@ Run 'rekal init' to reinitialize after cleaning.`,
 			if err != nil {
 				fmt.Fprintln(cmd.ErrOrStderr(), err)
 				return NewSilentError(err)
+			}
+
+			if !yes {
+				if err := confirmClean(cmd, gitRoot); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), err)
+					return NewSilentError(err)
+				}
 			}
 
 			if err := runClean(gitRoot); err != nil {
@@ -43,6 +57,34 @@ Run 'rekal init' to reinitialize after cleaning.`,
 			return nil
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm removal without prompting")
+	return cmd
+}
+
+// confirmClean gets consent before deleting local data.
+//
+// The command name is also a plausible search term, and a bare word reaches
+// cobra as a command whether the caller quoted it or not — `rekal "clean"` and
+// `rekal clean` are the same argv. An agent handed a user's wording can
+// therefore land here while trying to recall, so the destructive step asks
+// first and proceeds only on a literal "yes".
+//
+// The question is asked the same way everywhere rather than being gated on a
+// terminal check: /dev/null is a character device, so the usual is-a-tty
+// heuristic calls a script's empty stdin interactive. Reading the answer is
+// the check — a caller who cannot answer gets EOF, which is a refusal, and a
+// caller who does not want to answer passes --yes.
+func confirmClean(cmd *cobra.Command, gitRoot string) error {
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "This removes %s, the rekal git hooks, and the installed skill.\n", RekalDir(gitRoot))
+	fmt.Fprint(out, "Anything captured but not yet pushed is gone. Type 'yes' to continue: ")
+
+	answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if strings.TrimSpace(answer) == "yes" {
+		return nil
+	}
+	return fmt.Errorf("rekal: cancelled — nothing was removed\n" +
+		"re-run with --yes to confirm (if you meant to search, quote the term: rekal find \"clean\")")
 }
 
 // runClean removes .rekal/, Rekal hooks, and the installed skill. Idempotent.

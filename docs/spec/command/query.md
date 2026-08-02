@@ -24,7 +24,13 @@ Run a single SELECT statement against the data DB or index DB. The mode is
 explicit via `--sql`; a positional statement is the accepted shorthand.
 
 1. **Choose target** — Data DB (`.rekal/data.db`) by default; index DB (`.rekal/index.db`) if `--index`.
-2. **Execute** — Read-only (SELECT only). Rejects non-SELECT statements.
+2. **Execute** — Read-only, one SELECT per call. Rejects a statement that does
+   not start with SELECT, and rejects a second statement riding behind a `;`
+   (a semicolon inside a string literal, a quoted identifier or a comment is
+   data, not a separator). The connection itself is opened in DuckDB's
+   read-only access mode, so the append-only ledger is protected by the handle
+   rather than by the parse: no SQL that arrives here can write, whatever it
+   says.
 3. **Output** — TSV rows by default (header + values). With `--json`, one JSON object per row (NDJSON).
 
 ### Session drill-down (`--session <id>`)

@@ -280,7 +280,7 @@ func TestClean_RemovesRekalDir(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
-	stdout, _, err := env.RunCLI("clean")
+	stdout, _, err := env.RunCLI("clean", "--yes")
 	if err != nil {
 		t.Fatalf("clean: %v", err)
 	}
@@ -296,15 +296,38 @@ func TestClean_RemovesHooks(t *testing.T) {
 	env := NewTestEnv(t)
 	env.Init()
 
-	env.RunCLI("clean")
+	env.RunCLI("clean", "--yes")
 	if env.FileExists(".git/hooks/post-commit") {
 		t.Error("post-commit hook should be removed after clean")
 	}
 }
 
+// TestClean_RefusesWithoutConsent pins the guard that keeps a recall-shaped
+// invocation from deleting the store. `rekal "clean"` and `rekal clean` reach
+// the process as identical argv, so an agent searching for the word lands on
+// the command; without a terminal to prompt, the only safe answer is to refuse.
+func TestClean_RefusesWithoutConsent(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+
+	stdout, stderr, err := env.RunCLI("clean")
+	if err == nil {
+		t.Fatal("clean without --yes should fail when there is no terminal to confirm at")
+	}
+	if !strings.Contains(stderr, "--yes") {
+		t.Errorf("expected the refusal to name --yes, got: %q", stderr)
+	}
+	if strings.Contains(stdout, "Rekal cleaned.") {
+		t.Error("clean reported success without consent")
+	}
+	if !env.FileExists(".rekal") {
+		t.Error(".rekal/ was removed without consent")
+	}
+}
+
 func TestClean_Idempotent(t *testing.T) {
 	env := NewTestEnv(t)
-	stdout, _, err := env.RunCLI("clean")
+	stdout, _, err := env.RunCLI("clean", "--yes")
 	if err != nil {
 		t.Fatalf("clean (no init): %v", err)
 	}

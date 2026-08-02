@@ -56,9 +56,11 @@ points at this session — so an agent can navigate from a trunk conversation
 into the transcript that actually matched.
 
 SQL mode is explicit: --sql "<statement>". A bare positional statement
-(rekal query "SELECT …") is accepted as shorthand. SELECT only; rows print as
-TSV by default, or NDJSON with --json. Use --index to query the index DB.
---sql, --session, and a positional statement are mutually exclusive.
+(rekal query "SELECT …") is accepted as shorthand. One SELECT per call, run on
+a read-only connection — the ledger is append-only, so no statement here can
+write to it. Rows print as TSV by default, or NDJSON with --json. Use --index
+to query the index DB. --sql, --session, and a positional statement are
+mutually exclusive.
 
 Full queryable schema (FTS-internal tables — dict/docs/fields/stats/stopwords/
 terms — and state tables — schema_meta/checkpoint_state/index_state — are engine
@@ -102,9 +104,10 @@ INDEX DB SCHEMA (.rekal/index.db):
   session_reach        target_session_id, reach_count, last_query, last_ts
                        (L1 reach aggregate, derived from data.db.recall_edges)
 
-Note: turns.ts / turns_ft.ts are TIMESTAMP, not text. "ts LIKE '2023-05%'"
-raises a Binder error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP
-'2023-06-01', or CAST(ts AS VARCHAR) LIKE '2023-05%'.`,
+Note: turns.ts is a TIMESTAMP, not text. "ts LIKE '2023-05%'" raises a Binder
+error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01', or
+CAST(ts AS VARCHAR) LIKE '2023-05%'. turns_ft.ts is a VARCHAR holding the same
+instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
 		Example: `  # Explicit SQL mode
   rekal query --sql "SELECT id, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
 
@@ -505,19 +508,116 @@ func querySessionFilesFromIndex(indexDB *sql.DB, sessionID string) ([]string, er
 	return files, rows.Err()
 }
 
+// hasTrailingStatement reports whether q carries a second statement after the
+// first — a ';' outside string literals, quoted identifiers and comments, with
+// anything but whitespace and comments behind it. A plain trailing semicolon
+// ("SELECT 1;") and a semicolon inside a literal ("SELECT ';'") are fine.
+//
+// Byte scanning is safe here: every character it looks for is ASCII, and no
+// byte of a multi-byte UTF-8 rune is ever an ASCII byte.
+func hasTrailingStatement(q string) bool {
+	i := firstTopLevelSemicolon(q)
+	return i >= 0 && !onlyBlankOrComments(q[i+1:])
+}
+
+// firstTopLevelSemicolon returns the index of the first ';' in q that is not
+// inside a string literal, a quoted identifier or a comment, or -1.
+func firstTopLevelSemicolon(q string) int {
+	for i := 0; i < len(q); i++ {
+		switch q[i] {
+		case ';':
+			return i
+		case '\'', '"':
+			if end := skipQuoted(q, i); end > i {
+				i = end
+			}
+		case '-':
+			if i+1 < len(q) && q[i+1] == '-' {
+				i = skipLineComment(q, i)
+			}
+		case '/':
+			if i+1 < len(q) && q[i+1] == '*' {
+				i = skipBlockComment(q, i)
+			}
+		}
+	}
+	return -1
+}
+
+// onlyBlankOrComments reports whether s holds nothing but whitespace, comments
+// and empty statements.
+func onlyBlankOrComments(s string) bool {
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == ' ', c == '\t', c == '\n', c == '\r', c == ';':
+		case c == '-' && i+1 < len(s) && s[i+1] == '-':
+			i = skipLineComment(s, i)
+		case c == '/' && i+1 < len(s) && s[i+1] == '*':
+			i = skipBlockComment(s, i)
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// skipQuoted returns the index of the closing quote of the literal or quoted
+// identifier that starts at i, or len(s)-1 when it is never closed. A doubled
+// quote (” / "") is an escaped quote and does not close the literal.
+func skipQuoted(s string, i int) int {
+	quote := s[i]
+	for j := i + 1; j < len(s); j++ {
+		if s[j] != quote {
+			continue
+		}
+		if j+1 < len(s) && s[j+1] == quote {
+			j++
+			continue
+		}
+		return j
+	}
+	return len(s) - 1
+}
+
+// skipLineComment returns the index of the newline ending the -- comment that
+// starts at i, or len(s)-1 when the comment runs to the end.
+func skipLineComment(s string, i int) int {
+	if n := strings.IndexByte(s[i:], '\n'); n >= 0 {
+		return i + n
+	}
+	return len(s) - 1
+}
+
+// skipBlockComment returns the index of the '/' closing the /* comment that
+// starts at i, or len(s)-1 when it is never closed.
+func skipBlockComment(s string, i int) int {
+	if n := strings.Index(s[i+2:], "*/"); n >= 0 {
+		return i + 2 + n + 1
+	}
+	return len(s) - 1
+}
+
 func runQuery(cmd *cobra.Command, gitRoot, query string, useIndex, jsonOut bool) error {
 	// Read-only: only allow SELECT statements.
 	normalized := strings.TrimSpace(strings.ToUpper(query))
 	if !strings.HasPrefix(normalized, "SELECT") {
 		return fmt.Errorf("only SELECT statements are allowed")
 	}
+	// ...and only one of them. The driver runs every statement in the string it
+	// is handed, so a leading-keyword check alone accepts
+	// "SELECT 1; DELETE FROM turns". The read-only handle below is what makes
+	// the ledger safe; this check is here so the answer is a plain sentence
+	// rather than a driver error about a read-only database.
+	if hasTrailingStatement(query) {
+		return fmt.Errorf("one statement per query (found another statement after the ';')")
+	}
 
 	var d *sql.DB
 	var err error
 	if useIndex {
-		d, err = db.OpenIndex(gitRoot)
+		d, err = db.OpenIndexReadOnly(gitRoot)
 	} else {
-		d, err = db.OpenData(gitRoot)
+		d, err = db.OpenDataReadOnly(gitRoot)
 	}
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)

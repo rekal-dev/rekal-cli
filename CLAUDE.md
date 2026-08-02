@@ -232,7 +232,14 @@ for the same place and move `.rekal/` off the store that already exists —
 - `embed_cmd.go`: `rekal embed` — fill missing semantic vectors in budgeted
   bites (session + knowledge), releasing the DuckDB write lock between
   passes so recall can interleave. Spawned by `index`/`sync`; safe to run
-  by hand. Lock: `.rekal/embed.lock`; log when background: `.rekal/embed.log`
+  by hand. Lock: `.rekal/embed.lock`; log when background: `.rekal/embed.log`.
+  A bite reports whether it **stored** anything (`storedVectorCount` before/
+  after), and the loop stops on a pass that wrote nothing while work remains.
+  Both halves of a bite warn and swallow their errors and `knowledgeMore` is
+  recomputed from the database, so a backend failing every call left "vectors
+  still missing" true forever — measured at 353 identical no-op passes in one
+  run, and `index`/`sync` spawn this in the background where it burns a core
+  until killed. The stall message points at `.rekal/nomic/daemon.log`
 - `config.go`: Two-tier config, both gitignored/local-only (never committed,
   pushed, or synced) — local `.rekal/config.json` deep-merges over global
   `~/.config/rekal/config.json` (path honors `$REKAL_CONFIG_HOME` then

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -78,12 +79,26 @@ func runEmbed(w io.Writer, gitRoot string) error {
 	defer emb.Close()
 
 	for pass := 1; ; pass++ {
-		more, err := embedBite(w, gitRoot, pass, emb)
+		more, wrote, err := embedBite(w, gitRoot, pass, emb)
 		if err != nil {
 			return err
 		}
 		if !more {
 			fmt.Fprintln(w, "rekal: semantic embeddings up to date")
+			return nil
+		}
+		// A pass that wrote nothing while work remains is a stall, not
+		// progress. Both halves of a bite warn and swallow their errors, and
+		// knowledgeMore is recomputed from the database — so a backend that
+		// fails every call leaves "vectors still missing" true forever and the
+		// loop runs until something kills it. Measured at 353 identical
+		// failures in one run, each printing a warning, none embedding
+		// anything; index and sync spawn this in the background, so it burns a
+		// core indefinitely on a broken setup. Nothing about the next pass
+		// differs from this one, so stop and say where to look.
+		if !wrote {
+			fmt.Fprintln(w, "rekal: embed stalled — vectors are still missing and this pass wrote none")
+			fmt.Fprintf(w, "rekal: see %s\n", filepath.Join(gitRoot, ".rekal", "nomic", "daemon.log"))
 			return nil
 		}
 		// Yield the lock between bites, longer than a reader's max open-retry
@@ -98,26 +113,31 @@ func runEmbed(w io.Writer, gitRoot string) error {
 // open attempt while the lock is released.
 const embedYield = 300 * time.Millisecond
 
-// embedBite runs one budgeted session + knowledge embed pass. more is true
-// when either layer still has uncached work remaining after this bite. emb is
-// the shared embedder from runEmbed (nil to construct per-layer as a fallback).
-func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more bool, err error) {
+// embedBite runs one budgeted session + knowledge pass. more is true when
+// either layer still has uncached work remaining after this bite; emb is the
+// shared embedder from runEmbed (nil to construct per-layer as a fallback). wrote reports whether the pass actually
+// stored any vector, which is how the caller tells progress from a stall — the
+// two halves below warn and swallow their errors, so neither `more` nor the
+// error return distinguishes them.
+func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more bool, wrote bool, err error) {
 	indexDB, err := db.OpenIndex(gitRoot)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	defer indexDB.Close() //nolint:errcheck
 
 	if err := db.LoadFTSExtension(indexDB); err != nil {
-		return false, err
+		return false, false, err
 	}
 	if err := db.EnsureKnowledgeSchema(indexDB); err != nil {
-		return false, err
+		return false, false, err
 	}
+
+	before := storedVectorCount(indexDB)
 
 	sessionContent, err := db.QuerySessionContent(indexDB)
 	if err != nil {
-		return false, fmt.Errorf("query session content: %w", err)
+		return false, false, fmt.Errorf("query session content: %w", err)
 	}
 
 	sessionMore := false
@@ -142,7 +162,7 @@ func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more
 		}
 	}
 
-	return sessionMore || knowledgeMore, nil
+	return sessionMore || knowledgeMore, storedVectorCount(indexDB) > before, nil
 }
 
 // startBackgroundEmbed detaches 'rekal embed' after a structural index/sync
@@ -222,4 +242,19 @@ func limitStringMap(m map[string]string, n int) map[string]string {
 		out[k] = m[k]
 	}
 	return out
+}
+
+// storedVectorCount is the total number of semantic vectors in the index,
+// across both layers. It is the only signal that separates a bite that did
+// work from one that failed: the bite's two halves warn and swallow.
+// Best-effort — a count that cannot be read reports 0, which at worst makes a
+// healthy pass look like a stall and stops early rather than spinning.
+func storedVectorCount(indexDB *sql.DB) int64 {
+	var n int64
+	if err := indexDB.QueryRow(`
+		SELECT (SELECT count(*) FROM session_embeddings)
+		     + (SELECT count(*) FROM knowledge_embeddings)`).Scan(&n); err != nil {
+		return 0
+	}
+	return n
 }

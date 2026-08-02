@@ -69,7 +69,26 @@ it can only ever produce a superset. It repairs derived bytes from data.db,
 which is the source of truth — it never edits the ledger.
 
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
-You do not need to run this manually.`,
+You do not need to run this manually.
+
+Options (no short forms: every one of these changes what leaves your machine,
+so they are spelled out):
+
+  --remote <name>   Publish to this remote instead of origin. The pre-push
+                    hook passes whichever remote git is pushing to, so a push
+                    to a fork no longer sends memory to origin.
+  --strict          Exit non-zero when publication fails. Default is to warn
+                    and exit 0, because the hook runs on every git push and a
+                    diverged memory branch must not abort your code push.
+  --timeout <dur>   Deadline for each git network call (default 2m). Raise it
+                    on a slow remote; lower it to fail fast.
+  --progress        Print timed stages, for when a push feels slow.
+  --rebuild         Re-encode the branch's wire data from the local data DB.
+                    A repair, not a routine step: it refuses unless the
+                    branch's current body is already a prefix of what this
+                    machine would write, so it can only ever add.
+
+There is deliberately no --force.`,
 		Example: `  # What the pre-push hook runs for you
   rekal push
     rekal: pushed to origin/rekal/you@example.com

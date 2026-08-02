@@ -37,6 +37,19 @@ Reading the seed digest:
 
   The verdict is a recommendation, not a decision. You judge.
 
+Filters and flags (short forms are the cheapest to type and to emit):
+  -p, --file <regex>    Only sessions that touched a matching path
+  -c, --commit <sha>    Only sessions behind a commit (prefix or full SHA)
+  -a, --author <email>  Only one person's sessions
+  -A, --actor <type>    human or agent
+  -n, --limit <int>     Results per framing (default 20; 0 = none). Soft:
+                        the fused union across framings may exceed it
+  -j, --json            Raw structured JSON instead of the digest
+  -e, --explain         Per-layer scores and related sessions (needs --json)
+
+  Filters combine, and they narrow the session search only — the KNOWLEDGE
+  line is prose at HEAD and ignores them.
+
 Workflow:
   rekal "keyword"                   Search sessions → seed digest (use --json for raw)
   rekal --file auth "token refresh" Filter by file path
@@ -85,21 +98,25 @@ func NewRootCmd() *cobra.Command {
 		Long:  "Rekal gives your agent precise memory — the exact context it needs for what it's working on." + readingTheDigest,
 		Example: `  # Ask why something is the way it is, then read the conversation behind it
   rekal "why is the ledger append-only"
-  rekal query --session s35 --offset 260 --limit 5
+  rekal query -s s35 -o 260 -n 5
 
   # Narrow to one file's history, or to the work behind one commit
-  rekal --file "cmd/rekal/cli/push.go" "force flag"
-  rekal --commit 93952c0 "what did we decide"
+  rekal -p "cmd/rekal/cli/push.go" "force flag"
+  rekal -c 93952c0 "what did we decide"
 
   # Only a teammate's sessions, or only what a human typed
-  rekal --author frank@rekal.dev "merge gate"
-  rekal --actor human "why not squash"
+  rekal -a frank@rekal.dev "merge gate"
+  rekal -A human "why not squash"
 
-  # Machine-readable instead of the digest
-  rekal --json "merge gate"
+  # Combine filters, and cap the result set
+  rekal -p "search/" -a frank@rekal.dev -n 5 "ranking weights"
 
-  # Show which layer produced each score (with --json)
-  rekal --json --explain "merge gate"`,
+  # Machine-readable instead of the digest, with per-layer scores
+  rekal -j "merge gate"
+  rekal -j -e "merge gate"
+
+  # Long forms work identically — use them when writing scripts to read later
+  rekal --file "search/" --limit 5 "ranking weights"`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.ArbitraryArgs,

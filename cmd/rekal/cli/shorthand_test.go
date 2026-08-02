@@ -32,6 +32,9 @@ func TestFlagShorthands(t *testing.T) {
 			"o": "offset", "q": "sql", "r": "role", "s": "session",
 		},
 		"log": {"n": "limit"},
+		// clean's only flag is the consent gate; -y is the conventional letter
+		// for it and collides with nothing else.
+		"clean": {"y": "yes"},
 		// sync's --self takes no shorthand: -s belongs to --session,
 		// the most-typed flag in the CLI, and one letter means one thing.
 		"sync": {},

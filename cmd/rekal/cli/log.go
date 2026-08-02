@@ -20,7 +20,10 @@ author email, and number of sessions captured. Use --limit to control
 how many entries are shown.
 
 A checkpoint is the link between a commit and the conversation that produced
-it. Use log to find that commit, then recall or drill to read the reasoning.`,
+it. Use log to find that commit, then recall or drill to read the reasoning.
+
+Flags:
+  -n, --limit <int>     How many checkpoints to show (default 20)`,
 		Example: `  # The last few captures
   rekal log
     checkpoint 01KZ0HC2QGPQNYW46X9BW9V4XP
@@ -30,8 +33,8 @@ it. Use log to find that commit, then recall or drill to read the reasoning.`,
     Author:   noreply@anthropic.com
     Sessions: 1
 
-  # Widen the window
-  rekal log --limit 50
+  # Widen the window (short form)
+  rekal log -n 50
 
   # From a commit seen here, read the conversation behind it
   rekal --commit f2d7660 "what were we fixing"`,

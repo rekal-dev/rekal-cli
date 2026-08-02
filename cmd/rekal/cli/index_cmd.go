@@ -53,7 +53,26 @@ team. The choice is remembered: plain 'rekal index' and 'rekal sync' keep
 whatever you last set. Default is off.
 
 The index is rebuilt from data.db alone, so a plain rebuild drops teammate
-sessions until the next 'rekal sync' re-imports them.`,
+sessions until the next 'rekal sync' re-imports them.
+
+Options (no short forms — these change what your store contains, so they are
+spelled out on purpose):
+
+  --include-all         Import every local agent session on this machine —
+                        all agents, every repo, plus shell sessions. Use it
+                        when the answer you want lives in another project.
+  --include <path>      Import one repo's local sessions instead of all of
+                        them. Repeatable: --include ~/a --include ~/b.
+  --no-local            Stop importing cross-repo sessions and clear the
+                        remembered choice.
+
+All three are sticky. They write a preference to .rekal/config.json, so a
+later plain 'rekal index' or 'rekal sync' keeps whatever you last chose —
+you set it once, not on every rebuild. Default is off.
+
+Imported sessions are index-only. They are recallable here and cannot be
+pushed, because push reads data.db and they were never written there. That is
+structural, not a policy: your other clients' work cannot leak to this team.`,
 		Example: `  # Rebuild the local index
   rekal index
     creating full-text search index...
@@ -62,12 +81,23 @@ sessions until the next 'rekal sync' re-imports them.`,
 
   # Also recall this machine's sessions from your other repos (never pushed)
   rekal index --include-all
+    rekal: cross-repo local import on (all local sessions)
+    importing local cross-repo sessions...
+    index rebuilt: 212 sessions, 40311 turns
 
-  # Just one other project
+  # Just one other project, or several
   rekal index --include ~/projects/api-server
+  rekal index --include ~/projects/api-server --include ~/projects/web
 
   # Turn cross-repo recall back off
   rekal index --no-local
+
+  # The choice sticks — this keeps whatever you last set
+  rekal index
+
+  # Confirm what came in, and that it stays local
+  rekal query --index --sql "SELECT origin, count(*) FROM session_facets GROUP BY 1"
+  rekal query --sql "SELECT count(*) FROM sessions"   # data.db is unchanged
 
   # After a rebuild, pull teammates back in
   rekal sync`,

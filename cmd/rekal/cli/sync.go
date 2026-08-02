@@ -45,7 +45,14 @@ Typical usage:
   Ad-hoc:     Run 'rekal sync --self' to pull your own data from another machine
 
 Teammate sessions land in the index only, never in your data.db — so they are
-recallable here and structurally impossible to re-push from this machine.`,
+recallable here and structurally impossible to re-push from this machine.
+
+Options:
+  --self    Fetch only your own rekal/<email> branch, not the whole team.
+            This is the two-machines case, and it is the one path that writes
+            to data.db — your own sessions from another machine become yours
+            here, and can be pushed on from this one. No short form: -s is
+            --session elsewhere, and one letter means one thing.`,
 		Example: `  # Pull the whole team's ledger and rebuild the index
   rekal sync
     fetching remote rekal branches...

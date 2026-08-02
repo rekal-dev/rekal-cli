@@ -62,6 +62,19 @@ write to it. Rows print as TSV by default, or NDJSON with --json. Use --index
 to query the index DB. --sql, --session, and a positional statement are
 mutually exclusive.
 
+Flags (short forms first — they are what an agent should emit):
+  -s, --session <id>    Drill a session by short handle (s35) or full ULID
+  -o, --offset <int>    Skip the first N turns (with --session)
+  -n, --limit <int>     Return at most N turns, 0 = all (with --session)
+  -r, --role <role>     human | assistant | human_steering | summary
+  -F, --full            Add tool calls and files touched
+  -q, --sql "<stmt>"    Explicit SQL mode (a bare positional works too)
+  -i, --index           Run the SQL against index.db instead of data.db
+  -j, --json            One object for a drill, NDJSON for SQL rows
+
+  --offset/--limit/--role require --session. Short ids (s35) come from the
+  digest of the most recent recall; a ULID always works.
+
 Full queryable schema (FTS-internal tables — dict/docs/fields/stats/stopwords/
 terms — and state tables — schema_meta/checkpoint_state/index_state — are engine
 internals; ignore them).
@@ -111,7 +124,14 @@ Note: turns.ts is a TIMESTAMP, not text. "ts LIKE '2023-05%'" raises a Binder
 error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01', or
 CAST(ts AS VARCHAR) LIKE '2023-05%'. turns_ft.ts is a VARCHAR holding the same
 instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
-		Example: `  # Explicit SQL mode
+		Example: `  # Short forms — the compact way to drill a seed from a digest
+  rekal query -s s35                      # readable turns
+  rekal query -s s35 -o 260 -n 5          # a window around turn 262
+  rekal query -s s35 -r human_steering    # only what the human typed
+  rekal query -s s35 -F                   # add tool calls and files
+  rekal query -i -q "SELECT count(*) FROM turns_ft"
+
+  # Explicit SQL mode
   rekal query --sql "SELECT id, branch FROM sessions ORDER BY captured_at DESC LIMIT 5"
 
   # Positional shorthand (same as --sql)

@@ -65,7 +65,23 @@ imported into the local data DB automatically.
 If Rekal is already initialized, 'init' leaves your data untouched and
 refreshes the version-managed skill, hooks, and agent instruction lines.
 (The skill also auto-refreshes on the next recall when its pinned version
-lags the binary; re-run init to refresh hooks and instruction files too.)`,
+lags the binary; re-run init to refresh hooks and instruction files too.)
+
+Safe to re-run. It never touches captured data.`,
+		Example: `  # Set up a repository
+  rekal init
+    rekal: imported 5 session(s) from remote
+    Rekal initialized.
+
+  # Re-run after upgrading the binary — refreshes skill, hooks and agent lines
+  rekal init
+
+  # Then pull the team's history and check it landed
+  rekal sync
+  rekal log --limit 3
+
+  # Undo everything init did (asks first)
+  rekal clean`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

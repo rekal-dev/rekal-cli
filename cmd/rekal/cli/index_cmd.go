@@ -50,7 +50,27 @@ Kiro — every registered adapter) from other repos and shell sessions on this
 machine into recall. These sessions are stored in the index only, never in
 the data DB, so they can be recalled locally but can never be pushed to the
 team. The choice is remembered: plain 'rekal index' and 'rekal sync' keep
-whatever you last set. Default is off.`,
+whatever you last set. Default is off.
+
+The index is rebuilt from data.db alone, so a plain rebuild drops teammate
+sessions until the next 'rekal sync' re-imports them.`,
+		Example: `  # Rebuild the local index
+  rekal index
+    creating full-text search index...
+    knowledge layer: 90 file(s) re-chunked, 676 chunk(s)
+    index rebuilt: 36 sessions, 1267 turns
+
+  # Also recall this machine's sessions from your other repos (never pushed)
+  rekal index --include-all
+
+  # Just one other project
+  rekal index --include ~/projects/api-server
+
+  # Turn cross-repo recall back off
+  rekal index --no-local
+
+  # After a rebuild, pull teammates back in
+  rekal sync`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

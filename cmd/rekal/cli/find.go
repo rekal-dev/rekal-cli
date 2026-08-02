@@ -116,7 +116,29 @@ then a total. Drill a mention with:
 The sweep is complete (no limit) and covers the whole ledger — this machine's
 capture plus every teammate session pulled in by 'rekal sync'. The agent judges
 class-mapping, set size, and the other speaker's uptake.
-Optional role ∈ human|assistant|human_steering|summary.`,
+Optional role ∈ human|assistant|human_steering|summary.
+
+Use find, not recall, when the question is "all / every / how many". Recall
+ranks and returns the best few; find returns the set. It also answers the
+opposite question: a term with no mentions exits non-zero, which is how you
+tell "we never discussed this" from "the ranking buried it".`,
+		Example: `  # Every mention, oldest first, then a total
+  rekal find "sockaddr_un"
+    01KYF3M5VK… t842  2026-08-01T14:22 assistant: …the daemon died on 'bind: invalid
+    01KYF3M5VK… t879  2026-08-01T15:03 assistant: …a deep repo would still blow past…
+    total 4 mentions in 1 sessions — "sockaddr_un"
+
+  # Only what a human asked for, not what the agent said back
+  rekal find "force push" human_steering
+
+  # Only the compaction summaries
+  rekal find "merge gate" summary
+
+  # Nothing found — prints a reformulation hint and exits 1
+  rekal find "kubernetes"
+
+  # Drill a mention from the sweep
+  rekal query --session 01KYF3M5VK… --offset 840 --limit 5`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

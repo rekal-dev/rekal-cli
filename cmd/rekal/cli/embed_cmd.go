@@ -36,7 +36,31 @@ this command fills them in budgeted bites, releasing the index lock between
 passes so recall can run meanwhile. Safe to interrupt and re-run.
 
 'rekal index' and 'rekal sync' start this in the background after the
-structural rebuild finishes; you can also run it by hand.`,
+structural rebuild finishes; you can also run it by hand.
+
+Recall works without these vectors — it falls back to keyword plus LSA and
+says so. Filling them improves ranking; it is never required for an answer.`,
+		Example: `  # Finish or resume the vectors
+  rekal embed
+    building deep semantic embeddings (nomic-v1.5-c8k-d1)...
+    stored 36 semantic embeddings (12 cached, 24 embedded)
+    knowledge embeddings: 16 stored (0 cached, 16 embedded)
+
+  # Already complete
+  rekal embed
+    rekal: semantic embeddings up to date
+
+  # Another embed already holds the lock — safe, just wait
+  rekal embed
+    rekal: embed already running (or lock busy)
+
+  # Check coverage yourself
+  rekal query --index --sql "SELECT model, count(*) FROM session_embeddings GROUP BY 1"
+  rekal query --index --sql "SELECT count(*) FROM knowledge_embeddings"
+
+  # When it stalls, the reason is in the log
+  cat .rekal/embed.log
+  cat .rekal/nomic/daemon.log`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

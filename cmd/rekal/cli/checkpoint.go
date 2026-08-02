@@ -31,7 +31,25 @@ into .rekal/data.db. Each checkpoint is linked to the current HEAD commit and
 records which files were changed.
 
 Normally runs automatically via the post-commit hook installed by 'rekal init'.
-Run manually to capture a session without committing.`,
+Run manually to capture a session without committing.
+
+Capture is local. Nothing reaches the team until 'rekal push', and push only
+shares checkpoints whose work merged. A capture during a rebase is skipped —
+git replays every commit, and linking the live conversation to each one would
+claim work it never did.
+
+Re-capturing the same conversation appends the new turns to the session that
+already exists rather than storing a second copy of it.`,
+		Example: `  # What the post-commit hook runs for you
+  rekal checkpoint
+    rekal: 1 session(s) captured
+
+  # Nothing to capture — silent, exits 0
+  rekal checkpoint
+
+  # See what it recorded
+  rekal log --limit 1
+  rekal query --sql "SELECT count(*) FROM turns"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

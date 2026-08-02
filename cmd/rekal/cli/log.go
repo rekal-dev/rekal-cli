@@ -17,7 +17,24 @@ func newLogCmd() *cobra.Command {
 
 Each entry shows the checkpoint ID, timestamp, git commit SHA, branch,
 author email, and number of sessions captured. Use --limit to control
-how many entries are shown.`,
+how many entries are shown.
+
+A checkpoint is the link between a commit and the conversation that produced
+it. Use log to find that commit, then recall or drill to read the reasoning.`,
+		Example: `  # The last few captures
+  rekal log
+    checkpoint 01KZ0HC2QGPQNYW46X9BW9V4XP
+    Date:     2026-08-02T06:07:55Z
+    Commit:   f2d7660014a853a57eb363461221cf8a077b9425
+    Branch:   claude/plugin-pr-request-fz3r1z
+    Author:   noreply@anthropic.com
+    Sessions: 1
+
+  # Widen the window
+  rekal log --limit 50
+
+  # From a commit seen here, read the conversation behind it
+  rekal --commit f2d7660 "what were we fixing"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

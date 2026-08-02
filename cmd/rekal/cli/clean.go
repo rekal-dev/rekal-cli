@@ -31,7 +31,27 @@ This deletes local data. Anything captured but never pushed is gone with it,
 so clean asks first: it prompts at a terminal and refuses without --yes
 anywhere else (a script, a hook, an agent).
 
-Run 'rekal init' to reinitialize after cleaning.`,
+Run 'rekal init' to reinitialize after cleaning.
+
+What clean does not touch: the remote branch, .gitignore, and any file you
+wrote yourself. Sessions already pushed survive on rekal/<email>, so a clean
+followed by init restores them.`,
+		Example: `  # Interactive — prompts before removing anything
+  rekal clean
+    This removes /path/to/repo/.rekal, the rekal git hooks, and the installed skill.
+    Anything captured but not yet pushed is gone. Type 'yes' to continue: yes
+    Rekal cleaned. Run ` + "`rekal init`" + ` to reinitialize.
+
+  # Scripts, hooks, agents: no terminal to answer at, so confirm explicitly
+  rekal clean --yes
+
+  # Refused without consent, and nothing is removed
+  rekal clean < /dev/null
+    rekal: cancelled — nothing was removed
+
+  # Keep a copy of unpushed work before cleaning
+  rekal push
+  rekal clean --yes`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 

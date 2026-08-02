@@ -70,6 +70,32 @@ which is the source of truth — it never edits the ledger.
 
 Normally runs automatically via the pre-push git hook installed by 'rekal init'.
 You do not need to run this manually.`,
+		Example: `  # What the pre-push hook runs for you
+  rekal push
+    rekal: pushed to origin/rekal/you@example.com
+
+  # Nothing merged since last time — normal, not an error
+  rekal push
+    rekal: no new checkpoints to export
+
+  # Publish to a fork instead of origin
+  rekal push --remote upstream
+
+  # Fail the command if publication fails (default is to warn and exit 0,
+  # so a memory push never aborts your git push)
+  rekal push --strict
+
+  # Slow or wedged remote: bound every git call
+  rekal push --timeout 30s
+
+  # See where the time goes
+  rekal push --progress
+
+  # Repair a branch's wire bytes from the local data DB (superset-only)
+  rekal push --rebuild
+
+  # Check what is still held back, and why
+  rekal query --sql "SELECT git_sha, git_branch, exported FROM checkpoints WHERE NOT exported"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

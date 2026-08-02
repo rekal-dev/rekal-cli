@@ -42,7 +42,24 @@ index — locally recallable, never pushed.
 Typical usage:
   Developer:  Run 'rekal sync' at the start of the day
   Agent:      Run 'rekal sync' at the start of a session if team context matters
-  Ad-hoc:     Run 'rekal sync --self' to pull your own data from another machine`,
+  Ad-hoc:     Run 'rekal sync --self' to pull your own data from another machine
+
+Teammate sessions land in the index only, never in your data.db — so they are
+recallable here and structurally impossible to re-push from this machine.`,
+		Example: `  # Pull the whole team's ledger and rebuild the index
+  rekal sync
+    fetching remote rekal branches...
+    importing origin/rekal/frank@rekal.dev...
+    rekal: synced — 3 local sessions, 86 remote sessions from 1 team member(s)
+
+  # Your own branch only — the second-machine case
+  rekal sync --self
+
+  # Confirm what arrived, and from whom
+  rekal query --index --sql "SELECT user_email, count(*) FROM session_facets GROUP BY 1"
+
+  # The count above can be smaller than the number sync reported: duplicate
+  # captures of one conversation are collapsed on import.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

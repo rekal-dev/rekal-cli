@@ -11,7 +11,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const gettingStarted = `
+const readingTheDigest = `
+
+Reading the seed digest:
+  Recall answers with one header line, then one line per session it found.
+
+    INJECT top=0.87 gap=0.24 20 seeds
+      s35 conf=0.87 t262 [reached 9× drilled 2×· "rebase capture"] "Now the integration test proving…"
+      s12 conf=0.63 t54 "All done. Here's what was implemented: checkpoint now only writes…"
+    KNOWLEDGE docs/design/merged-only-sharing.md=0.88 docs/usage.md=0.78
+
+  Header
+    INJECT      sessions worth reading were found
+    KNOWLEDGE   no session stood out, but prose at HEAD looks relevant
+    SILENCE     nothing above the floor; exits 1
+    top=        highest absolute confidence in the set (corpus-independent)
+    gap=        top minus the runner-up, so one clear answer reads apart from a tie
+
+  Seed line
+    s35         short id for this call; pass it to 'rekal query --session s35'
+    conf=0.87   absolute confidence — judge relevance from this plus the snippet
+    t262        turn index of the match; drill around it with --offset 260 --limit 5
+    [reached…]  usage history: how often search surfaced it, how often an agent
+                opened it. A drill is the load-bearing signal; surfacing is not.
+
+  The verdict is a recommendation, not a decision. You judge.
 
 Workflow:
   rekal "keyword"                   Search sessions → seed digest (use --json for raw)
@@ -56,9 +80,26 @@ func NewRootCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:           "rekal [filters...] [query]",
-		Short:         "Rekal — gives your agent precise memory",
-		Long:          "Rekal gives your agent precise memory — the exact context it needs for what it's working on." + gettingStarted,
+		Use:   "rekal [filters...] [query]",
+		Short: "Rekal — gives your agent precise memory",
+		Long:  "Rekal gives your agent precise memory — the exact context it needs for what it's working on." + readingTheDigest,
+		Example: `  # Ask why something is the way it is, then read the conversation behind it
+  rekal "why is the ledger append-only"
+  rekal query --session s35 --offset 260 --limit 5
+
+  # Narrow to one file's history, or to the work behind one commit
+  rekal --file "cmd/rekal/cli/push.go" "force flag"
+  rekal --commit 93952c0 "what did we decide"
+
+  # Only a teammate's sessions, or only what a human typed
+  rekal --author frank@rekal.dev "merge gate"
+  rekal --actor human "why not squash"
+
+  # Machine-readable instead of the digest
+  rekal --json "merge gate"
+
+  # Show which layer produced each score (with --json)
+  rekal --json --explain "merge gate"`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.ArbitraryArgs,

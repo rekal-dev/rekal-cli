@@ -331,6 +331,34 @@ func (n nomicSessionEmbedder) Close() { n.c.Close() }
 // false so a not-yet-warm daemon degrades immediately (vectors converge on the
 // next embed) rather than stalling the post-commit hook. The HTTP backend
 // ignores wait — it has no local model to load.
+// embedBackendKey records which backend produced the index's vectors, beside
+// the model id under embed_model.
+//
+// The id alone is not enough to tell a retired *embedded* model from an HTTP
+// model whose config has since been removed, and those need opposite
+// responses: re-embed locally, or restore the config. Recording the backend
+// makes "this index is behind" a mechanical comparison instead of a list
+// somebody has to remember to update on every bump.
+const embedBackendKey = "embed_backend"
+
+// embedBackendOf names the backend behind an embedder.
+func embedBackendOf(emb sessionEmbedder) string {
+	if _, ok := emb.(nomicSessionEmbedder); ok {
+		return search.EmbedderBackendEmbedded
+	}
+	return search.EmbedderBackendHTTP
+}
+
+// recordEmbedProvenance stores the model id and the backend that produced it.
+// Best-effort on the backend: an older index simply has no value, and the
+// caller falls back to the closed legacy list.
+func recordEmbedProvenance(indexDB *sql.DB, model string, emb sessionEmbedder) error {
+	if err := db.WriteIndexState(indexDB, "embed_model", model); err != nil {
+		return err
+	}
+	return db.WriteIndexState(indexDB, embedBackendKey, embedBackendOf(emb))
+}
+
 func semanticEmbedder(gitRoot string, wait bool) (sessionEmbedder, error) {
 	cfg, err := readMergedConfig(gitRoot)
 	if err != nil {
@@ -393,7 +421,7 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 		needed[sid] = content
 	}
 	if len(needed) == 0 {
-		if err := db.WriteIndexState(indexDB, "embed_model", model); err != nil {
+		if err := recordEmbedProvenance(indexDB, model, emb); err != nil {
 			return false, err
 		}
 		return false, nil
@@ -436,7 +464,7 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 			// Still store whatever the cache supplied this bite.
 			if len(vectors) > 0 {
 				_ = db.StoreEmbeddings(indexDB, vectors, model)
-				_ = db.WriteIndexState(indexDB, "embed_model", model)
+				_ = recordEmbedProvenance(indexDB, model, emb)
 			}
 			return true, err
 		}
@@ -453,7 +481,7 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 	if err := db.StoreEmbeddings(indexDB, vectors, model); err != nil {
 		return false, err
 	}
-	if err := db.WriteIndexState(indexDB, "embed_model", model); err != nil {
+	if err := recordEmbedProvenance(indexDB, model, emb); err != nil {
 		return false, err
 	}
 	fmt.Fprintf(w, "stored %d semantic embeddings (%d cached, %d embedded)\n",

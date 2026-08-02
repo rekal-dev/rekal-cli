@@ -60,14 +60,22 @@ for the same place and move `.rekal/` off the store that already exists —
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
   index DB, refresh the knowledge layer (watermark-gated), call the `search`
   package. Two self-healing paths, both best-effort: an **empty** index is
-  rebuilt inline (`IsIndexPopulated`), and an index whose `embed_model` is a
-  **retired** id (`supersededNomicModels` — the window and the document scheme
-  are both part of the identity) spawns the same background `rekal embed` that
-  index/sync use, rather than only printing a warning. A binary upgrade
-  otherwise leaves the semantic layer dark on every repo the user owns until
-  they happen to read the warning and run the command by hand; `rekal embed`
-  holds its own lock, so concurrent recalls converge on one worker. Skipped
-  under `session.BenchEnv`. First runs `maybeRefreshStaleSkill` (init.go): the agent enters here
+  rebuilt inline (`IsIndexPopulated`), and an index whose vectors are **behind
+  this binary** spawns the same background `rekal embed` that index/sync use,
+  rather than only printing a warning — otherwise an upgrade leaves the semantic
+  layer dark on every repo the user owns until they happen to read a warning.
+  Staleness is a comparison, not a list: `index_state.embed_backend` records
+  which backend produced the vectors (written beside `embed_model` by
+  `recordEmbedProvenance`), and `staleEmbeddedVectors` treats an
+  **embedded**-backend index whose model id is not `nomic.ModelName` as an
+  upgrade to finish. So a future id bump needs no registration — the previous
+  hand-maintained set could be forgotten, and forgetting it told the user their
+  embedding config was missing. `legacyEmbeddedModels` is a **closed** set for
+  stores predating that column; do not add to it. An **http**-backend mismatch
+  is deliberately *not* stale: it means the embedding config was removed, and
+  re-embedding locally would silently replace the store's vectors with a
+  different model's. `rekal embed` holds its own lock, so concurrent recalls
+  converge on one worker. Skipped under `session.BenchEnv`. First runs `maybeRefreshStaleSkill` (init.go): the agent enters here
   after loading the skill, so a skill left behind by a binary upgrade
   (version-pinned marker mismatch) is refreshed in place — best-effort, bench-
   gated, touches only the gitignored `.claude/skills/`.

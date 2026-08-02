@@ -24,17 +24,38 @@ import (
 // a real "surfaced" signal, so the cap is generous.
 const reachLogCap = 50
 
-// supersededNomicModels are embedded-nomic model ids written by older binaries.
-// The context window is part of the model identity (see nomic.ModelName), so a
-// window change retires an id rather than reusing it. An index still carrying
-// one of these needs `rekal embed`, not an embedding config — distinguishing
-// the two is the difference between an actionable message and a confusing one.
-var supersededNomicModels = map[string]bool{
-	"nomic-v1.5":     true, // 2048-token window; superseded by nomic-v1.5-c8k
-	"nomic-v1.5-c8k": true, // whole-transcript document; superseded by the budgeted one
+// legacyEmbeddedModels is a **closed** set: the embedded-nomic ids written
+// before the index recorded which backend produced it.
+//
+// Do not add to this. A store written by any current binary carries
+// embed_backend, and staleEmbeddedVectors compares its model id against the one
+// this binary writes — so a future bump is detected mechanically. This list
+// exists only because indexes predating that column cannot be asked.
+var legacyEmbeddedModels = map[string]bool{
+	"nomic-v1.5":     true, // 2048-token window
+	"nomic-v1.5-c8k": true, // whole-transcript document
 }
 
-func isSupersededNomicModel(model string) bool { return supersededNomicModels[model] }
+// staleEmbeddedVectors reports whether the index's vectors came from this
+// binary's own embedder under an id it no longer writes — an upgrade to finish,
+// not a missing configuration.
+//
+// Vectors are keyed by model id, so anything that changes what the embedder
+// produces (the context window, the document fed to it) retires the id. The
+// backend has to be part of the test: an HTTP model id that no longer matches
+// means the config was removed, and re-embedding locally would be the wrong
+// answer to that.
+func staleEmbeddedVectors(backend, model string) bool {
+	switch backend {
+	case search.EmbedderBackendEmbedded:
+		return model != nomic.ModelName
+	case "":
+		// Predates embed_backend; fall back to the closed legacy set.
+		return legacyEmbeddedModels[model]
+	default:
+		return false
+	}
+}
 
 // attachReach fills each result's Reached hint from the derived session_reach
 // aggregate (index.db). Best-effort and display-only: on any error the results
@@ -323,6 +344,7 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 		}
 	}
 	if embedModel, ok, _ := db.ReadIndexState(indexDB, "embed_model"); ok && embedModel != "" {
+		embedBackend, _, _ := db.ReadIndexState(indexDB, embedBackendKey)
 		switch {
 		// A store built by an older binary carries a superseded nomic model id
 		// (the context window and the document scheme are both part of the
@@ -333,7 +355,7 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 		// command by hand, on every repo they own. Best-effort and
 		// self-serialising: `rekal embed` takes its own lock, so concurrent
 		// recalls converge on one worker instead of piling up.
-		case qe == nil && isSupersededNomicModel(embedModel):
+		case qe == nil && staleEmbeddedVectors(embedBackend, embedModel):
 			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: index was embedded by an older model (%q, now %q) — refilling the semantic layer in the background\n", embedModel, nomic.ModelName)
 			if !session.BenchEnv() {
 				startBackgroundEmbed(cmd.ErrOrStderr(), gitRoot)

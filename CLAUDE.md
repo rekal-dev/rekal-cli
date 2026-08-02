@@ -59,7 +59,15 @@ for the same place and move `.rekal/` off the store that already exists —
 - `root.go`: Root command (recall is the default) + command registration
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
   index DB, refresh the knowledge layer (watermark-gated), call the `search`
-  package. First runs `maybeRefreshStaleSkill` (init.go): the agent enters here
+  package. Two self-healing paths, both best-effort: an **empty** index is
+  rebuilt inline (`IsIndexPopulated`), and an index whose `embed_model` is a
+  **retired** id (`supersededNomicModels` — the window and the document scheme
+  are both part of the identity) spawns the same background `rekal embed` that
+  index/sync use, rather than only printing a warning. A binary upgrade
+  otherwise leaves the semantic layer dark on every repo the user owns until
+  they happen to read the warning and run the command by hand; `rekal embed`
+  holds its own lock, so concurrent recalls converge on one worker. Skipped
+  under `session.BenchEnv`. First runs `maybeRefreshStaleSkill` (init.go): the agent enters here
   after loading the skill, so a skill left behind by a binary upgrade
   (version-pinned marker mismatch) is refreshed in place — best-effort, bench-
   gated, touches only the gitignored `.claude/skills/`.

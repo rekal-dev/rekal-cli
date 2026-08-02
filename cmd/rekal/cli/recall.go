@@ -14,6 +14,7 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
 	"github.com/spf13/cobra"
 )
 
@@ -324,10 +325,19 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 	if embedModel, ok, _ := db.ReadIndexState(indexDB, "embed_model"); ok && embedModel != "" {
 		switch {
 		// A store built by an older binary carries a superseded nomic model id
-		// (the context window is part of the identity). That is an upgrade to
-		// finish, not a missing config — say so, and say what to run.
+		// (the context window and the document scheme are both part of the
+		// identity). That is an upgrade to finish, not a missing config — so
+		// finish it. Refilling vectors is exactly what index/sync already spawn
+		// in the background; leaving it to the user means the semantic layer
+		// stays dark until someone happens to read a warning and run the
+		// command by hand, on every repo they own. Best-effort and
+		// self-serialising: `rekal embed` takes its own lock, so concurrent
+		// recalls converge on one worker instead of piling up.
 		case qe == nil && isSupersededNomicModel(embedModel):
-			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: index was embedded by an older model (%q, now %q) — run `rekal embed` to rebuild the semantic layer\n", embedModel, nomic.ModelName)
+			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: index was embedded by an older model (%q, now %q) — refilling the semantic layer in the background\n", embedModel, nomic.ModelName)
+			if !session.BenchEnv() {
+				startBackgroundEmbed(cmd.ErrOrStderr(), gitRoot)
+			}
 		case qe == nil && embedModel != nomic.ModelName:
 			fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: index embed_model is %q but no embedding config is set — semantic layer will skip\n", embedModel)
 		case qe != nil && qe.ModelName() != embedModel:

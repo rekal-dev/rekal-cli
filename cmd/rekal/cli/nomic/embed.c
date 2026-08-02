@@ -33,8 +33,17 @@ struct nomic_embedder {
     llama_token *token_buf;
 };
 
+// When set, llama.cpp's diagnostics are left alone. See nomic_set_verbose.
+static int g_verbose = 0;
+
+void nomic_set_verbose(int on) {
+    g_verbose = on;
+}
+
 // Redirect stderr to /dev/null, return saved fd. Returns -1 on failure.
+// A -1 return means "not redirected", which is also what verbose mode wants.
 static int suppress_stderr(void) {
+    if (g_verbose || getenv("REKAL_NOMIC_DEBUG")) return -1;
     fflush(stderr);
     int saved = dup(STDERR_FILENO);
     if (saved < 0) return -1;

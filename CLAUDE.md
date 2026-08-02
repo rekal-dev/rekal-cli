@@ -480,7 +480,12 @@ for the same place and move `.rekal/` off the store that already exists —
   Model loading is isolated in a **single-flight daemon** (`daemon.lock` flock,
   one per store) that loads the model **before** opening its socket — so a
   connectable socket means "ready", and a native model-load crash kills the
-  disposable daemon, never the caller. The spawned daemon's stderr goes to
+  disposable daemon, never the caller. The daemon calls `SetVerbose(true)` so
+  llama.cpp's own diagnostics survive — `suppress_stderr` in `embed.c` sends
+  them to `/dev/null` around load *and* inference, which is right for a
+  terminal and wrong for the daemon, whose stderr is a file. It is why a SIGILL
+  and a segfault both left an empty log. `REKAL_NOMIC_DEBUG` turns it on for
+  the in-process path too. The spawned daemon's stderr goes to
   `.rekal/nomic/daemon.log` (truncated per spawn): a daemon that can *never*
   start is otherwise indistinguishable from one still warming, and recall tells
   the agent to retry with backoff forever. `socketPath` falls back to a private
@@ -497,7 +502,10 @@ for the same place and move `.rekal/` off the store that already exists —
   `rekal embed` passes `wait=true` (block for the model, bounded). Cache
   extraction is flock-serialized; spawns are cooldown-rate-limited. This is the
   fix for the concurrent-recall model-load crash.
-  `embed.c`'s `MAX_TOKENS` (8192, the model's trained window) is the hard
+  `embed.c`'s `MAX_TOKENS` (8192 — **not** the model's trained window; this
+  GGUF reports `n_ctx_train = 2048` and llama.cpp logs `n_ctx_seq (8192) >
+  n_ctx_train (2048) -- possible training context overflow` on every load) is
+  the hard
   truncation point: a session is embedded as one concatenated document, so
   anything past the cap is **discarded, not blurred** — and decisions land late
   in a conversation. It was 2048, which meant the neural layer never saw the

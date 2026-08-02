@@ -25,6 +25,9 @@ func WarmCache() error {
 type Embedder struct{}
 
 // NewEmbedder always returns ErrNotSupported on unsupported platforms.
+// SetVerbose is a no-op without the native embedder.
+func SetVerbose(_ bool) {}
+
 func NewEmbedder() (*Embedder, error) {
 	return nil, ErrNotSupported
 }

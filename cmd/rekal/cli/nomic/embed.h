@@ -5,6 +5,15 @@
 extern "C" {
 #endif
 
+// Let llama.cpp's own diagnostics through instead of discarding them.
+//
+// Loading and inference are normally wrapped in a stderr redirect to /dev/null,
+// because llama.cpp is chatty and a CLI must stay quiet. But that also swallows
+// the message when it *fails* — a native crash or a load error then leaves no
+// trace anywhere, and the caller can only report a timeout. The daemon writes
+// its stderr to a log file rather than a terminal, so it turns this on.
+void nomic_set_verbose(int on);
+
 // Opaque handle to a loaded embedding model.
 typedef struct nomic_embedder nomic_embedder;
 

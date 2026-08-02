@@ -171,6 +171,10 @@ func RunDaemon(gitRoot string) error {
 	sock := socketPath(gitRoot)
 	pid := pidPath(gitRoot)
 
+	// The daemon's stderr is daemon.log, not a terminal, so let llama.cpp
+	// speak: this is the only place a native failure can leave a trace.
+	SetVerbose(true)
+
 	// Load the model BEFORE opening the socket. Clients probe for the socket to
 	// decide readiness; if it appeared first they could connect mid-load and
 	// hang or race a crash. Load under the lock so no other daemon loads too.

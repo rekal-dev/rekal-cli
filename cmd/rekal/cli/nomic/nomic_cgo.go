@@ -123,6 +123,21 @@ func cachedModelPath() (string, error) {
 	return cached, nil
 }
 
+// SetVerbose lets llama.cpp's own stderr through instead of discarding it.
+//
+// The redirect exists so a CLI stays quiet, not to hide failures — and it hid
+// two real ones: a SIGILL from a CPU-mismatched build and a segfault during
+// inference, both leaving an empty log and a caller that could only report a
+// timeout. The daemon's stderr is a file, not a terminal, so it turns this on
+// and its diagnostics land in .rekal/nomic/daemon.log.
+func SetVerbose(on bool) {
+	v := C.int(0)
+	if on {
+		v = 1
+	}
+	C.nomic_set_verbose(v)
+}
+
 // NewEmbedder loads the embedded model, using a cached decompressed file when available.
 func NewEmbedder() (*Embedder, error) {
 	if !Supported() {

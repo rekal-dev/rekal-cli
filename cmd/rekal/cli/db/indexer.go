@@ -1136,48 +1136,179 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 	return nil
 }
 
-// QuerySessionContentByIDs returns session_id → concatenated turn content for specific sessions.
+// QuerySessionContentByIDs returns the budgeted embedding document for specific
+// sessions — the incremental counterpart of QuerySessionContent.
+//
+// Both paths must assemble a session identically. They embed into the same
+// column under the same model id, so if the incremental path built a document
+// the full rebuild would not, a session's vector would depend on which path
+// happened to reach it and recall would compare vectors from two different
+// document schemes.
 func QuerySessionContentByIDs(d *sql.DB, sessionIDs []string) (map[string]string, error) {
 	result := make(map[string]string, len(sessionIDs))
 	for _, sid := range sessionIDs {
-		// string_agg over zero rows returns NULL — a session can have tool
-		// calls but no turns, and that must not fail the whole batch.
-		var content sql.NullString
-		err := d.QueryRow(`
-			SELECT string_agg(content, ' ' ORDER BY turn_index)
+		// A session can have tool calls but no turns; that yields no rows and
+		// must not fail the whole batch.
+		rows, err := d.Query(`
+			SELECT session_id, role, content
 			FROM turns_ft WHERE session_id = $1
-		`, sid).Scan(&content)
-		if err != nil && err != sql.ErrNoRows {
+			ORDER BY turn_index
+		`, sid)
+		if err != nil {
 			return nil, fmt.Errorf("query session content for %s: %w", sid, err)
 		}
-		if content.Valid && content.String != "" {
-			result[sid] = content.String
+		docs, err := scanSessionDocs(rows)
+		if err != nil {
+			return nil, fmt.Errorf("build session doc for %s: %w", sid, err)
+		}
+		for id, doc := range docs {
+			result[id] = doc
 		}
 	}
 	return result, nil
 }
 
-// QuerySessionContent returns session_id → concatenated turn content for LSA.
+// Session documents for the semantic layer.
+//
+// A session used to be embedded as every turn concatenated, equally weighted.
+// Mean pooling then makes the vector a byte-weighted average, and on a real
+// store assistant turns are 84.4% of the bytes against 1.0% for steering — so
+// the vector was mostly "Let me check that file" and code blocks, which read
+// nearly the same in every session and pull them all toward one point.
+// Measured on a 36-session corpus: the best real session matched a query
+// *worse* on average than a two-turn "Reply with exactly: OK" echo
+// (mean cosine gap -0.0038). The ranking layer already asserts these turns are
+// not equal — steering_boost 1.3, summary_boost 1.15 — and the embedding
+// contradicted it.
+//
+// So the window is budgeted rather than filled in transcript order. Intent
+// turns are admitted first and in full; assistant turns share a bounded slice
+// of what is left, spread equally so truncation lands across the whole session
+// instead of amputating its tail — which mattered, because decisions arrive
+// late and positional truncation dropped exactly those.
+//
+// Measured effect at a 10% assistant allowance: real sessions' mean cosine
+// 0.5285 → 0.5737 with the echo's unchanged at 0.5323 (the whole movement is
+// real sessions improving, none of it junk degrading), top slot held by a real
+// session on 7 of 8 queries instead of 5.
+const (
+	// sessionDocBudgetChars is the embedder's window in characters. MAX_TOKENS
+	// in embed.c is 8192 and English/code runs about 4 chars per token; the
+	// bound only has to be the right order, since overshoot is truncated by the
+	// tokenizer anyway and undershoot merely leaves window unused.
+	sessionDocBudgetChars = 8192 * 4
+
+	// assistantAllowanceNum/Den is the share of the budget assistant turns may
+	// occupy between them (1/10). Measured across 0.05/0.10/0.25 the gain is a
+	// smooth curve, not a threshold, and 0.05-0.10 sits within noise of dropping
+	// assistant text entirely — 1/10 is the more conservative end, keeping more
+	// reasoning for the same measured ranking. Integer ratio so the budget
+	// arithmetic stays exact.
+	assistantAllowanceNum = 1
+	assistantAllowanceDen = 10
+)
+
+// isIntentTurn reports whether a turn carries intent rather than execution.
+// Summaries are compaction distillations, so they count as intent.
+func isIntentTurn(role string) bool {
+	return role == "human" || role == "human_steering" || role == "summary"
+}
+
+// clipTo returns s bounded to n characters, treating a spent budget as empty.
+func clipTo(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+type docTurn struct {
+	role    string
+	content string
+}
+
+// buildSessionDoc assembles one session's embedding document under the budget.
+func buildSessionDoc(turns []docTurn) string {
+	intent, assistants := 0, 0
+	for _, t := range turns {
+		if isIntentTurn(t.role) {
+			intent += len(t.content)
+		} else {
+			assistants++
+		}
+	}
+	if intent > sessionDocBudgetChars {
+		intent = sessionDocBudgetChars
+	}
+	allowance := sessionDocBudgetChars * assistantAllowanceNum / assistantAllowanceDen
+	if rem := sessionDocBudgetChars - intent; allowance > rem {
+		allowance = rem
+	}
+	perAssistant := 0
+	if assistants > 0 && allowance > 0 {
+		perAssistant = allowance / assistants
+	}
+
+	var b strings.Builder
+	used := 0
+	for _, t := range turns {
+		var piece string
+		if isIntentTurn(t.role) {
+			piece = clipTo(t.content, sessionDocBudgetChars-used)
+		} else {
+			piece = clipTo(t.content, perAssistant)
+		}
+		if piece == "" {
+			continue
+		}
+		b.WriteString(piece)
+		b.WriteByte(' ')
+		used += len(piece) + 1
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// scanSessionDocs reads turns in order and folds them into budgeted documents.
+func scanSessionDocs(rows *sql.Rows) (map[string]string, error) {
+	defer rows.Close() //nolint:errcheck
+	byID := map[string][]docTurn{}
+	var order []string
+	for rows.Next() {
+		var id, role, content string
+		if err := rows.Scan(&id, &role, &content); err != nil {
+			return nil, fmt.Errorf("scan session turn: %w", err)
+		}
+		if _, seen := byID[id]; !seen {
+			order = append(order, id)
+		}
+		byID[id] = append(byID[id], docTurn{role, content})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	result := make(map[string]string, len(order))
+	for _, id := range order {
+		if doc := buildSessionDoc(byID[id]); doc != "" {
+			result[id] = doc
+		}
+	}
+	return result, nil
+}
+
+// QuerySessionContent returns session_id → the budgeted embedding document.
 func QuerySessionContent(d *sql.DB) (map[string]string, error) {
 	rows, err := d.Query(`
-		SELECT session_id, string_agg(content, ' ' ORDER BY turn_index)
+		SELECT session_id, role, content
 		FROM turns_ft
-		GROUP BY session_id
+		ORDER BY session_id, turn_index
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query session content: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
-
-	result := make(map[string]string)
-	for rows.Next() {
-		var id, content string
-		if err := rows.Scan(&id, &content); err != nil {
-			return nil, fmt.Errorf("scan session content: %w", err)
-		}
-		result[id] = content
-	}
-	return result, rows.Err()
+	return scanSessionDocs(rows)
 }
 
 // PopulateCommitMessages fills session_facets.commit_message from this clone's

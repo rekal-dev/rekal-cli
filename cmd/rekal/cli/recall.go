@@ -29,7 +29,8 @@ const reachLogCap = 50
 // one of these needs `rekal embed`, not an embedding config — distinguishing
 // the two is the difference between an actionable message and a confusing one.
 var supersededNomicModels = map[string]bool{
-	"nomic-v1.5": true, // 2048-token window; superseded by nomic-v1.5-c8k
+	"nomic-v1.5":     true, // 2048-token window; superseded by nomic-v1.5-c8k
+	"nomic-v1.5-c8k": true, // whole-transcript document; superseded by the budgeted one
 }
 
 func isSupersededNomicModel(model string) bool { return supersededNomicModels[model] }

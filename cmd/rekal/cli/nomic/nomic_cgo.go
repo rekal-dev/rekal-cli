@@ -37,7 +37,7 @@ const (
 	// different MAX_TOKENS is not interchangeable with one produced under this
 	// one. Bump this whenever embed.c's MAX_TOKENS changes, or stores keep
 	// serving vectors from the old window and the change silently does nothing.
-	ModelName = "nomic-v1.5-c8k"
+	ModelName = "nomic-v1.5-c8k-d1"
 	// EmbedDim is the output dimensionality of nomic-embed-text-v1.5.
 	EmbedDim = 768
 )

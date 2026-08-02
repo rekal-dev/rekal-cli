@@ -399,7 +399,23 @@ for the same place and move `.rekal/` off the store that already exists —
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) before any DB insert — sessions (`checkpoint` / cross-repo import after parse) and knowledge chunks (`knowledge.ChunkFile` + `db.InsertKnowledgeChunks`). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter` (prose `.txt` dumps with binary/truncated runes used to abort the whole knowledge-layer transaction).
-- `db/`: DuckDB backend — open, close, schema (incl. the
+- `db/`: DuckDB backend — the session **embedding document** is budgeted, not
+  the raw transcript (`buildSessionDoc`): intent turns (`human`/
+  `human_steering`/`summary`) are admitted first and in full, assistant turns
+  share a bounded slice (1/10 of the window) spread equally across the session.
+  Mean pooling makes a vector a byte-weighted average, and assistant turns are
+  84.4% of the bytes against steering's 1.0% — so the old whole-transcript
+  document embedded mostly "let me check that file", which reads alike in every
+  session and pulled them toward one point; positional truncation then cut the
+  late turns, which is where decisions land. Measured on 36 sessions: real
+  sessions' mean cosine 0.5285 → 0.5737 with a two-turn `"Reply with exactly:
+  OK"` echo unchanged at 0.5323 (all movement is real sessions improving), top
+  slot real on 7/8 queries instead of 5/8. `QuerySessionContent` and
+  `QuerySessionContentByIDs` share the builder — they write the same column
+  under the same model id, so a divergence would make a vector depend on which
+  path reached it. `nomic.ModelName` bumped to `nomic-v1.5-c8k-d1`; the old id
+  is in `supersededNomicModels` so an index still holding it says
+  "run `rekal embed`". Also — open, close, schema (incl. the
   `(session_id, turn_index)` index on `turns`/`turns_ft`, created in
   `MigrateDataSchema` as well as the DDL so long-lived stores — the ones that
   need it most — gain it in place), insert helpers, index

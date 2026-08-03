@@ -338,22 +338,7 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 		return fmt.Errorf("short session handle %q needs index.db — run 'rekal index'", handle)
 	}
 
-	// A short handle resolves against the map pinned by the recall/query
-	// that printed it, not the live index — a background embed or rebuild
-	// can swap index.db out between that print and this drill, and
-	// recomputing fresh would silently point sN at a different session
-	// (see db/sid.go). Fall back to the live map when nothing is pinned
-	// yet, or the pin predates this handle.
-	resolveMap := sidMap
-	if db.IsShortSessionHandle(handle) {
-		if pinned, err := db.LoadPersistedSessionSIDMap(gitRoot); err == nil && pinned != nil {
-			if _, ok := pinned.ToULID[handle]; ok {
-				resolveMap = pinned
-			}
-		}
-	}
-
-	sessionID, err := resolveMap.Resolve(handle)
+	sessionID, err := sidMap.Resolve(handle)
 	if err != nil {
 		return err
 	}

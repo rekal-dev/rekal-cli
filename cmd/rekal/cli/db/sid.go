@@ -112,8 +112,21 @@ type shownSIDMapFile struct {
 // SaveSessionSIDMap pins the sN→ULID map that just produced agent-visible
 // output (a recall digest or its --json form) so a subsequent `query -s sN`
 // resolves against exactly what was shown, not whatever index.db looks like
-// by the time the drill runs. Best-effort: a write failure only costs the
-// pin, not the recall itself, so it never fails the caller.
+// by the time the drill runs.
+//
+// Written via a uniquely-named temp file in the same directory, then an
+// atomic rename over the live path — the same pattern index_cmd.go uses for
+// index.db and graph.go uses for the recall spool. A plain os.WriteFile
+// truncates before it writes, so a reader (or a second recall's writer)
+// landing mid-write would see a torn or empty file; two recalls close
+// together are the common case here (auto-widening's own internal framing
+// calls, or two agents against the same store), not a rare edge. The unique
+// temp name means concurrent writers never clobber each other's in-progress
+// file, and the rename means a reader always sees either the previous pin
+// or the new one whole, never a partial one. Whichever rename lands last
+// wins; there is no ordering requirement beyond that, since a drill that
+// misses the pin already falls back to live resolution. Best-effort
+// end-to-end: any failure here only costs the pin, not the recall itself.
 func SaveSessionSIDMap(gitRoot string, m *SessionSIDMap) error {
 	if m == nil {
 		return nil
@@ -122,7 +135,26 @@ func SaveSessionSIDMap(gitRoot string, m *SessionSIDMap) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(shownSIDsPath(gitRoot), data, 0o644)
+	dir := StoreDir(gitRoot)
+	tmp, err := os.CreateTemp(dir, "shown_sids.*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()        //nolint:errcheck // best-effort cleanup on the failure path
+		_ = os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup on the failure path
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup on the failure path
+		return err
+	}
+	if err := os.Rename(tmpPath, shownSIDsPath(gitRoot)); err != nil {
+		_ = os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup on the failure path
+		return err
+	}
+	return nil
 }
 
 // LoadPersistedSessionSIDMap reads the map saved by the most recent

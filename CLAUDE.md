@@ -417,7 +417,10 @@ for the same place and move `.rekal/` off the store that already exists —
   a digest printing sN and an agent drilling it, which would otherwise
   silently point sN at a different session on the next `LoadSessionSIDMap`
   call. `attachShortIDs` closes that by also pinning the map it just used to
-  `.rekal/shown_sids.json` (`db.SaveSessionSIDMap`), and `query -s` prefers
+  `.rekal/shown_sids.json` (`db.SaveSessionSIDMap`, temp-file + atomic
+  rename, same pattern as `index_cmd.go`'s index.db swap and `graph/`'s
+  spool drain — two recalls landing close together, not a rare case here,
+  must never leave a reader looking at a torn write), and `query -s` prefers
   that pin over recomputing live when it has the requested handle — see
   `db/sid.go`), the per-result
   `summary_turn_index` pointer (latest compaction-summary turn — pointer,

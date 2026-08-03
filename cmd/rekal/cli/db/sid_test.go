@@ -1,8 +1,11 @@
 package db
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -173,5 +176,72 @@ func TestSaveSessionSIDMap_NilIsNoop(t *testing.T) {
 	m, err := LoadPersistedSessionSIDMap(dir)
 	if err != nil || m != nil {
 		t.Fatalf("expected nothing persisted after a nil save, got %+v, %v", m, err)
+	}
+}
+
+// TestSaveSessionSIDMap_ConcurrentWritesNeverTorn drives many overlapping
+// SaveSessionSIDMap calls (the shape of two recalls landing close together —
+// auto-widening's own internal framing calls, or two agents against the same
+// store) alongside concurrent readers, under -race. A plain truncate-then-
+// write would let a reader observe a partial or empty file; the temp-file +
+// atomic-rename path means every read must see a complete, validly-shaped
+// map — never a JSON parse failure from a write caught mid-flight.
+func TestSaveSessionSIDMap_ConcurrentWritesNeverTorn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	const writers = 8
+	const readers = 8
+	var wg sync.WaitGroup
+
+	for i := range writers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			m := &SessionSIDMap{ToULID: map[string]string{
+				"s1": fmt.Sprintf("01ARZ3NDEKTSV4RRFFQ69G5F%02d", i),
+			}}
+			if err := SaveSessionSIDMap(dir, m); err != nil {
+				t.Errorf("SaveSessionSIDMap: %v", err)
+			}
+		}(i)
+	}
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// A miss (file not there yet) or a clean read are both fine;
+			// only a torn read — LoadPersistedSessionSIDMap surfacing a
+			// non-nil error other than the file simply not existing — is
+			// the failure this test guards against.
+			if _, err := LoadPersistedSessionSIDMap(dir); err != nil {
+				t.Errorf("LoadPersistedSessionSIDMap: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// After all writers finish, exactly one complete map must remain.
+	final, err := LoadPersistedSessionSIDMap(dir)
+	if err != nil {
+		t.Fatalf("final LoadPersistedSessionSIDMap: %v", err)
+	}
+	if final == nil || final.ToULID["s1"] == "" {
+		t.Fatalf("expected a complete map after concurrent writes, got %+v", final)
+	}
+
+	// No leftover temp files — every writer either renamed or cleaned up.
+	entries, err := os.ReadDir(StoreDir(dir))
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp") {
+			t.Errorf("leftover temp file: %s", e.Name())
+		}
 	}
 }

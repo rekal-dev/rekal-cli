@@ -115,6 +115,7 @@ There is deliberately no --force.`,
 
   # Check what is still held back, and why
   rekal query -q "SELECT git_sha, git_branch, exported FROM checkpoints WHERE NOT exported"`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

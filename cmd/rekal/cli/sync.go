@@ -67,6 +67,7 @@ Options:
 
   # The count above can be smaller than the number sync reported: duplicate
   # captures of one conversation are collapsed on import.`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

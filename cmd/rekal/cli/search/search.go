@@ -1831,7 +1831,7 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 		attachRelated(indexDB, results)
 	}
 
-	attachShortIDs(indexDB, results)
+	attachShortIDs(indexDB, gitRoot, results)
 
 	return Output{
 		Knowledge: knowledge,
@@ -1852,7 +1852,12 @@ func Run(indexDB *sql.DB, filters Filters, gitRoot string, w Weights, qe QueryEm
 // attachShortIDs stamps Sid on every result (and children / related) from
 // a single index-wide map. Non-fatal: a missing/empty map leaves Sid blank
 // and agents fall back to session_id.
-func attachShortIDs(indexDB *sql.DB, results []Result) {
+//
+// It also pins that map to disk (db.SaveSessionSIDMap) so that whatever sN
+// this call just showed the agent resolves back to the same session later,
+// even if a background embed/rebuild moves the live index on before the
+// agent drills it — see the race documented in db/sid.go.
+func attachShortIDs(indexDB *sql.DB, gitRoot string, results []Result) {
 	m, err := db.LoadSessionSIDMap(indexDB)
 	if err != nil || m == nil {
 		return
@@ -1870,4 +1875,5 @@ func attachShortIDs(indexDB *sql.DB, results []Result) {
 		}
 	}
 	walk(results)
+	_ = db.SaveSessionSIDMap(gitRoot, m) // best-effort: a failed pin only costs the pin
 }

@@ -52,6 +52,7 @@ followed by init restores them.`,
   # Keep a copy of unpushed work before cleaning
   rekal push
   rekal clean -y`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
@@ -85,9 +86,12 @@ followed by init restores them.`,
 //
 // The command name is also a plausible search term, and a bare word reaches
 // cobra as a command whether the caller quoted it or not — `rekal "clean"` and
-// `rekal clean` are the same argv. An agent handed a user's wording can
-// therefore land here while trying to recall, so the destructive step asks
-// first and proceeds only on a literal "yes".
+// `rekal clean` are the same argv; quoting does not disambiguate a single
+// word. An agent handed a user's wording can therefore land here while
+// trying to recall, so the destructive step asks first and proceeds only on
+// a literal "yes". The refusal message names the actual escape hatch (`rekal
+// -- clean` forces root-level recall past the name collision) rather than
+// quoting, which would not have helped.
 //
 // The question is asked the same way everywhere rather than being gated on a
 // terminal check: /dev/null is a character device, so the usual is-a-tty
@@ -104,7 +108,7 @@ func confirmClean(cmd *cobra.Command, gitRoot string) error {
 		return nil
 	}
 	return fmt.Errorf("rekal: cancelled — nothing was removed\n" +
-		"re-run with --yes to confirm (if you meant to search, quote the term: rekal find \"clean\")")
+		"re-run with --yes to confirm (if you meant to search for \"clean\", run: rekal -- clean)")
 }
 
 // runClean removes .rekal/, Rekal hooks, and the installed skill. Idempotent.

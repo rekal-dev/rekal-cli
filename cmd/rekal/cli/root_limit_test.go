@@ -37,6 +37,23 @@ func TestResolveRecallLimit(t *testing.T) {
 	}
 }
 
+func TestValidateActorFilter(t *testing.T) {
+	t.Parallel()
+
+	for _, ok := range []string{"", "human", "agent"} {
+		if err := validateActorFilter(ok); err != nil {
+			t.Errorf("validateActorFilter(%q): expected no error, got %v", ok, err)
+		}
+	}
+
+	// A typo used to silently match zero sessions, indistinguishable from a
+	// query with no real hits — this must fail loud instead.
+	err := validateActorFilter("robot")
+	if err == nil || !strings.Contains(err.Error(), `"robot"`) {
+		t.Errorf("validateActorFilter(%q): expected an error naming the bad value, got %v", "robot", err)
+	}
+}
+
 func TestRecallLimitNegative_Errors(t *testing.T) {
 	// Integration-style: root RunE should surface the silent error path.
 	// Avoid git/init — ParseFlags + resolve is covered above; this checks

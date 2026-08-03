@@ -44,6 +44,30 @@ func RekalDir(gitRoot string) string {
 	return filepath.Join(gitx.MainWorktreeRoot(gitRoot), ".rekal")
 }
 
+// rejectExtraArgs is the Args validator for commands that take no
+// positional arguments of their own (log, version, sync, push, embed,
+// index, checkpoint, clean, init). A bare invocation (`rekal log`) is
+// deliberately still valid — that's ordinary subcommand dispatch, same as
+// any other CLI. But trailing words are the signature of a natural-language
+// query whose first word happened to match a command name: cobra resolves
+// `rekal log recent commits about the ledger` to this command and hands
+// RunE the rest, which a `_ []string` RunE silently discards — the caller
+// gets the bare command's unrelated output with no error at all. This turns
+// that into a loud, actionable one instead: `rekal -- <query>` is the
+// existing (undocumented until now) escape hatch that forces root-level
+// recall past the name collision, because `--` stops cobra from resolving
+// the next word as a subcommand.
+func rejectExtraArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	full := cmd.Name() + " " + strings.Join(args, " ")
+	return fmt.Errorf(
+		"rekal %s: takes no arguments (got %d)\n"+
+			"rekal: if you meant to search for %q, the leading word collided with the %q command — run: rekal -- %s",
+		cmd.Name(), len(args), full, cmd.Name(), full)
+}
+
 // RequireInitializedRepo runs the two preconditions shared by every command
 // except init and clean (docs/spec/preconditions.md): resolve the git root and
 // verify Rekal is initialized. On failure it silences usage, prints the

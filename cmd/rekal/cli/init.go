@@ -82,6 +82,7 @@ Safe to re-run. It never touches captured data.`,
 
   # Undo everything init did (asks first)
   rekal clean`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
 
@@ -185,6 +186,17 @@ Safe to re-run. It never touches captured data.`,
 			// Run initial checkpoint to capture any existing sessions.
 			if err := doCheckpoint(gitRoot, cmd.ErrOrStderr()); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: initial checkpoint failed: %v\n", err)
+			}
+
+			// Build the index now rather than leaving it for the first
+			// recall to discover empty and rebuild inline. Structural only
+			// (FTS/LSA/facets/knowledge) — fast even when there is nothing
+			// yet to index — with deep-semantic vectors still deferred to
+			// the background 'rekal embed' this also starts, same as
+			// 'rekal sync'. Non-fatal: recall's own inline rebuild is still
+			// there as a fallback if this fails.
+			if err := runIndex(cmd, gitRoot); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: index build failed: %v\n", err)
 			}
 
 			// Pre-decompress nomic model so first query is fast.

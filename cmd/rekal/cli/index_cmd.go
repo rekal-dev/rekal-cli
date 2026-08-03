@@ -101,6 +101,7 @@ structural, not a policy: your other clients' work cannot leak to this team.`,
 
   # After a rebuild, pull teammates back in
   rekal sync`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

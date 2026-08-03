@@ -50,6 +50,7 @@ already exists rather than storing a second copy of it.`,
   # See what it recorded
   rekal log -n 1
   rekal query -q "SELECT count(*) FROM turns"`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

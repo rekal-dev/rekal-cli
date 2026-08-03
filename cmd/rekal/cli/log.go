@@ -38,6 +38,7 @@ Flags:
 
   # From a commit seen here, read the conversation behind it
   rekal -c f2d7660 "what were we fixing"`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

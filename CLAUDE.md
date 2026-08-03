@@ -56,7 +56,24 @@ for the same place and move `.rekal/` off the store that already exists —
 
 ### Core CLI (`cmd/rekal/cli/`)
 
-- `root.go`: Root command (recall is the default) + command registration
+- `root.go`: Root command (recall is the default) + command registration.
+  A query whose first word matches a registered command name (`log`, `push`,
+  `sync`, …) is ordinary cobra dispatch, not search — `rekal -- <query>`
+  forces root-level recall past the collision (`--` stops cobra resolving
+  the next word as a subcommand), documented in `--help` and the `Example`
+  block rather than left for the user to discover. Zero-arg subcommands
+  (`log`, `version`, `sync`, `push`, `embed`, `index`, `checkpoint`, `clean`,
+  `init`) carry `Args: rejectExtraArgs` (preconditions.go) so a query that
+  silently collided with one of them — `rekal log recent commits about the
+  ledger` used to dump the plain `log` output at exit 0, discarding
+  everything after the matched word — now errors and names the `--` escape
+  hatch instead of answering a different question with no sign anything was
+  wrong. `-A/--actor` is validated (`validateActorFilter`): an unrecognized
+  value used to silently match zero sessions, indistinguishable from a
+  query that legitimately has no hits for a real `human`/`agent` value.
+  `-e/--explain` without `-j/--json` now warns to stderr — the enrichment
+  only ever reached the JSON payload, so passing `-e` alone silently
+  computed and discarded it.
 - `recall.go`: Recall command orchestration — open/migrate/auto-rebuild the
   index DB, refresh the knowledge layer (watermark-gated), call the `search`
   package. Two self-healing paths, both best-effort: an **empty** index is
@@ -226,7 +243,13 @@ for the same place and move `.rekal/` off the store that already exists —
 - `init.go`: Bootstrap Rekal in a git repo — store, hooks, orphan branch,
   skill (tip + scripts + references), and one marker-tagged CLAUDE.md sentence
   (the whole DX: init, done; `clean` removes the line, refresh replaces it in
-  place). `installSkill` pins the binary `Version` into each installed skill
+  place). Also runs the same structural `runIndex` pass `sync` does (FTS/LSA/
+  facets/knowledge) and starts the background `rekal embed`, right after the
+  initial checkpoint — init used to report success while leaving the index
+  empty, so the first real recall silently absorbed a full rebuild with no
+  forewarning; now init leaves the store exactly as ready as `sync` does.
+  Non-fatal: a failure here just falls back to recall's own inline rebuild.
+  `installSkill` pins the binary `Version` into each installed skill
   dir (`.claude/skills/<name>/.rekal-version`); `maybeRefreshStaleSkill` (called
   from recall) reads it and re-installs the skill when it's behind the running
   binary, so an upgrade reaches the repo without a manual re-init. Re-running
@@ -254,7 +277,10 @@ for the same place and move `.rekal/` off the store that already exists —
   recalling a user's phrasing could delete the store, and unpushed capture has
   no other copy. Consent is read, not inferred from a terminal check: `/dev/null`
   is a character device, so the usual is-a-tty heuristic calls a script's empty
-  stdin interactive. EOF is a refusal
+  stdin interactive. EOF is a refusal. `Args: rejectExtraArgs` rejects extra
+  words before the prompt is even reached; the refusal message names the real
+  escape hatch (`rekal -- clean`) rather than quoting, which does not
+  disambiguate a single word
 - `index_cmd.go`: Rebuild index DB from data DB (structural: FTS/facets/LSA/
   knowledge chunks). Deep-semantic session + knowledge vectors are deferred
   to background `rekal embed` after the atomic rename. Also carries the
@@ -384,7 +410,16 @@ for the same place and move `.rekal/` off the store that already exists —
   → empty hybrid, no knowledge), the top-level `semantic`
   `{status:"warming",retryable:true}` field (present only while the nomic daemon
   loads the model — recall degraded to keyword+LSA; the agent re-runs with
-  backoff for full quality, taught by `SKILL.md`), the per-result
+  backoff for full quality, taught by `SKILL.md`), the per-result short `sid`
+  (`attachShortIDs`, `db.LoadSessionSIDMap` — ROW_NUMBER() over
+  `session_facets` ordered by ULID, so it is only deterministic for a *fixed*
+  index.db; a background embed/rebuild can atomically swap the index between
+  a digest printing sN and an agent drilling it, which would otherwise
+  silently point sN at a different session on the next `LoadSessionSIDMap`
+  call. `attachShortIDs` closes that by also pinning the map it just used to
+  `.rekal/shown_sids.json` (`db.SaveSessionSIDMap`), and `query -s` prefers
+  that pin over recomputing live when it has the requested handle — see
+  `db/sid.go`), the per-result
   `summary_turn_index` pointer (latest compaction-summary turn — pointer,
   never the 10-17KB payload; drill with `--role summary`), the
   `--explain` enrichments (per-layer normalized scores + query-time

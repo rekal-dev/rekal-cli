@@ -46,7 +46,7 @@ digest** (a compact ranked verdict), not raw rows.
 |---|---|---|---|
 | `--limit` | `-n` | 20 | Results per framing. `0` = none, negative rejected. Soft: the RRF-fused union across framings may exceed it |
 | `--json` | `-j` | off | Raw structured JSON instead of the digest |
-| `--explain` | `-e` | off | Per-layer scores + related-session joins |
+| `--explain` | `-e` | off | Per-layer scores + related-session joins (needs `--json`; warns and is otherwise a no-op without it) |
 | `--file` | `-p` | — | Filter by file path (regex) |
 | `--commit` | `-c` | — | Filter by git commit SHA |
 | `--author` | `-a` | — | Filter by author email |
@@ -55,6 +55,19 @@ digest** (a compact ranked verdict), not raw rows.
 **Exit code 1 means SILENCE** — Rekal found nothing it can stand behind. That
 is a real answer, not an error. Treat it as "the ledger does not know", and go
 look at the tree.
+
+**A query whose first word matches a command name** (`log`, `push`, `sync`,
+`find`, `init`, `clean`, `index`, `embed`, `checkpoint`, `version`, `query`)
+dispatches to that command instead of searching — ordinary cobra behavior,
+same as any subcommand-based CLI, and quoting a single word does not change
+it (`rekal "log"` and `rekal log` are the same argv). Force a search with
+`--`: `rekal -- log` searches for "log"; `rekal log` runs the log command.
+The zero-argument commands in that list reject unexpected extra words rather
+than silently discarding them, and name this escape hatch in the error.
+
+`--actor` rejects anything other than `human` or `agent` — an unrecognized
+value used to silently match zero sessions, indistinguishable in the digest
+from a query that legitimately has none.
 
 Digest header: `INJECT top=0.71 gap=0.21 15 seeds`
 

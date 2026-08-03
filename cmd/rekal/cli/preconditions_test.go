@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -61,6 +62,26 @@ func TestRekalDir(t *testing.T) {
 	want := filepath.Join("/tmp/myrepo", ".rekal")
 	if got != want {
 		t.Errorf("RekalDir = %q, want %q", got, want)
+	}
+}
+
+func TestRejectExtraArgs(t *testing.T) {
+	t.Parallel()
+
+	logCmd := newLogCmd()
+	if err := rejectExtraArgs(logCmd, nil); err != nil {
+		t.Errorf("bare command: expected no error, got: %v", err)
+	}
+
+	err := rejectExtraArgs(logCmd, []string{"recent", "commits", "about", "the", "ledger"})
+	if err == nil {
+		t.Fatal("expected error for unexpected positional args")
+	}
+	// The message must name the actual escape hatch, not silently discard
+	// the words the caller typed (what happened before this fix).
+	want := "rekal -- log recent commits about the ledger"
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q does not mention escape hatch %q", err.Error(), want)
 	}
 }
 

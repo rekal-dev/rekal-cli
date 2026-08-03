@@ -93,3 +93,85 @@ func TestLoadSessionSIDMap_StableByULIDOrder(t *testing.T) {
 		t.Fatalf("Resolve(ULID) = %q, %v", ulid, err)
 	}
 }
+
+func TestLoadPersistedSessionSIDMap_NoneSaved(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m, err := LoadPersistedSessionSIDMap(dir)
+	if err != nil {
+		t.Fatalf("LoadPersistedSessionSIDMap: %v", err)
+	}
+	if m != nil {
+		t.Fatalf("expected nil map when nothing was ever saved, got %+v", m)
+	}
+}
+
+// TestSessionSIDMap_PersistRoundTrip pins the fix for a real race: sN is
+// derived at query time from index.db's current session_facets, but a
+// background embed or rebuild can atomically swap that file between a
+// recall printing sN and an agent drilling it — recomputing fresh at drill
+// time would then silently resolve the same sN to a different session. The
+// save/load pair here must round-trip byte-for-byte so `query -s` can pin
+// resolution to exactly what a digest showed, not whatever the live index
+// looks like later.
+func TestSessionSIDMap_PersistRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	shown := &SessionSIDMap{
+		ToULID: map[string]string{
+			"s1": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+			"s2": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+		},
+	}
+	if err := SaveSessionSIDMap(dir, shown); err != nil {
+		t.Fatalf("SaveSessionSIDMap: %v", err)
+	}
+
+	loaded, err := LoadPersistedSessionSIDMap(dir)
+	if err != nil {
+		t.Fatalf("LoadPersistedSessionSIDMap: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected a persisted map, got nil")
+	}
+	for sid, ulid := range shown.ToULID {
+		if got := loaded.ToULID[sid]; got != ulid {
+			t.Errorf("ToULID[%s] = %q, want %q", sid, got, ulid)
+		}
+		if got := loaded.SID(ulid); got != sid {
+			t.Errorf("SID(%s) = %q, want %q", ulid, got, sid)
+		}
+	}
+
+	// A later live rebuild that reassigns sN must not silently change what
+	// the pinned map resolves an already-shown handle to.
+	resolved, err := loaded.Resolve("s1")
+	if err != nil || resolved != "01ARZ3NDEKTSV4RRFFQ69G5FAV" {
+		t.Fatalf("Resolve(s1) = %q, %v, want the pinned ULID unchanged", resolved, err)
+	}
+}
+
+func TestSaveSessionSIDMap_NilIsNoop(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveSessionSIDMap(dir, nil); err != nil {
+		t.Fatalf("SaveSessionSIDMap(nil): %v", err)
+	}
+	m, err := LoadPersistedSessionSIDMap(dir)
+	if err != nil || m != nil {
+		t.Fatalf("expected nothing persisted after a nil save, got %+v, %v", m, err)
+	}
+}

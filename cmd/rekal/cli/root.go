@@ -43,12 +43,19 @@ Filters and flags (short forms are the cheapest to type and to emit):
   -a, --author <email>  Only one person's sessions
   -A, --actor <type>    human or agent
   -n, --limit <int>     Results per framing (default 20; 0 = none). Soft:
-                        the fused union across framings may exceed it
+                        the fused union across framings may exceed it.
+                        Note: 'query -n' means the opposite — there, 0 = no limit
   -j, --json            Raw structured JSON instead of the digest
   -e, --explain         Per-layer scores and related sessions (needs --json)
 
   Filters combine, and they narrow the session search only — the KNOWLEDGE
   line is prose at HEAD and ignores them.
+
+  A query whose first word matches a command name (log, push, sync, find,
+  init, clean, index, embed, checkpoint, version, query) is dispatched to
+  that command, not searched — same as any subcommand-based CLI. Force a
+  search instead with ` + "`--`" + `: 'rekal -- log' searches for "log"; 'rekal log'
+  runs the log command.
 
 Workflow:
   rekal "keyword"                Search sessions → seed digest (-j for raw)
@@ -67,6 +74,20 @@ Getting Started:
   rekal index --include-all         Also recall your other repos' sessions (local only, never pushed)
   rekal embed                       Fill missing semantic embeddings (also runs after index/sync)
 `
+
+// validateActorFilter rejects an -A/--actor value that is neither "human"
+// nor "agent" nor unset. Left unvalidated, a typo (-A huamn) silently
+// matches zero sessions — indistinguishable in the digest from a query that
+// legitimately has no human-authored hits — so the agent or user has no way
+// to tell "you misspelled the filter" from "there really is nothing here."
+func validateActorFilter(actor string) error {
+	switch actor {
+	case "", "human", "agent":
+		return nil
+	default:
+		return fmt.Errorf("rekal: --actor must be \"human\" or \"agent\" (got %q)", actor)
+	}
+}
 
 // resolveRecallLimit interprets -n/--limit. Unset → (DefaultLimit, false).
 // Explicit 0 → empty result set. Negative → error (BUG 7).
@@ -115,6 +136,9 @@ func NewRootCmd() *cobra.Command {
   rekal -j "merge gate"
   rekal -j -e "merge gate"
 
+  # A query starting with a command name needs -- to search instead of dispatch
+  rekal -- log
+
   # Long forms work identically — clearer in scripts someone reads later
   rekal --file "search/" --limit 5 "ranking weights"`,
 		SilenceErrors: true,
@@ -148,6 +172,19 @@ func NewRootCmd() *cobra.Command {
 				return NewSilentError(err)
 			}
 
+			if err := validateActorFilter(actorFilter); err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), err)
+				return NewSilentError(err)
+			}
+
+			// --explain only enriches the --json payload (formatDigest never
+			// reads it); passing -e alone silently computed and discarded that
+			// work with no sign anything was missing. Not fatal — just tell
+			// the caller how to actually see it.
+			if explainFlag && !jsonFlag {
+				fmt.Fprintln(cmd.ErrOrStderr(), "rekal: --explain has no effect without --json — add -j to see it")
+			}
+
 			filters := search.Filters{
 				Query:         strings.Join(args, " "),
 				TextQuery:     len(args) > 0,
@@ -169,7 +206,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&commitFilter, "commit", "c", "", "Filter by git commit SHA")
 	cmd.Flags().StringVarP(&authorFilter, "author", "a", "", "Filter by author email")
 	cmd.Flags().StringVarP(&actorFilter, "actor", "A", "", "Filter by actor type (human|agent)")
-	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Results per framing (default 20; 0 = none; negative rejected). Soft: the RRF-fused union across framings may exceed it")
+	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 0, "Results per framing (default 20; 0 = none; negative rejected). Soft: the RRF-fused union across framings may exceed it. Note: the opposite of 'query -n', where 0 = no limit")
 	cmd.Flags().BoolVarP(&explainFlag, "explain", "e", false, "Add per-layer scores and related-session joins to results")
 	cmd.Flags().BoolVarP(&jsonFlag, "json", "j", false, "Raw structured JSON instead of the default seed digest (for machine consumers)")
 
@@ -219,6 +256,7 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the version",
+		Args:  rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "rekal", Version)
 			return nil

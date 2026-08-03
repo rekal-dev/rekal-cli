@@ -1,12 +1,18 @@
 package search
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestAttachShortIDs(t *testing.T) {
 	t.Parallel()
 
+	gitRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(gitRoot, ".rekal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	indexDB := openTempIndexDB(t)
 	// Lex order: a < b < c → s1, s2, s3
 	seedFacet(t, indexDB, "a-ulid", "a@example.com", "human")
@@ -20,7 +26,7 @@ func TestAttachShortIDs(t *testing.T) {
 			Children:  []Result{{SessionID: "a-ulid"}},
 		},
 	}
-	attachShortIDs(indexDB, results)
+	attachShortIDs(indexDB, gitRoot, results)
 
 	if results[0].Sid != "s3" {
 		t.Errorf("c-ulid sid = %q, want s3", results[0].Sid)

@@ -61,6 +61,7 @@ says so. Filling them improves ranking; it is never required for an answer.`,
   # When it stalls, the reason is in the log
   cat .rekal/embed.log
   cat .rekal/nomic/daemon.log`,
+		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			gitRoot, err := RequireInitializedRepo(cmd)
 			if err != nil {

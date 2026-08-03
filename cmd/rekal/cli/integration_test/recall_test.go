@@ -204,7 +204,12 @@ func TestRecall_AutoRebuild(t *testing.T) {
 
 	seedData(t, env)
 
-	// Don't run index first — recall should auto-rebuild.
+	// init now builds a (possibly empty) index. Remove it so recall must
+	// auto-rebuild — the path this test covers for stores that still lack one.
+	if err := os.Remove(db.IndexPath(env.RepoDir)); err != nil {
+		t.Fatalf("remove index: %v", err)
+	}
+
 	stdout, stderr, err := env.RunCLI("JWT", "--json")
 	if err != nil {
 		t.Fatalf("recall should succeed: %v\nstderr: %s", err, stderr)

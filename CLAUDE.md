@@ -676,6 +676,16 @@ for the same place and move `.rekal/` off the store that already exists —
 - `configuration.md`: `.rekal/config.json` reference — ranking weights,
   embedding backends, API-key handling (the deep content the README's
   Configuration section links to)
+- `compatibility.md`: what the version number covers, effective at 1.0 — the
+  append-only `data.db` (migrated forward on open, no mutation path), the
+  magic+version wire format (readers skip frames they can't parse, so an old
+  teammate keeps working), the flag surface, the `0`/`1` exit codes agents
+  branch on, and additive config (unknown keys ignored — plain `json.Unmarshal`,
+  no `DisallowUnknownFields`). Explicitly **not** covered: `index.db`'s schema,
+  the tables reachable through `query --sql`, ranking/scores, the installed
+  skill's internals, stderr wording, `REKAL_HUNT_*`. Freezing ranking would
+  freeze the product; the `--sql` surface is the one place "documented" does
+  not mean "stable". Deprecations keep a hidden alias for a major version
 - `git-transportation.md`: Git transport layer design
 - `design/skill-router.md`: Unified skill — substrate triage, progressive
   disclosure, executable gate scripts (mermaid)
@@ -724,6 +734,27 @@ for the same place and move `.rekal/` off the store that already exists —
   data pack is `docs/research/RUN.md`
 - `spec/preconditions.md`: Shared checks for all commands
 - `spec/command/`: One file per command — checkpoint, clean, embed, find, index, init, log, push, query, recall, sync
+
+### Demo (`scripts/demo/`)
+
+- `record.py`: generates the README's demo. Not a staged screencast — it plants
+  one earlier session in Claude Code's JSONL format, runs the real `rekal init`
+  (so the real skill is installed), commits so the real post-commit hook
+  captures it, then runs a real headless `claude -p` session and records what
+  that agent did: load the skill, recall, drill, answer. The point is that the
+  demo shows the *product* (init once, then the agent routes its own memory),
+  not a human typing `rekal` commands. Tool calls, `rekal` stdout and answer
+  text are captured from the live run into `cast.json` (committed, so the SVG
+  is reviewable in a diff and re-renderable via `--from-cast`); the frame in
+  `docs/assets/demo.svg` abridges it — Skill load plus ≤2 distinct `rekal`
+  invocations, `--json` variants and repeat queries dropped, output clipped
+  rather than wrapped. A live agent is not deterministic, so a re-record is a
+  different run; that is a property of a recording, and the fix for an untidy
+  run is not to re-roll until it looks good. SVG is hand-emitted (CSS-only
+  animation, `prefers-reduced-motion` honored) so regenerating needs no
+  asciinema/vhs/ffmpeg and the output stays diffable. The demo writes into the
+  real `~/.claude/projects/<sanitized>/` because `claude` needs its own config
+  dir for auth, and removes that dir afterwards.
 
 ### Community files (repo root)
 

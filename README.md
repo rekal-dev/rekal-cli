@@ -52,8 +52,12 @@ Every AI session settles decisions: why this approach, what got tried and thrown
 **Requirements:** git, and macOS on Apple Silicon or Linux (x86-64 / arm64).
 Nothing else — no runtime, no Python, no API key, no service to run.
 
-> **Status:** pre-1.0 and moving fast. The store format is append-only and
-> migrated forward, but commands and flags can still change between releases.
+> **Status: 1.0 release candidate.** The store format, wire format, command
+> surface and exit codes are what 1.0 intends to ship, and
+> [docs/compatibility.md](docs/compatibility.md) states exactly what the
+> version number will and will not cover. It says ranking and `index.db` are
+> deliberately *not* frozen. If something you depend on isn't covered, say so
+> now — that is what a candidate is for.
 
 The binary is **~170 MB** to download and **~200 MB** on disk. That is the
 tradeoff for a single file: the inference engine, the embedding model, the
@@ -449,6 +453,8 @@ hard-question runs.
 |---|---|
 | [docs/usage.md](docs/usage.md) | The two databases, orphan branches & merged-work-only sharing, worktrees, the full agent command surface, the skill, cross-repo recall |
 | [docs/configuration.md](docs/configuration.md) | `.rekal/config.json` — ranking weights, embedding backends, API-key handling |
+| [docs/compatibility.md](docs/compatibility.md) | What the version number promises: store, wire, flags, exit codes — and what is deliberately not covered |
+| [CHANGELOG.md](CHANGELOG.md) | What changed, release by release |
 | [docs/spec/command/](docs/spec/command/) | Per-command reference specs |
 | [docs/research/](docs/research/) | The paper, benchmark harness, and evaluation strategy |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, testing, and releasing |

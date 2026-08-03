@@ -1,6 +1,8 @@
 # Rekal
 
-**Rekal is the memory your team is missing — the *why* behind your code, captured at every commit and shared in git, not someone else's cloud. Your AI agent starts every session blank; Rekal gives it your team's reasoning, dead-ends and all.**
+**Rekal is a command-line tool that captures your AI coding sessions at every git
+commit, stores them in your repo, and lets any agent recall the reasoning behind
+a past decision — including the approaches that were tried and rejected.**
 
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
@@ -10,27 +12,37 @@
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/hDMj8zHH2)
 [![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/hDMj8zHH2)
+[Quick start](#quick-start) · [Commands](#commands-reference) · [How it works](#how-it-works) · [Team memory](#team-memory) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/hDMj8zHH2)
 
 📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
 
 > **Memory that lives in git — shared by your team, personally adaptive as you recall.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
 
-<!--
-  TODO (highest-leverage single change to this README): drop a demo GIF/asciinema here.
-  One loop, ~15s: `git commit` → new session → `rekal "why did we drop batching?"`
-  → the agent recalls the abandoned approach and the reason. Until this exists, the
-  reader has to *imagine* the product. Record with asciinema/vhs, export to .gif or .svg,
-  commit under docs/assets/, and replace this comment with the image.
--->
+![Rekal recalling the reasoning behind a webhook retry policy](docs/assets/demo.svg)
 
-Every AI session settles decisions — why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. No memory SaaS, no external memory service — embedding is local, and the whole store is a `.rekal/` directory in your repo. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision — in ~7.5K context tokens, in a few seconds, from git.
+<sub>Commit, then ask. Every line under a `$` above is real `rekal` stdout — the
+demo is recorded from the released binary by
+[`scripts/demo/record.py`](scripts/demo/record.py), which builds a throwaway repo,
+lets the real post-commit hook capture it, and records what the binary prints.
+Re-run it against any build to see what that build actually says.</sub>
+
+Every AI session settles decisions: why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. There is no memory SaaS and no external memory service. Embedding is local, and the whole store is a `.rekal/` directory in your repo. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision, in ~7.5K context tokens and a few seconds, from git.
 
 - **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
 - **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.
 - **Team memory in git** — merged work travels with the repo over plain push/fetch. No server.
-- **Personalised & adaptive** — as *you* recall, load-bearing memories get a local usage hint and a gentle ranking nudge — on your machine only, never synced.
+- **Personalised & adaptive** — as *you* recall, the memories you keep returning to get a usage hint and a small ranking boost. On your machine only, never synced.
 - **Scrubbed before it's stored** — transcripts pass through secret redaction (pattern + entropy) and home-path anonymization before they reach the database, let alone the wire. And only *merged* work is ever shared, so an unmerged spike never leaves your machine.
+
+## Why not just…?
+
+| Instead of | The gap | Rekal |
+|---|---|---|
+| a `MEMORY.md` / `CLAUDE.md` notes file | rots, hand-maintained, tied to one branch | captured automatically at every commit, immutable, branch-aware |
+| a hosted memory layer (Mem0, Zep, Letta) | a service and a vector tier to operate, your transcripts on someone else's box, memories distilled lossily up front | nothing to operate, nothing leaves the machine, raw sessions kept whole and reasoned over at query time |
+| editor/agent memory (Cursor, Copilot, Claude Code) | per-user, per-tool, ephemeral, no team history | team-wide persistent memory, travels with the repo, one ledger every agent reads |
+| a RAG index over your repo | indexes the code, the artifact, not the argument that produced it | indexes the conversation: the rejected options and the reason they lost |
+| `git log` / `git blame` | tell you *what* changed, never *why* | the conversation and reasoning behind the change |
 
 ## Quick start
 
@@ -40,10 +52,10 @@ Nothing else — no runtime, no Python, no API key, no service to run.
 > **Status:** pre-1.0 and moving fast. The store format is append-only and
 > migrated forward, but commands and flags can still change between releases.
 
-The binary is **~170 MB** to download. That is the price of the pitch: the
-inference engine, the embedding model, the database, and the FTS extension all
-ship *inside* it, so there is no model download on first run, no service to
-start, and recall works offline.
+The binary is **~170 MB** to download and **~200 MB** on disk. That is the
+tradeoff for a single file: the inference engine, the embedding model, the
+database, and the full-text extension all ship inside it, so there is no model
+download on first run, no service to start, and recall works offline.
 
 ### From Claude Code
 
@@ -93,8 +105,8 @@ bash rekal-install.sh
 **Pin a version** with `REKAL_VERSION=v0.2.64` in front of either command.
 
 **Build from source** if you want to change it. `go install` alone will not
-work — the deep-embedding layer is CGO bound to a pinned llama.cpp build — so
-follow [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), which has the exact
+work, because the deep-embedding layer is CGO bound to a pinned llama.cpp
+build. Follow [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), which has the exact
 prerequisites (mise, git-lfs, cmake, the pinned llama.cpp tag).
 
 </details>
@@ -130,7 +142,15 @@ always matches the version answering your commands.
 
 ## See it in action
 
-Last week, one engineer and their agent settled how webhook retries should work. This week, a *different* agent is about to re-propose the approach that was already rejected — until it asks Rekal first:
+A decision was settled in an earlier session: webhook retries use exponential
+backoff, not a fixed delay. A later agent — different session, no memory of that
+— is about to propose the fixed delay again. It asks first.
+
+Three terms carry the output. A **seed** is one candidate session, with `conf=`
+its absolute confidence that it answers your query. The header line is a
+**verdict** — `INJECT` (read this memory), `KNOWLEDGE` (read prose at HEAD
+instead), or `SILENCE` (memory isn't the tool here). `t14` is the turn to drill
+into.
 
 ```console
 $ rekal "should webhook retries use a fixed delay?"
@@ -141,11 +161,8 @@ INJECT top=0.81 gap=0.28 2 seeds
   s31 conf=0.53 t9 "we capped retries at 5 attempts then dead-letter — anything past that never lands…"
 ```
 
-Compact text by default — the whole answer in two lines. Line one is the
-**verdict**: `INJECT` (surface this memory now); the alternatives are
-`KNOWLEDGE` (read a HEAD-prose pointer instead) and `SILENCE` (memory isn't
-the tool — stay quiet). Each seed is a short handle for this call (`s14`), its
-**absolute** confidence, the turn to drill (`t14`), and the snippet.
+Compact text by default — the whole answer in two lines, each seed keyed by a
+short handle (`s14`) you pass straight to the next command.
 
 `[reached 3× drilled 1×· …]` is your personal recall graph: search has surfaced
 this memory three times and an agent actually opened it once, most often for
@@ -154,7 +171,7 @@ the ranker's own past output, opening is an agent's judgment — so a high reach
 with no drills means "the ranker keeps offering this", not "people read this".
 Local-only, never pushed.
 
-The agent gets the decision **and the reason the alternative was rejected** — sourced from the human's own mid-course correction — before it wastes a round re-proposing it. It drills in for the full reasoning with one more call, passing the short handle straight through:
+The agent gets the decision **and the reason the alternative was rejected**, sourced from the human's own mid-course correction, before it wastes a round re-proposing it. It drills in for the full reasoning with one more call, passing the short handle straight through:
 
 ```console
 $ rekal query -s s14 --role human_steering
@@ -183,27 +200,38 @@ $ rekal --json "should webhook retries use a fixed delay?"
 }
 ```
 
-## Why not just…?
+## Commands reference
 
-| Instead of | The gap | Rekal |
-|---|---|---|
-| a `MEMORY.md` / `CLAUDE.md` notes file | rots, hand-maintained, tied to one branch | captured automatically at every commit, immutable, branch-aware |
-| a hosted memory layer (Mem0, Zep, Letta) | a service and a vector tier to operate, your transcripts on someone else's box, memories distilled lossily up front | nothing to operate, nothing leaves the machine, raw sessions kept whole and reasoned over at query time |
-| editor/agent memory (Cursor, Copilot, Claude Code) | per-user, per-tool, ephemeral, no team history | team-wide persistent memory, travels with the repo, one ledger every agent reads |
-| a RAG index over your repo | indexes the code — the artifact — not the argument that produced it | indexes the conversation: the rejected options and the reason they lost |
-| `git log` / `git blame` | tell you *what* changed, never *why* | the conversation and reasoning behind the change |
+| Command | Description |
+|---------|-------------|
+| `rekal init` | Initialize Rekal in the current git repository |
+| `rekal clean` | Remove Rekal setup from this repository |
+| `rekal version` | Print the CLI version |
+| `rekal checkpoint` | Capture the current session after a commit |
+| `rekal push [--rebuild]` | Push Rekal data to the remote branch (merged work only; append-only — no force) |
+| `rekal sync [--self]` | Sync team context from remote rekal branches |
+| `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB (atomic temp→rename); optionally fold in cross-repo local sessions |
+| `rekal embed` | Fill missing semantic embeddings (resumable; also started after index/sync) |
+| `rekal log [--limit N]` | Show recent checkpoints |
+| `rekal find "<term>" [role]` | Enumerate every ledger mention of a term (complete, time order) |
+| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [--json] [query]` | Hybrid search → seed digest by default; `--json` for raw structured results; `--explain` adds per-layer scores |
+| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full] [--json]` | Drill into a session — readable turns by default; `--json` for one object |
+| `rekal query --sql "<sql>" [--index] [--json]` | Raw SQL → TSV by default; `--json` for NDJSON |
+
+Full details: [docs/spec/command/](docs/spec/command/).
 
 ## What makes Rekal different
 
-Rekal is built on beliefs. Those beliefs guide every decision. When a choice conflicts with a belief, the choice loses. That is the difference.
+These are consequences of the design, not features bolted on. The reasoning
+behind each one is in [SOUL.md](SOUL.md).
 
 - **One immutable source of truth, and a disposable index.** Your sessions land in an append-only `data.db` **raw** — no LLM pre-summarization, no lossy "memory" distillation. The derived `index.db` (full-text + embeddings) is a pure function of that ledger, so it can never drift the way a separate memory store does: a rebuild always reconciles it, and because it's disposable the heavy passes run in the background, hard-timeboxed, and your commit never waits. Thin on the wire, rich on the machine.
-- **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval — lexical + graph + deep semantic — runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
+- **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval (lexical, graph, and deep semantic) runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
 - **Personalised, adaptive recall graph.** Every recall links a session to the query that reached it — on *your* machine only (never pushed or synced). Well-trodden memories surface with a `[reached N×]` hint and, by default, rank a little higher (`reach_boost`). Self-activating; inert until *you* accumulate edges. See [docs/design/recall-graph.md](docs/design/recall-graph.md).
 - **Intent in git.** Not in a separate system, not behind someone else's service. Orphan branches, full history, travels with the repo. No servers, no APIs, no telemetry.
 - **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
 - **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
-- **Agent-first output.** A compact text digest built for an agent to act on — verdict, per-seed confidence, drill pointers — with structured JSON one `--json` away. Silence gates and confidence thresholds, not prose.
+- **Agent-first output.** A compact text digest built for an agent to act on: verdict, per-seed confidence, drill pointers, with structured JSON one `--json` away. Silence gates and confidence thresholds, not prose.
 
 The full version: [SOUL.md](SOUL.md).
 
@@ -250,77 +278,6 @@ a real corpus, not on a fresh test repo. `rekal --json "<q>"` always shows the
 raw knowledge hits and their scores, gate or no gate.
 
 Design: [docs/design/knowledge-layer.md](docs/design/knowledge-layer.md).
-
-## The research
-
-The design is argued and measured in our paper — *"Why Git Is the Memory
-Solution for the Agentic Development Lifecycle"* ([arXiv:2607.14390](https://arxiv.org/abs/2607.14390), 
-[PDF](https://arxiv.org/pdf/2607.14390)): memory bound to git inherits
-its hard guarantees instead of rebuilding them; retrieval is closed as a
-seed-supply problem (honest grep floors, a mechanism study, the facet term);
-and a gated router answers each question kind — structure, episode, or
-rationale — at a few hundred tokens per question. The benchmark labels
-itself from your own commit–session links, so every result is replicable on
-your own history at zero annotation cost. See [docs/research/](docs/research/) for details.
-
-### Benchmarks
-
-On two public long-term-memory benchmarks, Rekal reaches strong answer
-quality with **no memory layers and no external memory service** — retrieval
-runs locally over git. The answering agent is **GPT-5 Sol**; Rekal supplies the
-memory, the model supplies the answer:
-
-| Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query (agent) |
-|---|---|---|---|---|---|
-| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | a few seconds |
-| LongMemEval | 86.60% | 99% | ~10.5K | 6.6 | a few seconds |
-
-| Additional metric (LoCoMo) | Result |
-|---|---|
-| Recall@10 | 93.60% |
-| Recall@5 | 86.44% |
-| Official F1 | 63.0 |
-| Typical answer output | ~78–80 tokens |
-| L1 / L2 memory layers | None |
-| External memory service | None |
-
-These runs use the **shipped skill** in the loop, not a hand-tuned harness, so
-accuracy tracks the answering model and climbs toward the Top-20 recall ceiling
-as the right seeds get surfaced. Reproduce them — or run the self-labeling
-benchmark on your own history at zero annotation cost — with the harness in
-[`scripts/bench/`](scripts/bench/); the full run sequence is
-[docs/research/RUN.md](docs/research/RUN.md).
-
-**Local store, wire & recall latency** (Rekal's own coding sessions, Apple M4 —
-6 Claude transcripts / 14 sessions, 473 turns; pure `rekal`, no answering model):
-
-| Metric | Result |
-|---|---|
-| Raw JSONL | 8.5 MB |
-| Wire | 54 KB (**~158×**) |
-| `data.db` | 5.8 MB |
-| `index.db` | 10.8 MB |
-| Local store (`data` + `index`) | 16.5 MB |
-| Recall latency | median **~150 ms** (p95 ~210 ms) |
-| LoCoMo synthetic recall | median ~350 ms (p95 ~400 ms) |
-| In-process search | ~76 ms |
-
-Time/query in the accuracy table is end-to-end agent answering; these rows are
-retrieval and footprint alone. Wire reduction is vs the raw agent transcript
-(strip tool outputs / file bodies / JSONL chrome, then zstd) — see [SOUL.md](SOUL.md).
-Local DBs stay rich on the machine; only the wire is thin.
-
-**The trade we make on purpose.** Rekal never distills your sessions into lossy
-"memories." The ledger stays raw and append-only; the index is a disposable
-accelerator that a one-command rebuild reconciles back to it. So nothing is
-pre-baked and nothing can rot — the reasoning happens at query time, over the
-real record, and the one expensive write-time step runs in the background,
-hard-timeboxed, so your commit never waits. The cost is that answering is not
-free; the payoff is memory that is always fresh and never needs maintaining.
-And the ask itself becomes the next session, so that reasoning is captured too.
-
-Token estimates are the visible context produced during the enhanced
-hard-question runs.
 
 ## How it works
 
@@ -412,25 +369,76 @@ deep embeddings at an OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI),
 there is exactly one file — `.rekal/config.json`, gitignored and local-only,
 never committed. See **[docs/configuration.md](docs/configuration.md)**.
 
-## Commands reference
+## The research
 
-| Command | Description |
-|---------|-------------|
-| `rekal init` | Initialize Rekal in the current git repository |
-| `rekal clean` | Remove Rekal setup from this repository |
-| `rekal version` | Print the CLI version |
-| `rekal checkpoint` | Capture the current session after a commit |
-| `rekal push [--rebuild]` | Push Rekal data to the remote branch (merged work only; append-only — no force) |
-| `rekal sync [--self]` | Sync team context from remote rekal branches |
-| `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB (atomic temp→rename); optionally fold in cross-repo local sessions |
-| `rekal embed` | Fill missing semantic embeddings (resumable; also started after index/sync) |
-| `rekal log [--limit N]` | Show recent checkpoints |
-| `rekal find "<term>" [role]` | Enumerate every ledger mention of a term (complete, time order) |
-| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [--json] [query]` | Hybrid search → seed digest by default; `--json` for raw structured results; `--explain` adds per-layer scores |
-| `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full] [--json]` | Drill into a session — readable turns by default; `--json` for one object |
-| `rekal query --sql "<sql>" [--index] [--json]` | Raw SQL → TSV by default; `--json` for NDJSON |
+The design is argued and measured in our paper — *"Why Git Is the Memory
+Solution for the Agentic Development Lifecycle"* ([arXiv:2607.14390](https://arxiv.org/abs/2607.14390), 
+[PDF](https://arxiv.org/pdf/2607.14390)): memory bound to git inherits
+its hard guarantees instead of rebuilding them; retrieval is closed as a
+seed-supply problem (honest grep floors, a mechanism study, the facet term);
+and a gated router answers each question kind — structure, episode, or
+rationale — at a few hundred tokens per question. The benchmark labels
+itself from your own commit–session links, so every result is replicable on
+your own history at zero annotation cost. See [docs/research/](docs/research/) for details.
 
-Full details: [docs/spec/command/](docs/spec/command/).
+### Benchmarks
+
+On two public long-term-memory benchmarks, Rekal reaches strong answer
+quality with **no memory layers and no external memory service** — retrieval
+runs locally over git. The answering agent is **GPT-5 Sol**; Rekal supplies the
+memory, the model supplies the answer:
+
+| Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query (agent) |
+|---|---|---|---|---|---|
+| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | a few seconds |
+| LongMemEval | 86.60% | 99% | ~10.5K | 6.6 | a few seconds |
+
+| Additional metric (LoCoMo) | Result |
+|---|---|
+| Recall@10 | 93.60% |
+| Recall@5 | 86.44% |
+| Official F1 | 63.0 |
+| Typical answer output | ~78–80 tokens |
+| L1 / L2 memory layers | None |
+| External memory service | None |
+
+These runs use the **shipped skill** in the loop, not a hand-tuned harness, so
+accuracy tracks the answering model and climbs toward the Top-20 recall ceiling
+as the right seeds get surfaced. Reproduce them — or run the self-labeling
+benchmark on your own history at zero annotation cost — with the harness in
+[`scripts/bench/`](scripts/bench/); the full run sequence is
+[docs/research/RUN.md](docs/research/RUN.md).
+
+**Local store, wire & recall latency** (Rekal's own coding sessions, Apple M4 —
+6 Claude transcripts / 14 sessions, 473 turns; pure `rekal`, no answering model):
+
+| Metric | Result |
+|---|---|
+| Raw JSONL | 8.5 MB |
+| Wire | 54 KB (**~158×**) |
+| `data.db` | 5.8 MB |
+| `index.db` | 10.8 MB |
+| Local store (`data` + `index`) | 16.5 MB |
+| Recall latency | median **~150 ms** (p95 ~210 ms) |
+| LoCoMo synthetic recall | median ~350 ms (p95 ~400 ms) |
+| In-process search | ~76 ms |
+
+Time/query in the accuracy table is end-to-end agent answering; these rows are
+retrieval and footprint alone. Wire reduction is vs the raw agent transcript
+(strip tool outputs / file bodies / JSONL chrome, then zstd) — see [SOUL.md](SOUL.md).
+Local DBs stay rich on the machine; only the wire is thin.
+
+**The trade we make on purpose.** Rekal never distills your sessions into lossy
+"memories." The ledger stays raw and append-only; the index is a disposable
+accelerator that a one-command rebuild reconciles back to it. So nothing is
+pre-baked and nothing can rot — the reasoning happens at query time, over the
+real record, and the one expensive write-time step runs in the background,
+hard-timeboxed, so your commit never waits. The cost is that answering is not
+free; the payoff is memory that is always fresh and never needs maintaining.
+And the ask itself becomes the next session, so that reasoning is captured too.
+
+Token estimates are the visible context produced during the enhanced
+hard-question runs.
 
 ## Documentation
 

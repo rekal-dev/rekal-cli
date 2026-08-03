@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="521" viewBox="0 0 850 521" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13.5">
+<style>
+  .r{opacity:0;animation-duration:17.70s;animation-iteration-count:infinite;animation-timing-function:steps(1,end);animation-fill-mode:both}
+  @media (prefers-reduced-motion: reduce){.r{opacity:1;animation:none}.cur{display:none}}
+  @keyframes a0{0%,2.260%{opacity:0}2.261%,100%{opacity:1}}
+  .r0{animation-name:a0}
+  @keyframes a1{0%,25.085%{opacity:0}25.086%,100%{opacity:1}}
+  .r1{animation-name:a1}
+  @keyframes a2{0%,25.650%{opacity:0}25.651%,100%{opacity:1}}
+  .r2{animation-name:a2}
+  @keyframes a3{0%,26.215%{opacity:0}26.216%,100%{opacity:1}}
+  .r3{animation-name:a3}
+  @keyframes a4{0%,34.689%{opacity:0}34.690%,100%{opacity:1}}
+  .r4{animation-name:a4}
+  @keyframes a5{0%,49.124%{opacity:0}49.125%,100%{opacity:1}}
+  .r5{animation-name:a5}
+  @keyframes a6{0%,49.689%{opacity:0}49.690%,100%{opacity:1}}
+  .r6{animation-name:a6}
+  @keyframes a7{0%,50.254%{opacity:0}50.255%,100%{opacity:1}}
+  .r7{animation-name:a7}
+  @keyframes a8{0%,50.819%{opacity:0}50.820%,100%{opacity:1}}
+  .r8{animation-name:a8}
+  @keyframes a9{0%,51.384%{opacity:0}51.385%,100%{opacity:1}}
+  .r9{animation-name:a9}
+  @keyframes a10{0%,51.949%{opacity:0}51.950%,100%{opacity:1}}
+  .r10{animation-name:a10}
+  @keyframes a11{0%,52.514%{opacity:0}52.515%,100%{opacity:1}}
+  .r11{animation-name:a11}
+  @keyframes a12{0%,60.989%{opacity:0}60.990%,100%{opacity:1}}
+  .r12{animation-name:a12}
+  @keyframes a13{0%,72.881%{opacity:0}72.882%,100%{opacity:1}}
+  .r13{animation-name:a13}
+  @keyframes a14{0%,73.446%{opacity:0}73.447%,100%{opacity:1}}
+  .r14{animation-name:a14}
+  @keyframes a15{0%,74.011%{opacity:0}74.012%,100%{opacity:1}}
+  .r15{animation-name:a15}
+  @keyframes a16{0%,74.576%{opacity:0}74.577%,100%{opacity:1}}
+  .r16{animation-name:a16}
+  @keyframes a17{0%,75.141%{opacity:0}75.142%,100%{opacity:1}}
+  .r17{animation-name:a17}
+  @keyframes a18{0%,75.706%{opacity:0}75.707%,100%{opacity:1}}
+  .r18{animation-name:a18}
+  @keyframes a19{0%,76.271%{opacity:0}76.272%,100%{opacity:1}}
+  .r19{animation-name:a19}
+  @keyframes a20{0%,76.836%{opacity:0}76.837%,100%{opacity:1}}
+  .r20{animation-name:a20}
+  @keyframes t0{0%,2.260%{width:0}23.107%,100%{width:688.8px}}
+  .t0{animation:t0 17.70s infinite linear both}
+  @keyframes t4{0%,34.689%{width:0}47.147%,100%{width:411.6px}}
+  .t4{animation:t4 17.70s infinite linear both}
+  @keyframes t12{0%,60.989%{width:0}70.904%,100%{width:327.6px}}
+  .t12{animation:t12 17.70s infinite linear both}
+</style>
+<rect width="850" height="521" rx="10" fill="#12141c"/>
+<rect width="850" height="34" rx="10" fill="#1c1f2b"/>
+<rect y="24" width="850" height="10" fill="#1c1f2b"/>
+<circle cx="22" cy="17" r="6" fill="#ff5f57"/>
+<circle cx="41" cy="17" r="6" fill="#febc2e"/>
+<circle cx="60" cy="17" r="6" fill="#28c840"/>
+<text x="425.0" y="22" fill="#7d8590" text-anchor="middle" font-size="12">payments-api — rekal</text>
+<g class="r r0">
+<text x="22" y="52" fill="#59d499">$</text>
+<clipPath id="c0"><rect class="t0" x="38" y="38" height="21" width="0"/></clipPath>
+<text x="38" y="52" fill="#ffffff" clip-path="url(#c0)">git commit -m 'feat(dispatch): retry webhooks with exponential backoff and jitter'</text>
+<text x="743.6" y="52" fill="#7d8590" font-size="12"># post-commit hook captures the session</text>
+</g>
+<text class="r r1" x="22" y="73" fill="#7d8590" xml:space="preserve">[main 1c62ead] feat(dispatch): retry webhooks with exponential backoff and jitter</text>
+<text class="r r2" x="22" y="94" fill="#c9d1d9" xml:space="preserve"> 3 files changed, 7 insertions(+)</text>
+<g class="r r4">
+<text x="22" y="136" fill="#59d499">$</text>
+<clipPath id="c4"><rect class="t4" x="38" y="122" height="21" width="0"/></clipPath>
+<text x="38" y="136" fill="#ffffff" clip-path="url(#c4)">rekal "should webhook retries use a fixed delay?"</text>
+</g>
+<text class="r r5" x="22" y="157" fill="#7ab7ff" font-weight="600" xml:space="preserve">INJECT top=0.82 gap=0.15 2 seeds</text>
+<text class="r r6" x="22" y="178" fill="#c9d1d9" xml:space="preserve">s1 conf=0.82 t2 "no, a fixed 5s delay stampedes the downstream on recovery. Every hook that</text>
+<text class="r r7" x="22" y="199" fill="#c9d1d9" xml:space="preserve">failed during…"</text>
+<text class="r r8" x="22" y="220" fill="#c9d1d9" xml:space="preserve">s2 conf=0.67 t2 "keep the key stable across retries specifically - regenerating per attempt</text>
+<text class="r r9" x="22" y="241" fill="#c9d1d9" xml:space="preserve">defeats the whole point…"</text>
+<text class="r r10" x="22" y="262" fill="#7ab7ff" font-weight="600" xml:space="preserve">KNOWLEDGE README.md=0.38</text>
+<g class="r r12">
+<text x="22" y="304" fill="#59d499">$</text>
+<clipPath id="c12"><rect class="t12" x="38" y="290" height="21" width="0"/></clipPath>
+<text x="38" y="304" fill="#ffffff" clip-path="url(#c12)">rekal query -s s1 --role human_steering</text>
+</g>
+<text class="r r13" x="22" y="325" fill="#c9d1d9" xml:space="preserve">s1 t2-4  (h=human a=assistant hs=steering sum=summary)</text>
+<text class="r r14" x="22" y="346" fill="#c9d1d9" xml:space="preserve">t2 2026-07-14 10:14:00 hs: no, a fixed 5s delay stampedes the downstream on recovery. Every</text>
+<text class="r r15" x="22" y="367" fill="#c9d1d9" xml:space="preserve">hook that failed during an outage retries at the same instant and we DDoS ourselves the moment</text>
+<text class="r r16" x="22" y="388" fill="#c9d1d9" xml:space="preserve">the endpoint comes back. Use exponential backoff with jitter.</text>
+<text class="r r17" x="22" y="409" fill="#c9d1d9" xml:space="preserve">t4 …10:16:00 hs: also cap the attempts. Five, then dead-letter - anything past five never</text>
+<text class="r r18" x="22" y="430" fill="#c9d1d9" xml:space="preserve">lands and just burns queue throughput.</text>
+<text class="r r19" x="22" y="451" fill="#c9d1d9" xml:space="preserve">commits:</text>
+<text class="r r20" x="22" y="472" fill="#c9d1d9" xml:space="preserve">  1c62eadf feat(dispatch): retry webhooks with exponential backoff and jitter</text>
+</svg>

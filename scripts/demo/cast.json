@@ -1,0 +1,34 @@
+[
+  {
+    "recorded_from": "rekal 0.2.64"
+  },
+  {
+    "command": "git commit -m 'feat(dispatch): retry webhooks with exponential backoff and jitter'",
+    "output": [
+      "[main 1c62ead] feat(dispatch): retry webhooks with exponential backoff and jitter",
+      " 3 files changed, 7 insertions(+)"
+    ],
+    "note": "post-commit hook captures the session"
+  },
+  {
+    "command": "rekal \"should webhook retries use a fixed delay?\"",
+    "output": [
+      "INJECT top=0.82 gap=0.15 2 seeds",
+      "  s1 conf=0.82 t2 \"no, a fixed 5s delay stampedes the downstream on recovery. Every hook that failed during\u2026\"",
+      "  s2 conf=0.67 t2 \"keep the key stable across retries specifically - regenerating per attempt defeats the whole point\u2026\"",
+      "KNOWLEDGE README.md=0.38"
+    ],
+    "exit": 0
+  },
+  {
+    "command": "rekal query -s s1 --role human_steering",
+    "output": [
+      "s1 t2-4  (h=human a=assistant hs=steering sum=summary)",
+      "t2 2026-07-14 10:14:00 hs: no, a fixed 5s delay stampedes the downstream on recovery. Every hook that failed during an outage retries at the same instant and we DDoS ourselves the moment the endpoint comes back. Use exponential backoff with jitter.",
+      "t4 \u202610:16:00 hs: also cap the attempts. Five, then dead-letter - anything past five never lands and just burns queue throughput.",
+      "commits:",
+      "  1c62eadf feat(dispatch): retry webhooks with exponential backoff and jitter"
+    ],
+    "exit": 0
+  }
+]

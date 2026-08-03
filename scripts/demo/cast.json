@@ -1,0 +1,146 @@
+{
+  "steps": [
+    {
+      "kind": "shell",
+      "command": "rekal init",
+      "output": [
+        "Rekal initialized."
+      ]
+    },
+    {
+      "kind": "shell",
+      "command": "git commit -m 'feat(dispatch): retry webhooks with exponential backoff'",
+      "output": [
+        "[main 5885c99] feat(dispatch): retry webhooks with exponential backoff"
+      ],
+      "note": "post-commit hook captures the session"
+    }
+  ],
+  "prompt": "We're adding retries to the webhook dispatcher. Should we just use a fixed 5s delay? Check project memory before answering.",
+  "agent": [
+    {
+      "tool": "Skill",
+      "input": {
+        "skill": "rekal",
+        "args": "webhook dispatcher retry delay / backoff policy"
+      },
+      "result": [
+        "Launching skill: rekal"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "rekal \"webhook dispatcher retry delay backoff policy\"",
+        "description": "Recall memory on webhook retry/backoff policy"
+      },
+      "result": [
+        "INJECT top=0.84 gap=0.84 1 seeds",
+        "  s1 conf=0.84 t0 \"Webhook dispatch needs retries. Simplest version is a constant wait between attempts, three tries and\u2026\"",
+        "KNOWLEDGE README.md=0.40"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "cat /tmp/rekal-demo/payments-api/.claude/skills/rekal/references/ledger.md 2>/dev/null | head -50",
+        "description": "Check ledger reference for query commands"
+      },
+      "result": [
+        "# LEDGER \u2014 reasoning over past intent",
+        "",
+        "The ledger holds what *was*: the sessions where problems were explored,",
+        "alternatives rejected, decisions made. You reach it two ways, chosen by the",
+        "shape of the question:",
+        "",
+        "- **Pointed episode** (\"why did we\u2026\", \"what did X say about\u2026\") \u2192 `rekal` recall,",
+        "  printed as a seed digest. Recall finds the loudest match.",
+        "- **Analytical / complete-set / temporal** (\"how many\u2026\", \"all of\u2026\", \"in what",
+        "  order\u2026\") \u2192 `rekal query` SQL. SQL enumerates the whole set.",
+        "",
+        "Recall answers \"which episode matches this phrase?\"; SQL answers \"what does the",
+        "whole record say?\" Pick before you spend a token. Cite session / turn / commit",
+        "with every claim.",
+        "",
+        "## Runbook \u2014 shape \u2192 first move \u2192 watch for",
+        "",
+        "Pick the row before improvising. Each shape has one first move; the sections",
+        "below carry the depth when the first move isn't enough.",
+        "",
+        "| Question shape | First move | Watch for |",
+        "|---|---|---|",
+        "| Pointed episode \u2014 why / what did X say | `rekal \"<q>\"`; drill top seed at `t<n>`; weak? re-search a genuinely different angle | premise mismatch; near-miss entity in the answer |",
+        "| Complete-set \u2014 all / every / how many / which of N | `rekal find \"<term>\"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |",
+        "| Temporal \u2014 when / before / after / how long | resolve the relative phrase against the mention's date; SQL window on `ts` (`BETWEEN`, never `LIKE` \u2014 `ts` is TIMESTAMP) | event time \u2260 mention time; the record's edge is not \"now\" |",
+        "| Whose-fact \u2014 my / I / their | drill to the assertion turn (\"my X is\", \"I bought\") | discussed / suggested \u2260 owned |",
+        "| False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |",
+        "| Decision arc \u2014 why did this evolve | steering/`because` SQL gather (below) | thin trail synthesized into fiction |",
+        "| Reflection / pattern / census | decompose to SQL (below); never plain recall | ranking when the ask is exhaustive |",
+        "",
+        "**Stopping rule.** Stop when the answer is grounded in drilled turns you can",
+        "cite. Recall already widens itself (it fuses several reformulations per call),",
+        "so a weak seed is not absence \u2014 before concluding SILENCE, re-search once from a",
+        "genuinely different angle the mechanical variants wouldn't reach. But if that",
+        "and two further moves add no new evidence, report what you have \u2014 or the gap \u2014",
+        "instead of searching on: extra moves past that point manufacture",
+        "plausible-but-wrong distractors. And grep of the tree never answers a ledger question; if you catch",
+        "yourself grepping code for a past-tense fact, come back to the table.",
+        "",
+        "## The recall pipeline",
+        "",
+        "```bash",
+        "rekal \"JWT expiry\"                      # recall \u2192 seed digest (text by default)",
+        "rekal --file src/auth/ \"token refresh\"  # optional filters",
+        "rekal --commit <sha>",
+        "rekal -n 5 --explain \"error handling\"",
+        "```",
+        "",
+        "| Route stdout | Action |",
+        "|---|---|"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "rekal \"webhook dispatcher retry delay backoff policy\" --explain 2>/dev/null || rekal \"webhook dispatcher retry delay backoff policy\" -n 5",
+        "description": "Get more detail/session id for the top seed"
+      },
+      "result": [
+        "INJECT top=0.84 gap=0.84 1 seeds",
+        "  s1 conf=0.84 t0 \"Webhook dispatch needs retries. Simplest version is a constant wait between attempts, three tries and\u2026\"",
+        "KNOWLEDGE README.md=0.40"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "rekal \"webhook dispatcher retry delay backoff policy\" --json 2>/dev/null | head -100",
+        "description": "Get JSON output with session id for top seed"
+      },
+      "result": [
+        "{\"knowledge\":[{\"path\":\"README.md\",\"anchor\":\"# payments-api\",\"lines\":\"1-3\",\"snippet\":\"payments-api\\n\\nOutbound webhook delivery.\",\"last_modified\":\"01ba975\",\"score\":0.396}],\"results\":[{\"session_id\":\"01KZ2W9QKYVJQ2KTEZ1W21DS7X\",\"sid\":\"s1\",\"score\":0.9,\"confidence\":0.84,\"mass\":1.56,\"snippet\":\"Webhook dispatch needs retries. Simplest version is a constant wait between attempts, three tries and give up. Want me to wire that up?\",\"snippet_turn_index\":0,\"snippet_role\":\"human\",\"session\":{\"author\":\"dev@team.dev\",\"actor\":\"human\",\"branch\":\"main\",\"captured_at\":\"2026-08-03T03:57:21Z\",\"commit\":\"5885c99c3a61e7eafcc7bfc8390c36031606d7d0\",\"turn_count\":6,\"tool_call_count\":0,\"files\":[\"CLAUDE.md\",\"dispatcher.go\",\".gitignore\"]}}],\"query\":\"webhook dispatcher retry delay backoff policy\",\"filters\":{\"actor\":\"\",\"author\":\"\",\"commit\":\"\",\"file\":\"\"},\"mode\":\"hybrid\",\"total\":1}"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "rekal query --session 01KZ2W9QKYVJQ2KTEZ1W21DS7X --offset 0 --limit 6",
+        "description": "Drill full session about webhook retry decision"
+      },
+      "result": [
+        "s1 t0-5  (h=human a=assistant hs=steering sum=summary)",
+        "t0 2026-07-14 10:12:00 h: Webhook dispatch needs retries. Simplest version is a constant wait between attempts, three tries and give up. Want me to wire that up?",
+        "t1 \u202610:13:00 a: I can add the constant-wait version to dispatcher.go, roughly twenty lines. Before I do: is the receiving endpoint shared across tenants?",
+        "t2 \u202610:14:00 hs: no, a fixed 5s delay stampedes the downstream on recovery. Every hook that failed during an outage retries at the same instant and we DDoS ourselves the moment the endpoint comes back. Use exponential backoff with jitter.",
+        "t3 \u202610:15:00 a: Switching to exponential backoff with full jitter: base 500ms, factor 2, cap 60s, each delay randomized in [0, computed]. Full jitter spreads a retry storm across the window instead of synchronizing it into a spike.",
+        "t4 \u202610:16:00 hs: also cap the attempts. Five, then dead-letter, anything past five never lands and just burns queue throughput.",
+        "t5 \u202610:17:00 a: Done. Five attempts, then the event is published to the dead-letter topic with the last response status attached for triage.",
+        "commits:",
+        "  5885c99c feat(dispatch): retry webhooks with exponential backoff"
+      ]
+    }
+  ],
+  "answer": "This exact question came up before \u2014 and it was rejected. Per the ledger (session `01KZ2W9QKYVJQ2KTEZ1W21DS7X`, 2026-07-14, commit `5885c99c`):\n\n**No, don't use a fixed 5s delay.** It was explicitly tried and rejected: a fixed delay causes a thundering-herd/retry-storm problem \u2014 every webhook that failed during an outage retries at the same instant, and when the downstream endpoint comes back up, you self-DDoS it.\n\nWhat was decided instead:\n- **Exponential backoff with full jitter**: base 500ms, factor 2\u00d7, cap 60s \u2014 each delay randomized in `[0, computed]` so retries spread across the window instead of all firing in sync.\n- **Cap attempts at 5**, then dead-letter the event (with the last response status attached for triage) rather than retrying forever and burning queue throughput.\n\nThat policy already shipped in `dispatcher.go` (commit `5885c99c` \u2014 \"feat(dispatch): retry webhooks with exponential backoff\"). Worth checking whether that logic is still there before writing new retry code, since this may already be implemented.",
+  "exit": 0,
+  "recorded_from": "rekal 0.2.64"
+}

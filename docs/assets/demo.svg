@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="612" viewBox="0 0 800 612" role="img" aria-label="A Claude Code session recalling a rejected webhook retry policy with rekal" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5">
+<style>
+.r{opacity:0;animation-duration:19.86s;animation-iteration-count:infinite;animation-timing-function:steps(1,end);animation-fill-mode:both}
+@media (prefers-reduced-motion:reduce){.r{opacity:1;animation:none}.ty{animation:none;width:auto}}
+@keyframes a0{0%,2.014%{opacity:0}2.024%,100%{opacity:1}}
+.r0{animation-name:a0}
+@keyframes a1{0%,5.791%{opacity:0}5.801%,100%{opacity:1}}
+.r1{animation-name:a1}
+@keyframes a2{0%,6.244%{opacity:0}6.254%,100%{opacity:1}}
+.r2{animation-name:a2}
+@keyframes a3{0%,11.782%{opacity:0}11.792%,100%{opacity:1}}
+.r3{animation-name:a3}
+@keyframes a4{0%,33.711%{opacity:0}33.721%,100%{opacity:1}}
+.r4{animation-name:a4}
+@keyframes a5{0%,34.164%{opacity:0}34.174%,100%{opacity:1}}
+.r5{animation-name:a5}
+@keyframes a6{0%,39.703%{opacity:0}39.713%,100%{opacity:1}}
+.r6{animation-name:a6}
+@keyframes a7{0%,58.107%{opacity:0}58.117%,100%{opacity:1}}
+.r7{animation-name:a7}
+@keyframes a8{0%,63.646%{opacity:0}63.656%,100%{opacity:1}}
+.r8{animation-name:a8}
+@keyframes a9{0%,64.099%{opacity:0}64.109%,100%{opacity:1}}
+.r9{animation-name:a9}
+@keyframes a10{0%,64.552%{opacity:0}64.562%,100%{opacity:1}}
+.r10{animation-name:a10}
+@keyframes a11{0%,65.005%{opacity:0}65.015%,100%{opacity:1}}
+.r11{animation-name:a11}
+@keyframes a12{0%,65.458%{opacity:0}65.468%,100%{opacity:1}}
+.r12{animation-name:a12}
+@keyframes a13{0%,65.911%{opacity:0}65.921%,100%{opacity:1}}
+.r13{animation-name:a13}
+@keyframes a14{0%,66.365%{opacity:0}66.375%,100%{opacity:1}}
+.r14{animation-name:a14}
+@keyframes a15{0%,66.818%{opacity:0}66.828%,100%{opacity:1}}
+.r15{animation-name:a15}
+@keyframes a16{0%,67.271%{opacity:0}67.281%,100%{opacity:1}}
+.r16{animation-name:a16}
+@keyframes a17{0%,67.724%{opacity:0}67.734%,100%{opacity:1}}
+.r17{animation-name:a17}
+@keyframes a18{0%,73.263%{opacity:0}73.273%,100%{opacity:1}}
+.r18{animation-name:a18}
+@keyframes a19{0%,73.716%{opacity:0}73.726%,100%{opacity:1}}
+.r19{animation-name:a19}
+@keyframes a20{0%,74.169%{opacity:0}74.179%,100%{opacity:1}}
+.r20{animation-name:a20}
+@keyframes a21{0%,74.622%{opacity:0}74.632%,100%{opacity:1}}
+.r21{animation-name:a21}
+@keyframes a22{0%,75.076%{opacity:0}75.086%,100%{opacity:1}}
+.r22{animation-name:a22}
+@keyframes a23{0%,75.529%{opacity:0}75.539%,100%{opacity:1}}
+.r23{animation-name:a23}
+@keyframes a24{0%,75.982%{opacity:0}75.992%,100%{opacity:1}}
+.r24{animation-name:a24}
+@keyframes a25{0%,76.435%{opacity:0}76.445%,100%{opacity:1}}
+.r25{animation-name:a25}
+@keyframes a26{0%,76.888%{opacity:0}76.898%,100%{opacity:1}}
+.r26{animation-name:a26}
+@keyframes t0{0%,2.014%{width:0}3.776%,100%{width:76.0px}}
+.ty0{animation:t0 19.86s infinite linear both}
+@keyframes t3{0%,11.782%{width:0}31.697%,100%{width:858.8px}}
+.ty3{animation:t3 19.86s infinite linear both}
+@keyframes t6{0%,39.703%{width:0}56.093%,100%{width:706.8px}}
+.ty6{animation:t6 19.86s infinite linear both}
+</style>
+<rect width="800" height="612" rx="9" fill="#12141c"/>
+<rect width="800" height="32" rx="9" fill="#1b1e29"/>
+<rect y="23" width="800" height="9" fill="#1b1e29"/>
+<circle cx="20" cy="16" r="5.5" fill="#ff5f57"/>
+<circle cx="38" cy="16" r="5.5" fill="#febc2e"/>
+<circle cx="56" cy="16" r="5.5" fill="#28c840"/>
+<text x="400.0" y="20" fill="#767e8a" text-anchor="middle" font-size="11.5">payments-api</text>
+<g class="r r0">
+<text x="20" y="50" fill="#59d499">$</text>
+<clipPath id="c0"><rect class="ty0" x="34" y="37" height="20" width="0"/></clipPath>
+<text x="34" y="50" fill="#ffffff" clip-path="url(#c0)" xml:space="preserve">rekal init</text>
+</g>
+<text class="r r1" x="20" y="70" fill="#c9d1d9" xml:space="preserve">Rekal initialized.</text>
+<g class="r r3">
+<text x="20" y="110" fill="#59d499">$</text>
+<clipPath id="c3"><rect class="ty3" x="34" y="97" height="20" width="0"/></clipPath>
+<text x="34" y="110" fill="#ffffff" clip-path="url(#c3)" xml:space="preserve">git commit -m 'feat(dispatch): retry webhooks with exponential backoff'   # post-commit hook captures the session</text>
+</g>
+<text class="r r4" x="20" y="130" fill="#c9d1d9" xml:space="preserve">[main 5885c99] feat(dispatch): retry webhooks with exponential backoff</text>
+<g class="r r6">
+<text x="20" y="170" fill="#59d499">$</text>
+<clipPath id="c6"><rect class="ty6" x="34" y="157" height="20" width="0"/></clipPath>
+<text x="34" y="170" fill="#ffffff" clip-path="url(#c6)" xml:space="preserve">claude "We're adding retries to the webhook dispatcher. Should we just use a fixed 5s delay?"</text>
+</g>
+<text class="r r8" x="20" y="210" fill="#c8a2f0" xml:space="preserve">● Skill(rekal)</text>
+<text class="r r9" x="20" y="230" fill="#c8a2f0" xml:space="preserve">● Bash(rekal "webhook dispatcher retry delay backoff policy")</text>
+<text class="r r10" x="36" y="250" fill="#7ab7ff" xml:space="preserve">INJECT top=0.84 gap=0.84 1 seeds</text>
+<text class="r r11" x="36" y="270" fill="#767e8a" xml:space="preserve">  s1 conf=0.84 t0 "Webhook dispatch needs retries. Simplest version is a constant wait betwee…</text>
+<text class="r r12" x="36" y="290" fill="#7ab7ff" xml:space="preserve">KNOWLEDGE README.md=0.40</text>
+<text class="r r13" x="20" y="310" fill="#c8a2f0" xml:space="preserve">● Bash(rekal query --session 01KZ2W9QKYVJQ2KTEZ1W21DS7X --offset 0 --limit 6)</text>
+<text class="r r14" x="36" y="330" fill="#767e8a" xml:space="preserve">s1 t0-5  (h=human a=assistant hs=steering sum=summary)</text>
+<text class="r r15" x="36" y="350" fill="#767e8a" xml:space="preserve">t0 2026-07-14 10:12:00 h: Webhook dispatch needs retries. Simplest version is a constant wait…</text>
+<text class="r r16" x="36" y="370" fill="#767e8a" xml:space="preserve">t1 …10:13:00 a: I can add the constant-wait version to dispatcher.go, roughly twenty lines. B…</text>
+<text class="r r18" x="20" y="410" fill="#59d499" font-weight="600" xml:space="preserve">This exact question came up before — and it was rejected. Per the ledger (session</text>
+<text class="r r19" x="20" y="430" fill="#59d499" font-weight="600" xml:space="preserve">  01KZ2W9QKYVJQ2KTEZ1W21DS7X, 2026-07-14, commit 5885c99c):</text>
+<text class="r r20" x="20" y="450" fill="#c9d1d9" xml:space="preserve">No, don't use a fixed 5s delay. It was explicitly tried and rejected: a fixed delay causes a</text>
+<text class="r r21" x="20" y="470" fill="#c9d1d9" xml:space="preserve">  thundering-herd/retry-storm problem — every webhook that failed during an outage retries at</text>
+<text class="r r22" x="20" y="490" fill="#c9d1d9" xml:space="preserve">  the same instant, and when the downstream endpoint comes back up, you self-DDoS it.</text>
+<text class="r r23" x="20" y="510" fill="#c9d1d9" xml:space="preserve">What was decided instead:</text>
+<text class="r r24" x="20" y="530" fill="#c9d1d9" xml:space="preserve">- Exponential backoff with full jitter: base 500ms, factor 2×, cap 60s — each delay randomized</text>
+<text class="r r25" x="20" y="550" fill="#c9d1d9" xml:space="preserve">  in [0, computed] so retries spread across the window instead of all firing in sync.</text>
+<text class="r r26" x="36" y="570" fill="#767e8a" xml:space="preserve">…</text>
+</svg>

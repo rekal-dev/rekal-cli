@@ -14,9 +14,14 @@ The situation, which is the one Rekal exists for:
   *and* why the alternative lost - without re-proposing it.
 
 Everything the demo shows is executed for real: `rekal init`, the post-commit
-hook, `rekal push` against a real remote, `rekal sync` on the second machine,
+and pre-push hooks against a real remote, `rekal sync` on the second machine,
 and a real headless Claude Code session. The agent's tool calls, the rekal
 output they produced, and the answer text are all captured live.
+
+`rekal init` is the only rekal command the demo types on the authoring side.
+Capture and publication ride the `git commit` and `git push` a developer
+already runs, so the frame shows the workflow the README promises rather than
+teaching a manual `rekal push` step that nobody needs.
 
 The corpus in conversation.json is invented, because a demo needs a story a
 reader can follow. Nothing else is.
@@ -127,7 +132,12 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
     git(dana, "commit", "-qm", "initial commit")
     git(dana, "branch", "-M", "main")
     git(dana, "push", "-q", "-u", "origin", "main")
-    sh([rekal, "init"], cwd=dana)
+    init = sh([rekal, "init"], cwd=dana)
+    add("note", "one command, once per repo")
+    add("cmd", "rekal init")
+    for line in pick(init, "initialized")[:1]:
+        add("out", line)
+    add("note", "after that, nothing but normal git")
 
     dana_sessions = claude_session_dir(dana)
     dana_sessions.mkdir(parents=True, exist_ok=True)
@@ -150,8 +160,10 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
     add("cmd", "git push")
     for line in pick(push, "pushed to")[:1]:
         add("out", line)
-    # The gate is evaluated against the remote tip, so the freshly-landed
-    # commit publishes on the next push. Run it so the branch is real.
+    # Off-camera: the merged-only gate is evaluated against the remote tip, so
+    # a commit that just landed publishes on the *next* push. A developer hits
+    # this on their next ordinary `git push`; the demo should not spend a row
+    # on the timing.
     sh([rekal, "push"], cwd=dana, check=False)
 
     # ---- The spike that must NOT travel ----------------------------------
@@ -162,9 +174,9 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
     (dana / "queue.go").write_text("package main\n\n// redis streams spike\n")
     git(dana, "add", "-A")
     git(dana, "commit", "-qm", "spike: redis streams delivery queue")
-    spike = sh([rekal, "push"], cwd=dana, check=False)
-    add("note", "on an unmerged spike branch")
-    add("cmd", "rekal push")
+    spike = git(dana, "push", "-q", "-u", "origin", "spike/redis-queue", check=False)
+    add("note", "a second conversation, on an unmerged spike branch")
+    add("cmd", "git push -u origin spike/redis-queue")
     for line in pick(spike, "export")[:1]:
         add("out", line)
     # ...but the spike is still there locally, at full fidelity.

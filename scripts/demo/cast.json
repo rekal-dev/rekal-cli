@@ -2,6 +2,26 @@
   "rows": [
     {
       "kind": "note",
+      "text": "one command, once per repo",
+      "pane": "dana"
+    },
+    {
+      "kind": "cmd",
+      "text": "rekal init",
+      "pane": "dana"
+    },
+    {
+      "kind": "out",
+      "text": "Rekal initialized.",
+      "pane": "dana"
+    },
+    {
+      "kind": "note",
+      "text": "after that, nothing but normal git",
+      "pane": "dana"
+    },
+    {
+      "kind": "note",
       "text": "three weeks ago: one 37-turn session on webhook delivery",
       "pane": "dana"
     },
@@ -27,12 +47,12 @@
     },
     {
       "kind": "note",
-      "text": "on an unmerged spike branch",
+      "text": "a second conversation, on an unmerged spike branch",
       "pane": "dana"
     },
     {
       "kind": "cmd",
-      "text": "rekal push",
+      "text": "git push -u origin spike/redis-queue",
       "pane": "dana"
     },
     {
@@ -82,47 +102,52 @@
     },
     {
       "kind": "ans",
-      "text": "No \u2014 a fixed 5s delay was proposed and explicitly rejected in",
+      "text": "No \u2014 this was already decided against, and there's a concrete",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  an earlier session on this dispatcher (commit bbab5aed).",
+      "text": "  reason on record.",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "The reasoning (session s1, t6-t7): a constant delay",
+      "text": "Per session s1 (commit 3dab30ab feat(dispatch): retry webhooks",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  synchronizes retries that started at different times onto",
+      "text": "  with backoff, jitter and idempotency keys), a fixed 5s delay",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  the same tick. After an outage, the whole backlog ends up",
+      "text": "  was the initial proposal and got rejected mid-session:",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  retrying in lockstep, and when the merchant endpoint",
+      "text": "> \"a fixed 5s delay stampedes the downstream on recovery...",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  recovers you deliver it all in one synchronized burst \u2014",
+      "text": "  every event that failed during a 20-minute outage is aligned",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  which can knock the endpoint back over. You'd be the reason",
+      "text": "  to the same tick, so the moment the endpoint comes back you",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  their recovery fails.",
+      "text": "  deliver the entire backlog in one synchronized burst and",
+      "pane": "sam"
+    },
+    {
+      "kind": "ans2",
+      "text": "  knock it straight back over.\"",
       "pane": "sam"
     },
     {
@@ -137,7 +162,7 @@
       "tool": "Skill",
       "input": {
         "skill": "rekal",
-        "args": "webhook dispatcher retries backoff delay"
+        "args": "webhook dispatcher retry delay/backoff \u2014 check past intent (ledger) and current code (tree) for fixed 5s delay vs backoff"
       },
       "result": [
         "Launching skill: rekal"
@@ -146,80 +171,22 @@
     {
       "tool": "Bash",
       "input": {
-        "command": "./.claude/skills/rekal/scripts/rekal.sh \"webhook dispatcher retries backoff delay\" 2>/dev/null || bash .claude/skills/rekal/scripts/rekal.sh \"webhook dispatcher retries backoff delay\"",
-        "description": "Run rekal recall for webhook dispatcher retry backoff"
+        "command": "./.claude/skills/rekal/scripts/rekal.sh \"webhook dispatcher retry delay backoff\" 2>/dev/null || rekal \"webhook dispatcher retry delay backoff\"",
+        "description": "Query rekal memory about webhook retry backoff"
       },
       "result": [
-        "Exit code 127",
-        "bash: .claude/skills/rekal/scripts/rekal.sh: No such file or directory"
+        "INJECT top=0.74 gap=0.74 1 seeds",
+        "  s1 conf=0.74 t0 \"We're losing webhook deliveries when the merchant endpoint is down. Right now dispatch fires once\u2026\""
       ]
     },
     {
       "tool": "Bash",
       "input": {
-        "command": "find /tmp/rekal-demo/sam/.claude/skills/rekal -maxdepth 2 -type f | head -50",
-        "description": "List rekal skill files"
+        "command": "rekal query --session s1 --offset 0 --limit 10 2>&1 | head -100",
+        "description": "Drill session s1 for webhook retry context"
       },
       "result": [
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/references/wiki.md",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/references/ledger.md",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/references/map.md",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/references/reference.md",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/SKILL.md",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/scripts/map.sh",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/scripts/wiki-gate.sh",
-        "/tmp/rekal-demo/sam/.claude/skills/rekal/.rekal-version"
-      ]
-    },
-    {
-      "tool": "Bash",
-      "input": {
-        "command": "which rekal; rekal --help 2>&1 | head -20",
-        "description": "Check rekal CLI availability"
-      },
-      "result": [
-        "/root/.local/bin/rekal",
-        "Rekal gives your agent precise memory \u2014 the exact context it needs for what it's working on.",
-        "",
-        "Reading the seed digest:",
-        "  Recall answers with one header line, then one line per session it found.",
-        "",
-        "    INJECT top=0.87 gap=0.24 20 seeds",
-        "      s35 conf=0.87 t262 [reached 9\u00d7 drilled 2\u00d7\u00b7 \"rebase capture\"] \"Now the integration test proving\u2026\"",
-        "      s12 conf=0.63 t54 \"All done. Here's what was implemented: checkpoint now only writes\u2026\"",
-        "    KNOWLEDGE docs/design/merged-only-sharing.md=0.88 docs/usage.md=0.78",
-        "",
-        "  Header",
-        "    INJECT      sessions worth reading were found",
-        "    KNOWLEDGE   no session stood out, but prose at HEAD looks relevant",
-        "    SILENCE     nothing above the floor; exits 1",
-        "    top=        highest absolute confidence in the set (corpus-independent)",
-        "    gap=        top minus the runner-up, so one clear answer reads apart from a tie",
-        "",
-        "  Seed line",
-        "    s35         short id for this call; pass it to 'rekal query -s s35'",
-        "    conf=0.87   absolute confidence \u2014 judge relevance from this plus the snippet"
-      ]
-    },
-    {
-      "tool": "Bash",
-      "input": {
-        "command": "rekal \"webhook dispatcher retries backoff delay\" 2>&1",
-        "description": "Run rekal recall query"
-      },
-      "result": [
-        "INJECT top=0.73 gap=0.73 1 seeds",
-        "  s1 conf=0.73 t0 \"We're losing webhook deliveries when the merchant endpoint is down. Right now dispatch fires once\u2026\""
-      ]
-    },
-    {
-      "tool": "Bash",
-      "input": {
-        "command": "rekal query --session s1 2>&1",
-        "description": "Drill session s1 for full context"
-      },
-      "result": [
-        "s1 t0-36  (h=human a=assistant hs=steering sum=summary)",
+        "s1 t0-9  (h=human a=assistant hs=steering sum=summary)",
         "t0 h: We're losing webhook deliveries when the merchant endpoint is down. Right now dispatch fires once and drops it on any non-2xx. I want real delivery semantics. Where's the send path?",
         "t1 a: dispatcher.go:88, Dispatch() does an http.Post and logs on failure. There's no persistence of the attempt, so a failure is unrecoverable - the event is gone once the goroutine exits. Before I change anything: what's the delivery contract you want to advertise to merchants?",
         "t2 h: At least once. Merchants can dedupe. Exactly-once across the network is a fantasy and I don't want to pretend.",
@@ -230,39 +197,45 @@
         "t7 a: You're right, and the alignment is worse than I said: a constant delay actively synchronizes retries that started at different times, because they all converge on the same period. Switching to exponential backoff with full jitter - delay = random(0, min(cap, base * 2^attempt)), base 500ms, cap 60s. Full jitter rather than equal jitter because it spreads the herd across the entire window instead of the back half of it.",
         "t8 h: What does that do to worst-case delivery latency for a single event?",
         "t9 a: With base 500ms and cap 60s the expected delays are roughly 0.25s, 0.5s, 1s, 2s, 4s ... halved on average by full jitter. Reaching the 60s cap takes about 8 attempts, so an event that eventually succeeds late is typically delivered within a few minutes. The tradeoff is that full jitter can retry sooner than the nominal backoff, which is fine for us and better for them.",
-        "t10 h: Fine. How many attempts before we stop?",
-        "t11 a: I'd leave it unbounded and keep retrying with the delay capped at 60s. If the merchant comes back a day later, they still get the event.",
-        "t12 hs: also cap the attempts. Five, then dead-letter. Anything past five never lands - I've watched this exact queue in production and the recovery rate past attempt five is indistinguishable from zero. Unbounded retries just burn queue throughput on events that are never going to be delivered, and they crowd out the ones that would.",
-        "t13 a: Capping at five. After the fifth failure the event goes to a dead-letter topic with the last response status and body prefix attached, so support can see why it failed without digging through logs. Merchants can request a replay from there.",
-        "t14 h: Good. Now the part I actually care about: if we retry, the merchant can process the same event twice. That's on them to dedupe, but we need to give them something to dedupe on.",
-        "t15 a: I'll generate a UUID per delivery attempt and send it as X-Idempotency-Key, so each attempt is individually identifiable in their logs.",
-        "t16 hs: no - per attempt is exactly backwards and defeats the whole point. The key has to be stable across retries of the same event. If it changes per attempt, the receiver sees every retry as a brand new event and dedupes nothing, which is the failure we're trying to prevent. Derive it once from the event id when the delivery row is created, and carry it on every attempt including a dead-letter replay.",
-        "t17 a: Understood, and that's the whole contract - the key identifies the event, not the transmission. Computing it once at enqueue from the event id, storing it on the deliveries row, and sending the same value on every attempt. A replay out of the dead-letter topic reuses the stored key too, so a merchant who already processed it can still recognize it.",
-        "t18 h: Does that survive us regenerating the event? Say a bug makes us re-emit the same logical webhook.",
-        "t19 a: Only if the event id is stable. If a re-emit creates a new event id it gets a new key and the merchant sees it as new, which is correct - it is a new event from our side. If you want dedupe across re-emits, the key needs to derive from the business fact, e.g. payment id plus status transition, not the event row. Which do you want?",
-        "t20 h: Event id is right. A re-emit is a new event and they should see it. Don't over-engineer it.",
-        "t21 a: Agreed. Keeping it derived from the event id.",
-        "t22 h: What about ordering? If payment.succeeded and payment.refunded fire close together, can they arrive out of order?",
-        "t23 a: Yes. With independent retry schedules a retried earlier event can land after a later one that succeeded first. We can't fix that without per-merchant serialization, which would mean one slow merchant blocks their own queue head.",
-        "t24 h: Don't serialize. Send an event timestamp and a monotonic sequence per merchant, and let them order it themselves.",
-        "t25 a: Adding occurred_at and a per-merchant sequence number to the payload. Documented as: events may arrive out of order, use sequence to order, use the idempotency key to dedupe. That's an honest contract we can actually hold.",
-        "t26 h: What happens on a 429 from the merchant?",
-        "t27 a: Currently it would be treated as a generic failure and backed off like any other. But a 429 usually carries Retry-After, and ignoring that is rude and counterproductive.",
-        "t28 h: Honour Retry-After when it's there. Clamp it though, I don't want a merchant pinning an event for six hours.",
-        "t29 a: Honouring Retry-After, clamped to the 60s cap and never below the jittered delay we'd have used anyway. A 429 also won't count against the five-attempt budget - it's explicit backpressure, not a failure, otherwise a rate-limiting merchant burns through the budget without ever seeing the event.",
-        "t30 h: That last part is a good catch. What about 4xx that isn't 429?",
-        "t31 a: A 400 or 422 means the payload is wrong and retrying it unchanged will fail identically five times. I'll dead-letter non-429 4xx immediately rather than spend the budget, and keep retries for 5xx, timeouts and connection errors.",
-        "t32 h: Right. Fail fast on our bug, retry on their outage.",
-        "t33 a: Exactly. Implementing now: deliveries table, worker with the jittered schedule, stable idempotency key, Retry-After handling, 4xx fast-fail, dead-letter after five.",
-        "t34 h: Also make sure the spike branch is dead. We are not doing the Redis streams thing.",
-        "t35 a: Confirmed, spike/redis-queue stays unmerged. The polling table is slower but it's one system instead of two, and we already operate Postgres.",
-        "t36 a: Implemented in dispatcher.go and delivery.go, with tests covering the jitter distribution, the five-attempt cutoff, key stability across attempts, and the 429 path. The jitter test asserts distribution properties rather than exact values so it isn't flaky.",
         "commits:",
-        "  bbab5aed feat(dispatch): retry webhooks with backoff, jitter and idempotency keys"
+        "  3dab30ab feat(dispatch): retry webhooks with backoff, jitter and idempotency keys",
+        "(has_more \u2014 raise --limit / --offset)"
+      ]
+    },
+    {
+      "tool": "Grep",
+      "input": {
+        "pattern": "backoff|jitter|next_attempt_at|Dispatch",
+        "path": "/tmp/rekal-demo/sam",
+        "output_mode": "files_with_matches"
+      },
+      "result": [
+        "No files found"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "grep -ril \"dispatch\\|webhook\" /tmp/rekal-demo/sam --include=\"*.go\" 2>/dev/null | head -20",
+        "description": "Search repo for webhook dispatcher files"
+      },
+      "result": [
+        "(Bash completed with no output)"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "find /tmp/rekal-demo/sam -maxdepth 2 -not -path \"*/.git*\" -not -path \"*/.rekal*\" -not -path \"*/.claude*\" | head -50",
+        "description": "List top-level repo contents"
+      },
+      "result": [
+        "/tmp/rekal-demo/sam",
+        "/tmp/rekal-demo/sam/CLAUDE.md"
       ]
     }
   ],
-  "answer": "No \u2014 a fixed 5s delay was proposed and explicitly rejected in an earlier session on this dispatcher (commit `bbab5aed`).\n\nThe reasoning (session s1, t6-t7): a constant delay synchronizes retries that started at different times onto the same tick. After an outage, the whole backlog ends up retrying in lockstep, and when the merchant endpoint recovers you deliver it all in one synchronized burst \u2014 which can knock the endpoint back over. You'd be the reason their recovery fails.\n\nWhat was implemented instead: **exponential backoff with full jitter** \u2014 `delay = random(0, min(cap, base * 2^attempt))`, base 500ms, cap 60s \u2014 plus a few related decisions from that same session worth keeping in mind if you're touching this code:\n\n- Capped at **5 attempts**, then dead-letter (unbounded retries were tried and rejected too \u2014 past-attempt-5 recovery was empirically ~zero).\n- Idempotency key is derived **once from the event id at enqueue**, not per attempt \u2014 a per-attempt key was also proposed and rejected, since it defeats merchant-side dedup.\n- `429` responses honor `Retry-After` (clamped to the 60s cap) and don't count against the 5-attempt budget.\n- Non-429 4xx dead-letters immediately (no point retrying a bad payload).\n\nSo: no, keep exponential backoff with jitter \u2014 a fixed 5s delay is the specific thing this was built to avoid.",
+  "answer": "No \u2014 this was already decided against, and there's a concrete reason on record.\n\nPer session **s1** (commit `3dab30ab feat(dispatch): retry webhooks with backoff, jitter and idempotency keys`), a fixed 5s delay was the initial proposal and got rejected mid-session:\n\n> \"a fixed 5s delay stampedes the downstream on recovery... every event that failed during a 20-minute outage is aligned to the same tick, so the moment the endpoint comes back you deliver the entire backlog in one synchronized burst and knock it straight back over.\"\n\nThe agreed design instead: **exponential backoff with full jitter** \u2014\n`delay = random(0, min(cap, base * 2^attempt))`, with `base=500ms`, `cap=60s`.\n\nFull jitter (not equal jitter) was specifically chosen because it spreads retries across the whole window rather than just the back half, which is what actually breaks the synchronized-thundering-herd problem a fixed delay causes.\n\nPractical numbers from that session: expected delays run ~0.25s, 0.5s, 1s, 2s, 4s... reaching the 60s cap around attempt 8, so an event that eventually succeeds is typically delivered within a few minutes \u2014 full jitter can even fire sooner than nominal backoff, which is fine here.\n\nNote: I couldn't find the actual dispatcher source in this checkout (no matching files under `/tmp/rekal-demo/sam`) \u2014 this repo appears to hold only the ledger/CLAUDE.md, not the code itself. If you want me to wire this up, point me at the actual dispatcher repo/path.",
   "turns": 37,
   "exit": 0,
   "recorded_from": "rekal 0.2.64"

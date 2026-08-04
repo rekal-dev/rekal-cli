@@ -743,10 +743,14 @@ for the same place and move `.rekal/` off the store that already exists —
   single-terminal frame. Left pane (Dana): the 37-turn `conversation.json`
   session is planted in Claude Code's JSONL format, the real `rekal init` runs
   (so the real skill is installed), a commit fires the real post-commit hook,
-  and `git push` publishes to a real bare remote. It then commits an **unmerged
-  spike** and shows `rekal push` reporting nothing to export while `rekal find`
-  on the same machine still finds it — the merged-only guarantee, demonstrated
-  rather than asserted. Right pane (Sam): a second clone runs `rekal sync`, then
+  and `git push` publishes to a real bare remote. **`init` is the only rekal
+  command the authoring side types** — capture and publication ride the
+  `git commit`/`git push` a developer already runs, so the frame shows the
+  workflow the README promises instead of teaching a manual `rekal push` step
+  nobody needs. It then commits an **unmerged spike** whose ordinary
+  `git push` reports nothing to export, while `rekal find` on the same machine
+  still finds it — the merged-only guarantee, demonstrated rather than
+  asserted. Right pane (Sam): a second clone runs `rekal sync`, then
   a real headless `claude -p` session loads the skill, recalls, drills
   (`s1 t0-36`, so the conversation's length is visible) and answers that the
   fixed delay was already rejected. Only the corpus is invented.

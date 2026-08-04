@@ -201,6 +201,12 @@ for the same place and move `.rekal/` off the store that already exists —
   leaving the body byte-identical, and refusing there would block a repair that
   loses nothing
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`).
+  Plain `rekal sync` checkpoints and pushes **your own** local work (step 1-2
+  of `runSyncTeam`, both non-fatal) before it fetches — the round-trip is the
+  point, `--self` skips both. `--help` didn't say so (black-box testing
+  found the gap: an agent that only reads `--help`, per the design intent,
+  had no way to know a plain `sync` also writes to the remote); the `Long`
+  text now names it, matching `docs/spec/command/sync.md`, which already did.
   `indexSessionFrame` dedups an arriving session by **keeping the longest**: one
   conversation spanning several commits links to several checkpoints and rides in
   each one's frame, so the repeat would violate `session_facets`' primary key and
@@ -345,7 +351,15 @@ for the same place and move `.rekal/` off the store that already exists —
   append-only ledger and reported the delete count as a result. The statement
   check is only there to produce a plain sentence instead of a driver error —
   read-only is what makes it structural, per SOUL.md. A `;` inside a string
-  literal, quoted identifier or comment is data, not a separator
+  literal, quoted identifier or comment is data, not a separator. A drilled
+  session missing from **both** DBs used to surface as `session not found:
+  query session: sql: no rows in result set` — the driver's own wording, not
+  a sentence, and the wrapped error was the data-DB miss even on the
+  index-DB fallback path. `sessionNotFoundError` checks `errors.Is(...,
+  sql.ErrNoRows)` and reports the handle the caller typed instead; a real DB
+  failure (not just "no rows") still surfaces its detail. The short-handle
+  path (`sidMap.Resolve`) already had its own clean message — this only
+  covered the full-ULID path
 - `version.go`: Version constant (set via ldflags)
 - `errors.go`: SilentError pattern for clean error output
 - `preconditions.go`: Shared checks — `RequireInitializedRepo` (git repo +

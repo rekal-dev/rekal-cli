@@ -3,6 +3,7 @@ package cli
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -320,6 +321,16 @@ var indexDrilldownSource = drilldownSource{
 	children:  db.QueryChildSessionIDsFromIndex,
 }
 
+// sessionNotFoundError reports a missing session in plain words. A lookup
+// miss is sql.ErrNoRows, which is not something to show a caller; any other
+// error is a real DB failure and keeps its detail.
+func sessionNotFoundError(handle string, err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("session not found: %q", handle)
+	}
+	return fmt.Errorf("session not found: %w", err)
+}
+
 func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, offset, limit int, role string, jsonCompact bool) error {
 	// Open index once: resolve sN→ULID, emit sid on output, and fall back
 	// for teammate sessions that exist only in index.db.
@@ -371,11 +382,11 @@ func runSessionDrilldown(cmd *cobra.Command, gitRoot, handle string, full bool, 
 	// Not in the data DB — fall back to the index DB, where teammate
 	// sessions from `rekal sync` live.
 	if indexDB == nil {
-		return fmt.Errorf("session not found: %w", dataErr)
+		return sessionNotFoundError(handle, dataErr)
 	}
 	session, err = db.QuerySessionFromIndex(indexDB, sessionID)
 	if err != nil {
-		return fmt.Errorf("session not found: %w", dataErr)
+		return sessionNotFoundError(handle, err)
 	}
 	logDrillEdge(gitRoot, sessionID)
 	return renderSessionDrilldown(cmd, gitRoot, indexDB, session, indexDrilldownSource, full, offset, limit, role, shortSid, jsonCompact)

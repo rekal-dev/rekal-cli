@@ -309,4 +309,10 @@ func TestSessionDrilldown_NotFoundAnywhere(t *testing.T) {
 	if !strings.Contains(err.Error(), "session not found") {
 		t.Errorf("error = %q, want it to contain 'session not found'", err)
 	}
+	if strings.Contains(err.Error(), "sql:") {
+		t.Errorf("error = %q, leaks the raw driver error instead of a plain message", err)
+	}
+	if !strings.Contains(err.Error(), "01DOESNOTEXIST") {
+		t.Errorf("error = %q, want it to name the handle the caller passed", err)
+	}
 }

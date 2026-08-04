@@ -26,6 +26,12 @@ func newSyncCmd() *cobra.Command {
 This is a manual, deliberate operation — it is NOT automated via git hooks.
 Run it when you want to pull your team's session history before starting work.
 
+Before fetching, plain 'rekal sync' also checkpoints and pushes YOUR OWN local
+work first (same as 'rekal checkpoint' + 'rekal push', both non-fatal — a
+failure here only warns and sync still fetches and rebuilds). This is what
+makes 'sync' a round trip: your merged work reaches your rekal/<email> branch
+before you pull everyone else's. 'rekal sync --self' skips this; it only fetches.
+
 Imported data includes conversation turns, tool calls, and file change metadata
 from your teammates' AI coding sessions. Imported checkpoints are marked as
 exported so they are never re-pushed to your own branch.

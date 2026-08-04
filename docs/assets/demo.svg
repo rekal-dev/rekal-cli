@@ -152,4 +152,5 @@
 <text x="546.0" y="281.5" fill="#6e7681" font-size="9.5" text-anchor="middle">@team.dev</text>
 <text x="546.0" y="297.5" fill="#6e7681" font-size="9.5" text-anchor="middle">no server</text>
 </g>
+<text x="1082" y="488" fill="#6e7681" font-size="9.5" text-anchor="end" opacity="0.75">recorded from rekal 1.0.0</text>
 </svg>

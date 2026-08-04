@@ -443,6 +443,14 @@ def render_svg(cast: dict) -> str:
                f'text-anchor="middle">no server</text>')
     out.append("</g>")
 
+    # Stamp the binary that produced this frame. Without it a re-record against
+    # a new release is visually identical to the old one, so the README's claim
+    # that this is a recording of the released binary is unverifiable by the
+    # person reading it.
+    stamp = sax.escape(cast.get("recorded_from", "rekal"))
+    out.append(f'<text x="{width - 10}" y="{height - 7}" fill="{DIM}" font-size="9.5" '
+               f'text-anchor="end" opacity="0.75">recorded from {stamp}</text>')
+
     out.append("</svg>")
     return "\n".join(out)
 

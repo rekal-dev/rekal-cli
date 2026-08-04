@@ -4,9 +4,8 @@
 The situation, which is the one Rekal exists for:
 
   Dana works out webhook delivery semantics with her agent over a long
-  session. Three approaches are proposed and rejected along the way - a fixed
-  retry delay, unbounded attempts, a per-attempt idempotency key. The work
-  lands on main and she pushes.
+  session. A fixed retry delay is proposed and rejected along the way. The
+  work lands on main and she pushes.
 
   Weeks later Sam, on a different machine, was never in that conversation and
   asks his agent whether a fixed 5s delay would do. The agent loads the rekal
@@ -22,6 +21,11 @@ output they produced, and the answer text are all captured live.
 Capture and publication ride the `git commit` and `git push` a developer
 already runs, so the frame shows the workflow the README promises rather than
 teaching a manual `rekal push` step that nobody needs.
+
+The frame carries one claim and no more: a conversation becomes memory, and
+that memory reaches a teammate over plain git. The merged-only guarantee, the
+recall graph and the knowledge layer are all real and all documented, but a
+demo that argues three things argues none of them.
 
 The corpus in conversation.json is invented, because a demo needs a story a
 reader can follow. Nothing else is.
@@ -55,7 +59,6 @@ REPO_ROOT = HERE.parent.parent
 DANA, SAM = "dana@team.dev", "sam@team.dev"
 T0 = datetime(2026, 6, 23, 9, 40, tzinfo=timezone.utc)
 PRIOR_SESSION = "3f6b1c02-9d41-4e77-b8a2-5c1e0f7a4d33"
-SPIKE_SESSION = "b1d84e57-2a6f-4c19-9e05-77c3ab8f1120"
 
 PROMPT = (
     "We need retries on the webhook dispatcher. Can we just use a fixed 5s "
@@ -115,6 +118,13 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
 
     origin = workdir / "origin.git"
     dana, sam = workdir / "dana", workdir / "sam"
+    # A previous recording at this workdir maps to the same
+    # ~/.claude/projects/<sanitized> directory. A transcript left there gets
+    # picked up by `rekal init`, which put the demo's own prompt into the store
+    # and ranked it above the memory the demo exists to show. Clear both before
+    # anything runs, not just after.
+    for repo in (dana, sam):
+        shutil.rmtree(claude_session_dir(repo), ignore_errors=True)
     sh(["git", "init", "-q", "--bare", str(origin)])
 
     rows: list[dict] = []
@@ -165,27 +175,6 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
     # this on their next ordinary `git push`; the demo should not spend a row
     # on the timing.
     sh([rekal, "push"], cwd=dana, check=False)
-
-    # ---- The spike that must NOT travel ----------------------------------
-    git(dana, "checkout", "-q", "-b", "spike/redis-queue")
-    (dana_sessions / f"{SPIKE_SESSION}.jsonl").write_text(transcript(
-        SPIKE_SESSION, dana, "spike/redis-queue",
-        [("human", "Try swapping the delivery queue for Redis streams and see if tail latency improves.")]))
-    (dana / "queue.go").write_text("package main\n\n// redis streams spike\n")
-    git(dana, "add", "-A")
-    git(dana, "commit", "-qm", "spike: redis streams delivery queue")
-    spike = git(dana, "push", "-q", "-u", "origin", "spike/redis-queue", check=False)
-    add("note", "a second conversation, on an unmerged spike branch")
-    add("cmd", "git push -u origin spike/redis-queue")
-    for line in pick(spike, "export")[:1]:
-        add("out", line)
-    # ...but the spike is still there locally, at full fidelity.
-    found = sh([rekal, "find", "tail latency"], cwd=dana, check=False)
-    add("cmd", 'rekal find "tail latency"')
-    for line in pick(found, "mentions")[:1]:
-        add("out", line)
-    add("note", "unmerged work stays local. Nothing to opt out of.")
-    git(dana, "checkout", "-q", "main")
 
     # ---- Sam: different machine, never in that conversation ---------------
     sh(["git", "clone", "-q", str(origin), str(sam)])

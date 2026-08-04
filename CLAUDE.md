@@ -747,26 +747,32 @@ for the same place and move `.rekal/` off the store that already exists —
   command the authoring side types** — capture and publication ride the
   `git commit`/`git push` a developer already runs, so the frame shows the
   workflow the README promises instead of teaching a manual `rekal push` step
-  nobody needs. It then commits an **unmerged spike** whose ordinary
-  `git push` reports nothing to export, while `rekal find` on the same machine
-  still finds it — the merged-only guarantee, demonstrated rather than
-  asserted. Right pane (Sam): a second clone runs `rekal sync`, then
-  a real headless `claude -p` session loads the skill, recalls, drills
-  (`s1 t0-36`, so the conversation's length is visible) and answers that the
-  fixed delay was already rejected. Only the corpus is invented.
-  `cast.json` keeps the raw run — including calls the frame drops — and
-  **agent rows are expanded at render time** (`expand`), so a display-filter
-  mistake is fixed by `--from-cast` instead of re-running a nondeterministic
-  agent until it looks right. Dropped from the frame: `--help`/`--json` calls
-  (the agent orienting, not recalling) and shell errors from script paths the
-  agent guessed at (its noise, not rekal's output). `pick()` reads **both**
-  streams — rekal writes progress to stderr, and reading stdout alone silently
-  dropped the `sync` and `push` result lines. The SVG is hand-emitted (CSS-only,
-  `prefers-reduced-motion` honored) so regenerating needs no asciinema/vhs/
-  ffmpeg and stays diffable; it **plays once and holds** rather than looping,
-  since a loop makes a reader who missed a line wait a whole cycle. The demo
-  writes into the real `~/.claude/projects/<sanitized>/` because `claude` needs
-  its own config dir for auth, and removes those dirs afterwards.
+  nobody needs. Right pane (Sam): a second clone runs `rekal sync`, then a real
+  headless `claude -p` session loads the skill, recalls, drills and answers that
+  the fixed delay was already rejected. Only the corpus is invented.
+  The frame carries **one claim**: a conversation becomes memory, and that
+  memory reaches a teammate over plain git. The merged-only guarantee, the
+  recall graph and the knowledge layer are real and documented, but a demo that
+  argues three things argues none — an earlier cut showed the unmerged spike
+  being held back and it competed with the pitch rather than supporting it.
+  Both `~/.claude/projects/<sanitized>` dirs are cleared **before** anything
+  runs, not only after: a previous recording at the same workdir maps to the
+  same path, and a leftover transcript there was captured by `rekal init`, which
+  put the demo's own prompt into the store and ranked it *above* the memory the
+  demo exists to show. `cast.json` keeps the raw run — including calls the frame
+  drops — and **agent rows are expanded at render time** (`expand`), so a
+  display-filter mistake is fixed by `--from-cast` instead of re-running a
+  nondeterministic agent until it looks right. Dropped from the frame:
+  `--help`/`--json` calls (the agent orienting, not recalling) and shell errors
+  from script paths the agent guessed at (its noise, not rekal's output).
+  `pick()` reads **both** streams — rekal writes progress to stderr, and reading
+  stdout alone silently dropped the `sync` and `push` result lines. The SVG is
+  hand-emitted (CSS-only, `prefers-reduced-motion` honored) so regenerating
+  needs no asciinema/vhs/ffmpeg and stays diffable; it **plays once and holds**
+  rather than looping, since a loop makes a reader who missed a line wait a
+  whole cycle. The demo writes into the real `~/.claude/projects/<sanitized>/`
+  because `claude` needs its own config dir for auth, and removes those dirs
+  afterwards.
 
 ### Community files (repo root)
 

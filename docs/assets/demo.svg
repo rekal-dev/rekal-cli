@@ -1,99 +1,83 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1092" height="495" viewBox="0 0 1092 495" role="img" aria-label="Two terminals side by side. On the left Dana commits a 37-turn session about webhook delivery and pushes it. On the right Sam, who was never in that conversation, syncs and his agent answers that a fixed retry delay was already rejected." font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5">
 <style>
-.r{opacity:0;animation-duration:34.76s;animation-iteration-count:1;animation-timing-function:steps(1,end);animation-fill-mode:both}
+.r{opacity:0;animation-duration:27.02s;animation-iteration-count:1;animation-timing-function:steps(1,end);animation-fill-mode:both}
 @media (prefers-reduced-motion:reduce){.r{opacity:1;animation:none}[class*=ty]{animation:none!important;width:100%!important}}
-@keyframes a0{0%,1.438%{opacity:0}1.448%,100%{opacity:1}}
+@keyframes a0{0%,1.850%{opacity:0}1.860%,100%{opacity:1}}
 .r0{animation-name:a0}
-@keyframes a1{0%,5.754%{opacity:0}5.764%,100%{opacity:1}}
+@keyframes a1{0%,7.401%{opacity:0}7.411%,100%{opacity:1}}
 .r1{animation-name:a1}
-@keyframes a2{0%,9.350%{opacity:0}9.360%,100%{opacity:1}}
+@keyframes a2{0%,12.026%{opacity:0}12.036%,100%{opacity:1}}
 .r2{animation-name:a2}
-@keyframes a3{0%,10.501%{opacity:0}10.511%,100%{opacity:1}}
+@keyframes a3{0%,13.506%{opacity:0}13.516%,100%{opacity:1}}
 .r3{animation-name:a3}
-@keyframes a4{0%,14.816%{opacity:0}14.826%,100%{opacity:1}}
+@keyframes a4{0%,19.056%{opacity:0}19.066%,100%{opacity:1}}
 .r4{animation-name:a4}
-@keyframes a5{0%,19.131%{opacity:0}19.141%,100%{opacity:1}}
+@keyframes a5{0%,24.607%{opacity:0}24.617%,100%{opacity:1}}
 .r5{animation-name:a5}
-@keyframes a6{0%,27.661%{opacity:0}27.671%,100%{opacity:1}}
+@keyframes a6{0%,35.578%{opacity:0}35.588%,100%{opacity:1}}
 .r6{animation-name:a6}
-@keyframes a7{0%,28.812%{opacity:0}28.822%,100%{opacity:1}}
+@keyframes a7{0%,37.058%{opacity:0}37.068%,100%{opacity:1}}
 .r7{animation-name:a7}
-@keyframes a8{0%,32.207%{opacity:0}32.217%,100%{opacity:1}}
+@keyframes a8{0%,41.425%{opacity:0}41.435%,100%{opacity:1}}
 .r8{animation-name:a8}
-@keyframes a9{0%,33.357%{opacity:0}33.367%,100%{opacity:1}}
+@keyframes a9{0%,42.905%{opacity:0}42.915%,100%{opacity:1}}
 .r9{animation-name:a9}
-@keyframes a10{0%,37.673%{opacity:0}37.683%,100%{opacity:1}}
+@keyframes a10{0%,48.455%{opacity:0}48.465%,100%{opacity:1}}
 .r10{animation-name:a10}
-@keyframes a11{0%,43.887%{opacity:0}43.897%,100%{opacity:1}}
+@keyframes a11{0%,53.080%{opacity:0}53.090%,100%{opacity:1}}
 .r11{animation-name:a11}
-@keyframes a12{0%,45.037%{opacity:0}45.047%,100%{opacity:1}}
+@keyframes a12{0%,54.561%{opacity:0}54.571%,100%{opacity:1}}
 .r12{animation-name:a12}
-@keyframes a13{0%,50.144%{opacity:0}50.154%,100%{opacity:1}}
+@keyframes a13{0%,64.107%{opacity:0}64.117%,100%{opacity:1}}
 .r13{animation-name:a13}
-@keyframes a14{0%,51.295%{opacity:0}51.305%,100%{opacity:1}}
+@keyframes a14{0%,65.587%{opacity:0}65.597%,100%{opacity:1}}
 .r14{animation-name:a14}
-@keyframes a15{0%,55.610%{opacity:0}55.620%,100%{opacity:1}}
+@keyframes a15{0%,67.068%{opacity:0}67.078%,100%{opacity:1}}
 .r15{animation-name:a15}
-@keyframes a16{0%,59.925%{opacity:0}59.935%,100%{opacity:1}}
+@keyframes a16{0%,68.548%{opacity:0}68.558%,100%{opacity:1}}
 .r16{animation-name:a16}
-@keyframes a17{0%,63.521%{opacity:0}63.531%,100%{opacity:1}}
+@keyframes a17{0%,70.028%{opacity:0}70.038%,100%{opacity:1}}
 .r17{animation-name:a17}
-@keyframes a18{0%,64.672%{opacity:0}64.682%,100%{opacity:1}}
+@keyframes a18{0%,71.508%{opacity:0}71.518%,100%{opacity:1}}
 .r18{animation-name:a18}
-@keyframes a19{0%,72.094%{opacity:0}72.104%,100%{opacity:1}}
+@keyframes a19{0%,72.988%{opacity:0}72.998%,100%{opacity:1}}
 .r19{animation-name:a19}
-@keyframes a20{0%,73.245%{opacity:0}73.255%,100%{opacity:1}}
+@keyframes a20{0%,74.468%{opacity:0}74.478%,100%{opacity:1}}
 .r20{animation-name:a20}
-@keyframes a21{0%,74.396%{opacity:0}74.406%,100%{opacity:1}}
+@keyframes a21{0%,75.948%{opacity:0}75.958%,100%{opacity:1}}
 .r21{animation-name:a21}
-@keyframes a22{0%,75.547%{opacity:0}75.557%,100%{opacity:1}}
+@keyframes a22{0%,77.798%{opacity:0}77.808%,100%{opacity:1}}
 .r22{animation-name:a22}
-@keyframes a23{0%,76.697%{opacity:0}76.707%,100%{opacity:1}}
+@keyframes a23{0%,79.648%{opacity:0}79.658%,100%{opacity:1}}
 .r23{animation-name:a23}
-@keyframes a24{0%,77.848%{opacity:0}77.858%,100%{opacity:1}}
+@keyframes a24{0%,81.499%{opacity:0}81.509%,100%{opacity:1}}
 .r24{animation-name:a24}
-@keyframes a25{0%,78.999%{opacity:0}79.009%,100%{opacity:1}}
+@keyframes a25{0%,83.349%{opacity:0}83.359%,100%{opacity:1}}
 .r25{animation-name:a25}
-@keyframes a26{0%,80.150%{opacity:0}80.160%,100%{opacity:1}}
+@keyframes a26{0%,85.199%{opacity:0}85.209%,100%{opacity:1}}
 .r26{animation-name:a26}
-@keyframes a27{0%,81.300%{opacity:0}81.310%,100%{opacity:1}}
+@keyframes a27{0%,87.049%{opacity:0}87.059%,100%{opacity:1}}
 .r27{animation-name:a27}
-@keyframes a28{0%,82.739%{opacity:0}82.749%,100%{opacity:1}}
+@keyframes a28{0%,88.899%{opacity:0}88.909%,100%{opacity:1}}
 .r28{animation-name:a28}
-@keyframes a29{0%,84.177%{opacity:0}84.187%,100%{opacity:1}}
+@keyframes a29{0%,90.749%{opacity:0}90.759%,100%{opacity:1}}
 .r29{animation-name:a29}
-@keyframes a30{0%,85.616%{opacity:0}85.626%,100%{opacity:1}}
+@keyframes a30{0%,92.599%{opacity:0}92.609%,100%{opacity:1}}
 .r30{animation-name:a30}
-@keyframes a31{0%,87.054%{opacity:0}87.064%,100%{opacity:1}}
+@keyframes a31{0%,94.450%{opacity:0}94.460%,100%{opacity:1}}
 .r31{animation-name:a31}
-@keyframes a32{0%,88.493%{opacity:0}88.503%,100%{opacity:1}}
-.r32{animation-name:a32}
-@keyframes a33{0%,89.931%{opacity:0}89.941%,100%{opacity:1}}
-.r33{animation-name:a33}
-@keyframes a34{0%,91.369%{opacity:0}91.379%,100%{opacity:1}}
-.r34{animation-name:a34}
-@keyframes a35{0%,92.808%{opacity:0}92.818%,100%{opacity:1}}
-.r35{animation-name:a35}
-@keyframes a36{0%,94.246%{opacity:0}94.256%,100%{opacity:1}}
-.r36{animation-name:a36}
-@keyframes a37{0%,95.685%{opacity:0}95.695%,100%{opacity:1}}
-.r37{animation-name:a37}
-@keyframes t1{0%,5.754%{width:0}6.761%,100%{width:70.0px}}
-.ty1{animation:t1 34.76s 1 linear both}
-@keyframes t5{0%,19.131%{width:0}25.072%,100%{width:413.0px}}
-.ty5{animation:t5 34.76s 1 linear both}
-@keyframes t7{0%,28.812%{width:0}29.617%,100%{width:56.0px}}
-.ty7{animation:t7 34.76s 1 linear both}
-@keyframes t10{0%,37.673%{width:0}41.297%,100%{width:252.0px}}
-.ty10{animation:t10 34.76s 1 linear both}
-@keyframes t12{0%,45.037%{width:0}47.555%,100%{width:175.0px}}
-.ty12{animation:t12 34.76s 1 linear both}
-@keyframes t16{0%,59.925%{width:0}60.932%,100%{width:70.0px}}
-.ty16{animation:t16 34.76s 1 linear both}
-@keyframes t18{0%,64.672%{width:0}69.505%,100%{width:336.0px}}
-.ty18{animation:t18 34.76s 1 linear both}
-@keyframes wire{0%,54.603%{opacity:0}54.613%,100%{opacity:1}}
-.wire{opacity:0;animation:wire 34.76s 1 steps(1,end) both}
+@keyframes t1{0%,7.401%{width:0}8.696%,100%{width:70.0px}}
+.ty1{animation:t1 27.02s 1 linear both}
+@keyframes t5{0%,24.607%{width:0}32.248%,100%{width:413.0px}}
+.ty5{animation:t5 27.02s 1 linear both}
+@keyframes t7{0%,37.058%{width:0}38.094%,100%{width:56.0px}}
+.ty7{animation:t7 27.02s 1 linear both}
+@keyframes t10{0%,48.455%{width:0}49.750%,100%{width:70.0px}}
+.ty10{animation:t10 27.02s 1 linear both}
+@keyframes t12{0%,54.561%{width:0}60.777%,100%{width:336.0px}}
+.ty12{animation:t12 27.02s 1 linear both}
+@keyframes wire{0%,41.610%{opacity:0}41.620%,100%{opacity:1}}
+.wire{opacity:0;animation:wire 27.02s 1 steps(1,end) both}
 </style>
 <rect width="1092" height="495" fill="#0d0f16"/>
 <rect x="0" width="494" height="495" rx="9" fill="#12141c"/>
@@ -123,57 +107,43 @@
 <text x="28" y="181.5" fill="#ffffff" clip-path="url(#c7)" xml:space="preserve">git push</text>
 </g>
 <text class="r r8" x="16" y="200.0" fill="#c9d1d9" xml:space="preserve">rekal: pushed to origin/rekal/dana@team.dev</text>
-<text class="r r9" x="16" y="218.5" fill="#6e7681" font-style="italic" xml:space="preserve"># a second conversation, on an unmerged spike branch</text>
-<g class="r r10">
-<text x="16" y="237.0" fill="#f0a35e">$</text>
-<clipPath id="c10"><rect class="ty10" x="28" y="225.0" height="18.5" width="0"/></clipPath>
-<text x="28" y="237.0" fill="#ffffff" clip-path="url(#c10)" xml:space="preserve">git push -u origin spike/redis-queue</text>
-</g>
-<text class="r r11" x="16" y="255.5" fill="#c9d1d9" xml:space="preserve">rekal: no new checkpoints to export</text>
-<g class="r r12">
-<text x="16" y="274.0" fill="#f0a35e">$</text>
-<clipPath id="c12"><rect class="ty12" x="28" y="262.0" height="18.5" width="0"/></clipPath>
-<text x="28" y="274.0" fill="#ffffff" clip-path="url(#c12)" xml:space="preserve">rekal find "tail latency"</text>
-</g>
-<text class="r r13" x="16" y="292.5" fill="#c9d1d9" xml:space="preserve">total 1 mentions in 1 sessions — "tail latency"</text>
-<text class="r r14" x="16" y="311.0" fill="#6e7681" font-style="italic" xml:space="preserve"># unmerged work stays local. Nothing to opt out of.</text>
 <rect x="598" width="494" height="495" rx="9" fill="#12141c"/>
 <rect x="598" width="494" height="32" rx="9" fill="#1b1e29"/>
 <rect x="598" y="23" width="494" height="9" fill="#1b1e29"/>
 <circle cx="615" cy="16" r="4.5" fill="#7ab7ff"/>
 <text x="628" y="20" fill="#7ab7ff" font-size="11.5" font-weight="600">sam@team.dev</text>
 <text x="1080" y="20" fill="#6e7681" font-size="11" text-anchor="end">never saw it</text>
-<text class="r r15" x="614" y="52.0" fill="#6e7681" font-style="italic" xml:space="preserve"># today, another machine. Never in that conversation.</text>
-<g class="r r16">
+<text class="r r9" x="614" y="52.0" fill="#6e7681" font-style="italic" xml:space="preserve"># today, another machine. Never in that conversation.</text>
+<g class="r r10">
 <text x="614" y="70.5" fill="#7ab7ff">$</text>
-<clipPath id="c16"><rect class="ty16" x="626" y="58.5" height="18.5" width="0"/></clipPath>
-<text x="626" y="70.5" fill="#ffffff" clip-path="url(#c16)" xml:space="preserve">rekal sync</text>
+<clipPath id="c10"><rect class="ty10" x="626" y="58.5" height="18.5" width="0"/></clipPath>
+<text x="626" y="70.5" fill="#ffffff" clip-path="url(#c10)" xml:space="preserve">rekal sync</text>
 </g>
-<text class="r r17" x="614" y="89.0" fill="#c9d1d9" xml:space="preserve">rekal: synced — 0 local sessions, 1 remote sessions from 1 team m…</text>
-<g class="r r18">
+<text class="r r11" x="614" y="89.0" fill="#c9d1d9" xml:space="preserve">rekal: synced — 0 local sessions, 1 remote sessions from 1 team m…</text>
+<g class="r r12">
 <text x="614" y="107.5" fill="#7ab7ff">$</text>
-<clipPath id="c18"><rect class="ty18" x="626" y="95.5" height="18.5" width="0"/></clipPath>
-<text x="626" y="107.5" fill="#ffffff" clip-path="url(#c18)" xml:space="preserve">claude "can we just use a fixed 5s retry delay?"</text>
+<clipPath id="c12"><rect class="ty12" x="626" y="95.5" height="18.5" width="0"/></clipPath>
+<text x="626" y="107.5" fill="#ffffff" clip-path="url(#c12)" xml:space="preserve">claude "can we just use a fixed 5s retry delay?"</text>
 </g>
-<text class="r r19" x="614" y="126.0" fill="#c8a2f0" xml:space="preserve">● Skill(rekal)</text>
-<text class="r r20" x="614" y="144.5" fill="#c8a2f0" xml:space="preserve">● Bash(rekal "webhook dispatcher retry delay backoff")</text>
-<text class="r r21" x="628" y="163.0" fill="#7ab7ff" xml:space="preserve">INJECT top=0.74 gap=0.74 1 seeds</text>
-<text class="r r22" x="628" y="181.5" fill="#6e7681" xml:space="preserve">  s1 conf=0.74 t0 "We're losing webhook deliveries when the…</text>
-<text class="r r23" x="614" y="200.0" fill="#c8a2f0" xml:space="preserve">● Bash(rekal query --session s1 --offset 0 --limit 10)</text>
-<text class="r r24" x="628" y="218.5" fill="#6e7681" xml:space="preserve">s1 t0-9  (h=human a=assistant hs=steering sum=summary)</text>
-<text class="r r25" x="628" y="237.0" fill="#6e7681" xml:space="preserve">t0 h: We're losing webhook deliveries when the merchant end…</text>
-<text class="r r26" x="628" y="255.5" fill="#6e7681" xml:space="preserve">t1 a: dispatcher.go:88, Dispatch() does an http.Post and lo…</text>
-<text class="r r27" x="614" y="274.0" fill="#59d499" font-weight="600" xml:space="preserve">No — this was already decided against, and there's a concrete</text>
-<text class="r r28" x="614" y="292.5" fill="#c9d1d9" xml:space="preserve">  reason on record.</text>
-<text class="r r29" x="614" y="311.0" fill="#c9d1d9" xml:space="preserve">Per session s1 (commit 3dab30ab feat(dispatch): retry webhooks</text>
-<text class="r r30" x="614" y="329.5" fill="#c9d1d9" xml:space="preserve">  with backoff, jitter and idempotency keys), a fixed 5s delay</text>
-<text class="r r31" x="614" y="348.0" fill="#c9d1d9" xml:space="preserve">  was the initial proposal and got rejected mid-session:</text>
-<text class="r r32" x="614" y="366.5" fill="#c9d1d9" xml:space="preserve">&gt; "a fixed 5s delay stampedes the downstream on recovery...</text>
-<text class="r r33" x="614" y="385.0" fill="#c9d1d9" xml:space="preserve">  every event that failed during a 20-minute outage is aligned</text>
-<text class="r r34" x="614" y="403.5" fill="#c9d1d9" xml:space="preserve">  to the same tick, so the moment the endpoint comes back you</text>
-<text class="r r35" x="614" y="422.0" fill="#c9d1d9" xml:space="preserve">  deliver the entire backlog in one synchronized burst and</text>
-<text class="r r36" x="614" y="440.5" fill="#c9d1d9" xml:space="preserve">  knock it straight back over."</text>
-<text class="r r37" x="614" y="459.0" fill="#c9d1d9" xml:space="preserve">…</text>
+<text class="r r13" x="614" y="126.0" fill="#c8a2f0" xml:space="preserve">● Skill(rekal)</text>
+<text class="r r14" x="614" y="144.5" fill="#c8a2f0" xml:space="preserve">● Bash(rekal "webhook dispatcher retries backoff delay")</text>
+<text class="r r15" x="628" y="163.0" fill="#7ab7ff" xml:space="preserve">INJECT top=0.73 gap=0.73 1 seeds</text>
+<text class="r r16" x="628" y="181.5" fill="#6e7681" xml:space="preserve">  s1 conf=0.73 t0 "We're losing webhook deliveries when the…</text>
+<text class="r r17" x="614" y="200.0" fill="#c8a2f0" xml:space="preserve">● Bash(rekal query --session s1 --offset 0 --limit 10)</text>
+<text class="r r18" x="628" y="218.5" fill="#6e7681" xml:space="preserve">s1 t0-9  (h=human a=assistant hs=steering sum=summary)</text>
+<text class="r r19" x="628" y="237.0" fill="#6e7681" xml:space="preserve">t0 h: We're losing webhook deliveries when the merchant end…</text>
+<text class="r r20" x="628" y="255.5" fill="#6e7681" xml:space="preserve">t1 a: dispatcher.go:88, Dispatch() does an http.Post and lo…</text>
+<text class="r r21" x="614" y="274.0" fill="#59d499" font-weight="600" xml:space="preserve">No — that was tried and explicitly rejected. Session s1, turn</text>
+<text class="r r22" x="614" y="292.5" fill="#c9d1d9" xml:space="preserve">  5-7 (commit e2b5773e):</text>
+<text class="r r23" x="614" y="311.0" fill="#c9d1d9" xml:space="preserve">- t5: assistant initially proposed a constant 5s delay, 3</text>
+<text class="r r24" x="614" y="329.5" fill="#c9d1d9" xml:space="preserve">  attempts.</text>
+<text class="r r25" x="614" y="348.0" fill="#c9d1d9" xml:space="preserve">- t6 (human, steering): rejected it — a fixed delay</text>
+<text class="r r26" x="614" y="366.5" fill="#c9d1d9" xml:space="preserve">  synchronizes retries that started at different times onto</text>
+<text class="r r27" x="614" y="385.0" fill="#c9d1d9" xml:space="preserve">  the same tick. After a prolonged outage, the whole backlog</text>
+<text class="r r28" x="614" y="403.5" fill="#c9d1d9" xml:space="preserve">  is retrying in lockstep, so recovery triggers a synchronized</text>
+<text class="r r29" x="614" y="422.0" fill="#c9d1d9" xml:space="preserve">  burst that can knock the endpoint back over ("we'd be the</text>
+<text class="r r30" x="614" y="440.5" fill="#c9d1d9" xml:space="preserve">  reason their recovery fails").</text>
+<text class="r r31" x="614" y="459.0" fill="#c9d1d9" xml:space="preserve">…</text>
 <g class="wire">
 <path d="M 504 247.5 H 582" stroke="#59d499" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>
 <path d="M 578 243.5 l 6 4 l -6 4 z" fill="#59d499"/>

@@ -5,8 +5,7 @@ What a version number promises, and what it does not.
 Rekal follows [semantic versioning](https://semver.org/spec/v2.0.0.html). The
 question semver leaves open is *what* the version covers, because a CLI has
 several surfaces and they do not deserve the same guarantee. This page answers
-that. It takes effect at 1.0.0; the `1.0.0-rc.x` candidates exist so the answer
-can be corrected before it binds.
+that. It takes effect as of 1.0.0, which is released — so it binds.
 
 ## Covered by the version
 
@@ -97,8 +96,8 @@ These change in any release, including patches.
 A deprecated flag or command keeps working, hidden from `--help`, for at least
 one major version, and its removal is a `!`-marked entry in
 [CHANGELOG.md](../CHANGELOG.md). Nothing is removed in a minor or patch release
-except a genuine defect — as when `push --force` was removed in the 1.0
-candidate, because a flag that discards published frames contradicted the
+except a genuine defect — as when `push --force` was removed before 1.0,
+because a flag that discards published frames contradicted the
 append-only guarantee the wire format is supposed to *be*.
 
 ## Pre-1.0

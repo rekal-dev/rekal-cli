@@ -6,20 +6,18 @@ scope defined in [docs/compatibility.md](docs/compatibility.md).
 
 Per-release notes for every `0.1.x` and `0.2.x` build are on the
 [Releases page](https://github.com/rekal-dev/rekal-cli/releases). This file
-starts at the 1.0 release candidate; it records what changes between the
-candidate and 1.0, and everything after.
+starts at 1.0.0 and records everything after it.
 
 ## [Unreleased]
 
-## [1.0.0-rc.1]
+## [1.0.0] - 2026-08-04
 
-First release candidate for 1.0. The store format, wire format, command surface
-and exit codes are what 1.0 intends to ship. See
-[docs/compatibility.md](docs/compatibility.md) for what stability will and will
-not cover, and report anything that looks like it should be covered and isn't —
-that is the point of a candidate.
+First stable release. The store format, wire format, command surface and exit
+codes are now covered by the version number: see
+[docs/compatibility.md](docs/compatibility.md) for exactly what that means, and
+for the surfaces deliberately left uncovered.
 
-### Capabilities at the candidate
+### Capabilities at 1.0
 
 - **Capture.** Sessions from Claude Code, Cursor, Codex, Gemini, OpenCode,
   Copilot and Kiro, snapshotted by a `post-commit` hook into an append-only
@@ -72,5 +70,5 @@ that is the point of a candidate.
 - README corrected against the shipped binary: `rekal clean` residue, the seed
   digest format, platform support, and the download and on-disk size.
 
-[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v1.0.0-rc.1...HEAD
-[1.0.0-rc.1]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.0-rc.1
+[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.0

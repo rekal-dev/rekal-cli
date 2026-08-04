@@ -43,12 +43,11 @@ Every AI session settles decisions: why this approach, what got tried and thrown
 **Requirements:** git, and macOS on Apple Silicon or Linux (x86-64 / arm64).
 Nothing else — no runtime, no Python, no API key, no service to run.
 
-> **Status: 1.0 release candidate.** The store format, wire format, command
-> surface and exit codes are what 1.0 intends to ship, and
-> [docs/compatibility.md](docs/compatibility.md) states exactly what the
-> version number will and will not cover. It says ranking and `index.db` are
-> deliberately *not* frozen. If something you depend on isn't covered, say so
-> now — that is what a candidate is for.
+> **Status: 1.0.** The store format, wire format, command surface and exit
+> codes are stable, and [docs/compatibility.md](docs/compatibility.md) states
+> exactly what the version number covers — including what it deliberately does
+> *not* freeze, such as ranking and `index.db`. Breaking any covered surface
+> now requires a major version.
 
 The binary is **~170 MB** to download and **~200 MB** on disk. That is the
 tradeoff for a single file: the inference engine, the embedding model, the
@@ -100,7 +99,7 @@ bash rekal-install.sh
 `rekal_linux_arm64.tar.gz`. Each release ships `checksums.txt`; verify with
 `shasum -a 256 -c checksums.txt`, then extract `rekal` onto your `PATH`.
 
-**Pin a version** with `REKAL_VERSION=v0.2.64` in front of either command.
+**Pin a version** with `REKAL_VERSION=v1.0.0` in front of either command.
 
 **Build from source** if you want to change it. `go install` alone will not
 work, because the deep-embedding layer is CGO bound to a pinned llama.cpp

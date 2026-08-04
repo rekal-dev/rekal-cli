@@ -4,6 +4,10 @@
 commit, stores them in your repo, and lets any agent recall the reasoning behind
 a past decision — including the approaches that were tried and rejected.**
 
+**Once that work merges, it travels to your teammates over the same `git push`
+and `git fetch` you already run — so their agents start from your reasoning, not
+from nothing. No server, no account, no memory service in the middle.**
+
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
@@ -19,13 +23,14 @@ a past decision — including the approaches that were tried and rejected.**
 > **Memory that lives in git — shared by your team, personally adaptive as you recall.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
 
 ![Two terminals: Dana commits a 37-turn session about webhook delivery and pushes it; Sam, on another machine, syncs and his agent answers that a fixed retry delay was already rejected](docs/assets/demo.svg)
+
 Every AI session settles decisions: why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. There is no memory SaaS and no external memory service. Embedding is local, and the whole store is a `.rekal/` directory in your repo. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision, in ~7.5K context tokens and a few seconds, from git.
 
 - **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
 - **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.
-- **Team memory in git** — merged work travels with the repo over plain push/fetch. No server.
+- **Team memory in git** — and *only* merged work: an unmerged spike never leaves your machine.
 - **Personalised & adaptive** — as *you* recall, the memories you keep returning to get a usage hint and a small ranking boost. On your machine only, never synced.
-- **Scrubbed before it's stored** — transcripts pass through secret redaction (pattern + entropy) and home-path anonymization before they reach the database, let alone the wire. And only *merged* work is ever shared, so an unmerged spike never leaves your machine.
+- **Scrubbed before it's stored** — transcripts pass through secret redaction (pattern + entropy) and home-path anonymization before they reach the database, let alone the wire.
 
 ## Why not just…?
 

@@ -5,8 +5,7 @@ What a version number promises, and what it does not.
 Rekal follows [semantic versioning](https://semver.org/spec/v2.0.0.html). The
 question semver leaves open is *what* the version covers, because a CLI has
 several surfaces and they do not deserve the same guarantee. This page answers
-that. It takes effect at 1.0.0; the `1.0.0-rc.x` candidates exist so the answer
-can be corrected before it binds.
+that. It takes effect at 1.0.0.
 
 ## Covered by the version
 

@@ -10,6 +10,19 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-04
+
+### Fixed
+
+- `rekal push --rebuild` refuses when the remote branch holds checkpoints this
+  machine's `data.db` does not — it no longer silently deletes another
+  machine's already-shared frames.
+- The merged-only export gate judges ancestry against local `main` when it is
+  ahead of a stale `origin/main`, so a checkpoint ships on the same `git push`
+  that merges it rather than waiting for the next one.
+- Fish installs create `~/.config/fish/` before appending the PATH export, so
+  a machine that never configured fish still gets a working profile line.
+
 ## [1.0.1] - 2026-08-04
 
 ### Fixed
@@ -24,9 +37,7 @@ starts at 1.0; it records what 1.0 ships and everything after.
 - `rekal sync --help` documents that a plain sync also checkpoints and pushes
   the caller's own local work before fetching.
 
-[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.1
-[1.0.0]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.0
+## [1.0.0] - 2026-08-04
 
 First stable 1.0 release. The store format, wire format, command surface and
 exit codes are covered by the version number under
@@ -89,3 +100,8 @@ deliberately unfrozen.
   digest format, platform support, and the download and on-disk size.
 - Compatibility contract published in
   [docs/compatibility.md](docs/compatibility.md).
+
+[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.2
+[1.0.1]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.1
+[1.0.0]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.0

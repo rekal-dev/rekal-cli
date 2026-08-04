@@ -72,52 +72,52 @@
     },
     {
       "kind": "ans",
-      "text": "No \u2014 that was tried and explicitly rejected. Session s1, turn",
+      "text": "No \u2014 check what happened last time this came up. Session s1",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  5-7 (commit e2b5773e):",
+      "text": "  (commit 2510ea64) already went through this exact question:",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "- t5: assistant initially proposed a constant 5s delay, 3",
+      "text": "The trail:",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  attempts.",
+      "text": "- t5: assistant proposed a fixed 5s delay, 3 attempts, then",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "- t6 (human, steering): rejected it \u2014 a fixed delay",
+      "text": "  give up.",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  synchronizes retries that started at different times onto",
+      "text": "- t6 (steering, rejected): \"a fixed 5s delay stampedes the",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  the same tick. After a prolonged outage, the whole backlog",
+      "text": "  downstream on recovery... after a 20 minute merchant outage,",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  is retrying in lockstep, so recovery triggers a synchronized",
+      "text": "  every event that failed is aligned to the same tick. The",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  burst that can knock the endpoint back over (\"we'd be the",
+      "text": "  moment the endpoint comes back we deliver the entire backlog",
       "pane": "sam"
     },
     {
       "kind": "ans2",
-      "text": "  reason their recovery fails\").",
+      "text": "  in one synchronized burst and knock it straight back over.\"",
       "pane": "sam"
     },
     {
@@ -132,7 +132,7 @@
       "tool": "Skill",
       "input": {
         "skill": "rekal",
-        "args": "webhook dispatcher retries backoff delay"
+        "args": "webhook dispatcher retry delay backoff"
       },
       "result": [
         "Launching skill: rekal"
@@ -141,24 +141,13 @@
     {
       "tool": "Bash",
       "input": {
-        "command": "bash .claude/skills/rekal/scripts/rekal.sh \"webhook dispatcher retries backoff delay\" 2>&1 || ./rekal \"webhook dispatcher retries backoff delay\" 2>&1 || which rekal",
-        "description": "Run rekal recall query"
+        "command": "./rekal \"webhook dispatcher retry delay backoff\" 2>&1 || .rekal/rekal \"webhook dispatcher retry delay backoff\" 2>&1 || rekal \"webhook dispatcher retry delay backoff\" 2>&1"
       },
       "result": [
-        "bash: .claude/skills/rekal/scripts/rekal.sh: No such file or directory",
         "/bin/bash: line 1: ./rekal: No such file or directory",
-        "/root/.local/bin/rekal"
-      ]
-    },
-    {
-      "tool": "Bash",
-      "input": {
-        "command": "rekal \"webhook dispatcher retries backoff delay\" 2>&1",
-        "description": "Run rekal recall query"
-      },
-      "result": [
-        "INJECT top=0.73 gap=0.73 1 seeds",
-        "  s1 conf=0.73 t0 \"We're losing webhook deliveries when the merchant endpoint is down. Right now dispatch fires once\u2026\""
+        "/bin/bash: line 1: .rekal/rekal: No such file or directory",
+        "INJECT top=0.74 gap=0.74 1 seeds",
+        "  s1 conf=0.74 t0 \"We're losing webhook deliveries when the merchant endpoint is down. Right now dispatch fires once\u2026\""
       ]
     },
     {
@@ -492,11 +481,10 @@
     {
       "tool": "Bash",
       "input": {
-        "command": "rekal query --session s1 --offset 0 --limit 10 2>&1",
-        "description": "Drill top seed session for webhook retry context"
+        "command": "rekal query --session s1 --offset 0 --limit 8 2>&1 || rekal query --session s1 --offset -2 --limit 8 2>&1"
       },
       "result": [
-        "s1 t0-9  (h=human a=assistant hs=steering sum=summary)",
+        "s1 t0-7  (h=human a=assistant hs=steering sum=summary)",
         "t0 h: We're losing webhook deliveries when the merchant endpoint is down. Right now dispatch fires once and drops it on any non-2xx. I want real delivery semantics. Where's the send path?",
         "t1 a: dispatcher.go:88, Dispatch() does an http.Post and logs on failure. There's no persistence of the attempt, so a failure is unrecoverable - the event is gone once the goroutine exits. Before I change anything: what's the delivery contract you want to advertise to merchants?",
         "t2 h: At least once. Merchants can dedupe. Exactly-once across the network is a fantasy and I don't want to pretend.",
@@ -505,16 +493,37 @@
         "t5 a: Then the retry schedule. Simplest is a constant wait: retry every 5 seconds, three attempts, then give up. About twenty lines and easy to reason about.",
         "t6 hs: no, a fixed 5s delay stampedes the downstream on recovery. Think about what happens after a 20 minute merchant outage: every event that failed during those 20 minutes has been sitting there retrying on the same 5 second cadence, so they're all aligned to the same tick. The moment the endpoint comes back we deliver the entire backlog in one synchronized burst and knock it straight back over. We'd be the reason their recovery fails. Use exponential backoff with jitter.",
         "t7 a: You're right, and the alignment is worse than I said: a constant delay actively synchronizes retries that started at different times, because they all converge on the same period. Switching to exponential backoff with full jitter - delay = random(0, min(cap, base * 2^attempt)), base 500ms, cap 60s. Full jitter rather than equal jitter because it spreads the herd across the entire window instead of the back half of it.",
-        "t8 h: What does that do to worst-case delivery latency for a single event?",
-        "t9 a: With base 500ms and cap 60s the expected delays are roughly 0.25s, 0.5s, 1s, 2s, 4s ... halved on average by full jitter. Reaching the 60s cap takes about 8 attempts, so an event that eventually succeeds late is typically delivered within a few minutes. The tradeoff is that full jitter can retry sooner than the nominal backoff, which is fine for us and better for them.",
         "commits:",
-        "  e2b5773e feat(dispatch): retry webhooks with backoff, jitter and idempotency keys",
+        "  2510ea64 feat(dispatch): retry webhooks with backoff, jitter and idempotency keys",
         "(has_more \u2014 raise --limit / --offset)"
+      ]
+    },
+    {
+      "tool": "Grep",
+      "input": {
+        "pattern": "jitter|backoff|next_attempt_at|base \\* 2",
+        "path": "/tmp/rekal-demo/sam",
+        "output_mode": "content",
+        "-n": true,
+        "-i": true
+      },
+      "result": [
+        "No matches found"
+      ]
+    },
+    {
+      "tool": "Bash",
+      "input": {
+        "command": "git log --oneline -5 -- '*dispatch*' 2>&1; echo ---; find . -iname '*dispatch*' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>&1"
+      },
+      "result": [
+        "fatal: your current branch 'master' does not have any commits yet",
+        "---"
       ]
     }
   ],
-  "answer": "No \u2014 that was tried and explicitly rejected. Session `s1`, turn 5-7 (commit `e2b5773e`):\n\n- t5: assistant initially proposed a constant 5s delay, 3 attempts.\n- **t6 (human, steering):** rejected it \u2014 a fixed delay synchronizes retries that started at different times onto the same tick. After a prolonged outage, the whole backlog is retrying in lockstep, so recovery triggers a synchronized burst that can knock the endpoint back over (\"we'd be the reason their recovery fails\").\n- t7: switched to **exponential backoff with full jitter**: `delay = random(0, min(cap, base * 2^attempt))`, base 500ms, cap 60s. Full jitter (not equal jitter) was chosen specifically to spread the retry herd across the whole window rather than just the back half.\n- t9: worst case \u2014 reaches the 60s cap around attempt 8, so an event that eventually succeeds is typically delivered within a few minutes.\n\nSo: don't use a fixed 5s delay \u2014 use jittered exponential backoff instead, matching what's already implemented in `dispatcher.go` per commit `e2b5773e`.",
+  "answer": "No \u2014 check what happened last time this came up. Session `s1` (commit `2510ea64`) already went through this exact question:\n\n**The trail:**\n- t5: assistant proposed a fixed 5s delay, 3 attempts, then give up.\n- t6 (steering, rejected): *\"a fixed 5s delay stampedes the downstream on recovery... after a 20 minute merchant outage, every event that failed is aligned to the same tick. The moment the endpoint comes back we deliver the entire backlog in one synchronized burst and knock it straight back over.\"*\n- t7: fix \u2014 **exponential backoff with full jitter**: `delay = random(0, min(cap, base * 2^attempt))`, base 500ms, cap 60s. Full jitter (not equal jitter) was chosen specifically because it spreads retries across the whole window instead of just the back half.\n\nSo the answer is no, and it's not a style preference \u2014 a fixed delay synchronizes every event that failed during an outage onto the same retry cadence, so they all hit the endpoint in one burst the instant it recovers, which can knock a just-recovered merchant back over.\n\nRecommended: implement `delay = random(0, min(60s, 500ms * 2^attempt))` per attempt, paired with durable attempt state (a `deliveries` table with attempt count + `next_attempt_at`, polled by a worker) rather than an in-memory retry, so a crash mid-backoff doesn't lose the event.\n\nNote: this repo currently has no commits and no dispatcher code yet, so I can't point you at an existing file \u2014 this decision comes from the ledger (session `s1`, commit `2510ea64` in whatever repo that session was against), not from code present here. Let me know if you want me to scaffold the dispatcher with this retry logic.",
   "turns": 37,
   "exit": 0,
-  "recorded_from": "rekal 0.2.64"
+  "recorded_from": "rekal 1.0.0"
 }

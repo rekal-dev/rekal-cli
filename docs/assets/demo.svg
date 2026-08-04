@@ -126,23 +126,23 @@
 <text x="626" y="107.5" fill="#ffffff" clip-path="url(#c12)" xml:space="preserve">claude "can we just use a fixed 5s retry delay?"</text>
 </g>
 <text class="r r13" x="614" y="126.0" fill="#c8a2f0" xml:space="preserve">● Skill(rekal)</text>
-<text class="r r14" x="614" y="144.5" fill="#c8a2f0" xml:space="preserve">● Bash(rekal "webhook dispatcher retries backoff delay")</text>
-<text class="r r15" x="628" y="163.0" fill="#7ab7ff" xml:space="preserve">INJECT top=0.73 gap=0.73 1 seeds</text>
-<text class="r r16" x="628" y="181.5" fill="#6e7681" xml:space="preserve">  s1 conf=0.73 t0 "We're losing webhook deliveries when the…</text>
-<text class="r r17" x="614" y="200.0" fill="#c8a2f0" xml:space="preserve">● Bash(rekal query --session s1 --offset 0 --limit 10)</text>
-<text class="r r18" x="628" y="218.5" fill="#6e7681" xml:space="preserve">s1 t0-9  (h=human a=assistant hs=steering sum=summary)</text>
+<text class="r r14" x="614" y="144.5" fill="#c8a2f0" xml:space="preserve">● Bash(rekal "webhook dispatcher retry delay backoff")</text>
+<text class="r r15" x="628" y="163.0" fill="#7ab7ff" xml:space="preserve">INJECT top=0.74 gap=0.74 1 seeds</text>
+<text class="r r16" x="628" y="181.5" fill="#6e7681" xml:space="preserve">  s1 conf=0.74 t0 "We're losing webhook deliveries when the…</text>
+<text class="r r17" x="614" y="200.0" fill="#c8a2f0" xml:space="preserve">● Bash(rekal query --session s1 --offset 0 --limit 8)</text>
+<text class="r r18" x="628" y="218.5" fill="#6e7681" xml:space="preserve">s1 t0-7  (h=human a=assistant hs=steering sum=summary)</text>
 <text class="r r19" x="628" y="237.0" fill="#6e7681" xml:space="preserve">t0 h: We're losing webhook deliveries when the merchant end…</text>
 <text class="r r20" x="628" y="255.5" fill="#6e7681" xml:space="preserve">t1 a: dispatcher.go:88, Dispatch() does an http.Post and lo…</text>
-<text class="r r21" x="614" y="274.0" fill="#59d499" font-weight="600" xml:space="preserve">No — that was tried and explicitly rejected. Session s1, turn</text>
-<text class="r r22" x="614" y="292.5" fill="#c9d1d9" xml:space="preserve">  5-7 (commit e2b5773e):</text>
-<text class="r r23" x="614" y="311.0" fill="#c9d1d9" xml:space="preserve">- t5: assistant initially proposed a constant 5s delay, 3</text>
-<text class="r r24" x="614" y="329.5" fill="#c9d1d9" xml:space="preserve">  attempts.</text>
-<text class="r r25" x="614" y="348.0" fill="#c9d1d9" xml:space="preserve">- t6 (human, steering): rejected it — a fixed delay</text>
-<text class="r r26" x="614" y="366.5" fill="#c9d1d9" xml:space="preserve">  synchronizes retries that started at different times onto</text>
-<text class="r r27" x="614" y="385.0" fill="#c9d1d9" xml:space="preserve">  the same tick. After a prolonged outage, the whole backlog</text>
-<text class="r r28" x="614" y="403.5" fill="#c9d1d9" xml:space="preserve">  is retrying in lockstep, so recovery triggers a synchronized</text>
-<text class="r r29" x="614" y="422.0" fill="#c9d1d9" xml:space="preserve">  burst that can knock the endpoint back over ("we'd be the</text>
-<text class="r r30" x="614" y="440.5" fill="#c9d1d9" xml:space="preserve">  reason their recovery fails").</text>
+<text class="r r21" x="614" y="274.0" fill="#59d499" font-weight="600" xml:space="preserve">No — check what happened last time this came up. Session s1</text>
+<text class="r r22" x="614" y="292.5" fill="#c9d1d9" xml:space="preserve">  (commit 2510ea64) already went through this exact question:</text>
+<text class="r r23" x="614" y="311.0" fill="#c9d1d9" xml:space="preserve">The trail:</text>
+<text class="r r24" x="614" y="329.5" fill="#c9d1d9" xml:space="preserve">- t5: assistant proposed a fixed 5s delay, 3 attempts, then</text>
+<text class="r r25" x="614" y="348.0" fill="#c9d1d9" xml:space="preserve">  give up.</text>
+<text class="r r26" x="614" y="366.5" fill="#c9d1d9" xml:space="preserve">- t6 (steering, rejected): "a fixed 5s delay stampedes the</text>
+<text class="r r27" x="614" y="385.0" fill="#c9d1d9" xml:space="preserve">  downstream on recovery... after a 20 minute merchant outage,</text>
+<text class="r r28" x="614" y="403.5" fill="#c9d1d9" xml:space="preserve">  every event that failed is aligned to the same tick. The</text>
+<text class="r r29" x="614" y="422.0" fill="#c9d1d9" xml:space="preserve">  moment the endpoint comes back we deliver the entire backlog</text>
+<text class="r r30" x="614" y="440.5" fill="#c9d1d9" xml:space="preserve">  in one synchronized burst and knock it straight back over."</text>
 <text class="r r31" x="614" y="459.0" fill="#c9d1d9" xml:space="preserve">…</text>
 <g class="wire">
 <path d="M 504 247.5 H 582" stroke="#59d499" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>

@@ -737,24 +737,32 @@ for the same place and move `.rekal/` off the store that already exists —
 
 ### Demo (`scripts/demo/`)
 
-- `record.py`: generates the README's demo. Not a staged screencast — it plants
-  one earlier session in Claude Code's JSONL format, runs the real `rekal init`
-  (so the real skill is installed), commits so the real post-commit hook
-  captures it, then runs a real headless `claude -p` session and records what
-  that agent did: load the skill, recall, drill, answer. The point is that the
-  demo shows the *product* (init once, then the agent routes its own memory),
-  not a human typing `rekal` commands. Tool calls, `rekal` stdout and answer
-  text are captured from the live run into `cast.json` (committed, so the SVG
-  is reviewable in a diff and re-renderable via `--from-cast`); the frame in
-  `docs/assets/demo.svg` abridges it — Skill load plus ≤2 distinct `rekal`
-  invocations, `--json` variants and repeat queries dropped, output clipped
-  rather than wrapped. A live agent is not deterministic, so a re-record is a
-  different run; that is a property of a recording, and the fix for an untidy
-  run is not to re-roll until it looks good. SVG is hand-emitted (CSS-only
-  animation, `prefers-reduced-motion` honored) so regenerating needs no
-  asciinema/vhs/ffmpeg and the output stays diffable. The demo writes into the
-  real `~/.claude/projects/<sanitized>/` because `claude` needs its own config
-  dir for auth, and removes that dir afterwards.
+- `record.py` + `conversation.json`: generate the README's demo. Not a staged
+  screencast — **two panes, two machines, git drawn between them**, because the
+  team hop is the part that needs no server and it was invisible in a
+  single-terminal frame. Left pane (Dana): the 37-turn `conversation.json`
+  session is planted in Claude Code's JSONL format, the real `rekal init` runs
+  (so the real skill is installed), a commit fires the real post-commit hook,
+  and `git push` publishes to a real bare remote. It then commits an **unmerged
+  spike** and shows `rekal push` reporting nothing to export while `rekal find`
+  on the same machine still finds it — the merged-only guarantee, demonstrated
+  rather than asserted. Right pane (Sam): a second clone runs `rekal sync`, then
+  a real headless `claude -p` session loads the skill, recalls, drills
+  (`s1 t0-36`, so the conversation's length is visible) and answers that the
+  fixed delay was already rejected. Only the corpus is invented.
+  `cast.json` keeps the raw run — including calls the frame drops — and
+  **agent rows are expanded at render time** (`expand`), so a display-filter
+  mistake is fixed by `--from-cast` instead of re-running a nondeterministic
+  agent until it looks right. Dropped from the frame: `--help`/`--json` calls
+  (the agent orienting, not recalling) and shell errors from script paths the
+  agent guessed at (its noise, not rekal's output). `pick()` reads **both**
+  streams — rekal writes progress to stderr, and reading stdout alone silently
+  dropped the `sync` and `push` result lines. The SVG is hand-emitted (CSS-only,
+  `prefers-reduced-motion` honored) so regenerating needs no asciinema/vhs/
+  ffmpeg and stays diffable; it **plays once and holds** rather than looping,
+  since a loop makes a reader who missed a line wait a whole cycle. The demo
+  writes into the real `~/.claude/projects/<sanitized>/` because `claude` needs
+  its own config dir for auth, and removes those dirs afterwards.
 
 ### Community files (repo root)
 

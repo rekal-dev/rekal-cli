@@ -110,8 +110,10 @@ prerequisites (mise, git-lfs, cmake, the pinned llama.cpp tag).
 </details>
 
 `rekal init` sets up `.rekal/` (the store), a `post-commit`/`pre-push` git hook,
-the agent skill under `.claude/skills/rekal/`, an orphan branch
-`rekal/<your-email>` for transport, and one marker-tagged line in `CLAUDE.md`
+the agent skill under `.claude/skills/rekal/`, an **orphan branch**
+`rekal/<your-email>` for transport (a branch with no common ancestor with your
+code, so it never touches your history, merges, or working tree), and one
+marker-tagged line in `CLAUDE.md`
 pointing your agent at the skill — plus the equivalent line in the rules file of
 any other agent it detects (`AGENTS.md` for Codex/Cursor/OpenCode, `GEMINI.md`,
 `.github/copilot-instructions.md`, or `.kiro/steering/rekal.md` for Kiro). Your

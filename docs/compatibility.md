@@ -96,8 +96,8 @@ These change in any release, including patches.
 A deprecated flag or command keeps working, hidden from `--help`, for at least
 one major version, and its removal is a `!`-marked entry in
 [CHANGELOG.md](../CHANGELOG.md). Nothing is removed in a minor or patch release
-except a genuine defect — as when `push --force` was removed in the 1.0
-candidate, because a flag that discards published frames contradicted the
+except a genuine defect — as when `push --force` was removed before 1.0,
+because a flag that discards published frames contradicted the
 append-only guarantee the wire format is supposed to *be*.
 
 ## Pre-1.0

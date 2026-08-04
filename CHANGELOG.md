@@ -10,7 +10,7 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
-## [1.0.0]
+## [1.0.0] - 2026-08-04
 
 First stable 1.0 release. The store format, wire format, command surface and
 exit codes are covered by the version number under

@@ -93,6 +93,43 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 	return encodeCheckpointFrames(dataDB, codec.NewBody(), codec.NewDict(), checkpoints)
 }
 
+// preferLocalIfAhead upgrades a remote-tracking default ref (origin/main) to
+// the local branch of the same name (main) when the local branch is at least
+// as advanced — the exact situation `rekal push` runs in from the pre-push
+// hook: the hook fires before the push actually transfers anything, so
+// origin/main is still whatever it was as of the last fetch, one full cycle
+// behind a merge that just landed locally. Judging ancestry against that
+// stale ref means a checkpoint from a branch merged and pushed in the very
+// same `git push` gets held back until the *next*, unrelated push — which
+// contradicts "ships automatically once the branch merges." Only upgrades
+// when origin/<name> is an ancestor of (or equal to) local <name> — a
+// divergence *this checkout already knows about* (it fetched, and local and
+// origin/<name> are now on different lines) falls back to the original,
+// remote-tracking ref instead of judging against local-only state.
+//
+// This is a local-only, no-network check, so it cannot see a divergence
+// this checkout hasn't fetched yet — a stale origin/<name> that the actual
+// remote has since moved past looks identical to a safe fast-forward. That
+// gap is bounded by git itself: the code push this hook precedes would be
+// rejected as non-fast-forward in that case, so the work never lands under
+// the sha the checkpoint is anchored to. Cheap and correct for the common
+// case (an up-to-date checkout merging and pushing its own work); the
+// residual risk is a checkout that is both stale and has advanced on its
+// own, which is exactly the state a `git fetch` before pushing avoids.
+func preferLocalIfAhead(gitRoot, defaultRef string) string {
+	local := strings.TrimPrefix(defaultRef, "origin/")
+	if local == defaultRef || local == "" {
+		return defaultRef // already a local ref, nothing to upgrade
+	}
+	if gitx.BranchTip(gitRoot, local) == "" {
+		return defaultRef // no local branch of that name
+	}
+	if gitx.IsAncestor(gitRoot, defaultRef, local) {
+		return local
+	}
+	return defaultRef
+}
+
 // filterMerged returns only the checkpoints whose code has merged into the
 // mainline, or nil when the mainline can't be resolved. Shared by the
 // incremental (ExportNewFrames) and full re-export (ExportAllFrames) paths so
@@ -113,6 +150,7 @@ func filterMerged(dataDB *sql.DB, gitRoot string, checkpoints []db.CheckpointRow
 		// nothing (fail closed).
 		return nil
 	}
+	defaultRef = preferLocalIfAhead(gitRoot, defaultRef)
 
 	// Memoize the gate against the mainline tip. A checkpoint held back because
 	// its branch was abandoned is re-litigated on every push otherwise, and the

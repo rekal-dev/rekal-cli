@@ -381,7 +381,26 @@ for the same place and move `.rekal/` off the store that already exists —
   to the real predicates and the cache must never widen what leaves the machine: checkpoints reach
   the wire only when their `git_sha` is an ancestor of the default branch or
   their branch landed as a patch-equivalent squash commit — unmerged work
-  stays local (see `docs/design/merged-only-sharing.md`). An **already-exported**
+  stays local (see `docs/design/merged-only-sharing.md`). `gitx.DefaultBranch`
+  prefers the **remote-tracking** ref (`origin/main`) over the local branch,
+  which is right for an ordinary manual `rekal push` but wrong for the pre-push
+  hook specifically: the hook fires before `git push` transfers anything, so
+  `origin/main` is still whatever it was as of the last fetch — one full push
+  behind a merge that just landed on local `main`. Judging ancestry against
+  that stale ref held a checkpoint back until the *next*, unrelated push
+  instead of the push that actually merged and published it (black-box tested:
+  reproduced with a real bare-remote + two-clone setup, confirmed by
+  instrumenting the real `filterMerged` call rather than reasoning about it —
+  the two-machine test alone read as correct because by the time recall ran
+  against it, a second push had already happened). `preferLocalIfAhead`
+  upgrades `defaultRef` to the local branch when `origin/<name>` (as this
+  checkout currently knows it) is an ancestor of local `<name>` — exactly the
+  state right before a push that will make it true remotely. Local-only, no
+  network call, so it can't see a divergence this checkout hasn't fetched yet;
+  that gap is bounded by git itself refusing the code push as non-fast-forward
+  when it exists, and is distinct from a divergence already visible locally
+  (fetched, then diverged independently), which the ancestor check correctly
+  declines to upgrade. An **already-exported**
   checkpoint is shareable unconditionally: it passed the gate once, and a commit
   rebased/squashed away after capture leaves an orphaned `git_sha` that can never
   re-prove (empty cumulative diff → the squash probe fails closed), so

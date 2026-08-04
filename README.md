@@ -103,7 +103,7 @@ bash rekal-install.sh
 `rekal_linux_arm64.tar.gz`. Each release ships `checksums.txt`; verify with
 `shasum -a 256 -c checksums.txt`, then extract `rekal` onto your `PATH`.
 
-**Pin a version** with `REKAL_VERSION=v1.0.0` in front of either command.
+**Pin a version** with `REKAL_VERSION=v1.0.1` in front of either command.
 
 **Build from source** if you want to change it. `go install` alone will not
 work, because the deep-embedding layer is CGO bound to a pinned llama.cpp

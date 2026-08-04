@@ -83,6 +83,18 @@ get_version() {
     echo "$version"
 }
 
+# /dev/tty always exists as a device node, so `[[ -c /dev/tty ]]` says
+# nothing about whether this process actually has a controlling terminal to
+# open it on — a headless run (CI, a container, curl | bash with no tty
+# attached at all) has the node but opening it fails with ENXIO. Probe it for
+# real so that case falls through to the silent auto-append instead of
+# crashing on a failed `read`.
+tty_available() {
+    { exec 3</dev/tty; } 2>/dev/null || return 1
+    exec 3<&-
+    return 0
+}
+
 verify_checksum() {
     local file="$1" expected="$2" actual
     if command -v sha256sum &>/dev/null; then
@@ -100,19 +112,6 @@ main() {
     banner
 
     command -v curl &>/dev/null || error "curl is required. Install curl and try again."
-
-    # Require Claude Code — check binary on PATH or config directory.
-    if ! command -v claude &>/dev/null && [[ ! -d "${HOME}/.claude" ]]; then
-        echo ""
-        echo -e "  ${RED}✗${NC} Rekal requires Claude Code, which was not detected on this system."
-        echo "    For the beta release, only Claude Code is supported."
-        echo "    Other coding agents will be supported in a future release."
-        echo ""
-        echo -e "    Install Claude Code: ${BOLD}https://docs.anthropic.com/en/docs/claude-code${NC}"
-        echo -e "    Rekal docs:          ${BOLD}https://github.com/rekal-dev/rekal-cli${NC}"
-        echo ""
-        exit 1
-    fi
 
     # Parse arguments.
     local target_dir="" version_arg=""
@@ -203,7 +202,7 @@ main() {
 
         local export_line="export PATH=\"${install_dir}:\$PATH\""
 
-        if [[ -c /dev/tty && -n "$shell_profile" ]]; then
+        if [[ -n "$shell_profile" ]] && tty_available; then
             echo ""
             printf '  %b rekal is not on your PATH. Add it to %b%s%b? [Y/n] ' \
                 "${DIM}▸${NC}" "${BOLD}" "$shell_profile" "${NC}"

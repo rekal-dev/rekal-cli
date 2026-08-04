@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rekal",
   "displayName": "Rekal Memory",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Memory for your coding agent. Rekal saves every AI session transcript raw and append-only — no summaries to rot — then recalls the reasoning behind any change: why an approach was chosen, what was tried, what was rejected. Agent agnostic: Claude Code, Cursor, Codex, Gemini, Copilot, Kiro and OpenCode sessions all land in one ledger. Retrieval reasons at query time over the real record, with keyword and semantic search running locally — embedding is local, so there is no server, no account, no external memory service. Git is the transport: memory travels with your repo on push and reaches your team when work merges. Persistent cross-session context that maintains itself.",
   "author": {
     "name": "Rekal",

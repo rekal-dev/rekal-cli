@@ -18,16 +18,7 @@ a past decision — including the approaches that were tried and rejected.**
 
 > **Memory that lives in git — shared by your team, personally adaptive as you recall.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
 
-![A Claude Code session recalling that a fixed webhook retry delay was already proposed and rejected](docs/assets/demo.svg)
-
-<sub>You run `rekal init` and commit. After that it's your agent, not you: it
-loads the skill, recalls, drills, and answers with the decision *and* the reason
-the alternative lost. This is a recording of one real headless Claude Code run
-against the released binary, made by
-[`scripts/demo/record.py`](scripts/demo/record.py) — tool calls, `rekal` output
-and answer text all captured live, abridged to fit one frame. The unabridged
-run is in [`scripts/demo/cast.json`](scripts/demo/cast.json); re-record it
-against any build to see what that build does.</sub>
+![Two terminals: Dana commits a 37-turn session about webhook delivery and pushes it; Sam, on another machine, syncs and his agent answers that a fixed retry delay was already rejected](docs/assets/demo.svg)
 
 Every AI session settles decisions: why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. There is no memory SaaS and no external memory service. Embedding is local, and the whole store is a `.rekal/` directory in your repo. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision, in ~7.5K context tokens and a few seconds, from git.
 

@@ -1,26 +1,32 @@
 #!/usr/bin/env python3
-"""Record the README demo: a real agent recalling a real decision.
+"""Record the README demo: a real situation, end to end.
 
-The demo is the product loop, not a typed-command tour. It:
+The situation, which is the one Rekal exists for:
 
-  1. builds a throwaway git repo and plants one earlier agent session in
-     Claude Code's transcript format - a webhook retry policy where a fixed
-     delay was proposed and rejected;
-  2. runs the real `rekal init`, so the real skill is installed;
-  3. commits, so the real post-commit hook captures that session;
-  4. runs a real headless Claude Code session asking whether a fixed delay is
-     a good idea, and records what the agent actually does.
+  Dana works out webhook delivery semantics with her agent over a long
+  session. Three approaches are proposed and rejected along the way - a fixed
+  retry delay, unbounded attempts, a per-attempt idempotency key. The work
+  lands on main and she pushes.
 
-Nothing below a `$` in the output is written by hand. The agent's tool calls,
-the rekal output they produced, and the answer text are all captured from the
-live run. Only the corpus is invented, because a demo needs a story a reader
-can follow in fifteen seconds.
+  Weeks later Sam, on a different machine, was never in that conversation and
+  asks his agent whether a fixed 5s delay would do. The agent loads the rekal
+  skill, recalls, drills into Dana's session, and answers with the decision
+  *and* why the alternative lost - without re-proposing it.
+
+Everything the demo shows is executed for real: `rekal init`, the post-commit
+hook, `rekal push` against a real remote, `rekal sync` on the second machine,
+and a real headless Claude Code session. The agent's tool calls, the rekal
+output they produced, and the answer text are all captured live.
+
+The corpus in conversation.json is invented, because a demo needs a story a
+reader can follow. Nothing else is.
 
     python3 scripts/demo/record.py --rekal ./rekal
 
-Writes scripts/demo/cast.json (captured run, reviewable in a diff) and
-docs/assets/demo.svg. A live agent is not deterministic: re-recording yields a
-different run, which is the point - it is a recording, not a mock.
+Writes scripts/demo/cast.json (the captured run, reviewable in a diff) and
+docs/assets/demo.svg. A live agent is not deterministic, so re-recording gives
+a different run - that is a property of a recording, not a defect. The fix for
+an untidy run is not to re-roll until it looks good.
 """
 
 from __future__ import annotations
@@ -41,43 +47,38 @@ from datetime import datetime, timedelta, timezone
 HERE = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 
-T0 = datetime(2026, 7, 14, 10, 12, tzinfo=timezone.utc)
+DANA, SAM = "dana@team.dev", "sam@team.dev"
+T0 = datetime(2026, 6, 23, 9, 40, tzinfo=timezone.utc)
 PRIOR_SESSION = "3f6b1c02-9d41-4e77-b8a2-5c1e0f7a4d33"
+SPIKE_SESSION = "b1d84e57-2a6f-4c19-9e05-77c3ab8f1120"
 
 PROMPT = (
-    "We're adding retries to the webhook dispatcher. Should we just use a "
-    "fixed 5s delay? Check project memory before answering."
+    "We need retries on the webhook dispatcher. Can we just use a fixed 5s "
+    "delay between attempts? Check project memory before you answer."
 )
 
-# The decision the earlier session settled, including the option that lost.
-PRIOR_TURNS = [
-    ("human", "Webhook dispatch needs retries. Simplest version is a constant wait between attempts, three tries and give up. Want me to wire that up?"),
-    ("assistant", "I can add the constant-wait version to dispatcher.go, roughly twenty lines. Before I do: is the receiving endpoint shared across tenants?"),
-    ("steer", "no, a fixed 5s delay stampedes the downstream on recovery. Every hook that failed during an outage retries at the same instant and we DDoS ourselves the moment the endpoint comes back. Use exponential backoff with jitter."),
-    ("assistant", "Switching to exponential backoff with full jitter: base 500ms, factor 2, cap 60s, each delay randomized in [0, computed]. Full jitter spreads a retry storm across the window instead of synchronizing it into a spike."),
-    ("steer", "also cap the attempts. Five, then dead-letter, anything past five never lands and just burns queue throughput."),
-    ("assistant", "Done. Five attempts, then the event is published to the dead-letter topic with the last response status attached for triage."),
-]
 
-
-def sh(cmd, cwd=None, check=True, env=None, timeout=600):
+def sh(cmd, cwd=None, check=True, env=None, timeout=900):
     merged = dict(os.environ)
     merged.update(env or {})
-    proc = subprocess.run(
-        cmd, cwd=cwd, env=merged, shell=isinstance(cmd, str),
-        capture_output=True, text=True, timeout=timeout,
-    )
+    proc = subprocess.run(cmd, cwd=cwd, env=merged, shell=isinstance(cmd, str),
+                          capture_output=True, text=True, timeout=timeout)
     if check and proc.returncode != 0:
         sys.exit(f"command failed: {cmd}\n{proc.stdout}\n{proc.stderr}")
     return proc
 
 
-def transcript(session_id: str, repo: pathlib.Path) -> str:
-    """Claude Code JSONL. A 'steer' turn is a queue-operation, which the
-    parser classifies as human_steering: a human correcting the agent."""
+def claude_session_dir(repo: pathlib.Path) -> pathlib.Path:
+    """Where Claude Code keeps transcripts, and where rekal reads them from.
+    Mirrors session.FindSessionDir / SanitizeRepoPath."""
+    config = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or (pathlib.Path.home() / ".claude"))
+    return config / "projects" / re.sub(r"[^a-zA-Z0-9]", "-", str(repo))
+
+
+def transcript(session_id: str, repo: pathlib.Path, branch: str, turns) -> str:
     rows = []
-    for index, (kind, text) in enumerate(PRIOR_TURNS):
-        stamp = (T0 + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
+    for index, (kind, text) in enumerate(turns):
+        stamp = (T0 + timedelta(minutes=index * 3)).isoformat().replace("+00:00", "Z")
         if kind == "steer":
             rows.append({"type": "queue-operation", "operation": "enqueue",
                          "sessionId": session_id, "timestamp": stamp, "content": text})
@@ -86,59 +87,112 @@ def transcript(session_id: str, repo: pathlib.Path) -> str:
         rows.append({
             "type": role, "sessionId": session_id, "timestamp": stamp,
             "uuid": str(uuid.uuid5(uuid.NAMESPACE_OID, f"{session_id}:{index}")),
-            "cwd": str(repo), "gitBranch": "main", "isSidechain": False,
+            "cwd": str(repo), "gitBranch": branch, "isSidechain": False,
             "userType": "external", "version": "2.1.197",
             "message": {"role": role, "content": text},
         })
     return "\n".join(json.dumps(r) for r in rows) + "\n"
 
 
-def claude_session_dir(repo: pathlib.Path) -> pathlib.Path:
-    """Where Claude Code keeps transcripts for a repo, and where rekal reads
-    them from. Mirrors session.FindSessionDir / SanitizeRepoPath."""
-    config = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or (pathlib.Path.home() / ".claude"))
-    return config / "projects" / re.sub(r"[^a-zA-Z0-9]", "-", str(repo))
+def git(repo, *args, **kw):
+    return sh(["git", *args], cwd=repo, **kw)
+
+
+def pick(proc, needle: str) -> list[str]:
+    """Lines matching needle from either stream. rekal writes progress to
+    stderr, so reading stdout alone silently drops half its output."""
+    return [l.strip() for l in (proc.stdout + "\n" + proc.stderr).splitlines() if needle in l]
 
 
 def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
-    repo = workdir / "payments-api"
-    repo.mkdir(parents=True)
+    convo = json.loads((HERE / "conversation.json").read_text())
+    turns = convo["turns"]
 
-    sh("git init -q -b main", cwd=repo)
-    sh("git config user.email dev@team.dev", cwd=repo)
-    sh("git config user.name 'Dana Ellis'", cwd=repo)
-    sh("git config commit.gpgsign false", cwd=repo)
+    origin = workdir / "origin.git"
+    dana, sam = workdir / "dana", workdir / "sam"
+    sh(["git", "init", "-q", "--bare", str(origin)])
 
-    session_dir = claude_session_dir(repo)
-    session_dir.mkdir(parents=True, exist_ok=True)
+    rows: list[dict] = []
 
-    (repo / "README.md").write_text("# payments-api\n\nOutbound webhook delivery.\n")
-    sh("git add -A", cwd=repo)
-    sh("git commit -qm 'initial commit'", cwd=repo)
+    def add(kind: str, text: str, pane: str = "dana") -> None:
+        rows.append({"kind": kind, "text": text, "pane": pane})
 
-    steps: list[dict] = []
+    # ---- Dana: a long session, captured at commit, published on push -------
+    sh(["git", "clone", "-q", str(origin), str(dana)])
+    git(dana, "config", "user.email", DANA)
+    git(dana, "config", "user.name", "Dana Ellis")
+    git(dana, "config", "commit.gpgsign", "false")
+    (dana / "README.md").write_text("# payments-api\n\nOutbound webhook delivery.\n")
+    git(dana, "add", "-A")
+    git(dana, "commit", "-qm", "initial commit")
+    git(dana, "branch", "-M", "main")
+    git(dana, "push", "-q", "-u", "origin", "main")
+    sh([rekal, "init"], cwd=dana)
 
-    init = sh([rekal, "init"], cwd=repo)
-    steps.append({"kind": "shell", "command": "rekal init",
-                  "output": [line for line in init.stdout.strip().splitlines()
-                             if line.strip().endswith("initialized.")] or ["Rekal initialized."]})
+    dana_sessions = claude_session_dir(dana)
+    dana_sessions.mkdir(parents=True, exist_ok=True)
+    (dana_sessions / f"{PRIOR_SESSION}.jsonl").write_text(
+        transcript(PRIOR_SESSION, dana, "main", turns))
 
-    # Plant the earlier session, then commit: the post-commit hook captures it.
-    (session_dir / f"{PRIOR_SESSION}.jsonl").write_text(transcript(PRIOR_SESSION, repo))
-    (repo / "dispatcher.go").write_text(
-        "package main\n\n// retryPolicy: exponential backoff, full jitter.\n"
-        "// base 500ms, factor 2, cap 60s, 5 attempts, then dead-letter.\n"
-    )
-    sh("git add -A", cwd=repo)
-    commit = sh(["git", "commit", "-m", "feat(dispatch): retry webhooks with exponential backoff"], cwd=repo)
-    steps.append({"kind": "shell",
-                  "command": "git commit -m 'feat(dispatch): retry webhooks with exponential backoff'",
-                  "output": commit.stdout.strip().splitlines()[:1],
-                  "note": "post-commit hook captures the session"})
+    (dana / "dispatcher.go").write_text(
+        "package main\n\n// Delivery: exponential backoff, full jitter, base 500ms, cap 60s.\n"
+        "// Five attempts, then dead-letter. Idempotency key is stable per event.\n")
+    (dana / "delivery.go").write_text("package main\n\n// deliveries table + worker\n")
+    git(dana, "add", "-A")
+    commit = git(dana, "commit", "-m", convo["commit_subject"])
 
-    # The real thing: a fresh agent, no memory of that conversation.
+    add("note", f"three weeks ago: one {len(turns)}-turn session on webhook delivery")
+    add("cmd", "git commit -m 'feat(dispatch): retry webhooks with backoff'")
+    captured = [l for l in (commit.stdout + commit.stderr).splitlines() if "captured" in l]
+    add("out", captured[0].strip() if captured else "rekal: 1 session(s) captured")
+
+    push = git(dana, "push", "origin", "main")
+    add("cmd", "git push")
+    for line in pick(push, "pushed to")[:1]:
+        add("out", line)
+    # The gate is evaluated against the remote tip, so the freshly-landed
+    # commit publishes on the next push. Run it so the branch is real.
+    sh([rekal, "push"], cwd=dana, check=False)
+
+    # ---- The spike that must NOT travel ----------------------------------
+    git(dana, "checkout", "-q", "-b", "spike/redis-queue")
+    (dana_sessions / f"{SPIKE_SESSION}.jsonl").write_text(transcript(
+        SPIKE_SESSION, dana, "spike/redis-queue",
+        [("human", "Try swapping the delivery queue for Redis streams and see if tail latency improves.")]))
+    (dana / "queue.go").write_text("package main\n\n// redis streams spike\n")
+    git(dana, "add", "-A")
+    git(dana, "commit", "-qm", "spike: redis streams delivery queue")
+    spike = sh([rekal, "push"], cwd=dana, check=False)
+    add("note", "on an unmerged spike branch")
+    add("cmd", "rekal push")
+    for line in pick(spike, "export")[:1]:
+        add("out", line)
+    # ...but the spike is still there locally, at full fidelity.
+    found = sh([rekal, "find", "tail latency"], cwd=dana, check=False)
+    add("cmd", 'rekal find "tail latency"')
+    for line in pick(found, "mentions")[:1]:
+        add("out", line)
+    add("note", "unmerged work stays local. Nothing to opt out of.")
+    git(dana, "checkout", "-q", "main")
+
+    # ---- Sam: different machine, never in that conversation ---------------
+    sh(["git", "clone", "-q", str(origin), str(sam)])
+    git(sam, "config", "user.email", SAM)
+    git(sam, "config", "user.name", "Sam Okafor")
+    git(sam, "config", "commit.gpgsign", "false")
+    sh([rekal, "init"], cwd=sam)
+    sync = sh([rekal, "sync"], cwd=sam, check=False)
+    add("note", "today, another machine. Never in that conversation.", "sam")
+    add("cmd", "rekal sync", "sam")
+    for line in pick(sync, "synced")[:1]:
+        add("out", line, "sam")
+
+    # Warm the embedding daemon so the recording shows steady state rather
+    # than the first-run "SEMANTIC warming" notice.
+    sh([rekal, "webhook delivery retries"], cwd=sam, check=False, timeout=600)
+
     run = sh([claude, "-p", PROMPT, "--output-format", "stream-json", "--verbose",
-              "--allowedTools", "Bash,Skill,Read,Glob,Grep"], cwd=repo, check=False, timeout=900)
+              "--allowedTools", "Bash,Skill,Read,Glob,Grep"], cwd=sam, check=False)
 
     agent: list[dict] = []
     pending: dict[str, dict] = {}
@@ -148,7 +202,8 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if event.get("type") == "assistant":
+        kind = event.get("type")
+        if kind == "assistant":
             for block in event["message"].get("content", []):
                 if block["type"] == "tool_use":
                     entry = {"tool": block["name"], "input": block["input"], "result": []}
@@ -156,8 +211,8 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
                     agent.append(entry)
                 elif block["type"] == "text" and block["text"].strip():
                     answer = block["text"].strip()
-        elif event.get("type") == "user":
-            for block in event["message"].get("content", []) if isinstance(event.get("message"), dict) else []:
+        elif kind == "user" and isinstance(event.get("message"), dict):
+            for block in event["message"].get("content", []):
                 if isinstance(block, dict) and block.get("type") == "tool_result":
                     target = pending.get(block.get("tool_use_id"))
                     if target is None:
@@ -166,183 +221,241 @@ def record(rekal: str, claude: str, workdir: pathlib.Path) -> dict:
                     if isinstance(content, list):
                         content = "".join(c.get("text", "") for c in content if isinstance(c, dict))
                     target["result"] = str(content or "").strip().splitlines()
-        elif event.get("type") == "result" and event.get("result"):
+        elif kind == "result" and event.get("result"):
             answer = str(event["result"]).strip()
 
-    shutil.rmtree(session_dir, ignore_errors=True)
-    return {"steps": steps, "prompt": PROMPT, "agent": agent, "answer": answer,
-            "exit": run.returncode}
+    add("cmd", 'claude "can we just use a fixed 5s retry delay?"', "sam")
+    add("agent", "", "sam")
+    for index, para in enumerate(answer_lines(answer)):
+        add("ans" if index == 0 else "ans2", para, "sam")
+
+    for repo in (dana, sam):
+        shutil.rmtree(claude_session_dir(repo), ignore_errors=True)
+
+    return {"rows": rows, "prompt": PROMPT, "agent": agent, "answer": answer,
+            "turns": len(turns), "exit": run.returncode}
 
 
-# ---------------------------------------------------------------------------
-# SVG rendering — a terminal frame, animated with CSS only.
-# ---------------------------------------------------------------------------
-
-CHAR_W, LINE_H, PAD_X, PAD_Y = 7.6, 20, 20, 50
-TYPE_RATE, LINE_DELAY, PAUSE, END_PAUSE = 0.035, 0.09, 1.1, 4.5
-
-BG, CHROME, FG, DIM = "#12141c", "#1b1e29", "#c9d1d9", "#767e8a"
-PROMPT_C, CMD_C, ACCENT, TOOL, GOOD = "#59d499", "#ffffff", "#7ab7ff", "#c8a2f0", "#59d499"
+COLS = 66
 
 
-def clip(text: str, width: int) -> str:
+def clip(text: str, width: int = COLS) -> str:
     text = text.rstrip()
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
-def wrap(text: str, width: int, indent: str = "") -> list[str]:
-    text = text.rstrip()
-    if len(text) <= width:
-        return [text]
-    return textwrap.wrap(text, width=width, subsequent_indent=indent) or [text]
-
-
-def build_rows(cast: dict, cols: int) -> list[tuple[str, str]]:
-    rows: list[tuple[str, str]] = []
-    for step in cast["steps"]:
-        rows.append(("cmd", step["command"] + (f"   # {step['note']}" if step.get("note") else "")))
-        for line in step["output"]:
-            rows.append(("out", line))
-        rows.append(("gap", ""))
-
-    rows.append(("cmd", f'claude "{cast["prompt"].split(" Check project")[0]}"'))
-    rows.append(("gap", ""))
-
-    # One frame cannot hold a whole agent run. Show the Skill load and the
-    # distinct rekal invocations, first output lines only; cast.json keeps the
-    # unabridged record, including any call skipped here.
-    seen: set[str] = set()
-    shown = 0
-    for call in cast["agent"]:
+def agent_rows(agent: list[dict]) -> list[dict]:
+    """Skill load plus the distinct rekal calls. One frame cannot hold a whole
+    agent run; cast.json keeps everything, including calls dropped here."""
+    out, seen, shown = [], set(), 0
+    for call in agent:
         if call["tool"] == "Skill":
-            rows.append(("tool", f"Skill({call['input'].get('skill', '')})"))
+            out.append({"kind": "tool", "text": f"Skill({call['input'].get('skill', '')})"})
             continue
         if call["tool"] != "Bash" or shown >= 2:
             continue
         raw = (call["input"].get("command") or "").splitlines()
-        command = raw[0] if raw else ""
-        if not command.startswith("rekal"):
+        # An agent may wrap the call in shell (a guessed script path with a
+        # `|| rekal ...` fallback, a redirect, a pipe). Take the first segment
+        # that is actually a rekal invocation rather than requiring the whole
+        # command to be one.
+        segments = re.split(r"\s*(?:\|\||\||&&|;|2>)\s*", raw[0] if raw else "")
+        command = next((s.strip() for s in segments if s.strip().startswith("rekal ")), "")
+        if not command or any(f in command for f in ("--json", "--help", "-h ")):
             continue
-        # --json is the same answer in raw form; the digest already showed it.
-        if "--json" in command:
-            continue
-        # Cut the shell the agent wrapped around it, then take the first
-        # pipeline stage: `rekal X --explain || rekal X` and `rekal X` are one
-        # call as far as the story goes.
-        command = re.split(r"\s*(?:\|\||\||&&|2>)", command)[0].strip()
-        key = re.sub(r"\s*--\S+", "", command).strip()
+        key = re.sub(r"\s*--\S+|\s*-\w\b", "", command).strip()
         if key in seen:
             continue
         seen.add(key)
         shown += 1
-        rows.append(("tool", f"Bash({clip(command, cols - 12)})"))
-        for line in [l for l in call["result"] if l.strip()][:3]:
-            rows.append(("res", clip(line, cols - 6)))
+        out.append({"kind": "tool", "text": clip(f"Bash({command})", COLS - 4)})
+        useful = [l for l in call["result"]
+                  if l.strip() and not l.startswith(("/bin/bash", "bash:", "sh:"))]
+        for line in useful[:3]:
+            out.append({"kind": "res", "text": clip(line, COLS - 6)})
+    return out
 
-    rows.append(("gap", ""))
-    # The answer, down to the lines that carry the verdict and the policy.
-    body = [p.strip() for p in cast["answer"].split("\n") if p.strip()]
-    emitted = 0
-    for index, para in enumerate(body):
-        if emitted >= 7:
-            rows.append(("res", "…"))
+
+def answer_lines(answer: str, limit: int = 7) -> list[str]:
+    body, emitted = [], 0
+    for para in [p.strip() for p in answer.split("\n") if p.strip()]:
+        if emitted >= limit:
+            body.append("…")
             break
-        for piece in wrap(re.sub(r"[*`]", "", para), cols - 4, "  "):
-            rows.append(("ans" if index == 0 else "ans2", piece))
+        for piece in textwrap.wrap(re.sub(r"[*`]", "", para), width=COLS - 4,
+                                   subsequent_indent="  ") or [""]:
+            body.append(piece)
             emitted += 1
-    return rows
+    return body
 
 
-def render_svg(cast: dict, cols: int = 100) -> str:
-    rows = build_rows(cast, cols)
-    while rows and rows[-1][0] == "gap":
-        rows.pop()
+# ---------------------------------------------------------------------------
+# SVG: a terminal frame, CSS-only animation. Plays once and holds the final
+# frame - a looping demo makes a reader wait a full cycle to re-read a line.
+# ---------------------------------------------------------------------------
 
-    timings, clock = [], 0.4
-    for kind, text in rows:
+CHAR_W, LINE_H, PAD_X, PAD_Y = 7.0, 18.5, 16, 52
+LANE = 104
+TYPE_RATE, LINE_DELAY, BEAT, NOTE_BEAT = 0.035, 0.40, 1.8, 1.5
+
+BG, PANE, CHROME, FG, DIM = "#0d0f16", "#12141c", "#1b1e29", "#c9d1d9", "#6e7681"
+CMD_C, TOOL, GOOD = "#ffffff", "#c8a2f0", "#59d499"
+DANA_C, SAM_C, WIRE_C = "#f0a35e", "#7ab7ff", "#59d499"
+
+PANES = (
+    ("dana", "dana@team.dev", "wrote it", DANA_C),
+    ("sam", "sam@team.dev", "never saw it", SAM_C),
+)
+
+
+def expand(cast: dict) -> list[dict]:
+    """Materialize display rows, splicing the agent's calls in where the
+    recorder left a marker."""
+    out = []
+    for row in cast["rows"]:
+        if row["kind"] != "agent":
+            out.append(row)
+            continue
+        for call in agent_rows(cast["agent"]):
+            out.append({**call, "pane": row["pane"]})
+    return out
+
+
+def render_svg(cast: dict) -> str:
+    """Two terminals side by side: the machine that had the conversation, and
+    the machine that didn't. The gap between them is plain git - which is the
+    whole argument, so it gets drawn rather than described."""
+    rows = expand(cast)
+
+    timings, clock = [], 0.5
+    for row in rows:
+        kind, text = row["kind"], row["text"]
         if kind == "cmd":
             span = len(text) * TYPE_RATE
             timings.append((clock, clock + span))
-            clock += span + 0.4
+            clock += span + 0.9
+        elif kind == "note":
+            timings.append((clock, clock))
+            clock += NOTE_BEAT
         elif kind == "gap":
             timings.append((clock, clock))
-            clock += PAUSE
+            clock += BEAT
+        elif kind in ("ans", "ans2"):
+            timings.append((clock, clock))
+            clock += 0.5
         else:
             timings.append((clock, clock))
             clock += LINE_DELAY
-    total = clock + END_PAUSE
+    total = clock + 1.0
 
-    width = int(PAD_X * 2 + cols * CHAR_W)
-    height = int(PAD_Y + len(rows) * LINE_H + 22)
+    pane_w = int(PAD_X * 2 + COLS * CHAR_W)
+    width = pane_w * 2 + LANE
+    per_pane = {key: [i for i, r in enumerate(rows) if r["pane"] == key] for key, *_ in PANES}
+    height = int(PAD_Y + max(len(v) for v in per_pane.values()) * LINE_H + 18)
 
+    # The wire crosses when the second machine starts doing anything.
+    first_sam = per_pane["sam"][0] if per_pane["sam"] else 0
+    wire_at = timings[first_sam][0] - 0.35
+
+    pct = lambda t: max(0.0, min(99.8, t / total * 100))
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" role="img" '
-        f'aria-label="A Claude Code session recalling a rejected webhook retry policy with rekal" '
-        f'font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5">',
+        f'aria-label="Two terminals side by side. On the left Dana commits a {cast["turns"]}-turn '
+        f'session about webhook delivery and pushes it. On the right Sam, who was never in that '
+        f'conversation, syncs and his agent answers that a fixed retry delay was already rejected." '
+        f'font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5">',
         "<style>",
-        f".r{{opacity:0;animation-duration:{total:.2f}s;animation-iteration-count:infinite;"
+        # Plays once and holds: a loop makes a reader wait a full cycle to
+        # re-read a line they missed.
+        f".r{{opacity:0;animation-duration:{total:.2f}s;animation-iteration-count:1;"
         "animation-timing-function:steps(1,end);animation-fill-mode:both}",
-        "@media (prefers-reduced-motion:reduce){.r{opacity:1;animation:none}.ty{animation:none;width:auto}}",
+        "@media (prefers-reduced-motion:reduce){.r{opacity:1;animation:none}"
+        "[class*=ty]{animation:none!important;width:100%!important}}",
     ]
     for index, (start, _) in enumerate(timings):
-        pct = max(0.0, min(99.8, start / total * 100))
-        out.append(f"@keyframes a{index}{{0%,{pct:.3f}%{{opacity:0}}{pct + 0.01:.3f}%,100%{{opacity:1}}}}")
+        p = pct(start)
+        out.append(f"@keyframes a{index}{{0%,{p:.3f}%{{opacity:0}}{p + 0.01:.3f}%,100%{{opacity:1}}}}")
         out.append(f".r{index}{{animation-name:a{index}}}")
-    for index, ((kind, text), (start, end)) in enumerate(zip(rows, timings)):
-        if kind == "cmd" and text:
-            p0, p1 = start / total * 100, end / total * 100
-            out.append(f"@keyframes t{index}{{0%,{p0:.3f}%{{width:0}}{p1:.3f}%,100%{{width:{len(text) * CHAR_W:.1f}px}}}}")
-            out.append(f".ty{index}{{animation:t{index} {total:.2f}s infinite linear both}}")
+    for index, (row, (start, end)) in enumerate(zip(rows, timings)):
+        if row["kind"] == "cmd" and row["text"]:
+            out.append(f"@keyframes t{index}{{0%,{pct(start):.3f}%{{width:0}}{pct(end):.3f}%,100%"
+                       f"{{width:{len(clip(row['text'])) * CHAR_W:.1f}px}}}}")
+            out.append(f".ty{index}{{animation:t{index} {total:.2f}s 1 linear both}}")
+    w = pct(wire_at)
+    out.append(f"@keyframes wire{{0%,{w:.3f}%{{opacity:0}}{w + 0.01:.3f}%,100%{{opacity:1}}}}")
+    out.append(f".wire{{opacity:0;animation:wire {total:.2f}s 1 steps(1,end) both}}")
     out.append("</style>")
+    out.append(f'<rect width="{width}" height="{height}" fill="{BG}"/>')
 
-    out.append(f'<rect width="{width}" height="{height}" rx="9" fill="{BG}"/>')
-    out.append(f'<rect width="{width}" height="32" rx="9" fill="{CHROME}"/>')
-    out.append(f'<rect y="23" width="{width}" height="9" fill="{CHROME}"/>')
-    for i, color in enumerate(("#ff5f57", "#febc2e", "#28c840")):
-        out.append(f'<circle cx="{20 + i * 18}" cy="16" r="5.5" fill="{color}"/>')
-    out.append(f'<text x="{width / 2}" y="20" fill="{DIM}" text-anchor="middle" font-size="11.5">payments-api</text>')
+    for pane_index, (key, who, tag, accent) in enumerate(PANES):
+        x0 = pane_index * (pane_w + LANE)
+        out.append(f'<rect x="{x0}" width="{pane_w}" height="{height}" rx="9" fill="{PANE}"/>')
+        out.append(f'<rect x="{x0}" width="{pane_w}" height="32" rx="9" fill="{CHROME}"/>')
+        out.append(f'<rect x="{x0}" y="23" width="{pane_w}" height="9" fill="{CHROME}"/>')
+        out.append(f'<circle cx="{x0 + 17}" cy="16" r="4.5" fill="{accent}"/>')
+        out.append(f'<text x="{x0 + 30}" y="20" fill="{accent}" font-size="11.5" '
+                   f'font-weight="600">{who}</text>')
+        out.append(f'<text x="{x0 + pane_w - 12}" y="20" fill="{DIM}" font-size="11" '
+                   f'text-anchor="end">{tag}</text>')
 
-    for index, ((kind, text), _) in enumerate(zip(rows, timings)):
-        if kind == "gap":
-            continue
-        y = PAD_Y + index * LINE_H
-        esc = sax.escape(text)
-        if kind == "cmd":
-            out.append(f'<g class="r r{index}">')
-            out.append(f'<text x="{PAD_X}" y="{y}" fill="{PROMPT_C}">$</text>')
-            out.append(f'<clipPath id="c{index}"><rect class="ty{index}" x="{PAD_X + 14}" y="{y - 13}" height="{LINE_H}" width="0"/></clipPath>')
-            out.append(f'<text x="{PAD_X + 14}" y="{y}" fill="{CMD_C}" clip-path="url(#c{index})" xml:space="preserve">{esc}</text>')
-            out.append("</g>")
-            continue
-        if kind == "tool":
-            out.append(f'<text class="r r{index}" x="{PAD_X}" y="{y}" fill="{TOOL}" xml:space="preserve">● {esc}</text>')
-            continue
-        if kind == "res":
-            fill = ACCENT if text.strip().startswith(("INJECT", "KNOWLEDGE")) else DIM
-            out.append(f'<text class="r r{index}" x="{PAD_X + 16}" y="{y}" fill="{fill}" xml:space="preserve">{esc}</text>')
-            continue
-        if kind in ("ans", "ans2"):
-            fill = GOOD if kind == "ans" else FG
-            weight = ' font-weight="600"' if kind == "ans" else ""
-            out.append(f'<text class="r r{index}" x="{PAD_X}" y="{y}" fill="{fill}"{weight} xml:space="preserve">{esc}</text>')
-            continue
-        out.append(f'<text class="r r{index}" x="{PAD_X}" y="{y}" fill="{FG}" xml:space="preserve">{esc}</text>')
+        for slot, index in enumerate(per_pane[key]):
+            row = rows[index]
+            kind, text = row["kind"], clip(row["text"])
+            if kind == "gap":
+                continue
+            y = PAD_Y + slot * LINE_H
+            esc = sax.escape(text)
+            if kind == "cmd":
+                out.append(f'<g class="r r{index}">')
+                out.append(f'<text x="{x0 + PAD_X}" y="{y}" fill="{accent}">$</text>')
+                out.append(f'<clipPath id="c{index}"><rect class="ty{index}" '
+                           f'x="{x0 + PAD_X + 12}" y="{y - 12}" height="{LINE_H}" width="0"/></clipPath>')
+                out.append(f'<text x="{x0 + PAD_X + 12}" y="{y}" fill="{CMD_C}" '
+                           f'clip-path="url(#c{index})" xml:space="preserve">{esc}</text>')
+                out.append("</g>")
+                continue
+            fill, dx, extra, prefix = {
+                "note": (DIM, 0, ' font-style="italic"', "# "),
+                "tool": (TOOL, 0, "", "● "),
+                "res": (SAM_C if text.strip().startswith(("INJECT", "KNOWLEDGE")) else DIM, 14, "", ""),
+                "ans": (GOOD, 0, ' font-weight="600"', ""),
+                "ans2": (FG, 0, "", ""),
+            }.get(kind, (FG, 0, "", ""))
+            out.append(f'<text class="r r{index}" x="{x0 + PAD_X + dx}" y="{y}" fill="{fill}"{extra} '
+                       f'xml:space="preserve">{prefix}{esc}</text>')
+
+    # The lane between the two machines: no server, just a branch.
+    lane_x = pane_w + LANE / 2
+    mid = height / 2
+    out.append(f'<g class="wire">')
+    out.append(f'<path d="M {pane_w + 10} {mid} H {pane_w + LANE - 16}" stroke="{WIRE_C}" '
+               f'stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>')
+    out.append(f'<path d="M {pane_w + LANE - 20} {mid - 4} l 6 4 l -6 4 z" fill="{WIRE_C}"/>')
+    out.append(f'<text x="{lane_x}" y="{mid - 14}" fill="{WIRE_C}" font-size="10.5" '
+               f'text-anchor="middle">git push</text>')
+    out.append(f'<text x="{lane_x}" y="{mid + 22}" fill="{DIM}" font-size="9.5" '
+               f'text-anchor="middle">rekal/dana</text>')
+    out.append(f'<text x="{lane_x}" y="{mid + 34}" fill="{DIM}" font-size="9.5" '
+               f'text-anchor="middle">@team.dev</text>')
+    out.append(f'<text x="{lane_x}" y="{mid + 50}" fill="{DIM}" font-size="9.5" '
+               f'text-anchor="middle">no server</text>')
+    out.append("</g>")
 
     out.append("</svg>")
     return "\n".join(out)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--rekal", default=shutil.which("rekal") or "rekal")
     ap.add_argument("--claude", default=shutil.which("claude") or "claude")
     ap.add_argument("--cast", type=pathlib.Path, default=HERE / "cast.json")
     ap.add_argument("--svg", type=pathlib.Path, default=REPO_ROOT / "docs/assets/demo.svg")
-    ap.add_argument("--workdir", type=pathlib.Path, default=None,
-                    help="where to build the throwaway repo (default: a temp dir)")
+    ap.add_argument("--workdir", type=pathlib.Path, default=None)
     ap.add_argument("--from-cast", action="store_true",
-                    help="re-render the SVG from the committed cast, without running anything")
+                    help="re-render the SVG from the committed cast, running nothing")
     args = ap.parse_args()
 
     if args.from_cast:
@@ -358,7 +471,7 @@ def main() -> None:
         cast = record(rekal, shutil.which(args.claude) or args.claude, workdir)
         cast["recorded_from"] = version
         args.cast.write_text(json.dumps(cast, indent=2) + "\n")
-        print(f"cast: {args.cast} ({version}, agent made {len(cast['agent'])} tool calls)")
+        print(f"cast: {args.cast} ({version}, {len(cast['agent'])} agent tool calls)")
 
     args.svg.parent.mkdir(parents=True, exist_ok=True)
     args.svg.write_text(render_svg(cast))

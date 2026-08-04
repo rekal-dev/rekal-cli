@@ -202,6 +202,14 @@ main() {
 
         local export_line="export PATH=\"${install_dir}:\$PATH\""
 
+        # fish's profile lives under ~/.config/fish/, which a fresh install
+        # of fish (or a machine that never touched fish config) may not have
+        # created yet. `>>` can create a missing file but not a missing
+        # parent directory, so appending would fail outright — bash/zsh
+        # profiles live directly under $HOME, which always exists, so this
+        # is a no-op for them.
+        [[ -n "$shell_profile" ]] && mkdir -p "$(dirname "$shell_profile")"
+
         if [[ -n "$shell_profile" ]] && tty_available; then
             echo ""
             printf '  %b rekal is not on your PATH. Add it to %b%s%b? [Y/n] ' \

@@ -770,7 +770,11 @@ for the same place and move `.rekal/` off the store that already exists —
   hand-emitted (CSS-only, `prefers-reduced-motion` honored) so regenerating
   needs no asciinema/vhs/ffmpeg and stays diffable; it **plays once and holds**
   rather than looping, since a loop makes a reader who missed a line wait a
-  whole cycle. The demo writes into the real `~/.claude/projects/<sanitized>/`
+  whole cycle. The frame is **stamped with the binary that produced it**
+  (`recorded from rekal <version>`, read from `cast.json`'s `recorded_from`):
+  a re-record against a new release is otherwise pixel-identical to the old
+  one, so the README's "recording of the released binary" claim was not
+  checkable from the image. The demo writes into the real `~/.claude/projects/<sanitized>/`
   because `claude` needs its own config dir for auth, and removes those dirs
   afterwards.
 

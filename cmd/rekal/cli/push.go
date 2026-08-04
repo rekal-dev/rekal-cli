@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -161,7 +160,15 @@ There is deliberately no --force.`,
 // It is the only path that rewrites the body rather than appending to it, which
 // is why it is bounded by wouldDiscardRemoteFrames: it may only ever produce a
 // superset of what the branch already holds. Repairing derived bytes from the
-// ledger is not the same as editing the ledger.
+// ledger is not the same as editing the ledger. The safety check runs on the
+// freshly generated body *before* anything is committed — checking it after
+// committing on top of a branch this same run just fast-forwarded to the
+// remote's tip makes the new commit a descendant of the remote by
+// construction, so a commit-ancestry check there is always true regardless of
+// whether the body actually grew or shrank (black-box tested: a machine whose
+// data.db is a strict subset of the branch's contents ran --rebuild and
+// silently deleted another machine's already-shared session from the shared
+// branch, with no refusal and no warning).
 func doReExport(gitRoot string, w io.Writer) error {
 	// Catch up first, so the rebuild commit lands on top of the branch rather
 	// than beside it. Without this a machine that is merely behind looks like a
@@ -178,6 +185,23 @@ func doReExport(gitRoot string, w io.Writer) error {
 		return nil
 	}
 
+	branch := gitx.RekalBranchName()
+	hasRemote := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run() == nil
+	if hasRemote {
+		// A rebuild starts from an empty body, so it can only ever carry what
+		// this machine's data.db holds. Anything another machine put on the
+		// branch is not in there and could not be reconstructed by anyone.
+		// Checked against the candidate body directly, before it is committed
+		// anywhere — there is nothing to protect when there is no remote, so
+		// the local-only repair below still proceeds without a remote configured.
+		if lost, ok := wouldDiscardRemoteFrames(gitRoot, "origin", branch, body); ok && lost != "" {
+			fmt.Fprintf(w, "rekal: refusing to rebuild origin/%s\n", branch)
+			fmt.Fprintf(w, "rekal: the remote has %s this machine does not have, and a rebuild carries only this machine's data.db\n", lost)
+			fmt.Fprintln(w, "rekal: push from the machine that holds them first, then rebuild from there")
+			return nil
+		}
+	}
+
 	if err := transport.EnsureOrphanBranch(gitRoot); err != nil {
 		return fmt.Errorf("ensure rekal branch: %w", err)
 	}
@@ -189,20 +213,11 @@ func doReExport(gitRoot string, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "rekal: re-exported %d checkpoint(s)\n", len(exportedIDs))
 
-	branch := gitx.RekalBranchName()
-	if err := exec.Command("git", "-C", gitRoot, "remote", "get-url", "origin").Run(); err != nil {
+	if !hasRemote {
 		fmt.Fprintln(w, "rekal: no remote 'origin' configured — skipping push")
 		return nil
 	}
-	// A rebuild starts from an empty body, so it can only ever carry what this
-	// machine's data.db holds. Anything another machine put on the branch is
-	// not in there and could not be reconstructed by anyone.
-	if lost, ok := wouldDiscardRemoteFrames(gitRoot, "origin", branch); ok && lost != "" {
-		fmt.Fprintf(w, "rekal: refusing to rebuild origin/%s\n", branch)
-		fmt.Fprintf(w, "rekal: the remote has %s this machine does not have, and a rebuild carries only this machine's data.db\n", lost)
-		fmt.Fprintln(w, "rekal: push from the machine that holds them first, then rebuild from there")
-		return nil
-	}
+
 	// A plain push, like every other path. The rebuild commit was parented on
 	// the branch tip this run fast-forwarded to, so it is a descendant and the
 	// push is an ordinary fast-forward. Nothing in rekal force-pushes: that is
@@ -415,18 +430,36 @@ func isNonFastForward(output string) bool {
 		strings.Contains(output, "fetch first")
 }
 
-// wouldDiscardRemoteFrames reports what replacing the remote branch's body
-// would delete: wire data it holds that this machine does not. lost is a human count
-// ("3 commit(s)"), empty when nothing would be lost. ok is false when the
-// question could not be answered — offline, no such remote branch — in which
-// case the caller must not treat silence as permission.
+// wouldDiscardRemoteFrames reports whether replacing the remote branch's body
+// with candidateBody would delete checkpoints the remote holds that
+// candidateBody does not. lost is a short human description, empty when
+// nothing would be lost. ok is false when the question could not be answered
+// — offline, no such remote branch — in which case the caller must not treat
+// silence as permission.
+//
+// Compares checkpoint identity (git_sha), not raw bytes: --rebuild's whole
+// point is to re-encode from scratch — fresh zstd stream, frames possibly
+// batched or ordered differently — so a genuinely lossless rebuild is not a
+// byte-for-byte prefix of what was on the branch before, even in the safe,
+// common case of a solo machine repairing its own data. A byte comparison
+// here would refuse every real rebuild, not just the dangerous ones.
+//
+// Takes the candidate body directly rather than reading it back from a local
+// ref, and must be called before that body is committed anywhere. A rebuild
+// fast-forwards the local branch to the remote's tip and then commits the
+// freshly generated body as a child of it, so by the time that commit exists,
+// checking "is the remote's commit an ancestor of the local branch" is always
+// true — the new commit is a descendant of the remote by construction,
+// regardless of whether its *content* actually grew or shrank. Comparing
+// decoded checkpoint identity directly, before any commit exists to poison a
+// graph-based check, is what makes this catch a machine whose data.db is a
+// strict subset of what the branch already holds.
 //
 // This is the difference between the two forces. Overwriting a branch you are
 // merely ahead of costs nothing; overwriting one that carries another machine's
 // checkpoints destroys them, because sync imports other branches into the index
-// and never into data.db, so no local re-export can reproduce them. Git can
-// answer this in one question and the flag never asked it.
-func wouldDiscardRemoteFrames(gitRoot, remote, branch string) (lost string, ok bool) {
+// and never into data.db, so no local re-export can reproduce them.
+func wouldDiscardRemoteFrames(gitRoot, remote, branch string, candidateBody []byte) (lost string, ok bool) {
 	fetch := exec.Command("git", "-C", gitRoot, "fetch", remote, branch)
 	fetch.Stdin = nil
 	if err := fetch.Run(); err != nil {
@@ -437,34 +470,72 @@ func wouldDiscardRemoteFrames(gitRoot, remote, branch string) (lost string, ok b
 		return "", false
 	}
 	remoteSHA := strings.TrimSpace(string(head))
-	// Contained in local: a force here only replaces commits local already has.
-	if gitx.IsAncestor(gitRoot, remoteSHA, branch) {
-		return "", true
-	}
-	// Diverged by commit — but commits are not the thing worth protecting, the
-	// frames inside them are. A push appends to the body it found on the
-	// branch, so along any branch the body only ever grows: if the remote's
-	// body is a prefix of this machine's, every frame it holds is already here
-	// and the force costs nothing. Rewriting a commit (an amend, a re-anchored
-	// tip) diverges the history while leaving the body byte-identical, and
-	// refusing there would block a repair that loses nothing.
 	remoteBody := gitx.ShowFile(gitRoot, remoteSHA, codec.BodyFilename)
 	if len(remoteBody) == 0 {
 		return "", true // nothing on the branch to lose
 	}
-	if bytes.HasPrefix(gitx.ShowFile(gitRoot, branch, codec.BodyFilename), remoteBody) {
-		return "", true
+	remoteSHAs, err := checkpointGitSHAs(remoteBody)
+	if err != nil {
+		return "", false // can't prove it's safe — don't treat that as permission
 	}
-	out, err := exec.Command("git", "-C", gitRoot,
-		"rev-list", "--count", branch+".."+remoteSHA).Output()
+	candidateSHAs, err := checkpointGitSHAs(candidateBody)
 	if err != nil {
 		return "", false
 	}
-	n := strings.TrimSpace(string(out))
-	if n == "" || n == "0" {
+	missing := 0
+	for sha := range remoteSHAs {
+		if !candidateSHAs[sha] {
+			missing++
+		}
+	}
+	if missing == 0 {
 		return "", true
 	}
-	return n + " commit(s) of wire data", true
+	return fmt.Sprintf("%d checkpoint(s)", missing), true
+}
+
+// checkpointGitSHAs decodes a wire body and returns the git_sha of every
+// checkpoint frame it contains, standalone or inside a batch. GitSHA is
+// stored as a plain string in the frame (unlike branch/email/agent, which are
+// dict refs), so this needs no dict at all — only the fixed zstd preset the
+// decoder already carries. A malformed individual frame is skipped, matching
+// every other reader of this format; a body that fails to scan at all is an
+// error, since that is not "nothing here," it is "can't tell."
+func checkpointGitSHAs(body []byte) (map[string]bool, error) {
+	frames, err := codec.ScanFrames(body)
+	if err != nil {
+		return nil, fmt.Errorf("scan frames: %w", err)
+	}
+	dec, err := codec.NewDecoder()
+	if err != nil {
+		return nil, fmt.Errorf("create decoder: %w", err)
+	}
+	defer dec.Close()
+
+	shas := make(map[string]bool)
+	for _, fs := range frames {
+		compressed := codec.ExtractFramePayload(body, fs)
+		switch fs.Type {
+		case codec.FrameCheckpoint, codec.FrameCheckpointV2:
+			if cf, err := dec.DecodeCheckpointFrame(compressed); err == nil {
+				shas[cf.GitSHA] = true
+			}
+		case codec.FrameBatch:
+			members, err := dec.DecodeBatch(compressed)
+			if err != nil {
+				continue
+			}
+			for _, m := range members {
+				if m.Type != codec.FrameCheckpoint && m.Type != codec.FrameCheckpointV2 {
+					continue
+				}
+				if cf, err := codec.DecodeCheckpointPayload(m.Payload); err == nil {
+					shas[cf.GitSHA] = true
+				}
+			}
+		}
+	}
+	return shas, nil
 }
 
 // remoteDiverged confirms, against the refs themselves, that the remote branch

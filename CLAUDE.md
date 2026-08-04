@@ -194,12 +194,32 @@ for the same place and move `.rekal/` off the store that already exists —
   an ordinary fast-forward; `TestNoForcePushInSource` pins the absence. `--rebuild` (was `--re-export`, kept
   as a deprecated hidden alias) is the one path that rewrites the body —
   `ExportAllFrames` from an empty body, so it carries only this machine's
-  `data.db` — and it refuses via `wouldDiscardRemoteFrames` unless the branch's
-  current body is already a prefix of what it would write, making it a
-  superset-only repair of derived bytes. The check is on the **body**, not the
-  commit graph: a rewritten tip (amend, re-anchor) diverges history while
-  leaving the body byte-identical, and refusing there would block a repair that
-  loses nothing
+  `data.db` — and it refuses via `wouldDiscardRemoteFrames` unless every
+  checkpoint git_sha the branch already holds is also present in the
+  freshly regenerated body, making it a superset-only repair of derived
+  bytes. Black-box tested and found broken at 1.0.0: the guard used to run
+  *after* `CommitWireFormat`, checking whether the remote's commit was an
+  ancestor of the local branch — but `doReExport` always fast-forwards local
+  to the remote's tip first and commits the new body as a *child* of it, so
+  that ancestry check was true by construction on every call, regardless of
+  whether the body actually grew or shrank. A machine whose data.db was a
+  strict subset of the branch (never ran `sync --self`, same identity on two
+  machines) could run `--rebuild` and silently delete another machine's
+  already-shared session, with no refusal and no warning. The fix moved the
+  check *before* the commit, comparing the in-memory candidate body against
+  the remote's — but a raw byte/prefix comparison there (which is what the
+  ancestry check's fallback path already did, just unreachably) is *also*
+  wrong: `--rebuild`'s whole point is a fresh zstd stream and dict, so even a
+  correct, lossless rebuild is never a byte-for-byte prefix of what was on
+  the branch, and byte comparison would refuse the safe, common case (a solo
+  machine repairing its own data) too — confirmed by a pre-existing
+  integration test (`TestPush_RebuildWorksWhenNothingIsLost`) that started
+  failing under the first attempt. `checkpointGitSHAs` decodes both bodies
+  (standalone and batched frames) and compares checkpoint identity —
+  git_sha, stored as a plain string in the frame, needs no dict — so
+  encoding differences never matter, only which checkpoints are actually
+  present. `TestDoReExport_RefusesWhenLocalDataIsThinnerThanRemote` pins the
+  original bug against a real two-clone remote
 - `sync.go`: Sync team context (wire decode/import lives in `transport/`).
   Plain `rekal sync` checkpoints and pushes **your own** local work (step 1-2
   of `runSyncTeam`, both non-fatal) before it fetches — the round-trip is the

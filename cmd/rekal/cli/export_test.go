@@ -329,6 +329,126 @@ func TestDoReExport_NothingMergedExportsNothing(t *testing.T) {
 	}
 }
 
+// TestDoReExport_RefusesWhenLocalDataIsThinnerThanRemote is the regression
+// test for a data-loss bug found black-box testing push --rebuild: a machine
+// whose data.db is a strict subset of what the remote branch already holds
+// (e.g. it never ran a full `sync --self`, or is simply behind another
+// machine sharing the same identity) must refuse to rebuild, not silently
+// shrink the shared branch.
+//
+// The original bug: wouldDiscardRemoteFrames checked whether the remote's
+// commit was an ancestor of the *local* branch — but doReExport always
+// fast-forwards the local branch to the remote's tip and then commits the
+// freshly (and here, too narrowly) regenerated body as a child of it, so
+// that ancestry check was true by construction on every call, regardless of
+// whether the new body actually contained everything the old one did. The
+// fix compares the candidate body's bytes against the remote's actual body
+// before anything is committed.
+func TestDoReExport_RefusesWhenLocalDataIsThinnerThanRemote(t *testing.T) {
+	origin := t.TempDir()
+	runGit(t, origin, "init", "--bare")
+
+	// Machine A: publishes two checkpoints, each anchored to its own real
+	// commit, across two separate pushes — git_sha is a checkpoint's identity
+	// here, so two checkpoints sharing one commit (as seedCheckpoint alone
+	// would give them, since it always anchors to current HEAD) would let a
+	// rebuild missing the second look identical to one that has it.
+	aDir := setupExportTestRepo(t)
+	runGit(t, aDir, "remote", "add", "origin", origin)
+	runGit(t, aDir, "push", "-u", "origin", "main")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	commit1 := headSHA(t, aDir)
+	seedCheckpointAt(t, aDir, ulid.Make().String(), ulid.Make().String(), now, commit1, "main")
+	if err := doPush(aDir, io.Discard, pushOptions{}); err != nil {
+		t.Fatalf("doPush (checkpoint 1): %v", err)
+	}
+
+	runGit(t, aDir, "commit", "--allow-empty", "-m", "second commit")
+	commit2 := headSHA(t, aDir)
+	seedCheckpointAt(t, aDir, ulid.Make().String(), ulid.Make().String(), now, commit2, "main")
+	if err := doPush(aDir, io.Discard, pushOptions{}); err != nil {
+		t.Fatalf("doPush (checkpoint 2): %v", err)
+	}
+
+	branchName := "rekal/dev@example.com" // matches setupExportTestRepo's user.email
+	remoteFrameCount := func() int {
+		t.Helper()
+		out, err := exec.Command("git", "-C", origin, "cat-file", "blob", branchName+":"+codec.BodyFilename).Output()
+		if err != nil {
+			t.Fatalf("read origin body: %v", err)
+		}
+		frames, err := codec.ScanFrames(out)
+		if err != nil {
+			t.Fatalf("ScanFrames on origin body: %v", err)
+		}
+		n := 0
+		for _, fs := range frames {
+			if fs.Type == codec.FrameBatch {
+				n++
+			}
+		}
+		return n
+	}
+	before := remoteFrameCount()
+	if before != 2 {
+		t.Fatalf("setup: origin has %d batch frames, want 2", before)
+	}
+
+	// Machine B: same identity (same user.email — same rekal/<email> branch),
+	// cloned from origin, but its own data.db has never heard of either of
+	// A's checkpoints (it never synced --self).
+	bDir := t.TempDir()
+	runGit(t, bDir, "clone", origin, ".")
+	// The bare origin's symbolic HEAD doesn't necessarily point at "main"
+	// (git init --bare defaults it independently of what gets pushed later),
+	// so the clone can land with nothing checked out. Pin it explicitly.
+	runGit(t, bDir, "checkout", "main")
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(bDir); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origWD) })
+	runGit(t, bDir, "config", "user.email", "dev@example.com")
+	runGit(t, bDir, "config", "user.name", "Dev")
+	if err := os.MkdirAll(RekalDir(bDir), 0o755); err != nil {
+		t.Fatalf("MkdirAll .rekal: %v", err)
+	}
+	bDataDB, err := db.OpenData(bDir)
+	if err != nil {
+		t.Fatalf("OpenData (b): %v", err)
+	}
+	if err := db.InitDataSchema(bDataDB); err != nil {
+		bDataDB.Close()
+		t.Fatalf("InitDataSchema (b): %v", err)
+	}
+	bDataDB.Close()
+	if err := transport.EnsureOrphanBranch(bDir); err != nil {
+		t.Fatalf("EnsureOrphanBranch (b): %v", err)
+	}
+	// B does know about checkpoint 1 (same commit A anchored it to) — data.db
+	// is not empty, just thinner than the remote: it never heard of checkpoint
+	// 2. An empty data.db would hit doReExport's earlier "no checkpoints to
+	// export" return before the guard under test is ever reached.
+	seedCheckpointAt(t, bDir, ulid.Make().String(), ulid.Make().String(), now, commit1, "main")
+
+	var out strings.Builder
+	if err := doReExport(bDir, &out); err != nil {
+		t.Fatalf("doReExport (b): %v", err)
+	}
+	if !strings.Contains(out.String(), "refusing to rebuild") {
+		t.Errorf("doReExport output = %q, want a refusal — B's data.db does not have what the remote already holds", out.String())
+	}
+
+	after := remoteFrameCount()
+	if after != before {
+		t.Errorf("origin now has %d batch frames, want %d unchanged — B's rebuild reached the remote and discarded A's checkpoints", after, before)
+	}
+}
+
 // seedCheckpoint inserts a minimal session+turn+checkpoint fixture, using its
 // own short-lived data.db connection (each helper/production function in
 // this path opens and closes its own connection — sharing one long-lived

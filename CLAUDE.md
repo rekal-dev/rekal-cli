@@ -172,6 +172,15 @@ for the same place and move `.rekal/` off the store that already exists —
   drill inside an already-checkpointed session), refreshing `session_reach` via
   `db.RefreshSessionReach` on that path so the graph never stalls; otherwise the
   incremental index refresh rebuilds `session_reach`
+- `discovery_cache.go` + `db/discovery.go`: checkpoint caches Copilot/Codex
+  transcript-to-CWD discovery in local-only `session_discovery_cache` alongside
+  `checkpoint_state`. Loads metadata once; caches positive and negative repo
+  matches by adapter + path + actual file size + nanosecond mtime. Unchanged
+  transcripts are not reopened for repo discovery; directories are still walked
+  and statted. A directory's mtime is never a freshness signal for its existing
+  transcript. Failed reads are not cached; cache failures fall back to parsing.
+  Additive, rebuildable, never encoded on the wire; conversation rows stay
+  append-only.
 - `push.go`: Push data to remote branch (wire encode/commit lives in `transport/`).
   Publishes to `--remote` (default `origin`) — the pre-push hook forwards the
   remote git is actually pushing to, so a push to a fork no longer sends memory
@@ -496,7 +505,10 @@ for the same place and move `.rekal/` off the store that already exists —
   `gemini`, `opencode`, `copilot`, `kiro` — each `Discover`s that agent's
   session files for the repo and `Parse`s them into a `SessionPayload`. Codex
   discovery and cross-repo import share `codexSessionDirs` (`CODEX_HOME`, else
-  `~/.codex`; active + archived rollouts). `codex.go` accepts nested metadata
+  `~/.codex`; active + archived plain or `.jsonl.zst` rollouts). Compressed
+  rollouts stream through the existing zstd dependency; content hashes use
+  decoded bytes and checkpoint mapping strips `.zst` so compress/resume cannot
+  duplicate an existing conversation. `codex.go` accepts nested metadata
   IDs and legacy top-level IDs, uses response-item messages when event messages
   are absent, avoids mirrored-message duplication, retains timestamps, reports
   scanner errors, and bounds repo matching by path components. Shared tool-call
@@ -528,6 +540,12 @@ for the same place and move `.rekal/` off the store that already exists —
   so other agent types are untouched — `db.SummaryFingerprint`).
   `local.go` enumerates/resolves project session dirs under `~/.claude/projects/*`
   for the cross-repo local import
+- Copilot scanner failures return errors rather than committing partial parses.
+  Claude compatibility includes transcript-only compact summaries (kept as
+  `summary`), progress records and `isMeta` harness messages (filtered). Claude
+  writes transcripts asynchronously: a git hook can only capture flushed text;
+  a later checkpoint appends a late assistant tail. See
+  `docs/research/runs/2026-11-06-capture-audit.md` for evidence and limits.
 - `scrub/`: Redact secrets, anonymize file paths, and guarantee valid UTF-8 (`SanitizeText`) before any DB insert — sessions (`checkpoint` / cross-repo import after parse) and knowledge chunks (`knowledge.ChunkFile` + `db.InsertKnowledgeChunks`). DuckDB rejects invalid-UTF-8 VARCHAR binds, so this is the last-line guard against `could not bind parameter` (prose `.txt` dumps with binary/truncated runes used to abort the whole knowledge-layer transaction).
 - `db/`: DuckDB backend — the session **embedding document** is budgeted, not
   the raw transcript (`buildSessionDoc`): intent turns (`human`/
@@ -549,7 +567,12 @@ for the same place and move `.rekal/` off the store that already exists —
   `(session_id, turn_index)` index on `turns`/`turns_ft`, created in
   `MigrateDataSchema` as well as the DDL so long-lived stores — the ones that
   need it most — gain it in place), insert helpers, index
-  population (incl. `PopulateFacetText` — per-session facet documents from
+  population (incremental writes preserve immutable turn/tool rows by ID and
+  recover all historical checkpoint/file links without deleting old links;
+  only the affected session's bounded facet row is replaced, and whole-session
+  vectors invalidate on growth. Existing bloat is reclaimed by `rekal index`,
+  not by mutating data.db. Unchanged commit messages are not rewritten).
+  `PopulateFacetText` builds per-session facet documents from
   the index's own tables, full + incremental, and now including each session's
   **full commit message** via `PopulateCommitMessages` — subject *and* body,
   resolved from the reader's own clone by the batched `gitx.CommitMessages`.

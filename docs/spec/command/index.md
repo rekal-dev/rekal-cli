@@ -40,6 +40,12 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 
 The index DB can be deleted at any time; `rekal index` rebuilds it completely. No data is lost — the data DB is never modified.
 
+After upgrading from versions that deleted/reinserted complete sessions during
+incremental capture, run `rekal index` once to reclaim existing index bloat. New
+checkpoints preserve indexed turn/tool rows and historical file links. FTS
+snapshots and bounded metadata still refresh; this is not a promise of constant
+file size as the corpus grows.
+
 ---
 
 ## Flags

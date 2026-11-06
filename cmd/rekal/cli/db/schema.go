@@ -92,6 +92,9 @@ func MigrateDataSchema(d *sql.DB) error {
 	if _, err := d.Exec(recallEdgesDDL); err != nil {
 		return fmt.Errorf("create recall_edges table: %w", err)
 	}
+	if _, err := d.Exec(discoveryCacheDDL); err != nil {
+		return fmt.Errorf("create local discovery cache: %w", err)
+	}
 
 	version, err := readSchemaVersion(d, "schema_meta")
 	if err != nil {

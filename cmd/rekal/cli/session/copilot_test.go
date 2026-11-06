@@ -3,8 +3,22 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestCopilotAdapter_ParseRejectsOversizedRecord(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	content := copilotFixtureJSONL + `{"type":"user.message","data":{"content":"` + strings.Repeat("x", 10*1024*1024) + `"}}` + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := (&CopilotAdapter{}).Parse(SessionRef{Path: path})
+	if err == nil || payload != nil {
+		t.Fatal("oversized record returned a successful partial capture")
+	}
+}
 
 const copilotFixtureJSONL = `{"type":"session.start","timestamp":"2026-05-07T10:00:00Z","data":{"sessionId":"copilot-001","copilotVersion":"1.0.54","context":{"cwd":"/tmp/repo"},"repository":{"branch":"feature/auth"}}}
 {"type":"assistant.turn_start","timestamp":"2026-05-07T10:00:01Z","data":{}}

@@ -281,10 +281,13 @@ func TestParseTranscript_CmdPrefixTruncation(t *testing.T) {
 func TestParseTranscript_CompactSummaryTaggedAsSummary(t *testing.T) {
 	t.Parallel()
 
-	// Format verified against a real ~/.claude/projects/*.jsonl session file:
-	// the post-compaction turn is type "user" with top-level
-	// isCompactSummary:true (no isMeta), content a plain string.
-	input := `{"type":"user","isCompactSummary":true,"timestamp":"2026-07-02T12:20:03.322Z","sessionId":"sess-c1","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion."}}
+	// Recent shape reported in anthropics/claude-code#82509 (v2.1.220):
+	// transcript-only summary after a compact_boundary. Unknown display fields
+	// must not hide the summary or turn it into fresh human testimony.
+	input := `{"type":"system","subtype":"compact_boundary","sessionId":"sess-c1","compactMetadata":{"trigger":"manual","preTokens":100000}}
+{"type":"user","isVisibleInTranscriptOnly":true,"isCompactSummary":true,"version":"2.1.220","timestamp":"2026-07-02T12:20:03.322Z","sessionId":"sess-c1","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion."}}
+{"type":"progress","sessionId":"sess-c1","data":{"type":"hook_progress","hookEvent":"PostCompact"}}
+{"type":"user","isMeta":true,"sessionId":"sess-c1","message":{"role":"user","content":"Injected harness instructions"}}
 {"type":"user","timestamp":"2026-07-02T12:21:00.000Z","sessionId":"sess-c1","message":{"role":"user","content":"continue with the refactor"}}`
 
 	payload, err := ParseTranscript([]byte(input))

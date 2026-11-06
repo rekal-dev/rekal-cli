@@ -39,7 +39,9 @@ git replays every commit, and linking the live conversation to each one would
 claim work it never did.
 
 Re-capturing the same conversation appends the new turns to the session that
-already exists rather than storing a second copy of it.`,
+already exists rather than storing a second copy of it. Copilot and Codex repo
+discovery caches unchanged transcript metadata locally. Codex capture also reads
+compressed .jsonl.zst rollouts and preserves session identity across resume.`,
 		Example: `  # What the post-commit hook runs for you
   rekal checkpoint
     rekal: 1 session(s) captured
@@ -109,6 +111,10 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 
 	email := gitx.ConfigValue("user.email")
 	newID := ids.NewULIDFunc()
+	discovery, cacheErr := loadSessionDiscoveryCache(dataDB)
+	if cacheErr != nil {
+		fmt.Fprintf(w, "rekal: warning: discovery cache unavailable: %v\n", cacheErr)
+	}
 
 	var sessionIDs []string
 	// trunkOnlySessionIDs is the subset of sessionIDs with no parent — used to
@@ -125,7 +131,12 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 
 	// Iterate all adapters to discover sessions from all known agents.
 	for _, adapter := range session.Adapters {
-		refs, err := adapter.Discover(gitRoot)
+		var refs []session.SessionRef
+		if cached, ok := adapter.(session.CachedDiscoverer); ok {
+			refs, err = cached.DiscoverCached(gitRoot, discovery.matcher(adapter.Name()))
+		} else {
+			refs, err = adapter.Discover(gitRoot)
+		}
 		if err != nil {
 			continue
 		}
@@ -133,12 +144,16 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 		for _, ref := range refs {
 			// Determine cache key for deduplication.
 			cacheKey := ref.Path
+			if adapter.Name() == "codex" && strings.HasSuffix(cacheKey, ".jsonl.zst") {
+				// Codex compresses idle rollouts and materializes them on resume.
+				// Both paths must retain the original append mapping.
+				cacheKey = strings.TrimSuffix(cacheKey, ".zst")
+			}
 			if cacheKey == "" {
 				cacheKey = adapter.Name() + ":" + ref.DBID
 			}
 
 			// For file-based refs, check size+hash cache.
-			var data []byte
 			var hash string
 			if ref.Path != "" {
 				info, statErr := os.Stat(ref.Path)
@@ -150,8 +165,7 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 				if err != nil || len(fileData) == 0 {
 					continue
 				}
-				data = fileData
-				hash = sha256Hex(data)
+				hash = session.ContentHash(adapter, ref, fileData)
 
 				cachedSize, cachedHash, found, csErr := db.GetCheckpointState(dataDB, cacheKey)
 				if csErr != nil {
@@ -334,6 +348,10 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 			sessionIDs = append(sessionIDs, sessionID)
 			inserted++
 		}
+	}
+
+	if err := discovery.flush(dataDB); err != nil {
+		fmt.Fprintf(w, "rekal: warning: discovery cache update failed: %v\n", err)
 	}
 
 	// Drain the L1 recall-graph spool into data.db.recall_edges while we still

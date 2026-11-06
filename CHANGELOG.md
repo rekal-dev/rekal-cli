@@ -10,6 +10,22 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+### Fixed
+
+- Checkpoint caches Copilot and Codex transcript repo metadata by file size and
+  nanosecond mtime, including sessions belonging to other repositories. Warm
+  discovery still enumerates files but avoids reopening unchanged transcripts.
+- Incremental indexing appends missing turn/tool rows instead of rewriting a
+  growing session's complete history. Historical checkpoint/file links are
+  preserved and repaired; stale session vectors still invalidate. Existing
+  index bloat can be reclaimed with `rekal index`.
+- Codex discovers and streams compressed `.jsonl.zst` rollouts, hashes decoded
+  contents, and keeps the same capture identity when Codex materializes a
+  compressed rollout on resume.
+- Copilot rejects oversized-record scan failures instead of recording a
+  successful partial capture. Recent Claude compact-summary, progress and
+  harness-message shapes have explicit compatibility coverage.
+
 ## [1.0.3] - 2026-11-06
 
 ### Fixed

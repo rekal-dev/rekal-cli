@@ -1002,25 +1002,14 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 	defer d.Exec("DETACH data_db") //nolint:errcheck
 
 	for _, sid := range sessionIDs {
-		// Clear this session's derived rows before re-inserting. A session that
-		// grew since its last checkpoint is indexed again, and blind inserts
-		// collide on the primary key — aborting the incremental update and
-		// leaving the index behind until a full rebuild. Re-deriving one
-		// session's slice is always safe: the index is derived data, and
-		// data.db remains the source of truth.
-		//
-		// session_embeddings is dropped too, and that matters more than it
-		// looks. The embed pass skips any session that already has a vector, so
-		// a conversation embedded at fifty turns and grown to five hundred would
-		// keep answering semantic recall from the first fifty — no error, no
-		// warning, just quietly worse retrieval on exactly the long sessions
-		// worth retrieving. Dropping it here forces a recompute over the current
-		// content. This costs no more than before capture learned to append,
-		// when every re-capture created a new session and embedded it in full.
-		for _, tbl := range []string{"turns_ft", "tool_calls_index", "session_facets", "files_index", "session_embeddings"} {
-			if _, err := d.Exec(fmt.Sprintf("DELETE FROM %s WHERE session_id = $1", tbl), sid); err != nil {
-				return fmt.Errorf("clear %s for reindex: %w", tbl, err)
-			}
+		// Source turns/tool calls only append for an existing session ID.
+		// Rewriting the whole slice on every capture creates DuckDB tombstones
+		// proportional to the entire session, not its new tail. Keep existing
+		// row identities and insert only missing immutable source rows.
+		// Vectors describe the complete session, so they still invalidate on
+		// growth; keeping one would silently retrieve the old truncated history.
+		if _, err := d.Exec(`DELETE FROM session_embeddings WHERE session_id = $1`, sid); err != nil {
+			return fmt.Errorf("invalidate session embeddings: %w", err)
 		}
 
 		// turns_ft
@@ -1030,6 +1019,7 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 			FROM data_db.turns t
 			LEFT JOIN data_db.sessions s ON s.id = t.session_id
 			WHERE t.session_id = $1
+			  AND NOT EXISTS (SELECT 1 FROM turns_ft old WHERE old.id = t.id)
 		`, sid); err != nil {
 			return fmt.Errorf("incremental turns_ft: %w", err)
 		}
@@ -1037,13 +1027,20 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		// tool_calls_index
 		if _, err := d.Exec(`
 			INSERT INTO tool_calls_index (id, session_id, call_order, tool, path, cmd_prefix)
-			SELECT id, session_id, call_order, tool, path, cmd_prefix
-			FROM data_db.tool_calls WHERE session_id = $1
+			SELECT tc.id, tc.session_id, tc.call_order, tc.tool, tc.path, tc.cmd_prefix
+			FROM data_db.tool_calls tc WHERE tc.session_id = $1
+			  AND NOT EXISTS (SELECT 1 FROM tool_calls_index old WHERE old.id = tc.id)
 		`, sid); err != nil {
 			return fmt.Errorf("incremental tool_calls_index: %w", err)
 		}
 
 		// session_facets
+		// DuckDB cannot ON CONFLICT-update the indexed git_sha/branch fields.
+		// Replace this one bounded metadata row, not the immutable turn/tool
+		// history or historical file links that account for the write growth.
+		if _, err := d.Exec(`DELETE FROM session_facets WHERE session_id = $1`, sid); err != nil {
+			return fmt.Errorf("refresh session facet: %w", err)
+		}
 		if _, err := d.Exec(`
 			INSERT INTO session_facets (
 				session_id, user_email, git_branch, actor_type, agent_id,
@@ -1083,15 +1080,23 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		}
 	}
 
-	// files_index for the new checkpoint
-	if _, err := d.Exec(`
+	// Recover every checkpoint link for affected sessions, including old links
+	// lost by the former delete/reinsert path. No historical links are removed.
+	for _, sid := range sessionIDs {
+		if _, err := d.Exec(`
 		INSERT INTO files_index (checkpoint_id, session_id, file_path, change_type)
-		SELECT ft.checkpoint_id, cs.session_id, ft.file_path, ft.change_type
+		SELECT DISTINCT ft.checkpoint_id, cs.session_id, ft.file_path, ft.change_type
 		FROM data_db.files_touched ft
 		JOIN data_db.checkpoint_sessions cs ON cs.checkpoint_id = ft.checkpoint_id
-		WHERE ft.checkpoint_id = $1
-	`, checkpointID); err != nil {
-		return fmt.Errorf("incremental files_index: %w", err)
+		WHERE cs.session_id = $1
+		  AND NOT EXISTS (
+			SELECT 1 FROM files_index old WHERE old.checkpoint_id=ft.checkpoint_id
+			  AND old.session_id=cs.session_id AND old.file_path=ft.file_path
+			  AND old.change_type=ft.change_type
+		  )
+	`, sid); err != nil {
+			return fmt.Errorf("incremental files_index: %w", err)
+		}
 	}
 
 	// Facet documents for the new sessions.
@@ -1366,7 +1371,9 @@ func PopulateCommitMessages(d *sql.DB, gitRoot string) error {
 	if _, err := d.Exec(`UPDATE session_facets
 		SET commit_message = (SELECT m.message FROM commit_msgs m
 			WHERE m.git_sha = session_facets.git_sha)
-		WHERE git_sha IS NOT NULL AND git_sha <> ''`); err != nil {
+		WHERE git_sha IS NOT NULL AND git_sha <> ''
+		  AND commit_message IS DISTINCT FROM (SELECT m.message FROM commit_msgs m
+			WHERE m.git_sha = session_facets.git_sha)`); err != nil {
 		return fmt.Errorf("apply commit messages: %w", err)
 	}
 	return nil

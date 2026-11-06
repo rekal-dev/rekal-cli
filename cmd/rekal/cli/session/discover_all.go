@@ -1,13 +1,17 @@
 package session
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // AllDiscoverer is implemented by adapters that can enumerate every local
@@ -26,9 +30,21 @@ func DiscoverAllSessions(a Adapter) ([]SessionRef, error) {
 }
 
 // ContentHash is the dedup key shared by checkpoint and cross-repo import.
-// File refs hash transcript bytes; DB refs (OpenCode) hash "name:DBID".
+// File refs hash transcript bytes, decoding Codex zstd rollouts first so that
+// compression does not change identity. DB refs (OpenCode) hash "name:DBID".
 func ContentHash(a Adapter, ref SessionRef, fileData []byte) string {
 	if ref.Path != "" {
+		if a.Name() == "codex" && strings.HasSuffix(ref.Path, ".jsonl.zst") {
+			r, err := zstd.NewReader(bytes.NewReader(fileData), zstd.WithDecoderConcurrency(1))
+			if err == nil {
+				defer r.Close()
+				h := sha256.New()
+				if _, err := io.Copy(h, r); err == nil {
+					return hex.EncodeToString(h.Sum(nil))
+				}
+			}
+			// Invalid streams are rejected by Parse, not recorded as sessions.
+		}
 		return sha256HexBytes(fileData)
 	}
 	return sha256HexBytes([]byte(a.Name() + ":" + ref.DBID))
@@ -86,7 +102,7 @@ func (a *CursorAdapter) DiscoverAll() ([]SessionRef, error) {
 func (a *CodexAdapter) DiscoverAll() ([]SessionRef, error) {
 	var refs []SessionRef
 	for _, dir := range codexSessionDirs() {
-		matches, err := findJSONLFiles(dir)
+		matches, err := findCodexTranscripts(dir)
 		if err != nil {
 			continue
 		}

@@ -3,6 +3,7 @@ package session
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,10 @@ func copilotHome() string {
 }
 
 func (a *CopilotAdapter) Discover(repoPath string) ([]SessionRef, error) {
+	return a.DiscoverCached(repoPath, uncachedRepoMatch)
+}
+
+func (a *CopilotAdapter) DiscoverCached(repoPath string, match RepoMatcher) ([]SessionRef, error) {
 	base := copilotHome()
 	if base == "" {
 		return nil, nil
@@ -59,7 +64,7 @@ func (a *CopilotAdapter) Discover(repoPath string) ([]SessionRef, error) {
 		if _, err := os.Stat(events); err != nil {
 			continue
 		}
-		if copilotSessionMatchesRepo(events, repoPath) {
+		if match(events, repoPath, copilotRepoPaths) {
 			refs = append(refs, SessionRef{Path: events})
 		}
 	}
@@ -187,6 +192,9 @@ func (a *CopilotAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan copilot session: %w", err)
+	}
 	if payload.CapturedAt.IsZero() {
 		payload.CapturedAt = time.Now().UTC()
 	}
@@ -324,14 +332,12 @@ func copilotFillToolArgs(tc *ToolCall, args json.RawMessage) {
 	}
 }
 
-// copilotSessionMatchesRepo reports whether a Copilot events.jsonl belongs to
-// repoPath, by finding the session.start event's data.context.cwd and
-// prefix-matching it (same approach as the Codex adapter). Scans only until the
-// cwd is found — normally the first line.
-func copilotSessionMatchesRepo(eventsPath, repoPath string) bool {
+// copilotRepoPaths reads session.start's data.context.cwd. Scans only until
+// the cwd is found — normally the first line.
+func copilotRepoPaths(eventsPath string) ([]string, error) {
 	f, err := os.Open(eventsPath)
 	if err != nil {
-		return false
+		return nil, err
 	}
 	defer f.Close() //nolint:errcheck
 
@@ -350,9 +356,8 @@ func copilotSessionMatchesRepo(eventsPath, repoPath string) bool {
 		if err := json.Unmarshal(ev.Data, &d); err == nil && d.Context.CWD != "" {
 			// Exact repo or a path *inside* it — never a sibling that merely
 			// shares the prefix (repo vs repo-2).
-			return d.Context.CWD == repoPath ||
-				strings.HasPrefix(d.Context.CWD, repoPath+string(os.PathSeparator))
+			return []string{d.Context.CWD}, nil
 		}
 	}
-	return false
+	return nil, scanner.Err()
 }

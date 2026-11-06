@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // CodexAdapter discovers and parses OpenAI Codex CLI sessions from JSONL files.
@@ -16,14 +19,18 @@ type CodexAdapter struct{}
 func (a *CodexAdapter) Name() string { return "codex" }
 
 func (a *CodexAdapter) Discover(repoPath string) ([]SessionRef, error) {
+	return a.DiscoverCached(repoPath, uncachedRepoMatch)
+}
+
+func (a *CodexAdapter) DiscoverCached(repoPath string, match RepoMatcher) ([]SessionRef, error) {
 	var refs []SessionRef
 	for _, dir := range codexSessionDirs() {
-		matches, err := findJSONLFiles(dir)
+		matches, err := findCodexTranscripts(dir)
 		if err != nil {
 			continue
 		}
 		for _, f := range matches {
-			if codexSessionMatchesRepo(f, repoPath) {
+			if match(f, repoPath, codexRepoPaths) {
 				refs = append(refs, SessionRef{Path: f})
 			}
 		}
@@ -45,25 +52,25 @@ func codexSessionDirs() []string {
 }
 
 func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
-	data, err := os.ReadFile(ref.Path)
+	r, err := openCodexTranscript(ref.Path)
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 {
-		return nil, nil
-	}
+	defer r.Close() //nolint:errcheck
 
 	payload := &SessionPayload{
 		Source:    "codex",
 		ActorType: "human",
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var eventTurns, responseTurns []Turn
 	hasEventMessages := false
+	sawLine := false
 
 	for scanner.Scan() {
+		sawLine = true
 		var entry codexRawEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 			continue
@@ -163,6 +170,9 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan codex session: %w", err)
 	}
+	if !sawLine {
+		return nil, nil
+	}
 	// Rollouts can mirror messages in both streams. Prefer the event stream;
 	// response-only transcripts use message items without duplicating turns.
 	payload.Turns = responseTurns
@@ -239,14 +249,14 @@ func codexMessageText(content json.RawMessage) string {
 	return strings.Join(parts, "\n")
 }
 
-// findJSONLFiles recursively finds all .jsonl files under dir.
-func findJSONLFiles(dir string) ([]string, error) {
+// findCodexTranscripts includes rollouts compressed by recent Codex versions.
+func findCodexTranscripts(dir string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return filepath.SkipDir
 		}
-		if !d.IsDir() && strings.HasSuffix(d.Name(), ".jsonl") {
+		if !d.IsDir() && (strings.HasSuffix(d.Name(), ".jsonl") || strings.HasSuffix(d.Name(), ".jsonl.zst")) {
 			files = append(files, path)
 		}
 		return nil
@@ -257,17 +267,49 @@ func findJSONLFiles(dir string) ([]string, error) {
 	return files, err
 }
 
+type compressedCodexTranscript struct {
+	*zstd.Decoder
+	file *os.File
+}
+
+func (r *compressedCodexTranscript) Close() error {
+	r.Decoder.Close()
+	return r.file.Close()
+}
+
+func openCodexTranscript(path string) (io.ReadCloser, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasSuffix(path, ".jsonl.zst") {
+		return f, nil
+	}
+	decoder, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1))
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return &compressedCodexTranscript{Decoder: decoder, file: f}, nil
+}
+
 // codexSessionMatchesRepo checks if a Codex session file belongs to the given repo
 // by scanning for CWD in session_meta or turn_context entries.
 func codexSessionMatchesRepo(filePath, repoPath string) bool {
-	f, err := os.Open(filePath)
+	return uncachedRepoMatch(filePath, repoPath, codexRepoPaths)
+}
+
+func codexRepoPaths(filePath string) ([]string, error) {
+	f, err := openCodexTranscript(filePath)
 	if err != nil {
-		return false
+		return nil, err
 	}
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	var paths []string
+	seen := map[string]bool{}
 
 	for scanner.Scan() {
 		var entry codexRawEntry
@@ -275,12 +317,10 @@ func codexSessionMatchesRepo(filePath, repoPath string) bool {
 			continue
 		}
 		cwd := entry.extractCWD()
-		if cwd != "" {
-			rel, err := filepath.Rel(repoPath, cwd)
-			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				return true
-			}
+		if cwd != "" && !seen[cwd] {
+			paths = append(paths, cwd)
+			seen[cwd] = true
 		}
 	}
-	return false
+	return paths, scanner.Err()
 }

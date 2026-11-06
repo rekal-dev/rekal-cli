@@ -10,8 +10,25 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-06
+
 ### Fixed
 
+- Codex capture honors `CODEX_HOME` for both repo-scoped discovery and
+  cross-repo import, reads nested metadata IDs and response-only message
+  transcripts, preserves message timestamps, avoids mirrored-message
+  duplication, reports oversized-record errors, and excludes similarly named
+  sibling repositories. Shell tool calls also accept the `cmd` argument.
+- The installer extracts release archives without restoring foreign owners,
+  fixing installs in containers with restricted UID/GID mappings. The vendored
+  setup plugin carries the same fix (plugin 0.3.5).
+- The industry benchmark smoke shim explicitly requests JSON, uses the shipped
+  binary's digest instead of removed route scripts, accepts legitimate SILENCE
+  exits, preserves engine order and inclusive knowledge, and discloses its two
+  diagnostic recall calls. Python regressions now run in the release test gate.
+- Cloud setup instructions use the current CLI, explain existing LFS hooks and
+  Codex exports, and verify embedding models without waiting on a persistent
+  lock file.
 - The installer resolves the release version off the `releases/latest`
   redirect instead of the GitHub API. Unauthenticated API calls are capped at
   60 an hour per IP, so a shared office egress could exhaust the budget before

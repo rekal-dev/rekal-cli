@@ -51,6 +51,15 @@ python3 scripts/industry-bench/datasets/verify_dataset.py locomo
 
 Raw files stay under `datasets/data/` (gitignored).
 
+The shim requests `rekal --json` explicitly. Its `skill` diagnostic invokes the
+binary a second time for the shipped digest/verdict; it does not run removed
+Python route scripts or reimplement the gate. `SILENCE` at exit 1 is a valid
+result; command failures remain errors. Engine order and inclusive knowledge
+hits are preserved. `recall_calls` discloses the extra diagnostic call, whose
+latency is not a single production recall. Token counts remain the documented
+whitespace proxy. This smoke wrapper is not a reproduction of headline QA
+accuracy scores.
+
 ## Stock smoke (WS-E)
 
 After `sh_gen --index` on a conversation:

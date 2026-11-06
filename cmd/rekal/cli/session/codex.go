@@ -3,6 +3,7 @@ package session
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,18 +16,8 @@ type CodexAdapter struct{}
 func (a *CodexAdapter) Name() string { return "codex" }
 
 func (a *CodexAdapter) Discover(repoPath string) ([]SessionRef, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, nil
-	}
-
 	var refs []SessionRef
-	dirs := []string{
-		filepath.Join(home, ".codex", "sessions"),
-		filepath.Join(home, ".codex", "archived_sessions"),
-	}
-
-	for _, dir := range dirs {
+	for _, dir := range codexSessionDirs() {
 		matches, err := findJSONLFiles(dir)
 		if err != nil {
 			continue
@@ -38,6 +29,19 @@ func (a *CodexAdapter) Discover(repoPath string) ([]SessionRef, error) {
 		}
 	}
 	return refs, nil
+}
+
+// codexSessionDirs is shared by repo-scoped capture and cross-repo import.
+func codexSessionDirs() []string {
+	root := os.Getenv("CODEX_HOME")
+	if root == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		root = filepath.Join(home, ".codex")
+	}
+	return []string{filepath.Join(root, "sessions"), filepath.Join(root, "archived_sessions")}
 }
 
 func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
@@ -56,6 +60,8 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	var eventTurns, responseTurns []Turn
+	hasEventMessages := false
 
 	for scanner.Scan() {
 		var entry codexRawEntry
@@ -65,15 +71,19 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 
 		switch entry.Type {
 		case "session_meta":
+			var meta codexSessionMeta
+			_ = json.Unmarshal(entry.Payload, &meta)
 			if payload.SessionID == "" {
 				payload.SessionID = entry.SessionID
+				if payload.SessionID == "" {
+					payload.SessionID = meta.ID
+				}
 			}
 			if payload.CWD == "" {
 				payload.CWD = entry.extractCWD()
 			}
 			if payload.Branch == "" {
-				var meta codexSessionMeta
-				if err := json.Unmarshal(entry.Payload, &meta); err == nil && meta.Git.Branch != "" {
+				if meta.Git.Branch != "" {
 					payload.Branch = meta.Git.Branch
 				}
 			}
@@ -91,13 +101,15 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 			switch msg.Type {
 			case "user_message":
 				if msg.Message != "" {
-					payload.Turns = append(payload.Turns, Turn{
+					hasEventMessages = true
+					eventTurns = append(eventTurns, Turn{
 						Role: "human", Content: msg.Message, Timestamp: ts,
 					})
 				}
 			case "agent_message":
 				if msg.Message != "" {
-					payload.Turns = append(payload.Turns, Turn{
+					hasEventMessages = true
+					eventTurns = append(eventTurns, Turn{
 						Role: "assistant", Content: msg.Message, Timestamp: ts,
 					})
 				}
@@ -109,6 +121,19 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 				continue
 			}
 			switch item.Type {
+			case "message":
+				role := ""
+				switch item.Role {
+				case "user":
+					role = "human"
+				case "assistant":
+					role = "assistant"
+				}
+				if text := codexMessageText(item.Content); role != "" && text != "" {
+					responseTurns = append(responseTurns, Turn{
+						Role: role, Content: text, Timestamp: parseTimestamp(entry.Timestamp),
+					})
+				}
 			case "function_call":
 				tc := ToolCall{Tool: item.Name}
 				if item.Arguments != "" {
@@ -128,13 +153,21 @@ func (a *CodexAdapter) Parse(ref SessionRef) (*SessionPayload, error) {
 					}
 				}
 				if len(summaries) > 0 {
-					payload.Turns = append(payload.Turns, Turn{
-						Role:    "assistant",
-						Content: strings.Join(summaries, "\n"),
-					})
+					turn := Turn{Role: "assistant", Content: strings.Join(summaries, "\n"), Timestamp: parseTimestamp(entry.Timestamp)}
+					eventTurns = append(eventTurns, turn)
+					responseTurns = append(responseTurns, turn)
 				}
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan codex session: %w", err)
+	}
+	// Rollouts can mirror messages in both streams. Prefer the event stream;
+	// response-only transcripts use message items without duplicating turns.
+	payload.Turns = responseTurns
+	if hasEventMessages {
+		payload.Turns = eventTurns
 	}
 
 	payload.CapturedAt = time.Now().UTC()
@@ -163,6 +196,7 @@ func (e *codexRawEntry) extractCWD() string {
 }
 
 type codexSessionMeta struct {
+	ID  string `json:"id"`
 	Git struct {
 		Branch string `json:"branch"`
 	} `json:"git"`
@@ -174,12 +208,35 @@ type codexEventMsg struct {
 }
 
 type codexResponseItem struct {
-	Type      string `json:"type"`
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	Type      string          `json:"type"`
+	Role      string          `json:"role"`
+	Content   json.RawMessage `json:"content"`
+	Name      string          `json:"name"`
+	Arguments string          `json:"arguments"`
 	Summary   []struct {
 		Text string `json:"text"`
 	} `json:"summary"`
+}
+
+func codexMessageText(content json.RawMessage) string {
+	var text string
+	if json.Unmarshal(content, &text) == nil {
+		return text
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(content, &blocks) != nil {
+		return ""
+	}
+	var parts []string
+	for _, block := range blocks {
+		if (block.Type == "input_text" || block.Type == "output_text" || block.Type == "text") && block.Text != "" {
+			parts = append(parts, block.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 // findJSONLFiles recursively finds all .jsonl files under dir.
@@ -201,7 +258,7 @@ func findJSONLFiles(dir string) ([]string, error) {
 }
 
 // codexSessionMatchesRepo checks if a Codex session file belongs to the given repo
-// by scanning for CWD in session_meta or event_msg entries.
+// by scanning for CWD in session_meta or turn_context entries.
 func codexSessionMatchesRepo(filePath, repoPath string) bool {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -218,8 +275,11 @@ func codexSessionMatchesRepo(filePath, repoPath string) bool {
 			continue
 		}
 		cwd := entry.extractCWD()
-		if cwd != "" && strings.HasPrefix(cwd, repoPath) {
-			return true
+		if cwd != "" {
+			rel, err := filepath.Rel(repoPath, cwd)
+			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return true
+			}
 		}
 	}
 	return false

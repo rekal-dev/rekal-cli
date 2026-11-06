@@ -15,7 +15,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 ## What checkpoint does
 
 1. **Run shared preconditions** — Git root, init done.
-2. **Find session directory** — Locate Claude Code session files under `~/.claude/projects/` matching the current git repo.
+2. **Discover sessions** — Ask each registered agent adapter for transcripts matching the current git repo. Codex reads active and archived JSONL rollouts under `CODEX_HOME` (default `~/.codex`), including sessions launched in repo subdirectories and excluding similarly named sibling directories. Its parser accepts nested metadata IDs, legacy IDs, event messages, and response-only message transcripts; mirrored event/response messages count once. Hosts without local rollout files require an explicitly labelled transcript export before this file-based adapter can capture them.
 3. **Check for changes** — For each session file, compare size + SHA-256 hash against `checkpoint_state` cache. Skip unchanged files.
 4. **Dedup by content hash** — Check `sessions.session_hash` to skip already-imported sessions.
 5. **Parse transcript** — Extract conversation turns and tool calls from session JSON. Skip sessions with no turns and no tool calls.

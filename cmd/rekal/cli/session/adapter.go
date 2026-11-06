@@ -47,7 +47,7 @@ var _ AllDiscoverer = (*KiroAdapter)(nil)
 
 // toolCallArgsFromMap fills in tc.Path (preferring file_path, falling back
 // to path) and tc.CmdPrefix (truncated command) from a generic tool-call
-// argument map — the shape Codex, OpenCode, and Gemini's JSON tool-call
+// argument map (command, falling back to cmd) — the shape Codex, OpenCode, and Gemini's JSON tool-call
 // blocks all use (unlike Claude's, which has a more precisely known input
 // schema and uses a typed struct instead — see parse.go's extractToolCall).
 // Centralizing this here means a future change to path/command extraction
@@ -60,6 +60,8 @@ func toolCallArgsFromMap(tc *ToolCall, args map[string]interface{}) {
 		tc.Path = p
 	}
 	if cmd, ok := args["command"].(string); ok {
+		tc.CmdPrefix = truncate(cmd, 100)
+	} else if cmd, ok := args["cmd"].(string); ok {
 		tc.CmdPrefix = truncate(cmd, 100)
 	}
 }

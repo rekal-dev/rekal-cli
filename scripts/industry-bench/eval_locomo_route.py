@@ -2,14 +2,14 @@
 """LoCoMo route-logic eval — no LLM.
 
 For every LoCoMo question (minus known-bad), run stock recall in the ingested
-conversation repo, pipe through the checkout's `route.py` under chat
-calibration, and report gate + token cost (raw recall JSON vs route stdout).
+conversation repo and read the shipped binary's digest under chat calibration.
+The JSON/digest diagnostic uses two recall calls; it is not production latency.
 
 Pass / fail (deterministic):
   * Gold silence (adversarial / abstention) → must SILENCE
   * Otherwise (answerable or open-domain that needs an answer) → must INJECT
   * KNOWLEDGE is always a fail on LoCoMo (marker prose, not dialogue memory)
-  * route.py exit 2 is always a fail
+  * Command failures are always a fail
 
   python3 scripts/industry-bench/eval_locomo_route.py
   python3 scripts/industry-bench/eval_locomo_route.py --limit 40 --workers 4
@@ -25,14 +25,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from shim.shim import _extract_json_object, _run_recall_route as read_route, run_rekal
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IB = REPO_ROOT / "scripts" / "industry-bench"
-ROUTE = REPO_ROOT / "cmd" / "rekal" / "cli" / "skill" / "skills" / "rekal" / "scripts" / "route.py"
 REKAL = REPO_ROOT / "rekal"
 LOCOMO_ROOT = Path.home() / "imb-locomo"
 CONVS = IB / "datasets" / "data" / "locomo-conversations.jsonl"
 KNOWN_BAD = IB / "datasets" / "locomo-known-bad.jsonl"
-CHAT_CAL = IB / "calibration" / "locomo-route-eval.json"
+CHAT_CAL = IB / "calibration" / "skill-default.json"
 
 
 def toks(s: str) -> int:
@@ -130,66 +131,21 @@ def _keywords(q: str) -> str:
 
 def _recall_route(repo: Path, query: str, env: dict, weights: dict, limit: int) -> dict:
     """One recall→route pass. Returns gate/payload/token fields or error."""
-    wj = json.dumps(weights, separators=(",", ":"), sort_keys=True)
-    args = [query, "--limit", str(limit)]
-    if wj and wj != "{}":
-        args = ["--weights", wj, *args]
-
-    last_err = ""
-    raw = ""
-    for attempt in range(6):
-        p = subprocess.run(
-            [str(REKAL), *args],
-            cwd=repo,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        out = (p.stdout or "") + (p.stderr or "")
-        if p.returncode == 0 and "{" in (p.stdout or ""):
-            raw = p.stdout
-            break
-        low = out.lower()
-        if "lock" in low or "another rekal" in low or "rebuilding" in low or "index not built" in low:
-            time.sleep(1.2 * (attempt + 1))
-            last_err = out[-400:]
-            continue
-        return {"error": f"recall rc={p.returncode}: {out[-400:]}", "gate": "ERROR", "route_rc": 2}
-    else:
-        return {"error": f"recall retries: {last_err}", "gate": "ERROR", "route_rc": 2}
-
     try:
-        s, e = raw.find("{"), raw.rfind("}")
-        body = raw[s : e + 1]
-        payload = json.loads(body)
-    except json.JSONDecodeError as err:
-        return {"error": f"json: {err}", "gate": "ERROR", "route_rc": 2}
-
-    rp = subprocess.run(
-        ["python3", str(ROUTE)],
-        input=body,
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=30,
-    )
-    rout = (rp.stdout or "").strip()
-    line1 = rout.splitlines()[0] if rout else ""
-    if line1.startswith("INJECT"):
-        gate = "INJECT"
-    elif line1.startswith("KNOWLEDGE"):
-        gate = "KNOWLEDGE"
-    elif line1.startswith("SILENCE"):
-        gate = "SILENCE"
-    else:
-        gate = "ERROR"
+        raw = run_rekal(REKAL, repo, env, ["--json", "--limit", str(limit), "--", query])
+        payload, body = _extract_json_object(raw)
+        route = read_route(REKAL, repo, query, limit, env)
+    except (RuntimeError, ValueError) as err:
+        return {"error": str(err), "gate": "ERROR", "route_rc": 2}
+    rout = route["raw"]
+    gate = route["gate"]
 
     results = payload.get("results") or []
     inclusive = gate == "INJECT" and any(l.startswith("KNOWLEDGE") for l in rout.splitlines()[1:])
     return {
         "gate": gate,
-        "route_rc": rp.returncode,
+        "route_rc": route["exit_code"],
+        "recall_calls": 2,
         "inclusive_knowledge": inclusive,
         "n_results": len(results),
         "top_conf": float(results[0].get("confidence") or 0) if results else 0.0,
@@ -213,14 +169,8 @@ def run_one(task: dict, env: dict, weights: dict, limit: int) -> dict:
     if primary.get("error"):
         return {**task, **primary}
 
-    # Skill: widen before SILENCE — keyword reformulation (multi-lookup v1).
+    # One CLI recall already widens across deterministic reformulations.
     lookups = [primary]
-    if primary["gate"] == "SILENCE":
-        kw = _keywords(task["question"])
-        if kw and kw.lower() != task["question"].lower():
-            alt = _recall_route(repo, kw, env, weights, limit)
-            if not alt.get("error"):
-                lookups.append(alt)
 
     # Prefer first non-SILENCE; else keep primary.
     chosen = primary
@@ -259,16 +209,13 @@ def main() -> int:
         "--calibration",
         type=Path,
         default=CHAT_CAL,
-        help="gate/weights JSON (default: locomo-route-eval.json)",
+        help="gate/weights JSON (default: skill-default.json)",
     )
     args = ap.parse_args()
     calibration = args.calibration
 
     if not REKAL.exists():
         print(f"missing binary: {REKAL} (build first)", file=sys.stderr)
-        return 2
-    if not ROUTE.exists():
-        print(f"missing route.py: {ROUTE}", file=sys.stderr)
         return 2
     if not LOCOMO_ROOT.is_dir():
         print(f"missing LoCoMo repos: {LOCOMO_ROOT}", file=sys.stderr)
@@ -279,6 +226,13 @@ def main() -> int:
 
     tasks = load_tasks(args.limit)
     env, weights = chat_env(calibration)
+    # Configure each repo once before starting concurrent readers. The current
+    # CLI reads weights from config, not the removed --weights flag.
+    for cid in {task["conv"] for task in tasks}:
+        path = LOCOMO_ROOT / cid / "repo" / ".rekal" / "config.json"
+        config = json.loads(path.read_text()) if path.exists() else {}
+        config["weights"] = {**config.get("weights", {}), **weights}
+        path.write_text(json.dumps(config, indent=2) + "\n")
     print(f"tasks={len(tasks)} workers={args.workers} limit={args.n}")
     print(f"chat gates: CONF_MIN={env.get('REKAL_HUNT_CONF_MIN')} "
           f"CONF_SOFT={env.get('REKAL_HUNT_CONF_SOFT')} GAP_MIN={env.get('REKAL_HUNT_GAP_MIN')}")
@@ -358,7 +312,8 @@ def main() -> int:
         "avg_raw_tok": round(raw_tok / max(1, len(rows)), 1),
         "avg_route_tok": round(route_tok / max(1, len(rows)), 1),
         "chat_calibration": str(calibration),
-        "route": str(ROUTE),
+        "route": "rekal binary seed digest",
+        "recall_calls_per_question": 2,
         "rule": "want_silence→SILENCE; else→INJECT; KNOWLEDGE always fail",
     }
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")

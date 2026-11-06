@@ -494,7 +494,15 @@ for the same place and move `.rekal/` off the store that already exists —
 - `session/`: AI-session parsing — extract turns, tool calls, deduplicate. One
   `Adapter` per agent (`adapter.go` registry): `claude`, `cursor`, `codex`,
   `gemini`, `opencode`, `copilot`, `kiro` — each `Discover`s that agent's
-  session files for the repo and `Parse`s them into a `SessionPayload`. `kiro.go`
+  session files for the repo and `Parse`s them into a `SessionPayload`. Codex
+  discovery and cross-repo import share `codexSessionDirs` (`CODEX_HOME`, else
+  `~/.codex`; active + archived rollouts). `codex.go` accepts nested metadata
+  IDs and legacy top-level IDs, uses response-item messages when event messages
+  are absent, avoids mirrored-message duplication, retains timestamps, reports
+  scanner errors, and bounds repo matching by path components. Shared tool-call
+  extraction accepts `cmd` as a fallback to `command`. A host without local
+  rollout JSONL needs an explicitly labelled conversation export; this is not
+  automatic Work Mode capture. `kiro.go`
   (`KiroAdapter`) reads **both** Kiro CLI and IDE sessions (Parse dispatches on
   the ref extension). CLI: `$KIRO_HOME/sessions/cli/<id>.json` (metadata:
   `session_id`/`cwd`/`title`/`created_at` — `cwd` gives the exact repo match) +
@@ -841,6 +849,13 @@ for the same place and move `.rekal/` off the store that already exists —
   `docs/spec/command/` in the same change), test placement, commit convention
   (`type(scope): what changed`), and the binding benchmark honesty rules for
   `scripts/bench/` + `scripts/industry-bench/`
+  — the industry smoke shim explicitly requests JSON and reads the current
+  binary's digest for its optional skill diagnostic (two calls, disclosed in
+  `recall_calls`); no removed Python router or confidence re-sort. Standard-
+  library regressions under `scripts/tests/` cover that contract and installation
+  from archives with foreign owner IDs (`tar --no-same-owner`); `test:ci` runs
+  these alongside the Go race suite. The vendored plugin installer stays
+  byte-identical to `scripts/install.sh`.
 - `SECURITY.md`: Private reporting via GitHub advisories, and the threat model
   that follows from the architecture — in scope is anything putting material on
   the wire that should stay local (redaction/path-anonymization failure, a

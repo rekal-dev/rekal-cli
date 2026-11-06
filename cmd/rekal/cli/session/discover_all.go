@@ -84,15 +84,8 @@ func (a *CursorAdapter) DiscoverAll() ([]SessionRef, error) {
 
 // DiscoverAll returns every Codex session JSONL (active + archived).
 func (a *CodexAdapter) DiscoverAll() ([]SessionRef, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, nil
-	}
 	var refs []SessionRef
-	for _, dir := range []string{
-		filepath.Join(home, ".codex", "sessions"),
-		filepath.Join(home, ".codex", "archived_sessions"),
-	} {
+	for _, dir := range codexSessionDirs() {
 		matches, err := findJSONLFiles(dir)
 		if err != nil {
 			continue

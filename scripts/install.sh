@@ -218,7 +218,7 @@ main() {
     success "Checksum verified"
 
     info "Extracting..."
-    tar -xzf "${tmp_dir}/${archive_name}" -C "$tmp_dir"
+    tar --no-same-owner -xzf "${tmp_dir}/${archive_name}" -C "$tmp_dir"
 
     local binary_path="${tmp_dir}/rekal"
     local install_path="${install_dir}/rekal"

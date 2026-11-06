@@ -74,8 +74,9 @@ warnings. Never report recall-quality numbers from that state.
 ```bash
 rekal init          # store + hooks + skill; imports your rekal/<email> branch
 rekal sync          # pull teammate ledgers (all rekal/* branches), rebuild index
-rekal "<question>" | python3 .claude/skills/rekal/scripts/route.py   # recall, gated
-rekal query --session <sid> | python3 .claude/skills/rekal/scripts/view.py  # drill
+rekal "<question>"                       # shipped seed digest and verdict
+rekal query --session <sid>              # readable source turns
+rekal --json "<question>"                # structured results for programs
 ```
 
 `rekal init`/`sync` run under your configured git identity (`git config
@@ -88,16 +89,39 @@ The first recall after `init`/`sync` may print `SEMANTIC warming` — the nomic
 daemon is still loading; results are keyword + LSA. Re-run with backoff
 (2s/4s/8s) for full-quality ranking.
 
+If Git LFS already installed `post-commit` or `pre-push` hooks, `rekal init`
+preserves them and prints a notice. Add `rekal checkpoint` to the existing
+post-commit hook and `rekal push` to the existing pre-push hook, preserving
+their LFS commands. Otherwise automatic capture/sharing is not enabled.
+
+### Codex session capture
+
+The Codex adapter discovers active and archived JSONL rollouts under
+`$CODEX_HOME/sessions/` and `$CODEX_HOME/archived_sessions/`; the default root
+is `~/.codex`. Both `session_meta.payload.id` and the older top-level
+`session_id` are accepted. Repo matching includes subdirectories and excludes
+similarly named sibling repos.
+
+Conversation turns come from `event_msg` user/agent messages, with
+`response_item` messages used for response-only transcripts. Mirrored streams
+are not counted twice. A host that exposes no local JSONL rollout, including
+some Work Mode sessions, cannot be captured automatically by this adapter.
+An explicitly exported conversation can be checkpointed from a separate
+`CODEX_HOME`; label its export provenance and preserve the original visible
+message text and available timestamps.
+
 ## 3. Verify the semantic layer is actually on
 
 ```bash
 rekal index                                   # rebuild; spawns background embed
-until [ ! -f .rekal/embed.lock ]; do sleep 3; done   # wait for embeddings
-rekal query --index "SELECT COUNT(*) FROM knowledge_embeddings"   # > 0 = nomic on
+rekal embed                                   # finish missing vectors; retry if another embed holds the lock
+rekal query --index "SELECT model, count(*) FROM knowledge_embeddings GROUP BY model"
 ```
 
-If the count is 0 or you see `gzip: invalid header`, the model wasn't pulled —
-go back to build step 1.
+Check that the intended model has vectors, not merely that old vectors exist.
+The lock file can remain after its lock is released, so its existence is not a
+completion signal. If embeddings remain missing, inspect `.rekal/embed.log`;
+`gzip: invalid header` means the model wasn't pulled — return to build step 1.
 
 ## Dev loop without mise
 
@@ -109,4 +133,5 @@ gofmt -l -s . && golangci-lint run --timeout=5m ./...   # mise run lint (golangc
 go test ./...                          # mise run test
 go test -tags=integration ./cmd/rekal/cli/integration_test/...   # test:integration
 go test -tags=integration -race ./...  # mise run test:ci
+python3 -m unittest discover -s scripts/tests -v  # installer + benchmark CLI regressions
 ```

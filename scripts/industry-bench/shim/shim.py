@@ -44,7 +44,7 @@ def rekal_env(repo: Path, claude_config: Path | None, rekal: Path) -> dict:
     return env
 
 
-def run_rekal(rekal: Path, repo: Path, env: dict, args: list[str], retries: int = 8) -> str:
+def run_rekal(rekal: Path, repo: Path, env: dict, args: list[str], retries: int = 8, *, allow_silence: bool = False) -> str:
     """Run rekal in repo cwd; retry on DuckDB 'another rekal process' lock."""
     last = None
     for i in range(retries):
@@ -56,7 +56,9 @@ def run_rekal(rekal: Path, repo: Path, env: dict, args: list[str], retries: int 
             text=True,
         )
         out = (p.stdout or "") + (p.stderr or "")
-        if p.returncode == 0:
+        if p.returncode == 0 or (
+            allow_silence and p.returncode == 1 and p.stdout.startswith("SILENCE ")
+        ):
             return p.stdout
         if "another rekal process" in out.lower() or "lock" in out.lower():
             time.sleep(1.5 * (i + 1))
@@ -75,33 +77,15 @@ def _extract_json_object(raw: str) -> tuple[dict, str]:
     return json.loads(body), body
 
 
-def _skill_scripts_dir(repo: Path) -> Path:
-    local = repo / ".claude" / "skills" / "rekal" / "scripts"
-    if (local / "recall-route.py").exists():
-        return local
-    # Fallback for benchmark runs from the source tree.
-    return Path(__file__).resolve().parents[3] / "cmd" / "rekal" / "cli" / "skill" / "skills" / "rekal" / "scripts"
-
-
-def _run_recall_route(repo: Path, recall_json_body: str) -> dict:
-    scripts = _skill_scripts_dir(repo)
-    p = subprocess.run(
-        ["python3", str(scripts / "recall-route.py")],
-        input=recall_json_body,
-        capture_output=True,
-        text=True,
+def _run_recall_route(rekal: Path, repo: Path, query: str, limit: int, env: dict) -> dict:
+    """Read the shipped binary's verdict; never reconstruct its gate in Python."""
+    line = run_rekal(
+        rekal, repo, env, ["--limit", str(limit), "--", query], allow_silence=True
     )
-    line = (p.stdout or "").strip()
-    out = {"gate": "SILENCE", "raw": line or (p.stderr or "").strip(), "exit_code": p.returncode}
-    if not line:
-        return out
-    if line.startswith("INJECT"):
-        out["gate"] = "INJECT"
-    elif line.startswith("KNOWLEDGE"):
-        out["gate"] = "KNOWLEDGE"
-    elif line.startswith("SILENCE"):
-        out["gate"] = "SILENCE"
-    return out
+    first = line.splitlines()[0].split()[0] if line.strip() else ""
+    if first not in {"INJECT", "KNOWLEDGE", "SILENCE"}:
+        raise RuntimeError(f"unrecognized recall verdict: {line[:500]}")
+    return {"gate": first, "raw": line.strip(), "exit_code": int(first == "SILENCE")}
 
 
 def _is_marker_only_knowledge(path: str) -> bool:
@@ -118,24 +102,21 @@ def search(
 ) -> dict:
     """search(user_id, query) → contexts with token counts.
 
-    Invokes stock `rekal <query>` (JSON). No mode classifier yet (WS-C);
-    stock gates only — WS-E DoD allows this before C/D plug in.
+    Requests --json explicitly. The skill diagnostic makes a second call for
+    the shipped digest, so its latency is not a single production recall.
     """
     if env is None:
         env = rekal_env(repo, None, rekal)
-    raw = run_rekal(rekal, repo, env, [query, "--limit", str(limit)])
+    raw = run_rekal(rekal, repo, env, ["--json", "--limit", str(limit), "--", query])
     payload, body = _extract_json_object(raw)
 
     route_info = {"gate": "STOCK", "raw": "stock-route"}
     if route == "skill":
-        route_info = _run_recall_route(repo, body)
+        route_info = _run_recall_route(rekal, repo, query, limit, env)
 
     contexts = []
     retrieved_tokens = 0
     results = list(payload.get("results") or [])
-    if route == "skill" and route_info["gate"] == "INJECT":
-        # The skill gate uses absolute confidence; rank contexts accordingly.
-        results.sort(key=lambda r: float(r.get("confidence") or 0.0), reverse=True)
     for r in results:
         snippet = r.get("snippet") or ""
         tok = count_tokens(snippet)
@@ -168,10 +149,10 @@ def search(
                     "raw": "SILENCE reason=knowledge_marker_only",
                     "exit_code": route_info.get("exit_code"),
                 }
-        if route_info["gate"] == "INJECT":
-            knowledge = []
-        elif route_info["gate"] in ("KNOWLEDGE", "SILENCE"):
+        if route_info["gate"] in ("KNOWLEDGE", "SILENCE"):
             contexts = []
+        if route_info["gate"] == "SILENCE":
+            knowledge = []
 
     for c in contexts:
         retrieved_tokens += int(c.get("tokens") or 0)
@@ -183,6 +164,7 @@ def search(
         "contexts": contexts,
         "knowledge": knowledge,
         "route": route_info,
+        "recall_calls": 2 if route == "skill" else 1,
         "retrieved_context_tokens": retrieved_tokens,
         "token_counter": "whitespace",
         "limit": limit,

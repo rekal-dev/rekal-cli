@@ -113,6 +113,13 @@ type Result struct {
 	SnippetTurnIdx int           `json:"snippet_turn_index"`
 	SnippetRole    string        `json:"snippet_role"`
 	Session        SessionDetail `json:"session"`
+	// Session-wide signals do not locate a supporting turn. They carry no
+	// snippet and use -1 for SnippetTurnIdx instead of inventing a turn-0 hit.
+	MatchScope string `json:"match_scope,omitempty"`
+	// A conversation header can borrow its best child's snippet. Preserve the
+	// transcript the turn index belongs to; absent means SessionID itself.
+	SnippetSessionID string   `json:"snippet_session_id,omitempty"`
+	Anchors          []Anchor `json:"anchors,omitempty"`
 
 	// Children holds other matching transcripts folded under this one
 	// because they share the same trunk conversation (parent_session_id
@@ -368,6 +375,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 			sh.bm25Boost = boost
 			sh.bestHit = hit
 		}
+		sh.lexicalAnchors = append(sh.lexicalAnchors, lexicalAnchor(hit, filters.Query, weighted))
 	}
 
 	// Normalize BM25 scores to [0,1].
@@ -405,6 +413,7 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 			sessions[sid] = sh
 		}
 		sh.nomicScore = score
+		sh.semanticAnchors = sem.Anchors[sid]
 	}
 
 	// Normalize nomic scores to [0,1].
@@ -610,14 +619,16 @@ func hybridSearch(indexDB *sql.DB, filters Filters, limit int, gitRoot string, w
 		returned := make([]LineageReturned, 0, len(grouped))
 		for i, r := range grouped {
 			returned = append(returned, LineageReturned{
-				Rank:           i + 1,
-				SessionID:      r.SessionID,
-				Score:          r.Score,
-				Confidence:     r.Confidence,
-				Mass:           r.Mass,
-				SnippetTurnIdx: r.SnippetTurnIdx,
-				SnippetRole:    r.SnippetRole,
-				Children:       len(r.Children),
+				Rank:             i + 1,
+				SessionID:        r.SessionID,
+				Score:            r.Score,
+				Confidence:       r.Confidence,
+				Mass:             r.Mass,
+				SnippetTurnIdx:   r.SnippetTurnIdx,
+				SnippetRole:      r.SnippetRole,
+				MatchScope:       r.MatchScope,
+				SnippetSessionID: r.SnippetSessionID,
+				Children:         len(r.Children),
 			})
 		}
 		tokens := &LineageTokens{EmbedQueryChars: embedQueryChars}
@@ -768,6 +779,7 @@ func filterSearch(indexDB *sql.DB, filters Filters, limit int) ([]Result, error)
 			Snippet:        snippet,
 			SnippetTurnIdx: turnIdx,
 			SnippetRole:    role,
+			MatchScope:     "preview",
 			Session:        sf.detail(files),
 		})
 	}
@@ -975,6 +987,9 @@ func lsaSearch(indexDB *sql.DB, query string) (map[string]float64, error) {
 
 	scores := make(map[string]float64)
 	for sid, emb := range embeddings {
+		if len(emb) != len(queryVec) {
+			continue
+		}
 		sim := lsa.CosineSimilarity(queryVec, emb)
 		if sim > 0 {
 			scores[sid] = sim
@@ -1007,6 +1022,7 @@ type QueryEmbedder interface {
 // real embedder (embedded nomic-v1.5 or an HTTP model).
 type semanticSearchResult struct {
 	Scores     map[string]float64
+	Anchors    map[string][]Anchor
 	EmbedMS    int64
 	EmbedChars int
 	Model      string
@@ -1058,7 +1074,11 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder
 	if err != nil {
 		return out, err
 	}
-	if len(embeddings) == 0 {
+	passageCount, passageErr := db.CountPassageEmbeddings(indexDB, queryModel)
+	if passageErr != nil {
+		passageCount = 0
+	} // older, not-yet-migrated indexes use session vectors
+	if len(embeddings) == 0 && passageCount == 0 {
 		return out, semanticSkipReason(indexDB, queryModel)
 	}
 
@@ -1073,9 +1093,39 @@ func nomicSearch(indexDB *sql.DB, query string, gitRoot string, qe QueryEmbedder
 
 	out.Scores = make(map[string]float64)
 	for sid, emb := range embeddings {
+		if len(emb) != len(queryVec) {
+			continue
+		}
 		sim := lsa.CosineSimilarity(queryVec, emb)
 		if sim > 0 {
 			out.Scores[sid] = sim
+		}
+	}
+	out.Anchors = map[string][]Anchor{}
+	passageScores := map[string]float64{}
+	if passageCount > 0 {
+		err = db.VisitPassageVectors(indexDB, queryModel, func(p db.PassageVector) error {
+			if len(p.Vector) != len(queryVec) {
+				return nil
+			}
+			sim := lsa.CosineSimilarity(queryVec, p.Vector)
+			if sim > passageScores[p.SessionID] {
+				passageScores[p.SessionID] = sim
+			}
+			if sim <= 0 {
+				return nil
+			}
+			a := Anchor{SessionID: p.SessionID, StartTurn: p.StartTurn, EndTurn: p.EndTurn, StartByte: p.StartByte, EndByte: p.EndByte, Kind: "semantic", Score: sim, snippet: p.Content}
+			out.Anchors[p.SessionID] = rankedAnchors(append(out.Anchors[p.SessionID], a), 3)
+			return nil
+		})
+		if err != nil {
+			return out, err
+		}
+	}
+	for sid, score := range passageScores {
+		if score > 0 {
+			out.Scores[sid] = score
 		}
 	}
 	return out, nil
@@ -1175,15 +1225,43 @@ func buildResults(indexDB *sql.DB, scored []scored, filters Filters, limit int) 
 
 		// Build snippet.
 		var snippet string
-		var snippetIdx int
+		snippetIdx := -1
 		var snippetRole string
+		var matchScope string
+		var anchors []Anchor
+		if s.hit != nil {
+			lexical := rankedAnchors(s.hit.lexicalAnchors, 3)
+			// Reserve room for both signals when both have located evidence.
+			if len(lexical) > 2 && len(s.hit.semanticAnchors) >= 2 {
+				lexical = lexical[:2]
+			}
+			semantic := s.hit.semanticAnchors
+			if len(semantic) > anchorsPerResult-len(lexical) {
+				semantic = semantic[:anchorsPerResult-len(lexical)]
+			}
+			var located, unbounded []Anchor
+			for _, a := range lexical {
+				if a.unboundedLongTurn {
+					unbounded = append(unbounded, a)
+				} else {
+					located = append(located, a)
+				}
+			}
+			anchors = MergeAnchors(located, semantic, unbounded)
+		}
 
 		if s.hit != nil && s.hit.bestHit.content != "" {
 			snippet = extractSnippet(s.hit.bestHit.content, filters.Query)
 			snippetIdx = s.hit.bestHit.turnIndex
 			snippetRole = s.hit.bestHit.role
+		} else if s.hit != nil && len(s.hit.semanticAnchors) > 0 {
+			a := s.hit.semanticAnchors[0]
+			snippet, snippetIdx = extractSnippet(a.snippet, filters.Query), a.StartTurn
+			matchScope = "passage"
 		} else {
-			snippet, snippetIdx, snippetRole = firstTurnSnippet(indexDB, s.sessionID)
+			// LSA/nomic/facet scores describe a session. Without a lexical
+			// hit there is no located passage; its opening turn is not evidence.
+			matchScope = "session"
 		}
 
 		results = append(results, Result{
@@ -1194,6 +1272,8 @@ func buildResults(indexDB *sql.DB, scored []scored, filters Filters, limit int) 
 			Snippet:        snippet,
 			SnippetTurnIdx: snippetIdx,
 			SnippetRole:    snippetRole,
+			MatchScope:     matchScope,
+			Anchors:        anchors,
 			Session:        sf.detail(files),
 			Layers:         s.layers,
 		})
@@ -1578,18 +1658,31 @@ func groupByConversation(indexDB *sql.DB, results []Result, parentIDs map[string
 			continue
 		}
 		out = append(out, Result{
-			SessionID:      root,
-			Score:          best.Score,
-			Confidence:     best.Confidence,
-			Mass:           best.Mass,
-			Snippet:        best.Snippet,
-			SnippetTurnIdx: best.SnippetTurnIdx,
-			SnippetRole:    best.SnippetRole,
-			Session:        trunk,
-			Children:       g.members,
+			SessionID:        root,
+			Score:            best.Score,
+			Confidence:       best.Confidence,
+			Mass:             best.Mass,
+			Snippet:          best.Snippet,
+			SnippetTurnIdx:   best.SnippetTurnIdx,
+			SnippetRole:      best.SnippetRole,
+			MatchScope:       best.MatchScope,
+			SnippetSessionID: snippetSource(best),
+			Anchors:          best.Anchors,
+			Session:          trunk,
+			Children:         g.members,
 		})
 	}
 	return out
+}
+
+func snippetSource(r Result) string {
+	if r.SnippetTurnIdx < 0 || r.MatchScope == "session" {
+		return ""
+	}
+	if r.SnippetSessionID != "" {
+		return r.SnippetSessionID
+	}
+	return r.SessionID
 }
 
 // loadSessionFacet loads a session's facet row for use as a synthetic group
@@ -1618,13 +1711,15 @@ type scored struct {
 func round2(f float64) float64 { return math.Round(f*100) / 100 }
 
 type sessionHit struct {
-	bestHit    bm25Hit
-	bm25Max    float64 // boosted BM25 of the winning turn
-	bm25Raw    float64 // pre-boost BM25 of the winning turn (lineage)
-	bm25Boost  string  // "steering" | "summary" | "" (lineage)
-	lsaScore   float64
-	nomicScore float64
-	facetScore float64
+	lexicalAnchors  []Anchor
+	semanticAnchors []Anchor
+	bestHit         bm25Hit
+	bm25Max         float64 // boosted BM25 of the winning turn
+	bm25Raw         float64 // pre-boost BM25 of the winning turn (lineage)
+	bm25Boost       string  // "steering" | "summary" | "" (lineage)
+	lsaScore        float64
+	nomicScore      float64
+	facetScore      float64
 }
 
 func sortScored(s []scored) {
@@ -1861,6 +1956,9 @@ func attachShortIDs(indexDB *sql.DB, results []Result) {
 	walk = func(rs []Result) {
 		for i := range rs {
 			rs[i].Sid = m.SID(rs[i].SessionID)
+			for j := range rs[i].Anchors {
+				rs[i].Anchors[j].Sid = m.SID(rs[i].Anchors[j].SessionID)
+			}
 			for j := range rs[i].Related {
 				rs[i].Related[j].Sid = m.SID(rs[i].Related[j].SessionID)
 			}

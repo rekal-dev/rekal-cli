@@ -449,6 +449,34 @@ func semanticEmbedder(gitRoot string, wait bool) (sessionEmbedder, error) {
 // that run many passes pass a shared, already-loaded embedder so the model
 // loads once, off the index lock (see runEmbed).
 func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string, budget int, emb sessionEmbedder) (remaining bool, err error) {
+	return buildDocumentEmbeddings(indexDB, sessionContent, w, gitRoot, budget, emb, false)
+}
+
+func buildPassageEmbeddings(indexDB *sql.DB, sessionIDs []string, w io.Writer, gitRoot string, budget int, emb sessionEmbedder) (bool, error) {
+	if err := db.RefreshSessionPassages(indexDB, sessionIDs...); err != nil {
+		return false, err
+	}
+	if emb == nil {
+		var err error
+		emb, err = semanticEmbedder(gitRoot, false)
+		if err != nil || emb == nil {
+			return false, err
+		}
+		defer emb.Close()
+	}
+	docs, err := db.QueryMissingPassageDocuments(indexDB, emb.ModelName(), sessionIDs, 512)
+	if err != nil {
+		return false, err
+	}
+	more, err := buildDocumentEmbeddings(indexDB, docs, w, gitRoot, budget, emb, true)
+	if err != nil {
+		return more, err
+	}
+	left, err := db.QueryMissingPassageDocuments(indexDB, emb.ModelName(), sessionIDs, 1)
+	return more || len(left) > 0, err
+}
+
+func buildDocumentEmbeddings(indexDB *sql.DB, sessionContent map[string]string, w io.Writer, gitRoot string, budget int, emb sessionEmbedder, passages bool) (remaining bool, err error) {
 	if emb == nil {
 		// Per-call construction (checkpoint): degrade fast if the daemon isn't
 		// warm — this commit's vectors converge on the next `rekal embed`.
@@ -460,9 +488,18 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 	}
 	model := emb.ModelName()
 
-	existing, err := db.QueryEmbeddings(indexDB, model)
-	if err != nil {
-		return false, err
+	storeVectors := db.StoreEmbeddings
+	kind := "session"
+	if passages {
+		storeVectors = db.StorePassageEmbeddings
+		kind = "passage"
+	}
+	existing := map[string][]float64{}
+	if !passages {
+		existing, err = db.QueryEmbeddings(indexDB, model)
+		if err != nil {
+			return false, err
+		}
 	}
 	needed := make(map[string]string, len(sessionContent))
 	for sid, content := range sessionContent {
@@ -478,7 +515,7 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 		return false, nil
 	}
 
-	fmt.Fprintf(w, "building deep semantic embeddings (%s)...\n", model)
+	fmt.Fprintf(w, "building deep semantic %s embeddings (%s)...\n", kind, model)
 
 	hashBySession := make(map[string]string, len(needed))
 	hashes := make([]string, 0, len(needed))
@@ -514,7 +551,7 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 		if err != nil {
 			// Still store whatever the cache supplied this bite.
 			if len(vectors) > 0 {
-				_ = db.StoreEmbeddings(indexDB, vectors, model)
+				_ = storeVectors(indexDB, vectors, model)
 				_ = recordEmbedProvenance(indexDB, model, emb)
 			}
 			return true, err
@@ -529,7 +566,7 @@ func buildSemanticEmbeddings(indexDB *sql.DB, sessionContent map[string]string, 
 		}
 	}
 
-	if err := db.StoreEmbeddings(indexDB, vectors, model); err != nil {
+	if err := storeVectors(indexDB, vectors, model); err != nil {
 		return false, err
 	}
 	if err := recordEmbedProvenance(indexDB, model, emb); err != nil {

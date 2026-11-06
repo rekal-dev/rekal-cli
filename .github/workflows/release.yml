@@ -9,13 +9,20 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           lfs: true
+      - name: Verify release tag
+        run: python3 scripts/check_release_ref.py
       - uses: jdx/mise-action@v3
       - name: Build llama.cpp
         run: |
@@ -95,6 +102,9 @@ jobs:
           go build -ldflags "-s -w -X github.com/rekal-dev/rekal-cli/cmd/rekal/cli.Version=${VERSION}" \
             -o rekal ./cmd/rekal
 
+      - name: Verify binary version
+        run: test "$(./rekal version)" = "rekal ${GITHUB_REF_NAME#v}"
+
       - name: Create archive
         run: |
           ARCHIVE="rekal_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
@@ -128,11 +138,12 @@ jobs:
           cd dist
           cat *.sha256 > checksums.txt
           rm -f *.sha256
+          sha256sum --check checksums.txt
 
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p' || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || true)
           if [ -n "$PREV_TAG" ]; then
             CHANGELOG=$(git log --oneline "${PREV_TAG}..HEAD" --no-merges \
               --grep="^docs:" --grep="^test:" --grep="^chore:" --invert-grep)
@@ -147,6 +158,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" dist/* \
-            --title "${{ github.ref_name }}" \
+          gh release create "${GITHUB_REF_NAME}" dist/* --verify-tag \
+            --title "${GITHUB_REF_NAME}" \
             --notes-file /tmp/changelog.txt

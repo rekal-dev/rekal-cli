@@ -1022,13 +1022,33 @@ No exclamation marks. No emoji. No "oops."
 
 ## Release Process
 
+Passage retrieval (`db/passages.go`, `search/anchors.go`) is derived entirely
+from `index.db.turns_ft`: role/time-labelled 8 KiB windows, at most eight turn
+pieces, one-piece overlap, content-addressed IDs and append-aware tail refresh.
+`embed` fills passage vectors alongside existing session/knowledge layers in
+16-document bites. Semantic retrieval retains source ranges; lexical hits and
+framing fusion retain several anchors (four per result). Whole-session vectors
+remain a fallback. An unlocated session hit has index -1 and `match_scope=session`;
+it never inherits a fake turn-zero match. Group headers name a borrowed child's
+`snippet_session_id`. `evidence.go` exposes the `evidence/` package as
+`rekal evidence`: bounded original-text fetching, neighbor expansion, overlap
+deduplication, citations, explicit gaps and source-bound continuation. No ledger
+or wire mutation. See `docs/design/passage-evidence.md` and the command spec.
+The `scripts/passage-eval` diagnostic records evidence coverage and context
+hashes under matched retrieval settings; it does not run a QA reader/judge.
+
 1. Ensure main is green (CI, Lint, License Check)
 2. Tag and push:
    ```bash
    git tag v0.x.y
    git push origin v0.x.y
    ```
-3. Release workflow validates then publishes via GoReleaser
+3. Release workflow rejects branch dispatches and tags outside `origin/main`
+   (`scripts/check_release_ref.py`), then validates, builds the three native
+   targets, smoke-checks each binary version, verifies checksums and publishes
+   only the existing tag. Manual runs must select an existing stable version
+   tag. Changelog lookup uses an ancestor tag, not the globally second-largest
+   tag. Concurrent runs for the same ref serialize.
 4. Bump the `REKAL_VERSION=v…` pin in README.md's install commands to the new
    tag (`mise run check:readme-pin` verifies it). The README names a version so
    installing never depends on GitHub's 60-an-hour unauthenticated API budget —

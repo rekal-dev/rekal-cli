@@ -185,6 +185,18 @@ workflow steps, other agents in the same team) share this result's trunk
 conversation via `parent_session_id`; omitted otherwise. `total` counts
 top-level (grouped) results, not raw session hits.
 
+`anchors` retains several distinct lexical turns and semantic passages, including
+source session IDs, turn ranges and byte bounds. Query-framing fusion preserves
+up to four locations per result. Semantic passage previews use
+`match_scope: "passage"`. A session-level match with no located evidence uses
+`match_scope: "session"`, `snippet_turn_index: -1`, and an empty snippet instead
+of presenting its opening turn as evidence. Filter-only previews use
+`match_scope: "preview"`. `snippet_session_id` identifies a child transcript
+when a grouped conversation borrows its snippet. Default digest headers are
+unchanged; additional `anchors=` lines show available source pointers. Fetch
+selected ranges with [evidence](evidence.md), including one bounded call over
+recall JSON. See [passage design](../../design/passage-evidence.md).
+
 `summary_turn_index` points at the session's latest compaction-summary turn
 (role `summary`) when one exists; omitted otherwise. It is a pointer, not a
 payload — the summary itself is 10-17KB and is never inlined into recall

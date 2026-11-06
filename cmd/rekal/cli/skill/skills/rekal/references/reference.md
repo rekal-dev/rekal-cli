@@ -74,6 +74,7 @@ Structural index finishes first; deep vectors continue via `rekal embed`
 |---|---|
 | `rekal "<q>"` | Recall → seed digest (INJECT / KNOWLEDGE / SILENCE). One call auto-widens (fuses deterministic reformulations). Super-low floors; you judge `conf=` / `path=score`. `--json` for raw |
 | `rekal query --session <id>` / `--sql "…"` | Drill / SQL → readable turns or TSV rows (no JSON chrome); `--json` for raw; SQL errors printed verbatim |
+| `rekal evidence --anchor s3:12-15` / `--input recall.json` | Merge cited original-turn windows, preserve roles/time, and expose gaps/continuation under byte and turn limits |
 | `rekal find "<term>" [role]` | Every ledger mention of a term, time order, complete — enumeration without hand-SQL |
 | `bash scripts/map.sh fresh` / `watermark` | Map watermark vs HEAD / write-refresh (+ stub) |
 | `bash scripts/wiki-gate.sh` | Refuse wiki on default branch |

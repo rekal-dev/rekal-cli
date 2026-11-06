@@ -16,13 +16,13 @@ import (
 var publicCommands = []string{
 	"init", "clean", "version",
 	"checkpoint", "push", "sync", "log",
-	"query", "find", "index", "embed",
+	"query", "find", "index", "embed", "evidence",
 }
 
 // commandsWithSpec must have docs/spec/command/<name>.md (version is too thin).
 var commandsWithSpec = []string{
 	"init", "clean", "checkpoint", "push", "sync", "log",
-	"query", "find", "index", "embed",
+	"query", "find", "index", "embed", "evidence",
 	// root recall is documented as recall.md
 }
 

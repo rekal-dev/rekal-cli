@@ -224,9 +224,16 @@ All workflows use `ubuntu-latest`. CI and Lint use [jdx/mise-action@v3](https://
 ### 3.5 Release workflow
 
 - **File**: `.github/workflows/release.yml`
-- **Trigger**: Push of a tag matching `v*` (e.g. `v0.0.4`).
+- **Trigger**: Push of a stable `vMAJOR.MINOR.PATCH` tag, or manual dispatch
+  selecting that existing tag. A dispatch on a branch is rejected.
 - **Gate**: The `validate` job runs first: `mise run test:ci` and `mise run lint`.
-- **Release job**: GoReleaser builds Linux/amd64 binary (DuckDB requires CGO; cross-compilation TBD).
+- **Ref check**: `scripts/check_release_ref.py` verifies the checkout is the
+  peeled tag commit and that it is merged into `origin/main`.
+- **Build matrix**: Native Linux amd64, Linux arm64 and macOS arm64 builds,
+  each checking its actual `rekal version` output before archiving.
+- **Publish**: Combine and verify the three SHA-256 manifests, generate notes
+  from the previous ancestor tag, and `gh release create --verify-tag`.
+  Runs for the same ref serialize. Existing published assets are not replaced.
 
 ### 3.6 Cutting a release
 
@@ -236,7 +243,8 @@ All workflows use `ubuntu-latest`. CI and Lint use [jdx/mise-action@v3](https://
    git tag v0.x.y
    git push origin v0.x.y
    ```
-3. The Release workflow runs: validate (test:ci + lint), then release (GoReleaser).
+3. The Release workflow checks the tag, validates (test:ci + lint), builds and
+   smoke-tests the native artifacts, verifies checksums, then publishes.
 4. Bump `REKAL_VERSION=v…` in README.md's install commands to the new tag. The
    README pins a version so the install does not depend on GitHub's
    unauthenticated API budget; a pin nobody bumps quietly ships the old binary

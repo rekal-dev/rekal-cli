@@ -57,6 +57,11 @@ a program needs to parse it.
   session into readable turns. `rekal query --sql "SELECT …"` for analytical /
   complete-set SQL (see `references/reference.md` for the full schema; `ts` is a
   TIMESTAMP — use `BETWEEN`, not `LIKE`).
+- `rekal evidence --anchor s3:12-15 --anchor s8:42` — fetch several cited
+  windows together; merge overlap and retain original roles/timestamps. Or pass
+  recall JSON with `--input`. Byte/turn limits, visible gaps and `next` pagination
+  bound the fetch. A `session` match has no located turn; choose a drill rather
+  than treating turn zero as evidence. You choose the context and follow-up.
 
 `INJECT`/`SILENCE` are **recommendations**, biased toward more data than
 decision: only empty / near-zero absolute `confidence` is machine-silenced

@@ -111,6 +111,10 @@ INDEX DB SCHEMA (.rekal/index.db):
   file_cooccurrence    file_a, file_b, count
   session_embeddings   session_id, embedding, model, generated_at
                        PK: (session_id, model). Models: lsa-v1, nomic-v1.5-c8k
+  session_passages     id, session_id, start_turn, end_turn, start_byte,
+                       end_byte, content, content_hash (index-only)
+  passage_embeddings   passage_id, model, embedding, generated_at
+                       PK: (passage_id, model). Filled by rekal embed
   knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
                        content, content_hash, blob_sha
                        (heading-anchored prose sections of tracked files at HEAD)

@@ -46,6 +46,9 @@ So:
      (`sessionEmbedBudget`)
    - Knowledge vectors: embed up to 16 chunks missing vectors per bite
      (`knowledgeEmbedBudget`; same as the post-commit hook)
+   - Passage vectors: refresh changed original-turn windows and embed up to
+     16 uncached passages per bite. Retain roles, assertion timestamps and
+     turn/byte coordinates. Stable windows keep their vectors on append.
    - Close `index.db` (release the write lock so recall/checkpoint can run)
    - Brief yield, then next bite
 3. Progress and errors append to `.rekal/embed.log` when spawned from

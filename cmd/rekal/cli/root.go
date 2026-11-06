@@ -243,10 +243,13 @@ func NewRootCmd() *cobra.Command {
 	indexCmd.GroupID = "advanced"
 	embedCmd := newEmbedCmd()
 	embedCmd.GroupID = "advanced"
+	evidenceCmd := newEvidenceCmd()
+	evidenceCmd.GroupID = "advanced"
 
 	cmd.AddCommand(initCmd, cleanCmd, versionCmd)
 	cmd.AddCommand(checkpointCmd, pushCmd, syncCmd, logCmd)
 	cmd.AddCommand(queryCmd, findCmd, indexCmd, embedCmd)
+	cmd.AddCommand(evidenceCmd)
 	cmd.AddCommand(nomic.NewDaemonCmd())
 
 	return cmd

@@ -116,6 +116,7 @@ const rrfK = 60.0
 func fuseFramings(outs []*search.Output) *search.Output {
 	rrf := map[string]float64{}
 	best := map[string]search.Result{}
+	anchorGroups := map[string][][]search.Anchor{}
 	seen := map[string]bool{}
 	var order []string // first-seen order, for stable tie-breaking
 
@@ -125,6 +126,7 @@ func fuseFramings(outs []*search.Output) *search.Output {
 			if sid == "" {
 				sid = r.Sid
 			}
+			anchorGroups[sid] = append(anchorGroups[sid], r.Anchors)
 			if !seen[sid] {
 				seen[sid] = true
 				order = append(order, sid)
@@ -144,7 +146,25 @@ func fuseFramings(outs []*search.Output) *search.Output {
 		Mode:      outs[0].Mode,
 	}
 	for _, sid := range order {
-		fused.Results = append(fused.Results, best[sid])
+		r := best[sid]
+		// Keep the representative's primary pointer first, then admit one
+		// location per framing before second locations consume the seed cap.
+		groups := append([][]search.Anchor{r.Anchors}, anchorGroups[sid]...)
+		var interleaved []search.Anchor
+		for offset := 0; ; offset++ {
+			added := false
+			for _, group := range groups {
+				if offset < len(group) {
+					interleaved = append(interleaved, group[offset])
+					added = true
+				}
+			}
+			if !added {
+				break
+			}
+		}
+		r.Anchors = search.MergeAnchors(interleaved)
+		fused.Results = append(fused.Results, r)
 	}
 	fused.Total = len(fused.Results)
 	for _, o := range outs {

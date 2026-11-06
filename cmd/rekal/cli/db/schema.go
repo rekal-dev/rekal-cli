@@ -190,6 +190,9 @@ func MigrateIndexSchema(d *sql.DB) error {
 		}
 	}
 
+	if _, err := d.Exec(passageDDL); err != nil {
+		return err
+	}
 	for _, col := range []struct{ name, typ string }{
 		{"parent_session_id", "VARCHAR"},
 		{"team_name", "VARCHAR"},

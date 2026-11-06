@@ -172,8 +172,49 @@ func writeDigestRows(b *strings.Builder, results []search.Result) {
 		// Literal double quotes around the (unescaped) snippet, as route.py.
 		// The reach hint is empty unless the seed has recall-graph history, so
 		// this stays byte-identical to route.py on a cold store.
-		fmt.Fprintf(b, "  %s conf=%.2f t%d%s \"%s\"\n",
-			sid, r.Confidence, r.SnippetTurnIdx, reachHint(r.Reached), digestSnippet(r.Snippet))
+		pointer := "session"
+		if r.SnippetTurnIdx >= 0 && r.MatchScope != "session" {
+			pointer = fmt.Sprintf("t%d", r.SnippetTurnIdx)
+			if r.MatchScope == "passage" && len(r.Anchors) > 0 {
+				a := r.Anchors[0]
+				if a.EndTurn > a.StartTurn {
+					pointer = fmt.Sprintf("t%d-%d", a.StartTurn, a.EndTurn)
+				}
+			}
+			if r.SnippetSessionID != "" && r.SnippetSessionID != r.SessionID {
+				source := r.SnippetSessionID
+				for _, child := range r.Children {
+					if child.SessionID == source && child.Sid != "" {
+						source = child.Sid
+						break
+					}
+				}
+				pointer = source + ":" + pointer
+			}
+			if r.MatchScope == "preview" {
+				pointer = "preview:" + pointer
+			}
+		}
+		fmt.Fprintf(b, "  %s conf=%.2f %s%s \"%s\"\n",
+			sid, r.Confidence, pointer, reachHint(r.Reached), digestSnippet(r.Snippet))
+		if len(r.Anchors) > 1 || (len(r.Anchors) == 1 && (r.Anchors[0].StartByte > 0 || r.Anchors[0].EndByte > 0)) {
+			var refs []string
+			for _, a := range r.Anchors {
+				source := a.Sid
+				if source == "" {
+					source = a.SessionID
+				}
+				ref := fmt.Sprintf("%s:%d", source, a.StartTurn)
+				if a.EndTurn > a.StartTurn {
+					ref += fmt.Sprintf("-%d", a.EndTurn)
+				}
+				if a.StartByte > 0 || a.EndByte > 0 {
+					ref += fmt.Sprintf("@%d-%d", a.StartByte, a.EndByte)
+				}
+				refs = append(refs, ref)
+			}
+			fmt.Fprintf(b, "    anchors=%s\n", strings.Join(refs, ","))
+		}
 	}
 	if more := len(results) - digestWindow; more > 0 {
 		fmt.Fprintf(b, "  (+%d more)\n", more)

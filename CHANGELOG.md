@@ -10,7 +10,25 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+### Added
+
+- Original-turn passage embeddings in the disposable index, retaining every
+  speaker, assertion timestamp and source turn/byte range. Long turns split
+  without losing UTF-8 text; unchanged passages reuse their vectors on append.
+- Several evidence anchors per session, preserved across query-framing fusion.
+  `rekal evidence` fetches selected windows in one bounded call with source
+  citations, deduplication, visible gaps and resumable pagination.
+- A matched LoCoMo evidence-delivery diagnostic recording source turn IDs,
+  context hashes, text bytes and latency independently of QA accuracy.
+
 ### Fixed
+
+- Session-wide semantic matches no longer invent a turn-zero evidence pointer.
+  Located semantic passages retain ranges; grouped headers identify the child
+  transcript a borrowed snippet belongs to.
+- Release dispatch rejects branches and unmerged version tags. Each native
+  artifact verifies its version; publication verifies checksums and requires
+  the tag to exist. Changelog lookup follows tag ancestry.
 
 - Checkpoint caches Copilot and Codex transcript repo metadata by file size and
   nanosecond mtime, including sessions belonging to other repositories. Warm
@@ -25,10 +43,6 @@ starts at 1.0; it records what 1.0 ships and everything after.
 - Copilot rejects oversized-record scan failures instead of recording a
   successful partial capture. Recent Claude compact-summary, progress and
   harness-message shapes have explicit compatibility coverage.
-
-## [1.0.3] - 2026-11-06
-
-### Fixed
 
 - Codex capture honors `CODEX_HOME` for both repo-scoped discovery and
   cross-repo import, reads nested metadata IDs and response-only message

@@ -86,11 +86,11 @@ func TestSkill_ContentHashes(t *testing.T) {
 	s := rekalSkill(t)
 
 	want := map[string]string{
-		"SKILL.md":                             "c3774d215dc2e04a5c80889f9441caa6c3971c0646dcbb6e42c193922304d12c",
+		"SKILL.md":                             "2fcfa663b3e9da9f303fcb7e5e0a1a6c9ad13eadfa6549e2eeb922c9416e90bd",
 		"references/ledger.md":                 "032b086c88fb09d101dc78c4660a742dd07a2e8af6ada1d6e32ebf8b75275bed",
 		"references/map.md":                    "9434758a67fcded223659227b0e62c02a9c3a8b6a4f9cb005df00fa02ccbc950",
 		"references/wiki.md":                   "ce117f95ffd1f0d8d70b3d0c1d3401b641f1ef0ca3beb9a1d3812d4c65bc86a1",
-		"references/reference.md":              "bd0a571a8cba25d6a6749e3c97238e9373ebabdf14e748218fdbfd66d0eea58d",
+		"references/reference.md":              "ce3129a199577abbfc23b04063db46b8dc409657af8dfdca0ec62b32bbcfd357",
 		"references/workflows/duration.md":     "9fc5acd4920405c5a2e0b69d9cdd9efd9d6247e6c31b7fcdc096c8b2d589949f",
 		"references/workflows/complete-set.md": "ec228f7937c58847116ec0e3cab9e411a245edd4a442f007dc197fdd20b3322d",
 		"references/workflows/event-time.md":   "2e9624e231da7928e348e9e9e5bbc19da1706bd47f18ca233d8e7d21f80b2ed5",

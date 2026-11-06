@@ -48,3 +48,35 @@ func TestFuseFramings(t *testing.T) {
 		t.Errorf("single-framing fusion changed order: %+v", single.Results)
 	}
 }
+
+func TestFuseFramings_PreservesDifferentEvidenceAnchors(t *testing.T) {
+	t.Parallel()
+	var outs []*search.Output
+	for i, confidence := range []float64{.5, .8, .4} {
+		outs = append(outs, &search.Output{Results: []search.Result{{SessionID: "session-a", Confidence: confidence, Anchors: []search.Anchor{{SessionID: "session-a", StartTurn: i * 20, EndTurn: i * 20}}}}})
+	}
+	out := fuseFramings(outs)
+	if len(out.Results) != 1 || out.Results[0].Confidence != .8 || len(out.Results[0].Anchors) != 3 {
+		t.Fatalf("fusion lost located evidence: %+v", out)
+	}
+}
+
+func TestFuseFramings_FullSeedsLeaveRoomForEachFraming(t *testing.T) {
+	t.Parallel()
+	var outs []*search.Output
+	for i, confidence := range []float64{.5, .8, .4, .6} {
+		var anchors []search.Anchor
+		for j := 0; j < 4; j++ {
+			anchors = append(anchors, search.Anchor{SessionID: "session-a", StartTurn: i*20 + j, EndTurn: i*20 + j})
+		}
+		outs = append(outs, &search.Output{Results: []search.Result{{SessionID: "session-a", Confidence: confidence, Anchors: anchors}}})
+	}
+	r := fuseFramings(outs).Results[0]
+	seen := map[int]bool{}
+	for _, a := range r.Anchors {
+		seen[a.StartTurn/20] = true
+	}
+	if len(r.Anchors) != 4 || len(seen) != 4 || r.Anchors[0].StartTurn != 20 || r.Confidence != .8 {
+		t.Fatalf("one framing consumed the entire seed: %+v", r)
+	}
+}

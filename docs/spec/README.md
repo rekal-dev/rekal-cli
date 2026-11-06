@@ -16,6 +16,7 @@ Experience and behaviour per command. One file per command under `command/`.
 | `rekal log` | [command/log.md](command/log.md) |
 | `rekal find` | [command/find.md](command/find.md) |
 | `rekal query` | [command/query.md](command/query.md) |
+| `rekal evidence` | [command/evidence.md](command/evidence.md) |
 | `rekal` (root recall) | [command/recall.md](command/recall.md) |
 
 **Soul:** Minimum touch. Root = recall only. Everything else is explicit subcommands. We keep the command set small — no extra subcommands unless necessary.

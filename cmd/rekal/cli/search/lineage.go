@@ -255,14 +255,16 @@ type LineageSemantic struct {
 
 // LineageReturned is one top-level row after conversation grouping.
 type LineageReturned struct {
-	Rank           int     `json:"rank"`
-	SessionID      string  `json:"session_id"`
-	Score          float64 `json:"score"`
-	Confidence     float64 `json:"confidence,omitempty"`
-	Mass           float64 `json:"mass,omitempty"`
-	SnippetTurnIdx int     `json:"snippet_turn_index"`
-	SnippetRole    string  `json:"snippet_role,omitempty"`
-	Children       int     `json:"children,omitempty"`
+	Rank             int     `json:"rank"`
+	SessionID        string  `json:"session_id"`
+	Score            float64 `json:"score"`
+	Confidence       float64 `json:"confidence,omitempty"`
+	Mass             float64 `json:"mass,omitempty"`
+	SnippetTurnIdx   int     `json:"snippet_turn_index"`
+	SnippetRole      string  `json:"snippet_role,omitempty"`
+	MatchScope       string  `json:"match_scope,omitempty"`
+	SnippetSessionID string  `json:"snippet_session_id,omitempty"`
+	Children         int     `json:"children,omitempty"`
 }
 
 // LineageTokens accounts for embedding input size and stdout payload size.

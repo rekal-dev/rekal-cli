@@ -574,6 +574,11 @@ func updateIndexIncremental(gitRoot string, sessionIDs, embeddableSessionIDs []s
 	if _, err := buildSemanticEmbeddings(indexDB, sessionContent, w, gitRoot, 0, nil); err != nil {
 		fmt.Fprintf(w, "rekal: warning: nomic embeddings skipped: %v\n", err)
 	}
+	if len(embeddableSessionIDs) > 0 {
+		if _, err := buildPassageEmbeddings(indexDB, embeddableSessionIDs, w, gitRoot, sessionEmbedBudget, nil); err != nil {
+			fmt.Fprintf(w, "rekal: warning: passage embeddings skipped: %v\n", err)
+		}
+	}
 
 	return nil
 }

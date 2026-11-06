@@ -1,0 +1,51 @@
+{
+  "answering_model": null,
+  "conversations": 10,
+  "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "elapsed_seconds": 2418.957637104,
+  "max_content_bytes": 16000,
+  "max_turn_slices": 80,
+  "model": "nomic-v1.5-c8k-d1",
+  "modes": {
+    "passage-multiple": {
+      "questions": 1536,
+      "all_supporting_turns_delivered": 1179,
+      "supporting_turns_delivered": 1681,
+      "supporting_turns_total": 2355,
+      "content_bytes": 18014677,
+      "delivered_turn_slices": 121893
+    },
+    "passage-primary": {
+      "questions": 1536,
+      "all_supporting_turns_delivered": 992,
+      "supporting_turns_delivered": 1369,
+      "supporting_turns_total": 2355,
+      "content_bytes": 5630060,
+      "delivered_turn_slices": 36183
+    },
+    "session-primary": {
+      "questions": 1536,
+      "all_supporting_turns_delivered": 993,
+      "supporting_turns_delivered": 1373,
+      "supporting_turns_total": 2355,
+      "content_bytes": 5614158,
+      "delivered_turn_slices": 35947
+    }
+  },
+  "qa_accuracy": null,
+  "query_framings": 1,
+  "radius": 2,
+  "scope": "Matched retrieval/evidence ablation; no reader or judge is run. Same query vectors, questions, weights and context limits. Session-primary reproduces the former turn-zero fallback for session-only hits.",
+  "session_limit": 5,
+  "weights": {
+    "BM25": 0.35,
+    "LSA": 0.1,
+    "Semantic": 0.55,
+    "SteeringBoost": 1.3,
+    "SummaryBoost": 1.15,
+    "SubagentDownweight": 0.7,
+    "FacetBoost": 0.3,
+    "RecencyBoost": 0.15,
+    "ReachBoost": 0.2
+  }
+}

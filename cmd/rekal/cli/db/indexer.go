@@ -1099,6 +1099,11 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		}
 	}
 
+	if len(sessionIDs) > 0 {
+		if err := RefreshSessionPassages(d, sessionIDs...); err != nil {
+			return fmt.Errorf("refresh passages: %w", err)
+		}
+	}
 	// Facet documents for the new sessions.
 	if len(sessionIDs) > 0 {
 		if err := PopulateCommitMessages(d, gitRoot); err != nil {

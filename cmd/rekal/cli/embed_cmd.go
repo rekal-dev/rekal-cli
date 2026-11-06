@@ -28,7 +28,9 @@ func newEmbedCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "embed",
 		Short: "Fill missing semantic embeddings (resumable)",
-		Long: `Fill missing deep-semantic vectors for sessions and knowledge chunks.
+		Long: `Fill missing deep-semantic vectors for sessions, original-turn passages,
+and knowledge chunks. Passage documents retain every speaker and assertion
+timestamp, and carry source turn/byte ranges for evidence retrieval.
 
 Structural indexing (FTS, LSA, knowledge chunks) stays on 'rekal index' /
 'rekal sync'. Semantic vectors are network-bound and already soft-fail —
@@ -150,6 +152,9 @@ func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more
 		return false, false, err
 	}
 	defer indexDB.Close() //nolint:errcheck
+	if err := db.MigrateIndexSchema(indexDB); err != nil {
+		return false, false, err
+	}
 
 	if err := db.LoadFTSExtension(indexDB); err != nil {
 		return false, false, err
@@ -175,6 +180,10 @@ func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more
 		}
 	}
 
+	passageMore, passageErr := buildPassageEmbeddings(indexDB, nil, w, gitRoot, sessionEmbedBudget, emb)
+	if passageErr != nil {
+		fmt.Fprintf(w, "rekal: warning: passage embeddings pass %d: %v\n", pass, passageErr)
+	}
 	if err := embedKnowledgeChunks(w, indexDB, gitRoot, knowledgeEmbedBudget, emb); err != nil {
 		fmt.Fprintf(w, "rekal: warning: knowledge embeddings pass %d: %v\n", pass, err)
 	}
@@ -187,7 +196,7 @@ func embedBite(w io.Writer, gitRoot string, pass int, emb sessionEmbedder) (more
 		}
 	}
 
-	return sessionMore || knowledgeMore, storedVectorCount(indexDB) > before, nil
+	return sessionMore || passageMore || knowledgeMore, storedVectorCount(indexDB) > before, nil
 }
 
 // startBackgroundEmbed detaches 'rekal embed' after a structural index/sync
@@ -278,7 +287,8 @@ func storedVectorCount(indexDB *sql.DB) int64 {
 	var n int64
 	if err := indexDB.QueryRow(`
 		SELECT (SELECT count(*) FROM session_embeddings)
-		     + (SELECT count(*) FROM knowledge_embeddings)`).Scan(&n); err != nil {
+		     + (SELECT count(*) FROM knowledge_embeddings)
+		     + (SELECT count(*) FROM passage_embeddings)`).Scan(&n); err != nil {
 		return 0
 	}
 	return n

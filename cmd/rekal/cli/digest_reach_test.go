@@ -64,3 +64,21 @@ func TestWriteDigestRows_ReachSuffix(t *testing.T) {
 		t.Errorf("cold seed line changed.\ngot:\n%s\nwant line:\n%s", got, wantS2)
 	}
 }
+
+func TestWriteDigestRows_DistinguishesSessionAndChildAnchors(t *testing.T) {
+	t.Parallel()
+	results := []search.Result{
+		{SessionID: "semantic", Sid: "s1", Confidence: .8, MatchScope: "session", SnippetTurnIdx: -1},
+		{SessionID: "trunk", Sid: "s2", Confidence: .7, Snippet: "child evidence", SnippetTurnIdx: 7, SnippetSessionID: "child",
+			Children: []search.Result{{SessionID: "child", Sid: "s3"}}},
+	}
+	var b strings.Builder
+	writeDigestRows(&b, results)
+	got := b.String()
+	if !strings.Contains(got, `s1 conf=0.80 session ""`) || strings.Contains(got, "t-1") {
+		t.Fatalf("unlocated semantic match looks like a turn hit: %s", got)
+	}
+	if !strings.Contains(got, `s2 conf=0.70 s3:t7 "child evidence"`) {
+		t.Fatalf("digest points into the wrong transcript: %s", got)
+	}
+}

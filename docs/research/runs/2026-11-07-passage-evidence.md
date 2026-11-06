@@ -53,9 +53,9 @@ it does not establish an independent passage-ranking gain or a QA gain.
 | `passage-primary` | 49.3 / 104.9 | 38.7 / 89.3 |
 | `passage-multiple` | 48.5 / 86.3 | 174.8 / 315.7 |
 
-Query embeddings are precomputed once and excluded from lookup time. Native
-model loading, corpus embedding, index construction and all queries together
-took 40.3 minutes. This host also ran validation tests; timings
+Query embeddings are precomputed once and excluded from lookup time. Corpus
+embedding, index construction and all queries together took 40.3 minutes after
+initial model loading. This host also ran validation tests; timings
 are descriptive, not a service latency claim.
 
 The run was compiled from the feature worktree based on `9f6f83c4`, before

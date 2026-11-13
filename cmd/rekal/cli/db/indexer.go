@@ -163,6 +163,9 @@ func PopulateIndex(d *sql.DB, gitRoot string) error {
 		return fmt.Errorf("attach data_db: %w", err)
 	}
 	defer d.Exec("DETACH data_db") //nolint:errcheck
+	if err := RefreshMemoryIndex(d); err != nil {
+		return fmt.Errorf("refresh memory index: %w", err)
+	}
 
 	// turns_ft — LEFT JOIN so a turn with a missing session row (anomalous)
 	// still indexes, with its stored role.
@@ -368,6 +371,7 @@ func PurgeSupersededSessionsWithData(d *sql.DB, gitRoot string) error {
 		return fmt.Errorf("attach data_db: %w", err)
 	}
 	defer d.Exec("DETACH data_db") //nolint:errcheck
+
 	return PurgeSupersededSessionsFromIndex(d)
 }
 
@@ -1000,6 +1004,9 @@ func PopulateIndexIncremental(d *sql.DB, gitRoot string, sessionIDs []string, ch
 		return fmt.Errorf("attach data_db: %w", err)
 	}
 	defer d.Exec("DETACH data_db") //nolint:errcheck
+	if err := RefreshMemoryIndex(d); err != nil {
+		return fmt.Errorf("refresh memory index: %w", err)
+	}
 
 	for _, sid := range sessionIDs {
 		// Source turns/tool calls only append for an existing session ID.

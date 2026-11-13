@@ -230,6 +230,15 @@ func formatDigest(out *search.Output) (string, int) {
 	warming := out.Semantic != nil && out.Semantic.Retryable
 
 	finish := func(code int) (string, int) {
+		for _, m := range out.Memories {
+			fmt.Fprintf(&b, "MEMORY ref=%s source=%q path=%q matched_terms=%d\n  %q\n  query --index --sql %q\n", m.Ref, m.Source.Name, m.Path, m.MatchedTerms, m.Snippet, m.SQL)
+			if len(m.Anchors) > 0 {
+				fmt.Fprintf(&b, "  anchors=%s (explicit citations, unverified)\n", strings.Join(m.Anchors, ","))
+			}
+		}
+		if len(out.Memories) > 0 {
+			code = 0
+		}
 		if warming {
 			fmt.Fprintln(&b, "SEMANTIC warming — keyword+LSA only; retry with backoff")
 		}
@@ -261,6 +270,8 @@ func formatDigest(out *search.Output) (string, int) {
 	if reason == "" {
 		reason = "below_gate"
 	}
-	fmt.Fprintf(&b, "SILENCE reason=%s\n", reason)
+	if len(out.Memories) == 0 {
+		fmt.Fprintf(&b, "SILENCE reason=%s\n", reason)
+	}
 	return finish(1)
 }

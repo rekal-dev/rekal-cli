@@ -12,7 +12,7 @@ import (
 // build understands. Bump it whenever a change to dataDDL/MigrateDataSchema
 // is not purely additive-and-ignorable by older builds (see
 // SchemaVersionError doc for why this matters).
-const CurrentDataSchemaVersion = 1
+const CurrentDataSchemaVersion = 2
 
 // CurrentIndexSchemaVersion is the index.db equivalent of
 // CurrentDataSchemaVersion.
@@ -138,6 +138,9 @@ func MigrateDataSchema(d *sql.DB) error {
 		return err
 	}
 
+	if err := EnsureMemorySchema(d); err != nil {
+		return err
+	}
 	return writeSchemaVersion(d, "schema_meta", CurrentDataSchemaVersion)
 }
 

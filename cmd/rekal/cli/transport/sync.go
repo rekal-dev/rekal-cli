@@ -62,6 +62,10 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 		return 0, nil
 	}
 
+	revisions, err := readMemoryFrames(bodyData)
+	if err != nil {
+		return 0, fmt.Errorf("validate memory wire: %w", err)
+	}
 	dictData := gitx.ShowFile(gitRoot, remoteBranch, codec.DictFilename)
 	if len(dictData) == 0 {
 		return 0, nil
@@ -70,6 +74,10 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 	dict, err := codec.LoadDict(dictData)
 	if err != nil {
 		return 0, fmt.Errorf("load dict: %w", err)
+	}
+
+	if err := validateMemoryAssociations(bodyData, dict, revisions); err != nil {
+		return 0, err
 	}
 
 	frames, err := codec.ScanFrames(bodyData)
@@ -188,6 +196,9 @@ func ImportBranchToIndex(gitRoot string, indexDB *sql.DB, remoteBranch string) (
 		}
 	}
 
+	if err := db.ImportMemoryIndex(indexDB, revisions); err != nil {
+		return imported, err
+	}
 	return imported, nil
 }
 

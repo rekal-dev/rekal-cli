@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memory"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -23,6 +24,9 @@ import (
 // path is outside the repo), so hardcoded values stay on this machine;
 // secrets should still prefer env references.
 type Config struct {
+	// MemorySources is explicit, per-repo capture intent. Never inherited or synced.
+	MemorySources []memory.Config `json:"memory_sources,omitempty"`
+
 	// LocalImport is the cross-repo local import preference (rekal index
 	// --include-all / --include / --no-local). Omitted when unset (default).
 	LocalImport localPref `json:"local_import,omitempty"`
@@ -49,7 +53,7 @@ type Config struct {
 // file entirely rather than leave an empty {} behind. ScoringLineage is
 // excluded: it is global-only and must never keep a local config.json alive.
 func (c Config) empty() bool {
-	return !c.LocalImport.enabled() && c.Weights == nil && c.Embedding == nil
+	return !c.LocalImport.enabled() && c.Weights == nil && c.Embedding == nil && len(c.MemorySources) == 0
 }
 
 // scoringLineageConfig is the JSON shape of the global-only recall diagnostic
@@ -408,7 +412,7 @@ func readMergedConfig(gitRoot string) (Config, error) {
 //     switch and cannot be baked into a repo or turned on by a teammate's
 //     local file.
 func mergeConfig(global, local Config) Config {
-	merged := Config{LocalImport: local.LocalImport}
+	merged := Config{LocalImport: local.LocalImport, MemorySources: local.MemorySources}
 	merged.Embedding = global.Embedding
 	if local.Embedding != nil {
 		merged.Embedding = local.Embedding

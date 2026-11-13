@@ -530,3 +530,10 @@ If you use Rekal or build on the research, please cite the paper:
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+### Optional native memory
+
+Rekal can capture native Markdown notes through the existing checkpoint flow and
+retrieve them through ordinary recall. Capture is off by default; private sources
+are never exported. See [native memory integration](docs/design/native-memory.md)
+for local setup, sharing policy and compatibility. No new command is required.

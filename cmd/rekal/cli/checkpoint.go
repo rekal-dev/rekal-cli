@@ -111,6 +111,14 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 
 	email := gitx.ConfigValue("user.email")
 	newID := ids.NewULIDFunc()
+	checkpointID := newID()
+	now := time.Now().UTC()
+	gitSHA := gitx.HeadSHA(gitRoot)
+	memoryChanges, err := captureMemoryChanges(dataDB, gitRoot, email, checkpointID, gitSHA, now)
+	if err != nil {
+		fmt.Fprintf(w, "rekal: warning: memory capture skipped: %v\n", err)
+		memoryChanges = nil
+	}
 	discovery, cacheErr := loadSessionDiscoveryCache(dataDB)
 	if cacheErr != nil {
 		fmt.Fprintf(w, "rekal: warning: discovery cache unavailable: %v\n", cacheErr)
@@ -361,7 +369,7 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 	// already-checkpointed session), so the graph never stalls.
 	drained := drainRecallSpool(gitRoot, dataDB, w)
 
-	if inserted == 0 {
+	if inserted == 0 && len(memoryChanges) == 0 {
 		// Nothing new to checkpoint. If we drained edges, the derived
 		// session_reach aggregate still needs refreshing — release the writer
 		// first (a second live data.db handle can crash under CGO), then refresh.
@@ -376,17 +384,16 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 	}
 
 	// Get git state for checkpoint.
-	gitSHA := gitx.HeadSHA(gitRoot)
 	gitBranch := gitx.CurrentBranch(gitRoot)
 	filesTouched := gitx.FilesChanged(gitRoot)
 
-	// Generate checkpoint ULID.
-	checkpointID := newID()
-
 	// Insert checkpoint into DuckDB (exported = FALSE by default).
-	now := time.Now().UTC()
 	if err := db.InsertCheckpoint(dataDB, checkpointID, gitSHA, gitBranch, email, now.Format(time.RFC3339), "human", ""); err != nil {
 		return fmt.Errorf("insert checkpoint: %w", err)
+	}
+
+	if err := db.InsertMemoryRevisions(dataDB, memoryChanges); err != nil {
+		return fmt.Errorf("store memory: %w", err)
 	}
 
 	// Insert files_touched from git diff.
@@ -437,7 +444,12 @@ func doCheckpointNow(gitRoot string, w io.Writer) error {
 		fmt.Fprintf(w, "rekal: warning: incremental index update failed: %v\n", err)
 	}
 
-	fmt.Fprintf(w, "rekal: %d session(s) captured\n", inserted)
+	if inserted > 0 {
+		fmt.Fprintf(w, "rekal: %d session(s) captured\n", inserted)
+	}
+	if len(memoryChanges) > 0 {
+		fmt.Fprintf(w, "rekal: %d memory revision(s) captured\n", len(memoryChanges))
+	}
 	return nil
 }
 

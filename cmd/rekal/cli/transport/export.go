@@ -6,6 +6,7 @@ package transport
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -22,6 +23,9 @@ func ExportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		return nil, nil, nil, fmt.Errorf("open data DB: %w", err)
 	}
 	defer dataDB.Close()
+	if err := db.MigrateDataSchema(dataDB); err != nil {
+		return nil, nil, nil, err
+	}
 
 	checkpoints, err := db.QueryUnexportedCheckpoints(dataDB)
 	if err != nil {
@@ -53,6 +57,9 @@ func ExportNewFrames(gitRoot string) ([]byte, []byte, []string, error) {
 			dict = loaded
 		}
 	}
+	if _, err := readMemoryFrames(bodyData); err != nil {
+		return nil, nil, nil, err
+	}
 	body := bodyData
 	if len(body) == 0 {
 		body = codec.NewBody()
@@ -76,6 +83,9 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		return nil, nil, nil, fmt.Errorf("open data DB: %w", err)
 	}
 	defer dataDB.Close()
+	if err := db.MigrateDataSchema(dataDB); err != nil {
+		return nil, nil, nil, err
+	}
 
 	checkpoints, err := db.QueryAllCheckpoints(dataDB)
 	if err != nil {
@@ -90,6 +100,9 @@ func ExportAllFrames(gitRoot string) ([]byte, []byte, []string, error) {
 		return nil, nil, nil, nil
 	}
 
+	if err := guardMemoryReexport(dataDB, gitx.ShowFile(gitRoot, gitx.RekalBranchName(), codec.BodyFilename)); err != nil {
+		return nil, nil, nil, err
+	}
 	return encodeCheckpointFrames(dataDB, codec.NewBody(), codec.NewDict(), checkpoints)
 }
 
@@ -377,6 +390,23 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 		// paths, author, and phrasing, so compressing them together is far
 		// tighter than one zstd stream per frame (see codec.EncodeBatch).
 		var members []codec.BatchMember
+		revisions, err := db.QueryMemoryRevisions(dataDB, cp.ID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for _, revision := range revisions {
+			if revision.GitSHA != cp.GitSHA || revision.Source.Owner != cp.Email {
+				return nil, nil, nil, fmt.Errorf("memory checkpoint association mismatch")
+			}
+			if !revision.Source.Shared {
+				continue
+			}
+			payload, err := json.Marshal(revision)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			members = append(members, codec.BatchMember{Type: codec.FrameMemory, Payload: payload})
+		}
 
 		for _, sid := range sessionIDs {
 			// Skip a session that is a strict prefix of a longer one — the same

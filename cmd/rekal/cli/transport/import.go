@@ -20,6 +20,14 @@ func ImportBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 		return 0, nil // empty body (header only)
 	}
 
+	revisions, err := readMemoryFrames(bodyData)
+	if err != nil {
+		return 0, fmt.Errorf("validate memory wire: %w", err)
+	}
+	if err := db.MigrateDataSchema(dataDB); err != nil {
+		return 0, err
+	}
+
 	dictData := gitx.ShowFile(gitRoot, branch, codec.DictFilename)
 	if len(dictData) == 0 {
 		return 0, nil
@@ -28,6 +36,10 @@ func ImportBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 	dict, err := codec.LoadDict(dictData)
 	if err != nil {
 		return 0, fmt.Errorf("load dict: %w", err)
+	}
+
+	if err := validateMemoryAssociations(bodyData, dict, revisions); err != nil {
+		return 0, err
 	}
 
 	frames, err := codec.ScanFrames(bodyData)
@@ -113,6 +125,9 @@ func ImportBranch(gitRoot string, dataDB *sql.DB, branch string) (int, error) {
 		}
 	}
 
+	if err := db.InsertMemoryRevisions(dataDB, revisions); err != nil {
+		return imported, err
+	}
 	return imported, nil
 }
 

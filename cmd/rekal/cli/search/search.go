@@ -195,6 +195,7 @@ type SessionDetail struct {
 }
 
 type Output struct {
+	Memories []MemoryHit `json:"memories,omitempty"`
 	// Knowledge holds the knowledge layer's file hits — what the repo's
 	// prose files at HEAD currently say about the query, as pointers, with
 	// provenance edges into sessions (docs/design/knowledge-layer.md).

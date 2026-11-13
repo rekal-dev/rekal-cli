@@ -452,7 +452,22 @@ func TestPush_E2E_DivergenceIsReportedNotOverwritten(t *testing.T) {
 	}
 	gitRun(t, cloneDir, "fetch", "origin", branch)
 	gitRun(t, cloneDir, "checkout", "-q", "-b", branch, "origin/"+branch)
-	if err := os.WriteFile(filepath.Join(cloneDir, "rekal.body"), []byte("theirs, not ours"), 0o644); err != nil {
+	// Use a valid append-only wire update: malformed wire is now deliberately
+	// rejected before append so unknown memory cannot be lost in a repair.
+	theirBody, err := os.ReadFile(filepath.Join(cloneDir, "rekal.body"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoder, err := codec.NewEncoder()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer encoder.Close()
+	marker, err := encoder.EncodeMetaFrame(&codec.MetaFrame{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cloneDir, "rekal.body"), codec.AppendFrame(theirBody, marker), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	gitRun(t, cloneDir, "add", "rekal.body")

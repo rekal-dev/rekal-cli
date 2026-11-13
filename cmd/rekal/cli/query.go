@@ -115,6 +115,13 @@ INDEX DB SCHEMA (.rekal/index.db):
                        end_byte, content, content_hash (index-only)
   passage_embeddings   passage_id, model, embedding, generated_at
                        PK: (passage_id, model). Filled by rekal embed
+  memory_revisions     Immutable native-note revisions (data DB): id,
+                       checkpoint_id, source_id, path, observed_at, shared,
+                       deleted, content, payload
+  memory_archive       Local + team revision history (index DB), same columns
+  memory_documents     Current native notes (index DB): id, source_id, path,
+                       content, payload
+
   knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
                        content, content_hash, blob_sha
                        (heading-anchored prose sections of tracked files at HEAD)

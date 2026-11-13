@@ -24,8 +24,20 @@ The nested Go modules deliberately keep experiment code out of the production CL
 
 ## Production work still outstanding
 
-The earlier unfinished integration checkout was not recovered. These packages do not implement native-source discovery, production database migrations, checkpoint capture, import/export integration, CLI search commands, or end-to-end production rebuild. They do not establish retrieval-quality improvements.
+The earlier unfinished integration checkout was not recovered. These packages do not implement native-source discovery, production database migrations, checkpoint capture, import/export integration, memory results in existing retrieval paths, or end-to-end production rebuild. They do not establish retrieval-quality improvements.
 
 Implementation should use an optional adapter interface for discovery and reading; preserve immutable revisions separately from the current searchable view; enforce sharing scope before serialization; keep native modification time distinct from observation time; and refuse unsupported formats during rebuild/re-export. Explicit citations may yield deterministic links, but notes without citations must not acquire invented provenance.
 
 See `frames/SCENARIOS.md` for implemented proof cases versus remaining integration and evaluation work. Mixed old/new writers remain a compatibility decision: new guards cannot constrain an old executable.
+
+## Integration boundary
+
+Follow `SOUL.md`: integrate memory as another source behind existing Rekal workflows. This work does not require a new CLI command family, a mandatory consumer handshake, a service, or a scripted agent retrieval sequence.
+
+- Capture: optional native-memory adapters discover and read existing notes during the existing capture/checkpoint lifecycle, including onboarding and memory-only changes.
+- Storage and sync: append immutable revisions with source scope, timestamps and checkpoint associations; reuse Git transport. Sharing follows explicit source policy, never inferred from a note merely mentioning the repository.
+- Local index: rebuild searchable memory and explicit citation/backlink projections from the archive. Indexes and embeddings stay local.
+- Consumption: include labelled memory evidence and stable revision references through existing search, drill and bounded evidence paths. Resolve links mechanically where available; let the agent decide what to follow and whether the note applies.
+- Ownership: native agents retain ownership of their memory. No automatic native-memory write-back or interception of agent distillation is required.
+
+The Python consumer methods are executable test contracts, not proposed CLI commands. Their ranking knobs are experiment controls, not a requirement to expand shipped configuration. Production integration remains outstanding; this document defines its scope rather than claiming it is implemented.

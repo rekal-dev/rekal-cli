@@ -25,6 +25,8 @@ Incremental append preserves existing bytes. A legacy reader skips the new membe
 
 ## Consumer journey
 
+These are logical operations in the test model, not new CLI commands. Production integration should use the existing retrieval paths, with no mandatory handshake or prescribed sequence of calls. See [the integration boundary](../README.md#integration-boundary).
+
 ```mermaid
 flowchart TD
     A["Discover capabilities"] --> B["Search"]
@@ -43,7 +45,7 @@ Capability discovery is logical contract negotiation. In Rekal it should normall
 3. **Open:** retrieve the archived revision by canonical reference and snapshot ID. Do not read today's mutable native file for a historical hit.
 4. **Follow:** parse explicit source citations and translate them mechanically into the current evidence-anchor grammar. The current emitted `SID:t42:bytes0-30` becomes `SID:42@0-30`. This bridge is implemented in the prototype, not patched into the production CLI.
 5. **Read evidence:** apply scope again; deduplicate overlapping ranges; share one UTF-8 text-byte/slice budget across sessions; expose partial results and canonical continuation.
-6. **Reverse hop:** a session passage can list memories explicitly citing it, with a limit. Each command performs one hop; it does not automatically traverse or recursively load a graph.
+6. **Reverse hop:** a session passage can list memories explicitly citing it, with a limit. Each prototype operation performs one hop; it does not automatically traverse or recursively load a graph.
 7. **Judge/adopt:** the agent decides whether the note still applies and whether to write anything to its own native memory. This proof performs no native write-back.
 
 `example/consumer-journey.json` is a complete executed trace of this route. `example/rekal.body` and `example/dict.bin` use the actual upstream codec. The example commit hash is a synthetic placeholder; the fresh-clone integration test separately uses a real temporary Git commit.

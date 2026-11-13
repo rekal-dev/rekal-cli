@@ -1,0 +1,7 @@
+{
+  "upstream_commit": "16cc899274af026f8a8d6cf8216d391be9aa8489",
+  "upstream_file": "cmd/rekal/cli/transport/export.go",
+  "function": "CommitWireFormat",
+  "function_sha256": "516bb77387f874cd9807a8fe9c20ed1f35b049b9aa029a04cadbc3f8af850820",
+  "execution": "Exact function and its three Git helpers, compiled in isolation; not the full CLI or database pipeline."
+}

@@ -1,0 +1,15 @@
+{
+  "commit": "16cc899274af026f8a8d6cf8216d391be9aa8489",
+  "files": {
+    "harness/codec/batch_test.go": "70294dd854ec7e81d451570f696fd96a1e1600c81debdf5d11f3bc8b58c4d1c9",
+    "harness/codec/body.go": "f5432762ebecfb1c58c17625bd2c58dfe915a8f4d36f1b41c3de8a9d347c00c2",
+    "harness/codec/body_test.go": "51282ff8bcd5e5b0144c982aa4a9e93e13c2963df4757428c71098596f8bbfe3",
+    "harness/codec/dict.go": "7a26628206bcfedae2ae83bcdb6808028b18cb298eb4c16794ad74835458db7a",
+    "harness/codec/dict_test.go": "6102a534370e5cdbe1b6a1de970e96cc5a17d9a01eaa81bde611f8befa6158eb",
+    "harness/codec/frame.go": "6b55f277a14fc2f6b00273ac643ca0fc19aeb07ccaf962e51c7f026e2b0ae34d",
+    "harness/codec/frame_test.go": "2034bcb22da5566635e963d68b7a07a84c17e08aa887e9d392f7d5869bcce687",
+    "harness/codec/preset.dict": "080424010f2f689605f9d86426a2f0f273d01153da372d062740aee3477f42f0",
+    "harness/codec/preset.go": "8ba9734299e85cb93a1587f0c7a40f6acb7d46fe23ae4b7b7adf80a3ddbb9e89"
+  },
+  "git_writer_function_sha256": "516bb77387f874cd9807a8fe9c20ed1f35b049b9aa029a04cadbc3f8af850820"
+}

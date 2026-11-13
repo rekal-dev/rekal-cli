@@ -1,0 +1,25 @@
+test_delete_and_rebuild_index_gives_identical_ids_and_backlinks (__main__.ArchiveProof.test_delete_and_rebuild_index_gives_identical_ids_and_backlinks) ... ok
+test_identical_onboarding_and_unchanged_snapshot_are_noops (__main__.ArchiveProof.test_identical_onboarding_and_unchanged_snapshot_are_noops) ... ok
+test_incomplete_scan_cannot_delete_source_membership (__main__.ArchiveProof.test_incomplete_scan_cannot_delete_source_membership) ... ok
+test_memory_only_change_appends_preserving_previous_bytes (__main__.ArchiveProof.test_memory_only_change_appends_preserving_previous_bytes) ... ok
+test_no_citation_does_not_invent_a_session_link (__main__.ArchiveProof.test_no_citation_does_not_invent_a_session_link) ... ok
+test_onboarding_preserves_existing_note_and_distinct_timestamps (__main__.ArchiveProof.test_onboarding_preserves_existing_note_and_distinct_timestamps) ... ok
+test_personal_and_repo_private_sources_are_excluded_before_serialization (__main__.ArchiveProof.test_personal_and_repo_private_sources_are_excluded_before_serialization) ... ok
+test_removal_is_source_local_and_retains_old_snapshot (__main__.ArchiveProof.test_removal_is_source_local_and_retains_old_snapshot) ... ok
+test_same_path_different_owners_and_profiles_remains_distinct (__main__.ArchiveProof.test_same_path_different_owners_and_profiles_remains_distinct) ... ok
+test_truncation_corruption_and_unsupported_version_are_rejected (__main__.ArchiveProof.test_truncation_corruption_and_unsupported_version_are_rejected) ... ok
+test_unchanged_content_is_stored_once_across_snapshots_and_sources (__main__.ArchiveProof.test_unchanged_content_is_stored_once_across_snapshots_and_sources) ... ok
+test_unknown_native_time_stays_unknown (__main__.ArchiveProof.test_unknown_native_time_stays_unknown) ... ok
+test_exact_current_writer_omits_companion_from_new_tip_but_history_retains_it (__main__.GitProof.test_exact_current_writer_omits_companion_from_new_tip_but_history_retains_it) ... ok
+test_independent_memory_branch_survives_unchanged_old_writer (__main__.GitProof.test_independent_memory_branch_survives_unchanged_old_writer) ... ok
+test_local_remote_push_fresh_clone_and_index_rebuild (__main__.GitProof.test_local_remote_push_fresh_clone_and_index_rebuild) ... ok
+test_memory_only_update_preserves_both_session_files (__main__.GitProof.test_memory_only_update_preserves_both_session_files) ... ok
+test_older_writer_still_omits_companion_after_a_new_writer (__main__.GitProof.test_older_writer_still_omits_companion_after_a_new_writer) ... ok
+test_proposed_writer_preserves_memory_on_session_only_update (__main__.GitProof.test_proposed_writer_preserves_memory_on_session_only_update) ... ok
+test_stale_concurrent_writer_is_rejected_without_lost_update (__main__.GitProof.test_stale_concurrent_writer_is_rejected_without_lost_update) ... ok
+test_user_worktree_index_and_unrelated_sidecar_are_preserved (__main__.GitProof.test_user_worktree_index_and_unrelated_sidecar_are_preserved) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.292s
+
+OK

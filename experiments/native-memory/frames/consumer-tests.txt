@@ -1,0 +1,39 @@
+test_actual_current_writer_preserves_memory_inside_body (__main__.BodyIntegration.test_actual_current_writer_preserves_memory_inside_body) ... ok
+test_actual_writer_second_update_retains_prior_memory_frame (__main__.BodyIntegration.test_actual_writer_second_update_retains_prior_memory_frame) ... ok
+test_fresh_clone_search_memory_drill_and_actual_session_text (__main__.BodyIntegration.test_fresh_clone_search_memory_drill_and_actual_session_text) ... ok
+test_reexport_models_demonstrate_loss_and_memory_aware_retention (__main__.BodyIntegration.test_reexport_models_demonstrate_loss_and_memory_aware_retention) ... ok
+test_backlinks_respect_private_scope_and_return_each_note_once (__main__.ConsumerScenarios.test_backlinks_respect_private_scope_and_return_each_note_once) ... ok
+test_byte_citation_translates_to_current_anchor_grammar (__main__.ConsumerScenarios.test_byte_citation_translates_to_current_anchor_grammar) ... ok
+test_checkpoint_turn_extent_blocks_later_session_content (__main__.ConsumerScenarios.test_checkpoint_turn_extent_blocks_later_session_content) ... ok
+test_config_precedence_and_explicit_zero (__main__.ConsumerScenarios.test_config_precedence_and_explicit_zero) ... ok
+test_copied_note_has_one_hit_with_multiple_origins_and_no_vote_boost (__main__.ConsumerScenarios.test_copied_note_has_one_hit_with_multiple_origins_and_no_vote_boost) ... ok
+test_cross_repo_citation_does_not_bypass_scope (__main__.ConsumerScenarios.test_cross_repo_citation_does_not_bypass_scope) ... ok
+test_evidence_budget_is_shared_across_sessions (__main__.ConsumerScenarios.test_evidence_budget_is_shared_across_sessions) ... ok
+test_evidence_continuation_rejects_changed_source (__main__.ConsumerScenarios.test_evidence_continuation_rejects_changed_source) ... ok
+test_evidence_overlap_dedup_and_utf8_budget (__main__.ConsumerScenarios.test_evidence_overlap_dedup_and_utf8_budget) ... ok
+test_handshake_old_consumer_keeps_raw_session_search (__main__.ConsumerScenarios.test_handshake_old_consumer_keeps_raw_session_search) ... ok
+test_historical_fetch_returns_exact_old_version_after_edit (__main__.ConsumerScenarios.test_historical_fetch_returns_exact_old_version_after_edit) ... ok
+test_invalid_config_rejected (__main__.ConsumerScenarios.test_invalid_config_rejected) ... ok
+test_memory_tuning_and_disable_do_not_change_session_ranking (__main__.ConsumerScenarios.test_memory_tuning_and_disable_do_not_change_session_ranking) ... ok
+test_missing_semantic_vectors_fall_back_to_keywords (__main__.ConsumerScenarios.test_missing_semantic_vectors_fall_back_to_keywords) ... ok
+test_missing_session_is_explicitly_unavailable (__main__.ConsumerScenarios.test_missing_session_is_explicitly_unavailable) ... ok
+test_no_citation_keeps_raw_search_available (__main__.ConsumerScenarios.test_no_citation_keeps_raw_search_available) ... ok
+test_onboarding_timestamp_does_not_backdate_commit_eligibility (__main__.ConsumerScenarios.test_onboarding_timestamp_does_not_backdate_commit_eligibility) ... ok
+test_private_memory_filtered_in_search_and_direct_fetch (__main__.ConsumerScenarios.test_private_memory_filtered_in_search_and_direct_fetch) ... ok
+test_raw_session_backlink_opens_same_memory_revision (__main__.ConsumerScenarios.test_raw_session_backlink_opens_same_memory_revision) ... ok
+test_rebuild_keeps_canonical_memory_handle_valid (__main__.ConsumerScenarios.test_rebuild_keeps_canonical_memory_handle_valid) ... ok
+test_recency_uses_native_modified_not_import_time (__main__.ConsumerScenarios.test_recency_uses_native_modified_not_import_time) ... ok
+test_retrieved_instructions_remain_context_not_native_writeback (__main__.ConsumerScenarios.test_retrieved_instructions_remain_context_not_native_writeback) ... ok
+test_reverse_hop_has_explicit_limit (__main__.ConsumerScenarios.test_reverse_hop_has_explicit_limit) ... ok
+test_same_owner_different_account_profile_cannot_read_private_memory (__main__.ConsumerScenarios.test_same_owner_different_account_profile_cannot_read_private_memory) ... ok
+test_search_open_citation_bridge_and_raw_evidence (__main__.ConsumerScenarios.test_search_open_citation_bridge_and_raw_evidence) ... ok
+test_search_returns_bounded_pointer_not_full_memory (__main__.ConsumerScenarios.test_search_returns_bounded_pointer_not_full_memory) ... ok
+test_slice_limit_returns_canonical_continuation (__main__.ConsumerScenarios.test_slice_limit_returns_canonical_continuation) ... ok
+test_unknown_native_time_receives_no_fabricated_recency (__main__.ConsumerScenarios.test_unknown_native_time_receives_no_fabricated_recency) ... ok
+test_weight_changes_reorder_without_index_rebuild (__main__.ConsumerScenarios.test_weight_changes_reorder_without_index_rebuild) ... ok
+test_zero_relevance_is_not_created_by_recency (__main__.ConsumerScenarios.test_zero_relevance_is_not_created_by_recency) ... ok
+
+----------------------------------------------------------------------
+Ran 34 tests in 0.198s
+
+OK

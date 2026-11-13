@@ -1,0 +1,142 @@
+{
+  "tests_run": 34,
+  "passed": true,
+  "cases": [
+    {
+      "test": "__main__.BodyIntegration.test_actual_current_writer_preserves_memory_inside_body",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.BodyIntegration.test_actual_writer_second_update_retains_prior_memory_frame",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.BodyIntegration.test_fresh_clone_search_memory_drill_and_actual_session_text",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.BodyIntegration.test_reexport_models_demonstrate_loss_and_memory_aware_retention",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_backlinks_respect_private_scope_and_return_each_note_once",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_byte_citation_translates_to_current_anchor_grammar",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_checkpoint_turn_extent_blocks_later_session_content",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_config_precedence_and_explicit_zero",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_copied_note_has_one_hit_with_multiple_origins_and_no_vote_boost",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_cross_repo_citation_does_not_bypass_scope",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_evidence_budget_is_shared_across_sessions",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_evidence_continuation_rejects_changed_source",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_evidence_overlap_dedup_and_utf8_budget",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_handshake_old_consumer_keeps_raw_session_search",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_historical_fetch_returns_exact_old_version_after_edit",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_invalid_config_rejected",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_memory_tuning_and_disable_do_not_change_session_ranking",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_missing_semantic_vectors_fall_back_to_keywords",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_missing_session_is_explicitly_unavailable",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_no_citation_keeps_raw_search_available",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_onboarding_timestamp_does_not_backdate_commit_eligibility",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_private_memory_filtered_in_search_and_direct_fetch",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_raw_session_backlink_opens_same_memory_revision",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_rebuild_keeps_canonical_memory_handle_valid",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_recency_uses_native_modified_not_import_time",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_retrieved_instructions_remain_context_not_native_writeback",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_reverse_hop_has_explicit_limit",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_same_owner_different_account_profile_cannot_read_private_memory",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_search_open_citation_bridge_and_raw_evidence",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_search_returns_bounded_pointer_not_full_memory",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_slice_limit_returns_canonical_continuation",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_unknown_native_time_receives_no_fabricated_recency",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_weight_changes_reorder_without_index_rebuild",
+      "status": "passed"
+    },
+    {
+      "test": "__main__.ConsumerScenarios.test_zero_relevance_is_not_created_by_recency",
+      "status": "passed"
+    }
+  ]
+}

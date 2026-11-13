@@ -1,0 +1,14 @@
+{
+  "upstream_commit": "16cc899274af026f8a8d6cf8216d391be9aa8489",
+  "go_top_level_tests": {
+    "codec": 47,
+    "memoryframe": 11
+  },
+  "go_subtest_passes": 2,
+  "go_failures": [],
+  "python_tests": 34,
+  "python_passed": true,
+  "new_test_total": 45,
+  "scenario_count": 84,
+  "scope": "Actual upstream codec and Git writer; prototype memory, consumer and re-export contracts; no full CLI/DB integration."
+}

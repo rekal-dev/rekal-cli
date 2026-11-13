@@ -1,0 +1,149 @@
+{
+  "notice": "Synthetic prototype. Actual Rekal codec/session bytes; modeled consumer interface, no native writeback.",
+  "steps": [
+    {
+      "step": "discover support",
+      "response": {
+        "contract": "prototype/1",
+        "memory": "available",
+        "memory_schema": 1,
+        "session_search": true,
+        "evidence": true,
+        "memory_writeback": false,
+        "index_generation": "a0b5a4cab5651eb2a8af3274360c0aecfa3f736cb1e4bd56fb4deb984e17e1d1"
+      }
+    },
+    {
+      "step": "search",
+      "query": "payment retries",
+      "response": {
+        "memories": [
+          {
+            "ref": "memory:8a13e2af5b4a402e7ed93c67f2e1951b88b4898dd95796eb0093255e59558c70",
+            "kind": "memory",
+            "source": {
+              "adapter": "claude",
+              "owner": "alice",
+              "profile": "synthetic-alice",
+              "repo": "demo",
+              "root": "memory",
+              "scope": "repo_shared"
+            },
+            "path": "payment.md",
+            "snapshot_id": "86da5f967fb042ce08b81b9250f20d56aff39a8a824cdeedb1d0ce17c5f55599",
+            "source_modified_at": "2026-04-02T10:00:00Z",
+            "observed_at": "2026-11-07T12:00:00Z",
+            "observed_at_commit": "1111111111111111111111111111111111111111",
+            "trust": "retrieved_context",
+            "snippet": "---\nmodified: 2026-04-02T10:00:00Z\n---\nUse idempotency keys for ",
+            "score": 1.0,
+            "signals": {
+              "relevance": 1.0,
+              "native_recency": 0
+            },
+            "score_is_confidence": false,
+            "origins": [
+              {
+                "ref": "memory:8a13e2af5b4a402e7ed93c67f2e1951b88b4898dd95796eb0093255e59558c70",
+                "source": {
+                  "adapter": "claude",
+                  "owner": "alice",
+                  "profile": "synthetic-alice",
+                  "repo": "demo",
+                  "root": "memory",
+                  "scope": "repo_shared"
+                }
+              }
+            ]
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "01J00000000000000000000000",
+            "score": 1.0
+          }
+        ],
+        "memory_status": "available"
+      }
+    },
+    {
+      "step": "open exact memory revision",
+      "response": {
+        "status": "ok",
+        "ref": "memory:8a13e2af5b4a402e7ed93c67f2e1951b88b4898dd95796eb0093255e59558c70",
+        "kind": "memory",
+        "source": {
+          "adapter": "claude",
+          "owner": "alice",
+          "profile": "synthetic-alice",
+          "repo": "demo",
+          "root": "memory",
+          "scope": "repo_shared"
+        },
+        "path": "payment.md",
+        "blob": "c315a30ab427be1501be0983afecdb46112d058354be5651cbaa5eec35c09858",
+        "snapshot_id": "86da5f967fb042ce08b81b9250f20d56aff39a8a824cdeedb1d0ce17c5f55599",
+        "content": "---\nmodified: 2026-04-02T10:00:00Z\n---\nUse idempotency keys for payment retries.\nSource: 01J00000000000000000000000:t0\n",
+        "source_modified_at": "2026-04-02T10:00:00Z",
+        "observed_at": "2026-11-07T12:00:00Z",
+        "observed_at_commit": "1111111111111111111111111111111111111111",
+        "trust": "retrieved_context",
+        "anchors": [
+          {
+            "session_id": "01J00000000000000000000000",
+            "turn": 0,
+            "start": null,
+            "end": null,
+            "cli_anchor": "01J00000000000000000000000:0"
+          }
+        ],
+        "adopted": false
+      }
+    },
+    {
+      "step": "follow citation into bounded raw evidence",
+      "response": {
+        "slices": [
+          {
+            "session_id": "01J00000000000000000000000",
+            "turn": 0,
+            "content": "Use idempotency keys for payment retries.",
+            "start": 0,
+            "end": 41,
+            "citation": "01J00000000000000000000000:t0:bytes0-41"
+          }
+        ],
+        "content_bytes": 41,
+        "truncated": false,
+        "next": [],
+        "warnings": []
+      }
+    },
+    {
+      "step": "look back from session to citing memory",
+      "response": {
+        "memories": [
+          {
+            "ref": "memory:8a13e2af5b4a402e7ed93c67f2e1951b88b4898dd95796eb0093255e59558c70",
+            "snapshot_id": "86da5f967fb042ce08b81b9250f20d56aff39a8a824cdeedb1d0ce17c5f55599",
+            "source": {
+              "adapter": "claude",
+              "owner": "alice",
+              "profile": "synthetic-alice",
+              "repo": "demo",
+              "root": "memory",
+              "scope": "repo_shared"
+            },
+            "relationship": "explicit_citation_not_verified_support"
+          }
+        ],
+        "total": 1,
+        "truncated": false
+      }
+    },
+    {
+      "step": "agent judges whether to adopt",
+      "native_memory_changed": false
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "memories": [
+    {
+      "id": "8a13e2af5b4a402e7ed93c67f2e1951b88b4898dd95796eb0093255e59558c70",
+      "source": {
+        "adapter": "claude",
+        "owner": "alice",
+        "profile": "synthetic-alice",
+        "repo": "demo",
+        "root": "memory",
+        "scope": "repo_shared"
+      },
+      "path": "payment.md",
+      "snapshot_id": "86da5f967fb042ce08b81b9250f20d56aff39a8a824cdeedb1d0ce17c5f55599",
+      "content": "---\nmodified: 2026-04-02T10:00:00Z\n---\nUse idempotency keys for payment retries.\nSource: 01J00000000000000000000000:t0\n",
+      "source_modified_at": "2026-04-02T10:00:00Z",
+      "observed_at": "2026-11-07T12:00:00Z",
+      "observed_at_commit": "1111111111111111111111111111111111111111"
+    }
+  ],
+  "backlinks": [
+    {
+      "memory_id": "8a13e2af5b4a402e7ed93c67f2e1951b88b4898dd95796eb0093255e59558c70",
+      "session_id": "01J00000000000000000000000",
+      "turn": 0,
+      "byte_start": null,
+      "byte_end": null,
+      "relationship": "explicit_citation_not_verified_support"
+    }
+  ]
+}

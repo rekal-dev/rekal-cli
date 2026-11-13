@@ -1,0 +1,261 @@
+{"Time":"2026-11-07T11:38:14.136707644Z","Action":"start","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/cmd/frameprobe"}
+{"Time":"2026-11-07T11:38:14.13675984Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/cmd/frameprobe","Output":"?   \tgithub.com/rekal-dev/rekal-cli/cmd/rekal/cli/cmd/frameprobe\t[no test files]\n"}
+{"Time":"2026-11-07T11:38:14.136773005Z","Action":"skip","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/cmd/frameprobe","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136784813Z","Action":"start","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec"}
+{"Time":"2026-11-07T11:38:14.136788362Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_Roundtrip"}
+{"Time":"2026-11-07T11:38:14.136790249Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_Roundtrip","Output":"=== RUN   TestBatch_Roundtrip\n"}
+{"Time":"2026-11-07T11:38:14.136794358Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_Roundtrip","Output":"--- PASS: TestBatch_Roundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136796506Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_Roundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136798418Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_OldReaderSkips"}
+{"Time":"2026-11-07T11:38:14.136799933Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_OldReaderSkips","Output":"=== RUN   TestBatch_OldReaderSkips\n"}
+{"Time":"2026-11-07T11:38:14.136802337Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_OldReaderSkips","Output":"--- PASS: TestBatch_OldReaderSkips (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.136808501Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_OldReaderSkips","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.136813848Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_MixedBody"}
+{"Time":"2026-11-07T11:38:14.136815408Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_MixedBody","Output":"=== RUN   TestBatch_MixedBody\n"}
+{"Time":"2026-11-07T11:38:14.136817305Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_MixedBody","Output":"--- PASS: TestBatch_MixedBody (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.1368188Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_MixedBody","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.136820478Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_CompressesBetterThanPerFrame"}
+{"Time":"2026-11-07T11:38:14.136821912Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_CompressesBetterThanPerFrame","Output":"=== RUN   TestBatch_CompressesBetterThanPerFrame\n"}
+{"Time":"2026-11-07T11:38:14.136823583Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_CompressesBetterThanPerFrame","Output":"    batch_test.go:216: per-frame total: 790 bytes, single batch: 116 bytes (6.81x)\n"}
+{"Time":"2026-11-07T11:38:14.136827267Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_CompressesBetterThanPerFrame","Output":"--- PASS: TestBatch_CompressesBetterThanPerFrame (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.136829615Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_CompressesBetterThanPerFrame","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.136831518Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_V2MemberInside"}
+{"Time":"2026-11-07T11:38:14.13683283Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_V2MemberInside","Output":"=== RUN   TestBatch_V2MemberInside\n"}
+{"Time":"2026-11-07T11:38:14.136837743Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_V2MemberInside","Output":"--- PASS: TestBatch_V2MemberInside (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136842817Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBatch_V2MemberInside","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136846054Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_TruncatedNeverPanics"}
+{"Time":"2026-11-07T11:38:14.136847483Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_TruncatedNeverPanics","Output":"=== RUN   TestDecodeBatch_TruncatedNeverPanics\n"}
+{"Time":"2026-11-07T11:38:14.136849504Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_TruncatedNeverPanics","Output":"--- PASS: TestDecodeBatch_TruncatedNeverPanics (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136851081Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_TruncatedNeverPanics","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136852678Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_CorruptInnerLengthRejected"}
+{"Time":"2026-11-07T11:38:14.136854116Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_CorruptInnerLengthRejected","Output":"=== RUN   TestDecodeBatch_CorruptInnerLengthRejected\n"}
+{"Time":"2026-11-07T11:38:14.136856421Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_CorruptInnerLengthRejected","Output":"--- PASS: TestDecodeBatch_CorruptInnerLengthRejected (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.13685823Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeBatch_CorruptInnerLengthRejected","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136859781Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncodeMemberFrame_FallbackReadableAsStandalone"}
+{"Time":"2026-11-07T11:38:14.13686119Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncodeMemberFrame_FallbackReadableAsStandalone","Output":"=== RUN   TestEncodeMemberFrame_FallbackReadableAsStandalone\n"}
+{"Time":"2026-11-07T11:38:14.136863372Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncodeMemberFrame_FallbackReadableAsStandalone","Output":"--- PASS: TestEncodeMemberFrame_FallbackReadableAsStandalone (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.136864985Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncodeMemberFrame_FallbackReadableAsStandalone","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.136866594Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewBody_Header"}
+{"Time":"2026-11-07T11:38:14.136868022Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewBody_Header","Output":"=== RUN   TestNewBody_Header\n"}
+{"Time":"2026-11-07T11:38:14.136870436Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewBody_Header","Output":"--- PASS: TestNewBody_Header (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136872016Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewBody_Header","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136873728Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_AppendAndScan"}
+{"Time":"2026-11-07T11:38:14.136875026Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_AppendAndScan","Output":"=== RUN   TestBody_AppendAndScan\n"}
+{"Time":"2026-11-07T11:38:14.136879057Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_AppendAndScan","Output":"--- PASS: TestBody_AppendAndScan (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.136881414Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_AppendAndScan","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.136883008Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_IncrementalAppend"}
+{"Time":"2026-11-07T11:38:14.136884378Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_IncrementalAppend","Output":"=== RUN   TestBody_IncrementalAppend\n"}
+{"Time":"2026-11-07T11:38:14.136886141Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_IncrementalAppend","Output":"    body_test.go:158: After first checkpoint: 170 bytes (header: 9, data: 161)\n"}
+{"Time":"2026-11-07T11:38:14.136887844Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_IncrementalAppend","Output":"    body_test.go:185: After second checkpoint: 333 bytes (delta: 163)\n"}
+{"Time":"2026-11-07T11:38:14.13688962Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_IncrementalAppend","Output":"--- PASS: TestBody_IncrementalAppend (0.02s)\n"}
+{"Time":"2026-11-07T11:38:14.136891058Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestBody_IncrementalAppend","Elapsed":0.02}
+{"Time":"2026-11-07T11:38:14.13689285Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_EmptyBody"}
+{"Time":"2026-11-07T11:38:14.136894145Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_EmptyBody","Output":"=== RUN   TestScanFrames_EmptyBody\n"}
+{"Time":"2026-11-07T11:38:14.136896172Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_EmptyBody","Output":"--- PASS: TestScanFrames_EmptyBody (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136897717Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_EmptyBody","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.13689913Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_BadMagic"}
+{"Time":"2026-11-07T11:38:14.136900452Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_BadMagic","Output":"=== RUN   TestScanFrames_BadMagic\n"}
+{"Time":"2026-11-07T11:38:14.136902253Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_BadMagic","Output":"--- PASS: TestScanFrames_BadMagic (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136903733Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_BadMagic","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.13690517Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewDict_Empty"}
+{"Time":"2026-11-07T11:38:14.136906453Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewDict_Empty","Output":"=== RUN   TestNewDict_Empty\n"}
+{"Time":"2026-11-07T11:38:14.136908164Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewDict_Empty","Output":"--- PASS: TestNewDict_Empty (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136909612Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestNewDict_Empty","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136911022Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_LookupOrAdd"}
+{"Time":"2026-11-07T11:38:14.136912295Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_LookupOrAdd","Output":"=== RUN   TestDict_LookupOrAdd\n"}
+{"Time":"2026-11-07T11:38:14.136915616Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_LookupOrAdd","Output":"--- PASS: TestDict_LookupOrAdd (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136917083Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_LookupOrAdd","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136918554Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Lookup"}
+{"Time":"2026-11-07T11:38:14.136920024Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Lookup","Output":"=== RUN   TestDict_Lookup\n"}
+{"Time":"2026-11-07T11:38:14.136925173Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Lookup","Output":"--- PASS: TestDict_Lookup (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136926729Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Lookup","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136928413Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Get"}
+{"Time":"2026-11-07T11:38:14.136930038Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Get","Output":"=== RUN   TestDict_Get\n"}
+{"Time":"2026-11-07T11:38:14.136931825Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Get","Output":"--- PASS: TestDict_Get (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136933331Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_Get","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136934797Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_NamespaceIsolation"}
+{"Time":"2026-11-07T11:38:14.136936142Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_NamespaceIsolation","Output":"=== RUN   TestDict_NamespaceIsolation\n"}
+{"Time":"2026-11-07T11:38:14.136937857Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_NamespaceIsolation","Output":"--- PASS: TestDict_NamespaceIsolation (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136939405Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_NamespaceIsolation","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136940853Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EncodeLoadRoundtrip"}
+{"Time":"2026-11-07T11:38:14.136942153Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EncodeLoadRoundtrip","Output":"=== RUN   TestDict_EncodeLoadRoundtrip\n"}
+{"Time":"2026-11-07T11:38:14.136943838Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EncodeLoadRoundtrip","Output":"--- PASS: TestDict_EncodeLoadRoundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136945259Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EncodeLoadRoundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136946693Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EmptyEncode"}
+{"Time":"2026-11-07T11:38:14.136947958Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EmptyEncode","Output":"=== RUN   TestDict_EmptyEncode\n"}
+{"Time":"2026-11-07T11:38:14.136949597Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EmptyEncode","Output":"--- PASS: TestDict_EmptyEncode (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136951078Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_EmptyEncode","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136952552Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_BadMagic"}
+{"Time":"2026-11-07T11:38:14.136955164Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_BadMagic","Output":"=== RUN   TestLoadDict_BadMagic\n"}
+{"Time":"2026-11-07T11:38:14.136957127Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_BadMagic","Output":"--- PASS: TestLoadDict_BadMagic (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136958553Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_BadMagic","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.13696026Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_TooShort"}
+{"Time":"2026-11-07T11:38:14.136961731Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_TooShort","Output":"=== RUN   TestLoadDict_TooShort\n"}
+{"Time":"2026-11-07T11:38:14.136963426Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_TooShort","Output":"--- PASS: TestLoadDict_TooShort (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136964875Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestLoadDict_TooShort","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136966311Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2Roundtrip_ManyEmails"}
+{"Time":"2026-11-07T11:38:14.136967758Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2Roundtrip_ManyEmails","Output":"=== RUN   TestDict_V2Roundtrip_ManyEmails\n"}
+{"Time":"2026-11-07T11:38:14.136969511Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2Roundtrip_ManyEmails","Output":"--- PASS: TestDict_V2Roundtrip_ManyEmails (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136971048Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2Roundtrip_ManyEmails","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136972538Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_StaysV1WhileCountsFit"}
+{"Time":"2026-11-07T11:38:14.136973901Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_StaysV1WhileCountsFit","Output":"=== RUN   TestDict_StaysV1WhileCountsFit\n"}
+{"Time":"2026-11-07T11:38:14.136975611Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_StaysV1WhileCountsFit","Output":"--- PASS: TestDict_StaysV1WhileCountsFit (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136978051Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_StaysV1WhileCountsFit","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136979578Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2LongBranchName"}
+{"Time":"2026-11-07T11:38:14.136981083Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2LongBranchName","Output":"=== RUN   TestDict_V2LongBranchName\n"}
+{"Time":"2026-11-07T11:38:14.136983205Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2LongBranchName","Output":"--- PASS: TestDict_V2LongBranchName (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.136984957Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2LongBranchName","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136978661Z","Action":"start","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"}
+{"Time":"2026-11-07T11:38:14.137002163Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx","Output":"?   \tgithub.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx\t[no test files]\n"}
+{"Time":"2026-11-07T11:38:14.137009225Z","Action":"skip","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.136986517Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2TruncatedNeverPanics"}
+{"Time":"2026-11-07T11:38:14.137023215Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2TruncatedNeverPanics","Output":"=== RUN   TestDict_V2TruncatedNeverPanics\n"}
+{"Time":"2026-11-07T11:38:14.137029692Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2TruncatedNeverPanics","Output":"--- PASS: TestDict_V2TruncatedNeverPanics (0.04s)\n"}
+{"Time":"2026-11-07T11:38:14.137032934Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDict_V2TruncatedNeverPanics","Elapsed":0.04}
+{"Time":"2026-11-07T11:38:14.137037803Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_Roundtrip"}
+{"Time":"2026-11-07T11:38:14.137040461Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_Roundtrip","Output":"=== RUN   TestSessionFrame_Roundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137044244Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_Roundtrip","Output":"--- PASS: TestSessionFrame_Roundtrip (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.137047327Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_Roundtrip","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.137050033Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_WithAgent"}
+{"Time":"2026-11-07T11:38:14.137052496Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_WithAgent","Output":"=== RUN   TestSessionFrame_WithAgent\n"}
+{"Time":"2026-11-07T11:38:14.137055887Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_WithAgent","Output":"--- PASS: TestSessionFrame_WithAgent (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.13705849Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_WithAgent","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.137061034Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_InlinePath"}
+{"Time":"2026-11-07T11:38:14.137063253Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_InlinePath","Output":"=== RUN   TestSessionFrame_InlinePath\n"}
+{"Time":"2026-11-07T11:38:14.137066403Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_InlinePath","Output":"--- PASS: TestSessionFrame_InlinePath (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.137092742Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_InlinePath","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.137095637Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrame_Roundtrip"}
+{"Time":"2026-11-07T11:38:14.137098083Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrame_Roundtrip","Output":"=== RUN   TestCheckpointFrame_Roundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137102927Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrame_Roundtrip","Output":"--- PASS: TestCheckpointFrame_Roundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137105844Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrame_Roundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137108342Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestMetaFrame_Roundtrip"}
+{"Time":"2026-11-07T11:38:14.137110743Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestMetaFrame_Roundtrip","Output":"=== RUN   TestMetaFrame_Roundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137115919Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestMetaFrame_Roundtrip","Output":"--- PASS: TestMetaFrame_Roundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137118821Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestMetaFrame_Roundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137121367Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestToolCode_Mapping"}
+{"Time":"2026-11-07T11:38:14.13712377Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestToolCode_Mapping","Output":"=== RUN   TestToolCode_Mapping\n"}
+{"Time":"2026-11-07T11:38:14.137127057Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestToolCode_Mapping","Output":"--- PASS: TestToolCode_Mapping (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137129723Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestToolCode_Mapping","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137132704Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCompressionRatio"}
+{"Time":"2026-11-07T11:38:14.137134781Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCompressionRatio","Output":"=== RUN   TestCompressionRatio\n"}
+{"Time":"2026-11-07T11:38:14.137137372Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCompressionRatio","Output":"    frame_test.go:351: Uncompressed: 476 bytes, Compressed: 238 bytes, Ratio: 2.00:1, Total with envelope: 244 bytes\n"}
+{"Time":"2026-11-07T11:38:14.137140893Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCompressionRatio","Output":"--- PASS: TestCompressionRatio (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137143586Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCompressionRatio","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137146377Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_TruncatedNeverPanics"}
+{"Time":"2026-11-07T11:38:14.137148886Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_TruncatedNeverPanics","Output":"=== RUN   TestParseCheckpointPayload_TruncatedNeverPanics\n"}
+{"Time":"2026-11-07T11:38:14.137152545Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_TruncatedNeverPanics","Output":"--- PASS: TestParseCheckpointPayload_TruncatedNeverPanics (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137155554Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_TruncatedNeverPanics","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137159077Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_HugeSessionCountRejected"}
+{"Time":"2026-11-07T11:38:14.137161599Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_HugeSessionCountRejected","Output":"=== RUN   TestParseCheckpointPayload_HugeSessionCountRejected\n"}
+{"Time":"2026-11-07T11:38:14.137164887Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_HugeSessionCountRejected","Output":"--- PASS: TestParseCheckpointPayload_HugeSessionCountRejected (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137167733Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseCheckpointPayload_HugeSessionCountRejected","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.13717031Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayload_TruncatedNeverPanics"}
+{"Time":"2026-11-07T11:38:14.137174018Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayload_TruncatedNeverPanics","Output":"=== RUN   TestParseSessionPayload_TruncatedNeverPanics\n"}
+{"Time":"2026-11-07T11:38:14.137176984Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayload_TruncatedNeverPanics","Output":"--- PASS: TestParseSessionPayload_TruncatedNeverPanics (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137179856Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayload_TruncatedNeverPanics","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137182406Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseMetaPayload_TruncatedNeverPanics"}
+{"Time":"2026-11-07T11:38:14.137184677Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseMetaPayload_TruncatedNeverPanics","Output":"=== RUN   TestParseMetaPayload_TruncatedNeverPanics\n"}
+{"Time":"2026-11-07T11:38:14.13718787Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseMetaPayload_TruncatedNeverPanics","Output":"--- PASS: TestParseMetaPayload_TruncatedNeverPanics (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137190274Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseMetaPayload_TruncatedNeverPanics","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137193158Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic"}
+{"Time":"2026-11-07T11:38:14.137195928Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic","Output":"=== RUN   TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic\n"}
+{"Time":"2026-11-07T11:38:14.137199661Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic","Output":"--- PASS: TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137202659Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestDecodeCheckpointFrame_CorruptCompressedBytesNoPanic","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137205204Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_RoleSummaryRoundtrip"}
+{"Time":"2026-11-07T11:38:14.137207982Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_RoleSummaryRoundtrip","Output":"=== RUN   TestSessionFrame_RoleSummaryRoundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137212348Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_RoleSummaryRoundtrip","Output":"--- PASS: TestSessionFrame_RoleSummaryRoundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.13721505Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_RoleSummaryRoundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137217935Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrameV2_Roundtrip"}
+{"Time":"2026-11-07T11:38:14.137220132Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrameV2_Roundtrip","Output":"=== RUN   TestSessionFrameV2_Roundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137223209Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrameV2_Roundtrip","Output":"--- PASS: TestSessionFrameV2_Roundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.13722582Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrameV2_Roundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137228438Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrameV2_Roundtrip"}
+{"Time":"2026-11-07T11:38:14.137232542Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrameV2_Roundtrip","Output":"=== RUN   TestCheckpointFrameV2_Roundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137235582Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrameV2_Roundtrip","Output":"--- PASS: TestCheckpointFrameV2_Roundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137238428Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestCheckpointFrameV2_Roundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137240962Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncoder_SelectsV1WhenCountsFit"}
+{"Time":"2026-11-07T11:38:14.137243317Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncoder_SelectsV1WhenCountsFit","Output":"=== RUN   TestEncoder_SelectsV1WhenCountsFit\n"}
+{"Time":"2026-11-07T11:38:14.137246427Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncoder_SelectsV1WhenCountsFit","Output":"--- PASS: TestEncoder_SelectsV1WhenCountsFit (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.137249112Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestEncoder_SelectsV1WhenCountsFit","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.137251927Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_UnknownTypeIsSkippable"}
+{"Time":"2026-11-07T11:38:14.137254127Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_UnknownTypeIsSkippable","Output":"=== RUN   TestScanFrames_UnknownTypeIsSkippable\n"}
+{"Time":"2026-11-07T11:38:14.137257076Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_UnknownTypeIsSkippable","Output":"--- PASS: TestScanFrames_UnknownTypeIsSkippable (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.137259478Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestScanFrames_UnknownTypeIsSkippable","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.137262169Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_TruncatedNeverPanics"}
+{"Time":"2026-11-07T11:38:14.137264254Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_TruncatedNeverPanics","Output":"=== RUN   TestParseSessionPayloadV2_TruncatedNeverPanics\n"}
+{"Time":"2026-11-07T11:38:14.137267676Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_TruncatedNeverPanics","Output":"--- PASS: TestParseSessionPayloadV2_TruncatedNeverPanics (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137270546Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_TruncatedNeverPanics","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137273307Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_HugeCountsRejected"}
+{"Time":"2026-11-07T11:38:14.137277975Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_HugeCountsRejected","Output":"=== RUN   TestParseSessionPayloadV2_HugeCountsRejected\n"}
+{"Time":"2026-11-07T11:38:14.137281009Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_HugeCountsRejected","Output":"--- PASS: TestParseSessionPayloadV2_HugeCountsRejected (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137283501Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestParseSessionPayloadV2_HugeCountsRejected","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137287581Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_MetadataRoundtrip"}
+{"Time":"2026-11-07T11:38:14.137289738Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_MetadataRoundtrip","Output":"=== RUN   TestSessionFrame_MetadataRoundtrip\n"}
+{"Time":"2026-11-07T11:38:14.137293736Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_MetadataRoundtrip","Output":"--- PASS: TestSessionFrame_MetadataRoundtrip (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137296329Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_MetadataRoundtrip","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.137299087Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_PartialMetadata"}
+{"Time":"2026-11-07T11:38:14.137301074Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_PartialMetadata","Output":"=== RUN   TestSessionFrame_PartialMetadata\n"}
+{"Time":"2026-11-07T11:38:14.137303662Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_PartialMetadata","Output":"--- PASS: TestSessionFrame_PartialMetadata (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.137306732Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Test":"TestSessionFrame_PartialMetadata","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.13730927Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Output":"PASS\n"}
+{"Time":"2026-11-07T11:38:14.137312027Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Output":"ok  \tgithub.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec\t(cached)\n"}
+{"Time":"2026-11-07T11:38:14.137317141Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/codec","Elapsed":0.001}
+{"Time":"2026-11-07T11:38:14.25236761Z","Action":"start","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe"}
+{"Time":"2026-11-07T11:38:14.252500587Z","Action":"start","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport"}
+{"Time":"2026-11-07T11:38:14.252519608Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport","Output":"?   \tgithub.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport\t[no test files]\n"}
+{"Time":"2026-11-07T11:38:14.252540337Z","Action":"skip","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/transport","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.25456554Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip"}
+{"Time":"2026-11-07T11:38:14.254586149Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip","Output":"=== RUN   TestStandaloneAndBatchedMemoryRoundTrip\n"}
+{"Time":"2026-11-07T11:38:14.254605552Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/standalone"}
+{"Time":"2026-11-07T11:38:14.254607801Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/standalone","Output":"=== RUN   TestStandaloneAndBatchedMemoryRoundTrip/standalone\n"}
+{"Time":"2026-11-07T11:38:14.263695414Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/standalone","Output":"--- PASS: TestStandaloneAndBatchedMemoryRoundTrip/standalone (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.26371473Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/standalone","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.263721594Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/batch"}
+{"Time":"2026-11-07T11:38:14.263730374Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/batch","Output":"=== RUN   TestStandaloneAndBatchedMemoryRoundTrip/batch\n"}
+{"Time":"2026-11-07T11:38:14.277993593Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/batch","Output":"--- PASS: TestStandaloneAndBatchedMemoryRoundTrip/batch (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.278015054Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip/batch","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.27802005Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip","Output":"--- PASS: TestStandaloneAndBatchedMemoryRoundTrip (0.02s)\n"}
+{"Time":"2026-11-07T11:38:14.278022435Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestStandaloneAndBatchedMemoryRoundTrip","Elapsed":0.02}
+{"Time":"2026-11-07T11:38:14.27802528Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMemoryOnlyCheckpointHasNoFabricatedSession"}
+{"Time":"2026-11-07T11:38:14.278026984Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMemoryOnlyCheckpointHasNoFabricatedSession","Output":"=== RUN   TestMemoryOnlyCheckpointHasNoFabricatedSession\n"}
+{"Time":"2026-11-07T11:38:14.282822708Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMemoryOnlyCheckpointHasNoFabricatedSession","Output":"--- PASS: TestMemoryOnlyCheckpointHasNoFabricatedSession (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.282834179Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMemoryOnlyCheckpointHasNoFabricatedSession","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.282836872Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMismatchedMemoryCommitRejected"}
+{"Time":"2026-11-07T11:38:14.282838635Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMismatchedMemoryCommitRejected","Output":"=== RUN   TestMismatchedMemoryCommitRejected\n"}
+{"Time":"2026-11-07T11:38:14.286980923Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMismatchedMemoryCommitRejected","Output":"--- PASS: TestMismatchedMemoryCommitRejected (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.286986747Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestMismatchedMemoryCommitRejected","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.286989307Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestOlderBodyWithoutMemoryRemainsReadable"}
+{"Time":"2026-11-07T11:38:14.286992212Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestOlderBodyWithoutMemoryRemainsReadable","Output":"=== RUN   TestOlderBodyWithoutMemoryRemainsReadable\n"}
+{"Time":"2026-11-07T11:38:14.28963853Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestOlderBodyWithoutMemoryRemainsReadable","Output":"--- PASS: TestOlderBodyWithoutMemoryRemainsReadable (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.289641284Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestOlderBodyWithoutMemoryRemainsReadable","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.289643352Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLaterSessionAppendRetainsMemory"}
+{"Time":"2026-11-07T11:38:14.289645078Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLaterSessionAppendRetainsMemory","Output":"=== RUN   TestLaterSessionAppendRetainsMemory\n"}
+{"Time":"2026-11-07T11:38:14.295526429Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLaterSessionAppendRetainsMemory","Output":"--- PASS: TestLaterSessionAppendRetainsMemory (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.295542657Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLaterSessionAppendRetainsMemory","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.295546126Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLegacyReexportModelDropsUnknownMemory"}
+{"Time":"2026-11-07T11:38:14.295548678Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLegacyReexportModelDropsUnknownMemory","Output":"=== RUN   TestLegacyReexportModelDropsUnknownMemory\n"}
+{"Time":"2026-11-07T11:38:14.300298983Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLegacyReexportModelDropsUnknownMemory","Output":"--- PASS: TestLegacyReexportModelDropsUnknownMemory (0.01s)\n"}
+{"Time":"2026-11-07T11:38:14.300314507Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLegacyReexportModelDropsUnknownMemory","Elapsed":0.01}
+{"Time":"2026-11-07T11:38:14.300319254Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestAwareReexportModelRetainsMemory"}
+{"Time":"2026-11-07T11:38:14.300321496Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestAwareReexportModelRetainsMemory","Output":"=== RUN   TestAwareReexportModelRetainsMemory\n"}
+{"Time":"2026-11-07T11:38:14.31605389Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestAwareReexportModelRetainsMemory","Output":"--- PASS: TestAwareReexportModelRetainsMemory (0.02s)\n"}
+{"Time":"2026-11-07T11:38:14.316094648Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestAwareReexportModelRetainsMemory","Elapsed":0.02}
+{"Time":"2026-11-07T11:38:14.316112965Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureSchemaRefusedByNewMemoryReaderAndRepair"}
+{"Time":"2026-11-07T11:38:14.316114832Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureSchemaRefusedByNewMemoryReaderAndRepair","Output":"=== RUN   TestFutureSchemaRefusedByNewMemoryReaderAndRepair\n"}
+{"Time":"2026-11-07T11:38:14.317050177Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureSchemaRefusedByNewMemoryReaderAndRepair","Output":"--- PASS: TestFutureSchemaRefusedByNewMemoryReaderAndRepair (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.317053428Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureSchemaRefusedByNewMemoryReaderAndRepair","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.317055838Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureFrameRefusedByAwareRepair"}
+{"Time":"2026-11-07T11:38:14.31705777Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureFrameRefusedByAwareRepair","Output":"=== RUN   TestFutureFrameRefusedByAwareRepair\n"}
+{"Time":"2026-11-07T11:38:14.318191998Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureFrameRefusedByAwareRepair","Output":"--- PASS: TestFutureFrameRefusedByAwareRepair (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.318195732Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestFutureFrameRefusedByAwareRepair","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.318197753Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestTrailingPartialAndTruncatedFramesRejected"}
+{"Time":"2026-11-07T11:38:14.318206182Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestTrailingPartialAndTruncatedFramesRejected","Output":"=== RUN   TestTrailingPartialAndTruncatedFramesRejected\n"}
+{"Time":"2026-11-07T11:38:14.321271822Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestTrailingPartialAndTruncatedFramesRejected","Output":"--- PASS: TestTrailingPartialAndTruncatedFramesRejected (0.00s)\n"}
+{"Time":"2026-11-07T11:38:14.321285566Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestTrailingPartialAndTruncatedFramesRejected","Elapsed":0}
+{"Time":"2026-11-07T11:38:14.321288666Z","Action":"run","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLargeMemoryPayloadBeyondAdvisoryLengthRoundTrips"}
+{"Time":"2026-11-07T11:38:14.321290614Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLargeMemoryPayloadBeyondAdvisoryLengthRoundTrips","Output":"=== RUN   TestLargeMemoryPayloadBeyondAdvisoryLengthRoundTrips\n"}
+{"Time":"2026-11-07T11:38:14.340763633Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLargeMemoryPayloadBeyondAdvisoryLengthRoundTrips","Output":"--- PASS: TestLargeMemoryPayloadBeyondAdvisoryLengthRoundTrips (0.02s)\n"}
+{"Time":"2026-11-07T11:38:14.340792651Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Test":"TestLargeMemoryPayloadBeyondAdvisoryLengthRoundTrips","Elapsed":0.02}
+{"Time":"2026-11-07T11:38:14.340796777Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Output":"PASS\n"}
+{"Time":"2026-11-07T11:38:14.340953995Z","Action":"output","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Output":"ok  \tgithub.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe\t0.088s\n"}
+{"Time":"2026-11-07T11:38:14.341393407Z","Action":"pass","Package":"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memoryframe","Elapsed":0.089}

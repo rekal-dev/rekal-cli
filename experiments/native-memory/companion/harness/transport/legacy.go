@@ -1,6 +1,11 @@
 package transport
 
-import ("fmt"; "os/exec"; "strings"; "github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx")
+import (
+	"fmt"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
+	"os/exec"
+	"strings"
+)
 
 func CommitWireFormat(gitRoot string, bodyData, dictData []byte) (string, error) {
 	branch := gitx.RekalBranchName()

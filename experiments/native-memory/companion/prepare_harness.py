@@ -34,6 +34,8 @@ def main():
     (harness / "go.mod").write_text("module github.com/rekal-dev/rekal-cli/cmd/rekal/cli\n\ngo 1.25.6\n")
     (harness / "gitx/git.go").write_text('package gitx\n\nimport ("os/exec"; "strings")\n\n' + helpers)
     (harness / "transport/legacy.go").write_text('package transport\n\nimport ("fmt"; "os/exec"; "strings"; "github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx")\n\n' + writer)
+    subprocess.run(["gofmt", "-s", "-w", str(harness / "gitx/git.go"),
+                    str(harness / "transport/legacy.go")], check=True)
     (ROOT / "source_provenance.json").write_text(json.dumps({
         "upstream_commit": commit,
         "upstream_file": "cmd/rekal/cli/transport/export.go",

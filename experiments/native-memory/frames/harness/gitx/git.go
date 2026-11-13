@@ -1,6 +1,9 @@
 package gitx
 
-import ("os/exec"; "strings")
+import (
+	"os/exec"
+	"strings"
+)
 
 func ConfigValue(key string) string {
 	out, err := exec.Command("git", "config", key).Output()

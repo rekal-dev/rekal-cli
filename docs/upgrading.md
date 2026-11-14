@@ -2,10 +2,11 @@
 
 This guide covers upgrading from v1.0.2 to [v2.0.0](https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.0), released 14 November 2026. See [CHANGELOG.md](../CHANGELOG.md).
 
-> **Linux AMD64 compatibility:** the published v2.0.0 archive requires GLIBC 2.43.
-> Its checksum verifies, but it does not start on older GLIBC systems. Build from
-> source on your target system using [DEVELOPMENT.md](DEVELOPMENT.md); a
-> portable replacement release has not yet been verified.
+> **Linux portability patch:** use [v2.0.1](https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.1)
+> on Ubuntu 24.04 / GLIBC 2.39 or newer with libstdc++ and libgomp. The v2.0.0
+> AMD64 archive required GLIBC 2.43. The patch changes packaging, not storage or
+> command behavior: upgrading 2.0.0 to 2.0.1 needs no additional reindex.
+> Older GLIBC and musl systems require a [source build](DEVELOPMENT.md).
 
 ## What changes
 

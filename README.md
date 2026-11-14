@@ -1,22 +1,22 @@
 # Rekal — Git-backed memory for AI coding agents
 
-**New session. New agent. Same project memory.**
+**Carry the context forward.**
 
-Your code has a history. So do the decisions behind it. Rekal makes past coding
+Your project’s memory, across sessions, agents and teammates.
+Rekal makes past coding
 conversations and project notes searchable across Claude Code, Codex and your
-team—with the original source ready to read. Capture at commit time. Search
-locally. Share eligible context through Git.
+team—with the original source ready to read. Captured with commits. Searchable locally. Shared through Git.
 
 One binary. Local embeddings by default. No hosted memory account required.
 
-> **Rekal 2.0 is available.** [Download v2.0.0](https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.0)
+> **Rekal 2.0 is available.** [Download v2.0.1](https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.1)
 > for native project memory and the unified search/read interface.
 > Coming from 1.x? Read the [upgrade guide](docs/upgrading.md) before migrating.
 
-> **Linux AMD64 compatibility:** the published v2.0.0 archive requires GLIBC 2.43.
-> Its checksum verifies, but it does not start on older GLIBC systems. Build from
-> source on your target system using [DEVELOPMENT.md](docs/DEVELOPMENT.md); a
-> portable replacement release has not yet been verified.
+> **Linux compatibility:** v2.0.1 targets Ubuntu 24.04 / GLIBC 2.39 or newer,
+> with the standard C++ and OpenMP runtimes. Older GLIBC and musl systems need a
+> [source build](docs/DEVELOPMENT.md). Upgrade from v2.0.0 on Linux AMD64 to
+> remove its unintended GLIBC 2.43 requirement.
 
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
@@ -73,7 +73,7 @@ separate capabilities.
 ### From a shell
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | REKAL_VERSION=v2.0.0 bash
+curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | REKAL_VERSION=v2.0.1 bash
 cd your-project
 rekal init
 # Work and commit normally. The hook captures supported sessions.

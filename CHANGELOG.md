@@ -10,6 +10,8 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-14
+
 ### Fixed
 
 - Pin Linux release builds to Ubuntu 24.04 and gate publication on a GLIBC 2.39
@@ -217,7 +219,8 @@ deliberately unfrozen.
 - Compatibility contract published in
   [docs/compatibility.md](docs/compatibility.md).
 
-[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.1
 [2.0.0]: https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.0
 [1.0.2]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.2
 [1.0.1]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.1

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="790" viewBox="0 0 1000 790" role="img" aria-labelledby="title desc">
-<title id="title">New session. New agent. Same project memory.</title>
+<title id="title">Carry the context forward.</title>
 <desc id="desc">Illustrative three-step workflow: Dana captures a retry decision, Sam syncs and searches with Codex, then reads its original source. Synthetic content, abbreviated results.</desc>
 <rect width="1000" height="790" rx="20" fill="#08080a"/>
-<text x="35" y="48" fill="#e8e8ec" font-size="28" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">New session. New agent. Same project memory.</text>
+<text x="35" y="48" fill="#e8e8ec" font-size="28" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">Carry the context forward.</text>
 <text x="35" y="81" fill="#8a8a94" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Git-backed memory for the decisions behind your code.</text>
 <rect x="25" y="110" width="950" height="189" rx="12" fill="#101015" stroke="#2d2d38"/>
 <text x="47" y="141" fill="#a79bff" font-size="17" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">01  KEEP THE DECISION</text>

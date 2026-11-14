@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_sessions (
 
 ---
 
-## Native memory (unreleased main)
+## Native memory (v2.0)
 
 `memory_revisions` holds immutable repository note observations and deletion
 markers. Eligible revisions are encoded on the wire with their checkpoint.

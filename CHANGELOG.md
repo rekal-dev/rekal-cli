@@ -10,6 +10,12 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh README positioning and align release status across guides with the published v2.0.0 binary.
+
+## [2.0.0] - 2026-11-14
+
 ### Added
 
 - Release workflow accepts an explicit stable version on main, pins the selected
@@ -23,7 +29,7 @@ starts at 1.0; it records what 1.0 ships and everything after.
   bounded reads return continuations and canonical source IDs. The agent skill
   defaults to search/read rather than requiring separate retrieval routes.
   Existing advanced commands remain available. This changes default text output
-  and adds JSON fields; it is intended for the next major interface release.
+  and adds JSON fields; it ships in this major interface release.
 
 - Native Claude project memory is captured by default during ordinary
   checkpoints and found through recall. Missing default directories are quiet;
@@ -205,7 +211,8 @@ deliberately unfrozen.
 - Compatibility contract published in
   [docs/compatibility.md](docs/compatibility.md).
 
-[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/rekal-dev/rekal-cli/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.0
 [1.0.2]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.2
 [1.0.1]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.1
 [1.0.0]: https://github.com/rekal-dev/rekal-cli/releases/tag/v1.0.0

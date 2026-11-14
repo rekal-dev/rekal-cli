@@ -1,8 +1,7 @@
 # Command reference
 
-> This page describes the current main branch. Native memory integration,
-> literal search pagination and `query --ref` are unreleased changes; the
-> v1.0.2 installation does not include them. See the [changelog](../CHANGELOG.md) for release status.
+> Native memory integration, literal search pagination and `query --ref` ship in
+> v2.0.0. See the [upgrade guide](upgrading.md) when migrating from 1.x.
 
 Command flags and source types for search, reading and lifecycle operations.
 Per-command behavioural specs live in [`spec/command/`](spec/command/); this

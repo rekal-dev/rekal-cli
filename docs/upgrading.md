@@ -1,12 +1,15 @@
 # Upgrading from v1.0.2
 
-This guide describes **unreleased main**, proposed for v2.0. It is not a release
-announcement. Published installation commands remain pinned to v1.0.2 until an
-actual release is verified. See [CHANGELOG.md](../CHANGELOG.md).
+This guide covers upgrading from v1.0.2 to [v2.0.0](https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.0), released 14 November 2026. See [CHANGELOG.md](../CHANGELOG.md).
+
+> **Linux AMD64 compatibility:** the published v2.0.0 archive requires GLIBC 2.43.
+> Its checksum verifies, but it does not start on older GLIBC systems. Build from
+> source on your target system using [DEVELOPMENT.md](DEVELOPMENT.md); a
+> portable replacement release has not yet been verified.
 
 ## What changes
 
-| Area | Unreleased behavior |
+| Area | v2.0.0 behavior |
 |---|---|
 | Ordinary search | Ranked conversations, separate memory/prose results and paginated literal conversation matches |
 | Reading | `rekal query --ref` opens a returned source; `query --cursor` continues it |

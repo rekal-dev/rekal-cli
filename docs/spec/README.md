@@ -1,7 +1,7 @@
 # Rekal CLI — Spec
 
-These specs describe unreleased main. See [upgrade guidance](../upgrading.md)
-for the differences from the published v1.0.2 binary.
+These specs describe the v2.0 interface. See [upgrade guidance](../upgrading.md)
+for the differences from v1.0.2.
 
 Experience and behaviour per command. One file per command under `command/`.
 

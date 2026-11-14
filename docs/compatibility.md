@@ -48,7 +48,7 @@ Agents branch on these, so they are a contract:
 
 | Code | Meaning |
 |---|---|
-| `0` | Useful ranked/prose results; unreleased main also succeeds for nonempty literal or memory results |
+| `0` | Useful ranked/prose results; v2.0 also succeeds for nonempty literal or memory results |
 | `1` | No useful text-search results, or a runtime error |
 
 ### Default output shape
@@ -112,9 +112,9 @@ at 1.0 — schema migration on open and skip-unknown frame decoding have been in
 the codebase throughout — but they were never written down as a promise until
 now, and this page is where they become one.
 
-## Planned v2.0 search interface (unreleased)
+## v2.0 search interface
 
-The unreleased interface uses ordinary search for ranked context plus literal
+The v2.0 interface uses ordinary search for ranked context plus literal
 conversation enumeration, and `rekal query --ref` for bounded source reads.
 Default text output changes; JSON adds `ref` and `literal` fields. Existing
 `find`, session queries, SQL and evidence commands remain supported.
@@ -128,4 +128,4 @@ No special reindex is required solely for search/read routing. An absent or stal
 index still needs normal rebuilding/sync; this change does not automatically
 backfill historical passage vectors. Memory wire compatibility and the need to
 upgrade all memory-bearing branch writers remain separate requirements. Follow
-the [upgrade guide](upgrading.md); the version proposal does not indicate a release.
+the [upgrade guide](upgrading.md)..

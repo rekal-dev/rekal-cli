@@ -33,6 +33,20 @@ One binary. Local embeddings by default. No hosted memory account required.
 - **Follow the evidence.** Read captured conversation passages and attributed note
   revisions. Compare historical reasoning with current project files and tests.
 
+## Built to enable your agent
+
+**Agents own the reasoning. Rekal makes the context durable, retrievable and shared.**
+
+As agents and their harnesses improve at memory and distillation, Rekal carries
+their project context across sessions, tools and teammates. Your agent writes
+the notes and decides what matters. Rekal preserves captured conversations and
+repository note revisions, handles Git sharing, and provides local search with
+sources the agent can read.
+
+Retrieval can evolve without replacing the retained record. The goal is better
+context for the agent's judgment, with less plumbing to manage.
+[Read the core principles](SOUL.md#the-core-bet-enable-the-agent).
+
 ## Build on your team’s context
 
 After setup, just ask your coding agent:

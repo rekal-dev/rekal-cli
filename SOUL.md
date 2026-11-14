@@ -16,9 +16,9 @@ An append-only intent ledger. Distributed through git. Shared across the team. I
 
 This is not a feature of Rekal. This is the first reason Rekal exists.
 
-### 2. Agents can't remember
+### 2. Context doesn't travel by itself
 
-An AI agent starts every session blank. It reads the code. It does not know why the code looks the way it does. It does not know what was tried and rejected last week. It does not know that the team already explored and abandoned the approach it's about to suggest.
+Agents and their harnesses can remember, distill notes and recover earlier work. But context held by one tool or working session does not automatically reach another agent or teammate. Reading the code alone cannot recover every rejected approach, constraint or reason behind a decision.
 
 Humans have institutional memory — imperfect, fading, but real. Agents may keep
 notes, but continuity across sessions, tools and teammates still needs a record.
@@ -28,6 +28,42 @@ Rekal gives agents memory. Not general knowledge. Not search results. Recall —
 The agent is the reader. Not the human. Every decision about output format, query interface, and context loading puts the agent first.
 
 This is not a feature of Rekal. This is the second reason Rekal exists.
+
+---
+
+## The core bet: enable the agent
+
+**Agents own the reasoning. Rekal makes the context durable, retrievable and shared.**
+
+We expect agents to become smarter and harnesses to become better at memory,
+distillation and context management. Rekal should become more useful as they
+improve. Its enduring job is to carry project context across sessions, agents
+and teammates through the Git workflow.
+
+- **Preserve the evidence.** Keep captured conversations and observed repository
+  note revisions with their identities and provenance. A distilled note is
+  useful context, not a replacement for the original record or proof of what
+  today's code does.
+- **Reuse native memory.** Let agents and harnesses write and refine their own
+  notes. Observe supported sources without intercepting their distillation or
+  imposing a universal memory-writing process. Respect scope: explicitly local
+  notes stay local; eligible repository records can travel through Git.
+- **Own the mechanics.** Capture, revision tracking, transport, index rebuilding
+  and source resolution belong in tools. Give the agent simple search and
+  bounded reads with references it can follow. Enabling the agent means removing
+  plumbing, not asking it to manage our internals.
+- **Leave judgment with the agent.** The agent decides what to search, which
+  evidence matters, how to reconcile conflicting notes and what to do next.
+  Retrieval ranks candidates; it does not establish truth or prescribe a
+  reasoning workflow.
+- **Keep retrieval replaceable.** BM25, embeddings and future retrieval methods
+  are ways to reach evidence. Evaluate them by useful context recovered, cost
+  and latency. More mechanisms do not by themselves mean better results.
+  Retained records should support improved local indexes without recapturing
+  the original work.
+
+The test for a new feature is whether it gives a stronger agent more useful
+context with less friction, while preserving evidence and ownership.
 
 ---
 
@@ -101,6 +137,7 @@ When facing a choice, we ask:
 6. Is it transparent — can the user see and remove everything?
 7. Does the agent get what it needs?
 8. Does it enable the agent's reasoning rather than replace it?
+9. Will better agents and harnesses benefit without having to recreate the captured history?
 
 If the answer to any of these is no, we find another way.
 

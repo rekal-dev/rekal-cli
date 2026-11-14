@@ -65,12 +65,24 @@ separate capabilities.
 ### From a shell
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | bash
+curl -fsSL https://rekal.dev/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+rekal version
 cd your-project
 rekal init
-# Work and commit normally. The hook captures supported sessions.
-rekal "why do webhook retries use jitter?"
+# Work with your coding agent, then commit normally.
+rekal "what did we change and why?"
 ```
+
+The PATH line makes Rekal available immediately in this shell (Bash or Zsh).
+In Fish, use `fish_add_path "$HOME/.local/bin"` instead.
+
+Your first search needs captured context. After working with a supported agent
+in this repository, a commit checkpoints the session. Already have local agent
+history? Run `rekal checkpoint` to capture it now. For history shared by teammates,
+run `rekal sync`. Ask about your actual work, then open a returned source with
+`rekal query --ref <returned-reference>`. A new repository with no captured
+history can legitimately return no matches.
 
 Supported release targets: macOS ARM64, Linux AMD64 and Linux ARM64. Historical
 releases are approximately 170 MB to download: the embedding model, database and

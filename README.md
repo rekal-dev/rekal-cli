@@ -1,10 +1,11 @@
 # Rekal — Git-backed memory for AI coding agents
 
-**Carry the reasoning forward.**
+**New session. New agent. Same project memory.**
 
-Keep the decisions, conversations and project notes behind your code ready for
-the next session, agent and teammate. Capture at commit time. Search locally.
-Share eligible context through Git.
+Your code has a history. So do the decisions behind it. Rekal makes past coding
+conversations and project notes searchable across Claude Code, Codex and your
+team—with the original source ready to read. Capture at commit time. Search
+locally. Share eligible context through Git.
 
 One binary. Local embeddings by default. No hosted memory account required.
 
@@ -40,7 +41,27 @@ One binary. Local embeddings by default. No hosted memory account required.
 - **Follow the evidence.** Read captured conversation passages and attributed note
   revisions. Compare historical reasoning with current project files and tests.
 
-![Dana commits and pushes a webhook discussion; Sam syncs and recovers why fixed-delay retries were rejected](docs/assets/demo.svg)
+## A decision should survive the handoff
+
+Yesterday, Dana and Claude Code rejected fixed-delay webhook retries: they made
+failing deliveries arrive together. Today, Sam opens Codex to change the retry
+logic. The code shows jitter. Rekal helps recover **why it is there**.
+
+![Three-step walkthrough: capture the retry decision, find it with another agent, then read its source](docs/assets/demo.svg)
+
+1. **Keep the decision.** Commit normally. Rekal checkpoints supported sessions
+   and project notes; eligible records travel after merge and push.
+2. **Find it again.** Sam runs `rekal sync`, then
+   `rekal "why do webhook retries use jitter?"`. Search returns conversation
+   leads and matching notes.
+3. **Read before changing.** Copy a returned reference into
+   `rekal query --ref <returned-reference>`. Inspect the original reasoning,
+   then check the current implementation and tests.
+
+*This is an illustrative scenario with synthetic content and abbreviated results,
+not a recorded CLI run. A note does not automatically link to the exact
+conversation that produced it.* [Try the interactive walkthrough](https://rekal.dev).
+
 
 Session adapters support **Claude Code, Cursor, Copilot, Codex, Gemini, Kiro and
 OpenCode**. Native note discovery defaults to **Claude project memory**; other
@@ -56,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/in
 cd your-project
 rekal init
 # Work and commit normally. The hook captures supported sessions.
-rekal "why did we drop batching?"
+rekal "why do webhook retries use jitter?"
 ```
 
 Supported release targets: macOS ARM64, Linux AMD64 and Linux ARM64. Historical
@@ -90,7 +111,7 @@ The everyday interface is deliberately small:
 
 | Task | Command |
 |---|---|
-| Find context | `rekal "why did we drop batching?"` |
+| Find context | `rekal "why do webhook retries use jitter?"` |
 | Read a source | `rekal query --ref <returned-reference>` |
 | Continue | Follow the returned `more:` command |
 | Programmatic output | Add `--json` |

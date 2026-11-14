@@ -132,7 +132,9 @@ continuations are separate; copy the printed command.
 <details>
 <summary>Advanced retrieval and administration</summary>
 
-Filters, `find`, session queries, `evidence`, SQL, index rebuilds and embedding
+Use `rekal find <query> [--json]` for explicit literal conversation search.
+
+Filters, session queries, `evidence`, SQL, index rebuilds and embedding
 administration remain available. They are not required for ordinary memory use.
 Read the [command guide](docs/commands.md) and
 [read contract](docs/spec/command/query.md) when you need them.

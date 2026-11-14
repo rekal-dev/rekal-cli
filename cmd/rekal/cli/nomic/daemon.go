@@ -115,7 +115,7 @@ func daemonLogPath(gitRoot string) string {
 }
 
 // writeMsg writes a length-prefixed JSON message to a connection.
-func writeMsg(conn net.Conn, v interface{}) error {
+func writeMsg(conn io.Writer, v interface{}) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -130,7 +130,7 @@ func writeMsg(conn net.Conn, v interface{}) error {
 }
 
 // readMsg reads a length-prefixed JSON message from a connection.
-func readMsg(conn net.Conn, v interface{}) error {
+func readMsg(conn io.Reader, v interface{}) error {
 	var hdr [4]byte
 	if _, err := io.ReadFull(conn, hdr[:]); err != nil {
 		return err
@@ -344,7 +344,7 @@ func handleRequest(req daemonRequest, embedder *Embedder, mu *sync.Mutex) daemon
 
 // daemonClient wraps a Unix socket connection to the daemon.
 type daemonClient struct {
-	conn net.Conn
+	conn io.ReadWriteCloser
 }
 
 func (c *daemonClient) ping() error {
@@ -418,7 +418,7 @@ func connectDaemon(gitRoot string) (*daemonClient, error) {
 
 	conn, err := net.DialTimeout("unix", sock, dialTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("nomic: no daemon running")
+		return nil, fmt.Errorf("nomic: no daemon running: %w", err)
 	}
 	dc := &daemonClient{conn: conn}
 	if err := dc.ping(); err != nil {
@@ -430,8 +430,7 @@ func connectDaemon(gitRoot string) (*daemonClient, error) {
 
 // spawnDaemon launches a daemon process in the background.
 // It does not wait for the daemon to become ready — callers should
-// fall back to in-process embedding and benefit from the daemon on
-// subsequent invocations.
+// use keyword/LSA results and benefit from the daemon on subsequent invocations.
 // spawnCooldown rate-limits daemon spawns. With the daemon-only client, a
 // caller that can't connect spawns a daemon on every miss; if the model can't
 // load (bad model / incompatible build) the daemon crashes on startup and the
@@ -491,12 +490,16 @@ func spawnDaemon(gitRoot string) {
 // NewDaemonCmd returns the hidden _nomic-daemon cobra command.
 func NewDaemonCmd() *cobra.Command {
 	var gitRoot string
+	var stdio bool
 
 	cmd := &cobra.Command{
 		Use:    "_nomic-daemon",
 		Hidden: true,
 		Short:  "Run the nomic embedding daemon (internal)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if stdio {
+				return RunStdioWorker(cmd.InOrStdin(), cmd.OutOrStdout())
+			}
 			if gitRoot == "" {
 				return fmt.Errorf("--git-root is required")
 			}
@@ -504,5 +507,6 @@ func NewDaemonCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&gitRoot, "git-root", "", "Git repository root")
+	cmd.Flags().BoolVar(&stdio, "stdio", false, "Serve one client over standard input/output")
 	return cmd
 }

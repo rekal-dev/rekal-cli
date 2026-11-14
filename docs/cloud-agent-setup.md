@@ -37,6 +37,13 @@ it encodes the setup mistakes that cost real time:
    skill test and route call
    exercises an old router.
 
+## Socket-restricted hosts
+
+When the host denies Unix sockets, Rekal uses an isolated child worker connected
+through pipes. Semantic retrieval still uses the embedded model. Loading it per
+client is slower than reusing the ordinary warm daemon; native crashes remain
+isolated from the CLI. This is not a fallback for corrupt model files.
+
 ## 1. Build (one-time)
 
 ```bash

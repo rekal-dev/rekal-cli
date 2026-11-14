@@ -52,6 +52,9 @@ func TestSocketPath_LongRootBindsAnyway(t *testing.T) {
 	got = socketPath(root)
 	ln, err := net.Listen("unix", got)
 	if err != nil {
+		if socketUnavailable(err) {
+			t.Skipf("host denies Unix sockets; pipe worker tests cover this host: %v", err)
+		}
 		t.Fatalf("cannot bind %q (%d bytes): %v", got, len(got), err)
 	}
 	defer ln.Close() //nolint:errcheck
@@ -113,6 +116,9 @@ func TestSocketPath_LongRuntimeDirStillBinds(t *testing.T) {
 	}
 	ln, err := net.Listen("unix", got)
 	if err != nil {
+		if socketUnavailable(err) {
+			t.Skipf("host denies Unix sockets; pipe worker tests cover this host: %v", err)
+		}
 		t.Fatalf("cannot bind %q (%d bytes): %v", got, len(got), err)
 	}
 	defer ln.Close()     //nolint:errcheck

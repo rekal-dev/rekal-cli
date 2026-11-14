@@ -14,6 +14,11 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ### Fixed
 
+- Keep embedded semantic retrieval working on hosts that deny Unix sockets using
+  a pipe-connected child worker. Native model crashes remain isolated; ordinary
+  hosts continue to reuse the warm daemon.
+- Require real embedded semantic scoring in CI and Linux release smoke tests.
+
 - Align `init` agent instructions with ordinary search, `query --ref` and source
   continuation. Remove obsolete routing from the default onboarding path.
 - Make root, init and query help explain default native notes, initial capture,

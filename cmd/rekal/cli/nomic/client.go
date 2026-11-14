@@ -9,7 +9,7 @@ import (
 )
 
 // Client provides nomic embeddings through the daemon. The model is loaded
-// ONLY in the daemon process, never in-process: a native model-load crash
+// ONLY in a child process (daemon or pipe worker), never in-process: a native model-load crash
 // (a bad model, an incompatible llama build, an OOM) then kills the disposable
 // daemon, not the caller. recall and embed degrade to keyword/LSA instead of
 // dying — the memory tool must never fail harder than the fallback it guards.
@@ -40,6 +40,12 @@ func NewClient(gitRoot string, wait bool) (*Client, error) {
 		return nil, ErrNotSupported
 	}
 	if dc, err := connectDaemon(gitRoot); err == nil {
+		return &Client{daemon: dc}, nil
+	} else if socketUnavailable(err) {
+		dc, workerErr := newPipeClient(gitRoot)
+		if workerErr != nil {
+			return nil, workerErr
+		}
 		return &Client{daemon: dc}, nil
 	}
 

@@ -6,6 +6,7 @@ fixtures. These tests never read the developer's native agent memory.
 import base64
 import http.server
 import threading
+import time
 import datetime
 import json
 import os
@@ -259,3 +260,18 @@ class BinaryContract(unittest.TestCase):
         self.assertIn("quartzdecision", self.run_cli("find", "quartzdecision").stdout)
         self.assertTrue(self.data("query", "--session", "s1", "--limit", "2")["turns"])
         self.assertEqual(json.loads(self.run_cli("query", "--sql", "SELECT 1 AS n", "--json").stdout)["n"], 1)
+
+    @unittest.skipUnless(os.environ.get("REKAL_TEST_SEMANTIC") == "1", "opt-in real embedded model test")
+    def test_real_semantic_vectors_contribute(self):
+        deadline = time.monotonic() + 120
+        last = {}
+        while time.monotonic() < deadline:
+            self.command([self.binary, "embed"])
+            last = self.data("quartzdecision", "--explain")
+            if "semantic" not in last and any(
+                hit.get("layers", {}).get("nomic", 0) > 0
+                for hit in last.get("results", [])
+            ):
+                return
+            time.sleep(1)
+        self.fail(f"real semantic scoring never contributed: {last.get('semantic', last)}")

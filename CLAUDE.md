@@ -895,6 +895,13 @@ for the same place and move `.rekal/` off the store that already exists —
 
 ## Development
 
+When Unix socket creation returns EPERM/EAFNOSUPPORT/EPROTONOSUPPORT,
+`nomic.Client` uses a pipe-connected child (`_nomic-daemon --stdio`). Model load
+stays outside the CLI process. The worker is reused for one client/batch, has a
+bounded startup handshake, and is terminated/reaped on close or startup failure.
+Socket-denied hosts pay model startup per client. `REKAL_TEST_SEMANTIC=1` enables
+the real embedded scoring check required by CI and Linux release smoke tests.
+
 `init` installs the embedded search → `query --ref` → `more:` skill and matching
 agent pointers. Reinitializing refreshes these managed assets while preserving
 user instructions and stored history. Root, init and query help describe the same

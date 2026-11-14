@@ -138,7 +138,7 @@ jobs:
             apt-get install -y -qq --no-install-recommends libstdc++6 libgomp1 git python3 ca-certificates
             test "$(/src/rekal version)" = "rekal ${RELEASE_TAG#v}"
             /src/rekal --help >/dev/null
-            REKAL_TEST_BINARY=/src/rekal python3 -m unittest discover -s /src/scripts/tests -p test_binary_contract.py -v
+            REKAL_TEST_SEMANTIC=1 REKAL_TEST_BINARY=/src/rekal python3 -m unittest discover -s /src/scripts/tests -p test_binary_contract.py -v
           '
 
       - name: Create archive

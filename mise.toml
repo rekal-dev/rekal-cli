@@ -23,7 +23,7 @@ go test -tags=integration -race ./...
 test_binary="$(mktemp /tmp/rekal-test-binary.XXXXXX)"
 trap 'rm -f "$test_binary"' EXIT
 go build -o "$test_binary" ./cmd/rekal
-REKAL_TEST_BINARY="$test_binary" python3 -m unittest discover -s scripts/tests -v
+REKAL_TEST_SEMANTIC=1 REKAL_TEST_BINARY="$test_binary" python3 -m unittest discover -s scripts/tests -v
 """
 
 [tasks."test:coverage"]

@@ -2,14 +2,12 @@
 
 **Carry the context forward.**
 
-Your project’s memory, across sessions, agents and teammates.
-Rekal makes past coding
-conversations and project notes searchable across Claude Code, Codex and your
-team—with the original source ready to read. Captured with commits. Searchable locally. Shared through Git.
+Ask your agent to Rekal context from your team and past work for the task at hand.
+Across sessions, agents and teammates—with the original sources ready to read.
+Captured with commits. Searchable locally. Shared through Git.
 
 One binary. Local embeddings by default. No hosted memory account required.
 
-> 
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
@@ -22,45 +20,20 @@ One binary. Local embeddings by default. No hosted memory account required.
 [Native memory](#native-memory) · [Team memory](#team-memory) ·
 [Benchmarks](#benchmarks) · [Upgrade](#upgrading) · [Docs](#documentation)
 
-## Why Rekal
+## Get context. Then get to work.
 
-- **Resume earlier work.** Recover constraints, attempted fixes and rejected
-  alternatives before repeating the investigation.
-- **Change agents, keep context.** Make captured project history available to the
-  next supported coding tool, even when another agent produced it.
-- **Bring teammates up to speed.** Share eligible records through your Git remote;
-  each teammate searches a local index.
-- **Follow the evidence.** Read captured conversation passages and attributed note
-  revisions. Compare historical reasoning with current project files and tests.
-
-## Built to enable your agent
-
-**Agents own the reasoning. Rekal makes the context durable, retrievable and shared.**
-
-As agents and their harnesses improve at memory and distillation, Rekal carries
-their project context across sessions, tools and teammates. Your agent writes
-the notes and decides what matters. Rekal preserves captured conversations and
-repository note revisions, handles Git sharing, and provides local search with
-sources the agent can read.
-
-Retrieval can evolve without replacing the retained record. The goal is better
-context for the agent's judgment, with less plumbing to manage.
-[Read the core principles](SOUL.md#the-core-bet-enable-the-agent).
-
-## Build on your team’s context
-
-After setup, just ask your coding agent:
+After setup, ask your coding agent:
 
 > Please Rekal the context around invoice exports, then add date filters.
 
-[![Animated agent terminals: Alex builds CSV export; Sam recalls Alex’s context and adds date filters](docs/assets/demo.svg)](https://rekal.dev/#demo)
+[![Alex builds invoice exports with Claude Code; Sam uses that context in Codex to add date filters](docs/assets/demo.svg)](https://rekal.dev/#demo)
 
-Alex builds the feature with Claude Code. Sam extends it with Codex.
-Rekal carries the captured context through their existing Git remote.
-Your agent handles the search and source reading.
+Your agent finds relevant context from your team and past work, reads the
+sources and uses what matters for the job.
 
-*Animated illustration with synthetic content, not a recorded run.*
-[Play the interactive demo](https://rekal.dev/#demo).
+**Agents own the reasoning. Rekal makes the context durable, retrievable and shared.**
+As agents improve at memory and distillation, they can do more with the project
+record you already have. [Core principles](SOUL.md#the-core-bet-enable-the-agent).
 
 Session adapters support **Claude Code, Cursor, Copilot, Codex, Gemini, Kiro and
 OpenCode**. Native note discovery defaults to **Claude project memory**; other
@@ -78,7 +51,7 @@ rekal version
 cd your-project
 rekal init
 # Work with your coding agent, then commit normally.
-rekal "what did we change and why?"
+rekal "invoice export context"
 ```
 
 The PATH line makes Rekal available immediately in this shell (Bash or Zsh).
@@ -122,7 +95,7 @@ The everyday interface is deliberately small:
 
 | Task | Command |
 |---|---|
-| Find context | `rekal "why do webhook retries use jitter?"` |
+| Find context | `rekal "invoice export context"` |
 | Read a source | `rekal query --ref <returned-reference>` |
 | Continue | Follow the returned `more:` command |
 | Programmatic output | Add `--json` |

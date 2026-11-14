@@ -61,7 +61,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             goos: linux
             goarch: amd64
           - runner: ubuntu-24.04-arm
@@ -123,6 +123,23 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: test "$(./rekal version)" = "rekal ${RELEASE_TAG#v}"
+
+      - name: Check Linux GLIBC baseline
+        if: matrix.goos == 'linux'
+        run: python3 scripts/check_linux_abi.py ./rekal 2.39
+
+      - name: Smoke test Linux on Ubuntu 24.04
+        if: matrix.goos == 'linux'
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -e RELEASE_TAG ubuntu:24.04 bash -ec '
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends libstdc++6 libgomp1 git python3 ca-certificates
+            test "$(/src/rekal version)" = "rekal ${RELEASE_TAG#v}"
+            /src/rekal --help >/dev/null
+            REKAL_TEST_BINARY=/src/rekal python3 -m unittest discover -s /src/scripts/tests -p test_binary_contract.py -v
+          '
 
       - name: Create archive
         run: |

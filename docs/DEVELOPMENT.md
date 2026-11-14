@@ -281,3 +281,15 @@ immutable releases must have their assets uploaded while still drafts.
 | Lint | `mise run lint` |
 | Build | `mise run build` |
 | Install pre-push hook | `./scripts/install-hooks.sh` |
+
+## Linux release compatibility
+
+Linux release builds use explicit Ubuntu 24.04 runners (AMD64 and ARM64), not
+`ubuntu-latest`. `scripts/check_linux_abi.py` rejects ELF requirements above
+GLIBC 2.39. Before packaging, the release workflow runs version/help checks and
+the synthetic binary contract suite in a clean Ubuntu 24.04 container with
+libstdc++6 and libgomp1. This is the supported runtime baseline; older GLIBC or
+musl systems require a source build. Keep this gate when updating native libraries.
+
+v2.0.0 AMD64 was built on a floating runner and required GLIBC 2.43. Do not
+replace its immutable assets; publish the corrected build under a new patch tag.

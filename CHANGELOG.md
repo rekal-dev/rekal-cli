@@ -10,6 +10,12 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+### Fixed
+
+- Pin Linux release builds to Ubuntu 24.04 and gate publication on a GLIBC 2.39
+  requirement ceiling plus binary contract tests in a clean baseline container.
+  This addresses the v2.0.0 AMD64 archive requiring GLIBC 2.43.
+
 ### Changed
 
 - Refresh README positioning and align release status across guides with the published v2.0.0 binary.

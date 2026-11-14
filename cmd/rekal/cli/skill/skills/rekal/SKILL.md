@@ -42,6 +42,12 @@ history has not reached this clone.
 
 ## Read the source, judge the claim
 
+A matched passage covers its referenced turns, not necessarily the full exchange.
+If it summarizes an activity, leaves something unnamed or needs surrounding
+explanation, read `session:<same-session-ID>` through `query --ref`. Follow that
+read's continuation as needed. A relevant hit is a lead, not proof that the
+requested detail or complete set has been recovered.
+
 - Ranked results are useful leads, not an exhaustive set. `INJECT`, `KNOWLEDGE`
   and `SILENCE` are recommendations. Inspect literal matches even when ranked
   confidence is weak. A zero literal total does not prove absence.

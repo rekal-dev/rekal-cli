@@ -10,6 +10,27 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-11-14
+
+### Fixed
+
+- Align `init` agent instructions with ordinary search, `query --ref` and source
+  continuation. Remove obsolete routing from the default onboarding path.
+- Make root, init and query help explain default native notes, initial capture,
+  local-only sources, source limitations and what cleanup actually removes.
+- Correct plugin setup guidance: existing context can be available immediately;
+  an explicit setup request does not need a second permission round trip.
+
+### Changed
+
+- Clarify that a passage hit may need surrounding conversation before answering.
+- Document native memory configuration in the bundled skill's optional reference.
+- Install the latest release by default; simplify README quick start and add a
+  mobile-readable animated agent/team example.
+- Collect public release-archive download totals in a daily workflow for the
+  website and README. Downloads are not unique users or confirmed installations;
+  no CLI usage telemetry is collected.
+
 ## [2.0.1] - 2026-11-14
 
 ### Fixed

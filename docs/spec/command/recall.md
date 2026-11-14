@@ -349,3 +349,6 @@ deep semantic *layer*, not the model. Prefer `semantic.model` /
 Stdout JSON is unchanged (agents keep parsing it). Lineage is a separate
 stream from `--explain` (which adds thin `layers`/`related` fields on
 results); they can run together.
+
+Root help describes default Claude project notes, repository-local `memory_sources`,
+local-only scope and the search → reference → continuation path.

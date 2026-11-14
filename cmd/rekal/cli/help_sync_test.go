@@ -43,6 +43,8 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 			name: "root",
 			mustHave: []string{
 				"seed digest",
+				"memory_sources",
+				"does not write changes back",
 				"LITERAL",
 				"MEMORY",
 				"--cursor",
@@ -52,6 +54,12 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 				"--json",
 			},
 			mustNot: []string{"rekal when", "--also", "rekal show"},
+		},
+		{
+			name:     "init",
+			cmdPath:  []string{"init"},
+			mustHave: []string{"captures discoverable sessions", "Claude project notes", "query --ref", "more:", "custom hooks are preserved", "remote copies remain"},
+			mustNot:  []string{"Undo everything"},
 		},
 		{
 			name:    "query",

@@ -48,7 +48,12 @@ func newQueryCmd() *cobra.Command {
 		Long: `Read a search result with --ref. Conversations, passages and memory notes use
 the same bounded read path. Follow --cursor when a response returns more.
 Returned references use permanent source IDs; sN handles are local aliases.
-Local-memory references expire when the local note changes.
+Local-memory references expire when the local note changes or is removed.
+A passage reads only its referenced turns. For surrounding context, read
+session:<same-session-ID> and follow its continuation.
+Repository memory references identify immutable revisions. Notes are distilled
+claims, not guaranteed links to their originating conversations. Preserve source
+attribution and timestamps; read current files to verify current behavior.
 
 Advanced: run raw SQL against the data or index DB, or drill into a session.
 

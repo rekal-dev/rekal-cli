@@ -897,7 +897,10 @@ for the same place and move `.rekal/` off the store that already exists —
 
 `init` installs the embedded search → `query --ref` → `more:` skill and matching
 agent pointers. Reinitializing refreshes these managed assets while preserving
-user instructions and stored history. The plugin init skill describes immediate
+user instructions and stored history. Root, init and query help describe the same
+reference-read path, default notes, local scope and source limitations. The skill
+and query help explain how to open surrounding conversation from a narrow
+passage when a matching turn does not yet answer the question. The plugin init skill describes immediate
 capture, default native notes and local versus Git sharing boundaries.
 
 ### Running Tests

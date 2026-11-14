@@ -85,7 +85,7 @@ func TestSkill_ContentHashes(t *testing.T) {
 	s := rekalSkill(t)
 
 	want := map[string]string{
-		"SKILL.md":                             "562ea635a3af94fa56ff166c7025607394ac97b2766b1f11fa282699354438df",
+		"SKILL.md":                             "b30862f31b943773a577245d054aa4781d6a074df2a3961e32b5b53336d96391",
 		"references/ledger.md":                 "6bbf7fba54424c5bc258862a90b494ce9de794a8686ba4f5462dbd851c152ca8",
 		"references/map.md":                    "9434758a67fcded223659227b0e62c02a9c3a8b6a4f9cb005df00fa02ccbc950",
 		"references/wiki.md":                   "ce117f95ffd1f0d8d70b3d0c1d3401b641f1ef0ca3beb9a1d3812d4c65bc86a1",

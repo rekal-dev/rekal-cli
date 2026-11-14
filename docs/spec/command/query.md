@@ -173,3 +173,8 @@ rekal query "SELECT ts, session_id, content FROM turns WHERE ts BETWEEN TIMESTAM
 # Knowledge layer — prose chunks of tracked files at HEAD
 rekal query --index "SELECT path, anchor, start_line, end_line FROM knowledge_chunks WHERE content ILIKE '%merged-only%' ORDER BY path"
 ```
+
+Reference-read help distinguishes immutable repository note revisions from expiring
+local snapshots; distilled notes do not guarantee a link to an originating session.
+A passage covers only its referenced turns; `session:<same-session-ID>` opens
+the surrounding conversation through the same bounded read path.

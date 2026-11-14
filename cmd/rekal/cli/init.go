@@ -62,12 +62,24 @@ Creates:
 If the remote already has data on your rekal branch, it is fetched and
 imported into the local data DB automatically.
 
+On first setup, captures discoverable sessions and supported memory notes,
+builds the local index, and starts semantic embeddings in the background.
+Claude project notes are discovered by default. Personal/account sources are
+not scanned automatically. Configure other sources in .rekal/config.json;
+explicitly local notes stay local. Eligible repository records share through Git.
+Existing custom hooks are preserved; follow any printed integration notices.
+
+Search with rekal "<query>", read with rekal query --ref <reference>, and
+follow the returned more: command when needed. Read current files for current
+behavior; recalled conversations and notes are evidence to assess.
+
 If Rekal is already initialized, 'init' leaves your data untouched and
 refreshes the version-managed skill, hooks, and agent instruction lines.
 (The skill also auto-refreshes on the next recall when its pinned version
 lags the binary; re-run init to refresh hooks and instruction files too.)
 
-Safe to re-run. It never touches captured data.`,
+Safe to re-run: refreshing setup leaves captured history intact.
+rekal clean removes local setup; remote copies remain.`,
 		Example: `  # Set up a repository
   rekal init
     rekal: imported 5 session(s) from remote
@@ -80,7 +92,7 @@ Safe to re-run. It never touches captured data.`,
   rekal sync
   rekal log -n 3
 
-  # Undo everything init did (asks first)
+  # Remove local setup (asks first); remote copies remain
   rekal clean`,
 		Args: rejectExtraArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

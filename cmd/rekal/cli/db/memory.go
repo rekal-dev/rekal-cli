@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memory"
 )
@@ -45,8 +46,14 @@ func QueryMemoryRevisions(d *sql.DB, checkpoint string) ([]memory.Revision, erro
 	return out, rows.Err()
 }
 
-func LatestMemory(d *sql.DB, source string) (map[string]memory.Revision, error) {
-	rows, err := d.Query(`SELECT payload FROM memory_revisions WHERE source_id = ? QUALIFY row_number() OVER (PARTITION BY path ORDER BY CAST(observed_at AS TIMESTAMP_NS) DESC, id DESC) = 1`, source)
+func LatestMemory(d *sql.DB, source string, legacy ...string) (map[string]memory.Revision, error) {
+	args := []interface{}{source}
+	marks := []string{"?"}
+	for _, id := range legacy {
+		args = append(args, id)
+		marks = append(marks, "?")
+	}
+	rows, err := d.Query(`SELECT payload FROM memory_revisions WHERE source_id IN (`+strings.Join(marks, ",")+`) QUALIFY row_number() OVER (PARTITION BY path ORDER BY CAST(observed_at AS TIMESTAMP_NS) DESC, id DESC) = 1`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +82,11 @@ func MemoryChanges(previous map[string]memory.Revision, source memory.Source, fi
 	var out []memory.Revision
 	seen := map[string]bool{}
 	add := func(f memory.File, deleted bool) {
-		r := memory.Revision{Schema: 1, CheckpointID: checkpoint, GitSHA: gitSHA, ObservedAt: observed, Source: source, Path: f.Path, Content: f.Content, ModifiedAt: f.ModifiedAt, SourceModifiedAt: f.SourceModifiedAt, NativeType: f.NativeType, Deleted: deleted}
+		schema := 1
+		if source.Scope != "" {
+			schema = 2
+		}
+		r := memory.Revision{Schema: schema, CheckpointID: checkpoint, GitSHA: gitSHA, ObservedAt: observed, Source: source, Path: f.Path, Content: f.Content, ModifiedAt: f.ModifiedAt, SourceModifiedAt: f.SourceModifiedAt, NativeType: f.NativeType, Deleted: deleted}
 		r.ID = r.Digest()
 		out = append(out, r)
 	}
@@ -103,6 +114,9 @@ func InsertMemoryRevisions(d *sql.DB, revisions []memory.Revision) error {
 		return nil
 	}
 	for _, r := range revisions {
+		if r.Schema == 2 && !r.Source.Repository() {
+			return fmt.Errorf("local memory cannot enter ledger or wire archive")
+		}
 		if err := r.Validate(); err != nil {
 			return err
 		}
@@ -117,7 +131,7 @@ func InsertMemoryRevisions(d *sql.DB, revisions []memory.Revision) error {
 		if err != nil {
 			return err
 		}
-		if _, err = tx.Exec(`INSERT INTO memory_revisions VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`, r.ID, r.CheckpointID, r.Source.ID(), r.Path, r.ObservedAt, r.Source.Shared, r.Deleted, r.Content, string(b)); err != nil {
+		if _, err = tx.Exec(`INSERT INTO memory_revisions VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`, r.ID, r.CheckpointID, r.Source.ID(), r.Path, r.ObservedAt, r.Source.Repository(), r.Deleted, r.Content, string(b)); err != nil {
 			return fmt.Errorf("insert memory: %w", err)
 		}
 	}
@@ -135,6 +149,8 @@ func EnsureMemoryIndex(d *sql.DB) error {
  id VARCHAR PRIMARY KEY, checkpoint_id VARCHAR, source_id VARCHAR, path VARCHAR,
  observed_at VARCHAR, shared BOOLEAN, deleted BOOLEAN, content VARCHAR, payload VARCHAR);
  CREATE TABLE IF NOT EXISTS memory_documents (
+ id VARCHAR PRIMARY KEY, source_id VARCHAR, path VARCHAR, content VARCHAR, payload VARCHAR);
+ CREATE TABLE IF NOT EXISTS local_memory_documents (
  id VARCHAR PRIMARY KEY, source_id VARCHAR, path VARCHAR, content VARCHAR, payload VARCHAR);`)
 	return err
 }
@@ -142,7 +158,7 @@ func EnsureMemoryIndex(d *sql.DB) error {
 func refreshMemoryDocuments(d *sql.DB) error {
 	_, err := d.Exec(`CREATE OR REPLACE TEMP VIEW memory_current AS
  SELECT id, source_id, path, content, payload, deleted FROM memory_archive
- QUALIFY row_number() OVER (PARTITION BY source_id,path ORDER BY CAST(observed_at AS TIMESTAMP_NS) DESC,id DESC)=1;
+ QUALIFY row_number() OVER (PARTITION BY json_extract_string(payload,'$.source.name'),json_extract_string(payload,'$.source.adapter'),json_extract_string(payload,'$.source.owner'),json_extract_string(payload,'$.source.profile'),shared,path ORDER BY CAST(observed_at AS TIMESTAMP_NS) DESC,id DESC)=1;
  DELETE FROM memory_documents WHERE id NOT IN (SELECT id FROM memory_current WHERE NOT deleted);
  INSERT INTO memory_documents SELECT id,source_id,path,content,payload FROM memory_current c
  WHERE NOT deleted AND NOT EXISTS (SELECT 1 FROM memory_documents d WHERE d.id=c.id);
@@ -167,10 +183,13 @@ func ImportMemoryIndex(d *sql.DB, revisions []memory.Revision) error {
 		return err
 	}
 	for _, r := range revisions {
+		if r.Schema == 2 && !r.Source.Repository() {
+			return fmt.Errorf("local memory cannot enter ledger or wire archive")
+		}
 		if err := r.Validate(); err != nil {
 			return err
 		}
-		if !r.Source.Shared {
+		if !r.Source.Repository() {
 			return fmt.Errorf("refuse private memory import")
 		}
 	}
@@ -184,7 +203,7 @@ func ImportMemoryIndex(d *sql.DB, revisions []memory.Revision) error {
 		if err != nil {
 			return err
 		}
-		if _, err = tx.Exec(`INSERT INTO memory_archive VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`, r.ID, r.CheckpointID, r.Source.ID(), r.Path, r.ObservedAt, r.Source.Shared, r.Deleted, r.Content, string(b)); err != nil {
+		if _, err = tx.Exec(`INSERT INTO memory_archive VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`, r.ID, r.CheckpointID, r.Source.ID(), r.Path, r.ObservedAt, r.Source.Repository(), r.Deleted, r.Content, string(b)); err != nil {
 			return err
 		}
 	}
@@ -192,4 +211,43 @@ func ImportMemoryIndex(d *sql.DB, revisions []memory.Revision) error {
 		return err
 	}
 	return refreshMemoryDocuments(d)
+}
+
+// ReplaceLocalMemory holds only the latest complete configured local snapshot.
+// Rebuilding/dropping this table loses no ledger history: none is written here.
+func ReplaceLocalMemory(d *sql.DB, revisions []memory.Revision) error {
+	if err := EnsureMemoryIndex(d); err != nil {
+		return err
+	}
+	for _, r := range revisions {
+		if err := r.Validate(); err != nil {
+			return err
+		}
+		if r.Schema != 2 || r.Source.Scope != "local" || r.CheckpointID != "" || r.GitSHA != "" || r.Deleted {
+			return fmt.Errorf("invalid local memory snapshot")
+		}
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	if _, err := tx.Exec("CREATE OR REPLACE TEMP TABLE local_memory_next AS SELECT * FROM local_memory_documents WHERE false"); err != nil {
+		return err
+	}
+	for _, r := range revisions {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec("INSERT INTO local_memory_next VALUES (?,?,?,?,?)", r.ID, r.Source.ID(), r.Path, r.Content, string(b)); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM local_memory_documents WHERE id NOT IN (SELECT id FROM local_memory_next);
+ INSERT INTO local_memory_documents SELECT * FROM local_memory_next n WHERE NOT EXISTS (SELECT 1 FROM local_memory_documents d WHERE d.id=n.id);
+ DROP TABLE local_memory_next;`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

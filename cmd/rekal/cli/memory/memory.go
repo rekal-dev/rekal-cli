@@ -19,14 +19,14 @@ const MaxFileBytes = 1 << 20
 const MaxSourceBytes = 16 << 20
 const MaxFiles = 1024
 
-// Config is local capture intent. An absent source is never discovered implicitly.
+// Config describes an explicitly configured native source.
 // Path is local-only and is never part of a revision on the wire.
 type Config struct {
 	Name    string `json:"name"`
 	Adapter string `json:"adapter"`
 	Path    string `json:"path,omitempty"`
 	Profile string `json:"profile,omitempty"`
-	Share   bool   `json:"share,omitempty"`
+	Scope   string `json:"scope,omitempty"`
 }
 
 type Source struct {
@@ -34,11 +34,46 @@ type Source struct {
 	Adapter string `json:"adapter"`
 	Owner   string `json:"owner"`
 	Profile string `json:"profile"`
-	Shared  bool   `json:"shared"`
+	Shared  bool   `json:"shared"` // Legacy schema-1 publication bit; never used for new source identity.
+	Scope   string `json:"scope,omitempty"`
 }
 
-func (s Source) ID() string { b, _ := json.Marshal(s); return Hash(b) }
-func Hash(b []byte) string  { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+func (s Source) ID() string {
+	b, _ := json.Marshal(struct{ Name, Adapter, Owner, Profile string }{s.Name, s.Adapter, s.Owner, s.Profile})
+	return Hash(b)
+}
+
+// LegacyRepositoryID locates pre-scope project revisions without changing them.
+func (s Source) LegacyRepositoryID() string {
+	s.Scope = ""
+	s.Shared = true
+	b, _ := json.Marshal(s)
+	return Hash(b)
+}
+
+// Repository identifies ledger-backed project notes, including legacy exports.
+func (s Source) Repository() bool { return s.Scope == "repo" || (s.Scope == "" && s.Shared) }
+
+// UnmarshalJSON keeps old explicit share:false sources local during upgrade.
+func (c *Config) UnmarshalJSON(b []byte) error {
+	type plain Config
+	var raw struct {
+		plain
+		Share *bool `json:"share"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*c = Config(raw.plain)
+	if c.Scope == "" && raw.Share != nil {
+		c.Scope = "local"
+		if *raw.Share {
+			c.Scope = "repo"
+		}
+	}
+	return nil
+}
+func Hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 type File struct {
 	Path             string
@@ -144,15 +179,32 @@ type Revision struct {
 	Deleted          bool   `json:"deleted,omitempty"`
 }
 
-func (r Revision) Digest() string { r.ID = ""; b, _ := json.Marshal(r); return Hash(b) }
+func (r Revision) Digest() string {
+	r.ID = ""
+	if r.Schema == 2 && r.Source.Scope == "local" {
+		r.ObservedAt = ""
+	}
+	b, _ := json.Marshal(r)
+	return Hash(b)
+}
 func (r Revision) Validate() error {
-	if r.Schema != 1 {
+	if r.Schema == 1 && r.Source.Scope != "" {
+		return fmt.Errorf("legacy memory cannot declare scope")
+	}
+
+	if r.Schema != 1 && r.Schema != 2 {
 		return fmt.Errorf("unsupported memory schema %d", r.Schema)
 	}
 	if r.ID != r.Digest() {
 		return fmt.Errorf("memory revision hash mismatch")
 	}
-	if r.CheckpointID == "" || r.GitSHA == "" {
+	if r.Schema == 2 && r.Source.Scope != "repo" && r.Source.Scope != "local" {
+		return fmt.Errorf("invalid memory scope")
+	}
+	if r.Schema == 2 && r.Source.Shared {
+		return fmt.Errorf("schema 2 does not use legacy sharing flag")
+	}
+	if (r.Schema == 1 || r.Source.Repository()) && (r.CheckpointID == "" || r.GitSHA == "") {
 		return fmt.Errorf("memory checkpoint association missing")
 	}
 	if observed, err := time.Parse(time.RFC3339Nano, r.ObservedAt); err != nil {

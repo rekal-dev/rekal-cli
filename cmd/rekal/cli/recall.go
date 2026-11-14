@@ -11,9 +11,7 @@ import (
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/embedhttp"
-	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/gitx"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/graph"
-	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memory"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/session"
@@ -432,20 +430,10 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 		out = *fuseFramings(outs)
 	}
 
-	privateSources := []string{}
-	for _, c := range cfg.MemorySources {
-		if c.Profile == "" {
-			c.Profile = "default"
-		}
-		if c.Adapter == "" {
-			c.Adapter = "markdown"
-		}
-		source := memory.Source{Name: c.Name, Adapter: c.Adapter, Owner: gitx.ConfigValue("user.email"), Profile: c.Profile, Shared: c.Share}
-		if !c.Share {
-			privateSources = append(privateSources, source.ID())
-		}
+	if err := refreshLocalMemory(indexDB, gitRoot, cfg); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: local memory refresh failed: %v\n", err)
 	}
-	if hits, err := search.SearchMemory(indexDB, filters, privateSources); err != nil {
+	if hits, err := search.SearchMemory(indexDB, filters, nil); err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "rekal: warning: memory search failed: %v\n", err)
 	} else {
 		out.Memories = hits

@@ -24,7 +24,11 @@ import (
 // path is outside the repo), so hardcoded values stay on this machine;
 // secrets should still prefer env references.
 type Config struct {
-	// MemorySources is explicit, per-repo capture intent. Never inherited or synced.
+	// Memory disables native-memory capture and local-source indexing when explicitly false.
+	// Neither this switch nor source scope is inherited from global config.
+	Memory *bool `json:"memory,omitempty"`
+
+	// MemorySources overrides automatic repository Claude discovery. Never synced.
 	MemorySources []memory.Config `json:"memory_sources,omitempty"`
 
 	// LocalImport is the cross-repo local import preference (rekal index
@@ -53,7 +57,7 @@ type Config struct {
 // file entirely rather than leave an empty {} behind. ScoringLineage is
 // excluded: it is global-only and must never keep a local config.json alive.
 func (c Config) empty() bool {
-	return !c.LocalImport.enabled() && c.Weights == nil && c.Embedding == nil && len(c.MemorySources) == 0
+	return !c.LocalImport.enabled() && c.Weights == nil && c.Embedding == nil && len(c.MemorySources) == 0 && c.Memory == nil
 }
 
 // scoringLineageConfig is the JSON shape of the global-only recall diagnostic
@@ -412,7 +416,7 @@ func readMergedConfig(gitRoot string) (Config, error) {
 //     switch and cannot be baked into a repo or turned on by a teammate's
 //     local file.
 func mergeConfig(global, local Config) Config {
-	merged := Config{LocalImport: local.LocalImport, MemorySources: local.MemorySources}
+	merged := Config{LocalImport: local.LocalImport, MemorySources: local.MemorySources, Memory: local.Memory}
 	merged.Embedding = global.Embedding
 	if local.Embedding != nil {
 		merged.Embedding = local.Embedding

@@ -1,164 +1,133 @@
 # Native memory integration
 
-Rekal can capture native Markdown memory alongside conversations, without owning
-agent distillation or adding a command family. Capture is optional and off by
-default. The existing checkpoint, push, sync, index, recall and read-only query
-paths do the work. No agent file is written back or modified.
+Memory uses ordinary checkpoint, push, sync and recall paths. Rekal never writes
+back to native agent files or controls the agent's distillation process.
 
-## Enable a source locally
+## Default: repository memory
 
-Add a source to the repository's gitignored `.rekal/config.json` (merge it with
-any existing settings):
+Claude project memory is discovered automatically in the primary worktree's
+conventional Claude project memory directory. No configuration is needed. The
+next checkpoint captures a baseline; later checkpoints append changed notes or
+deletion markers. Unchanged text is a no-op. Memory-only changes can create a
+checkpoint with zero conversation sessions.
+
+These repository notes follow the same redaction, merged-commit export gate and
+ordinary push/sync flow as conversations. They use the existing user branch and
+`rekal.body`; first export appends typed compressed frames. No force push or extra
+branch is required. Association with a merged commit records when a note was
+observed, not proof that every sentence concerns merged work.
+
+Missing automatically discovered directories are quiet no-ops, even if a directory
+was previously observed. Only a successful scan of an existing directory can
+establish that a note was deleted. Invalid or unreadable sources produce a warning
+and leave memory history unchanged; transcript capture can continue.
+
+## Local sources: index only
+
+Personal/account-wide sources are not automatically scanned. Explicit local
+sources are read during ordinary recall and stored only in
+`index.db.local_memory_documents`. They never enter data.db, checkpoint revisions,
+wire frames, or the historical memory archive. Their native files are the source
+of truth. Removing a note, disabling its source, or a failed refresh removes its
+searchable cached snapshot. Refresh retries on the next recall.
+
+The local index retains only the current snapshot. Rebuilding it re-reads native
+files; it cannot recover deleted personal notes or provide historical time travel.
+Unchanged snapshots retain the same reference across refreshes and rebuilds.
+Changed or removed snapshots invalidate their earlier references.
+
+## Configuration
+
+All memory settings are local to the repository's gitignored `.rekal/config.json`.
+They are not inherited from global configuration or received from teammates.
+Merge settings with any existing configuration.
+
+Set `"memory": false` to stop native capture and local-source indexing. It does
+not remove previously captured repository history or previously published notes.
+Removing the switch or setting it true restores configured/default behavior.
+
+A nonempty `memory_sources` list replaces automatic discovery. This example keeps
+default repository capture and adds one local source:
 
 ```json
 {
   "memory_sources": [
-    {
-      "name": "claude-project",
-      "adapter": "claude",
-      "profile": "work",
-      "share": false
-    }
+    {"name": "claude-project", "adapter": "claude", "scope": "repo"},
+    {"name": "personal-notes", "adapter": "markdown", "scope": "local",
+     "path": "/absolute/path/to/personal/notes"}
   ]
 }
 ```
 
-The Claude adapter defaults to the primary worktree's Claude project memory
-directory. It respects `CLAUDE_CONFIG_DIR` and, when set alongside it,
-`CLAUDE_CODE_PROJECT_DIR_NAME`. For a custom `autoMemoryDirectory`, managed
-settings, or another native agent's memory directory, give an explicit `path`.
-Rekal does not interpret Claude's settings/trust hierarchy. Paths can be absolute
-or relative to the repository's primary worktree; use an absolute path rather
-than shell `~` expansion in JSON.
+Custom sources default to `scope: local` when scope is omitted. Explicit
+`scope: repo` includes that source in repository capture and ordinary publication.
+There is no separate sharing switch. `profile` defaults to `default`; use distinct
+names/profiles for distinct accounts. Do not configure the same source twice.
 
-```json
-{
-  "memory_sources": [
-    {
-      "name": "native-project-notes",
-      "adapter": "markdown",
-      "path": "/absolute/path/to/native/memory",
-      "profile": "work",
-      "share": false
-    }
-  ]
-}
-```
+The Claude adapter respects `CLAUDE_CONFIG_DIR` and, when set alongside it,
+`CLAUDE_CODE_PROJECT_DIR_NAME`. Custom `autoMemoryDirectory` and managed settings
+require an explicit path; Rekal does not interpret Claude's trust hierarchy.
+Paths are absolute or relative to the primary worktree. JSON paths do not expand
+shell `~`. Local source paths are not put on the wire.
 
-`markdown` accepts UTF-8 `.md` files recursively. `claude` uses the same reader
-and additionally extracts recognized simple `modified` and `type` frontmatter
-scalars. Complex/unrecognized metadata remains in the archived text without
-inventing a timestamp or type. Custom native formats need an adapter implementing
-`memory.Adapter`; they are not treated as Markdown implicitly.
+Adapters accept UTF-8 Markdown recursively, bounded to 1 MiB/note, 16 MiB/source
+and 1,024 notes. Symlinks, non-regular notes and files changing during read fail
+the scan. Existing transcript redaction/anonymization applies before storage.
+Claude's simple frontmatter `modified` and `type` metadata is retained when
+recognized; unknown metadata remains text rather than acquiring invented meaning.
 
-Source identity consists of name, adapter, git user email, profile and sharing
-policy. Keep these stable across your machines. Use distinct source names or
-profiles for different accounts. The local directory path is not sent to Git.
-Global settings cannot enable capture in repositories: `memory_sources` is
-per-repository only. An empty list disables future capture.
+## Identity, history and retrieval
 
-The next ordinary checkpoint captures existing notes as an observed baseline.
-No onboarding command is required. A source configured before its directory
-exists produces a warning and leaves memory history unchanged. Transcript
-capture can continue. The same applies to unreadable, invalid, oversized or
-symlinked sources. Scans are bounded to 1 MiB per note, 16 MiB per source and
-1,024 notes. A failed scan never means all the notes were deleted.
+Stable source identity uses name, adapter, Git user email and profile. Scope and
+publication do not participate in that identity. Changing source scope does not
+promote earlier private history: entering repository capture takes a new observed
+baseline when there is no prior repository revision. Changing to local scope
+stops future ledger capture but cannot retract already captured/published history.
 
-## Local versus shared
+Repository revision IDs address immutable records associated with checkpoints and
+code commits. The index contains `memory_archive` (historical revisions) and
+`memory_documents` (latest nondeleted repository revisions, plus retained legacy
+records). Current selection orders observations by timestamp, then revision ID;
+it is deterministic but is not causal conflict resolution across machine clocks.
 
-`share` defaults to false. Private revisions stay in the local data store; the
-export path cannot serialize them. Recall includes a private source only when
-its owner/profile/source identity is enabled locally. Shared sources can be
-retrieved by teammates after the existing push/sync flow. This retrieval policy
-is not encryption or a security boundary against someone who owns the local
-filesystem and can query its databases.
+`modified_at` is filesystem time; `source_modified_at` is recognized native time;
+`observed_at` is capture/index observation time. None establishes when a fact
+became true. Local snapshot hashes exclude observation time so an unchanged file
+does not acquire a new reference at every search.
 
-Setting `share: true` authorizes sharing **every Markdown note in that source**.
-A note's `type: project`, directory name or association with a repository does
-not independently grant permission to publish it. Existing secret redaction
-and path anonymization apply before storage; archived text is the scrubbed
-observation, not a promise of byte-for-byte native-file preservation.
+Ordinary recall returns bounded keyword memory hits with source/scope labels,
+revision references and SQL drills through the existing `query --index --sql`
+path. Local drills target `local_memory_documents`; repository drills target
+`memory_archive`. Sessions retain their existing ranking. At most five memory
+notes and bounded UTF-8 snippets are returned. Author, commit, path and limit
+filters apply; local notes have no invented checkpoint/commit association.
+Actor-filtered queries exclude memory.
 
-The existing merged-checkpoint gate also applies to shared memory. The linked
-code commit says when the note was observed, not that every sentence originated
-in that commit or only describes merged work. Turning sharing off later cannot
-retract history already published through Git.
+Explicit `SESSION:tTURN:bytesSTART-END` citations expose pointers to existing
+evidence reads. They are unverified citations, not proof of support. No session
+links are inferred from a memory checkpoint. A common `query --ref` reader is a
+proposal, not part of this implementation. Semantic memory embeddings and
+cross-type ranking are also not implemented.
 
-## Ledger, wire and index
+## Compatibility
 
-Each changed note creates a content-addressed immutable revision associated with
-a checkpoint. Identical content is a no-op, even if filesystem mtime changes.
-A removal appends a tombstone; previous revisions remain readable. Reappearance
-creates another observation even if its text matches an older version.
-Memory-only changes create checkpoints with zero sessions. Memory is never
-encoded as a fabricated conversation or human turn.
+Schema-1 memory revisions remain readable without rewriting their payloads or
+revision hashes. Earlier `share: false` configurations map to local sources;
+`share: true` maps to repository sources. Legacy private ledger history stays
+private and is not promoted into exports or ordinary recall. New observations
+use explicit scope in revision schema 2. Legacy source IDs are recognized when
+finding prior repository revisions; index grouping handles both identities.
 
-`memory_revisions` in data.db is the local ledger. A typed `FrameMemory` member
-(`0x07`, schema 1) travels inside the existing compressed `rekal.body` batches.
-Only changed note revisions travel. The existing user branch and transport are
-reused; there is no extra archive, service or memory branch.
+Data schema version 2 prevents unsafe local downgrades. New binaries migrate old
+stores, but older binaries on another machine can still omit unknown memory
+records during full wire rebuilds. Reindexing does not fix that wire limitation.
+Upgrade every writer of a memory-bearing branch before use. Ordinary append
+preserves the existing body prefix; local reindex does not modify Git wire data.
 
-The local index contains:
-
-- `memory_archive`: exact scrubbed revisions from the local ledger and shared
-  Git wire history, including revisions that are no longer current.
-- `memory_documents`: the latest revision per source and relative path, excluding
-  tombstones. It is a disposable projection, not editable source data.
-
-`rekal index` rebuilds from the local ledger, following its existing behavior.
-`rekal sync` rebuilds the team view from local data and fetched teammate branches.
-Repeated imports are idempotent. Rebuild order uses observation time, then revision
-ID as a deterministic tie-break. It does not attempt a semantic merge of concurrent
-notes or claim remote clock ordering establishes truth.
-
-Timestamps retain separate meanings: `modified_at` is filesystem modification
-time; `source_modified_at` is a recognized native timestamp (otherwise absent);
-`observed_at` is Rekal capture time. Frontmatter type is provenance, not a weight.
-
-## Consumption uses existing paths
-
-Ordinary `rekal "query"` adds a labelled MEMORY block; JSON adds `memories`.
-Session ranking remains unchanged. Memory search currently uses bounded keyword
-matching in a separate block, with at most five notes and bounded UTF-8 snippets.
-There is no memory confidence gate, recency/type boost or mandatory handshake.
-The existing author, commit, path and limit filters apply; actor-filtered searches
-exclude memory because notes are not session actors. Memory path filters refer to
-note paths, not inferred code-file associations.
-
-Each hit returns `memory:<revision-id>` and a read-only SQL drill for the exact
-archived revision. Use the existing query command:
-
-```sh
-rekal query --index --sql "SELECT payload FROM memory_archive WHERE id = '<revision-id>'"
-```
-
-Explicit `SESSION:tTURN:bytesSTART-END` citations are translated to the existing
-evidence-anchor grammar and exposed as bounded pointers. They are unverified
-citations, not proof of support. The agent can follow them through the existing
-evidence command and decide what to adopt. Notes lacking citations acquire no
-invented session links. No automatic native-memory write-back occurs.
-
-Semantic memory embeddings, calibrated cross-type ranking, semantic conflict
-resolution and a dedicated reverse-link projection are not part of this change.
-Historical session extents are not inferred from a memory checkpoint. The
-prototype scenario matrix remains a broader research/acceptance inventory, not a
-claim that every experimental behavior ships here.
-
-## Compatibility and verification
-
-Data schema version 2 prevents older binaries from rewriting a local ledger that
-contains these records. Readers validate revision hashes, schema, sharing scope
-and checkpoint/commit associations. Updated writers refuse unknown wire members
-and re-export refuses to drop memory missing from the local ledger.
-
-Old binaries on another machine cannot be retroactively guarded: they may skip
-memory members and lose them during a full re-export. Upgrade every writer of a
-shared Rekal branch before enabling shared memory. The experimental ZIP wire
-fixtures are not production data and are not a supported import format.
-
-Tests cover memory-only checkpoints, unchanged scans, edits/deletions/reappearance,
-private-source filtering before ranking, private export rejection, exact revision
-drill, explicit citation translation, deterministic rebuild, idempotent imports,
-unsupported schemas and source-scan failure. All fixtures are synthetic.
+All integration fixtures are synthetic. Tests exercise repository capture/export,
+local-only indexing and rebuild, deletion and failed scans, stable snapshot/source
+identities, legacy configuration, forbidden ledger/wire insertion, and revision
+validation. The broader experimental scenario matrix is not a claim that every
+prototype behavior ships here.
 
 Claude storage reference: <https://code.claude.com/docs/en/memory#storage-location>.

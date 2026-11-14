@@ -49,7 +49,7 @@ func readMemoryFrames(body []byte) ([]memory.Revision, error) {
 			if err := r.Validate(); err != nil {
 				return err
 			}
-			if !r.Source.Shared {
+			if !r.Source.Repository() {
 				return fmt.Errorf("private memory revision on shared wire")
 			}
 			result = append(result, r)

@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,6 +79,30 @@ func TestClaudeMetadataDoesNotInventTimeOrType(t *testing.T) {
 		modified, kind := claudeMetadata(tc.input)
 		if modified != tc.modified || kind != tc.kind {
 			t.Fatalf("metadata %q => %q %q", tc.input, modified, kind)
+		}
+	}
+}
+
+func TestSourceScopeIdentityAndLegacyConfiguration(t *testing.T) {
+	s := Source{Name: "notes", Adapter: "markdown", Owner: "alice", Profile: "work", Scope: "repo"}
+	id := s.ID()
+	s.Scope = "local"
+	s.Shared = true
+	if s.ID() != id {
+		t.Fatal("publication policy changed source identity")
+	}
+	for _, tc := range []struct{ input, scope string }{
+		{`{"name":"notes","share":false}`, "local"},
+		{`{"name":"notes","share":true}`, "repo"},
+		{`{"name":"notes","scope":"local","share":true}`, "local"},
+	} {
+		var c Config
+		if err := json.Unmarshal([]byte(tc.input), &c); err != nil || c.Scope != tc.scope {
+			t.Fatalf("legacy config: %+v %v", c, err)
+		}
+		b, err := json.Marshal(c)
+		if err != nil || strings.Contains(string(b), "share") {
+			t.Fatalf("legacy switch persisted: %s %v", b, err)
 		}
 	}
 }

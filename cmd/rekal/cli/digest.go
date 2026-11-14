@@ -231,7 +231,7 @@ func formatDigest(out *search.Output) (string, int) {
 
 	finish := func(code int) (string, int) {
 		for _, m := range out.Memories {
-			fmt.Fprintf(&b, "MEMORY ref=%s source=%q path=%q matched_terms=%d\n  %q\n  query --index --sql %q\n", m.Ref, m.Source.Name, m.Path, m.MatchedTerms, m.Snippet, m.SQL)
+			fmt.Fprintf(&b, "MEMORY ref=%s source=%q scope=%q path=%q matched_terms=%d\n  %q\n  query --index --sql %q\n", m.Ref, m.Source.Name, m.Source.Scope, m.Path, m.MatchedTerms, m.Snippet, m.SQL)
 			if len(m.Anchors) > 0 {
 				fmt.Fprintf(&b, "  anchors=%s (explicit citations, unverified)\n", strings.Join(m.Anchors, ","))
 			}

@@ -398,7 +398,7 @@ func encodeCheckpointFrames(dataDB *sql.DB, body []byte, dict *codec.Dict, check
 			if revision.GitSHA != cp.GitSHA || revision.Source.Owner != cp.Email {
 				return nil, nil, nil, fmt.Errorf("memory checkpoint association mismatch")
 			}
-			if !revision.Source.Shared {
+			if !revision.Source.Repository() {
 				continue
 			}
 			payload, err := json.Marshal(revision)

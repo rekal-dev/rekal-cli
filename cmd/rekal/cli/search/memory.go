@@ -60,7 +60,7 @@ func SearchMemory(d *sql.DB, f Filters, privateSources []string) ([]MemoryHit, e
 		scores = append(scores, `CASE WHEN contains(lower(content),?) THEN 1 ELSE 0 END`)
 		args = append(args, term)
 	}
-	eligible := `CAST(json_extract(payload,'$.source.shared') AS BOOLEAN)`
+	eligible := `(json_extract_string(payload,'$.source.scope') IN ('repo','local') OR CAST(json_extract(payload,'$.source.shared') AS BOOLEAN))`
 	if len(privateSources) > 0 {
 		marks := make([]string, len(privateSources))
 		for i, id := range privateSources {
@@ -90,7 +90,15 @@ func SearchMemory(d *sql.DB, f Filters, privateSources []string) ([]MemoryHit, e
 		limit = f.Limit
 	}
 	args = append(args, limit)
-	query := `SELECT payload, matched FROM (SELECT payload,id,(` + strings.Join(scores, "+") + `) AS matched FROM memory_documents WHERE ` + where + `) WHERE matched>0 ORDER BY matched DESC,id LIMIT ?`
+	documents := "memory_documents"
+	var localExists int
+	if err := d.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_name='local_memory_documents'`).Scan(&localExists); err != nil {
+		return nil, err
+	}
+	if localExists > 0 {
+		documents = "(SELECT * FROM memory_documents UNION ALL SELECT * FROM local_memory_documents)"
+	}
+	query := `SELECT payload, matched FROM (SELECT payload,id,(` + strings.Join(scores, "+") + `) AS matched FROM ` + documents + ` WHERE ` + where + `) WHERE matched>0 ORDER BY matched DESC,id LIMIT ?`
 	rows, err := d.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -118,6 +126,10 @@ func SearchMemory(d *sql.DB, f Filters, privateSources []string) ([]MemoryHit, e
 			}
 		}
 		hit := MemoryHit{Ref: "memory:" + r.ID, Path: r.Path, Source: r.Source, CheckpointID: r.CheckpointID, GitSHA: r.GitSHA, ObservedAt: r.ObservedAt, ModifiedAt: r.ModifiedAt, SourceModifiedAt: r.SourceModifiedAt, NativeType: r.NativeType, Snippet: snippet, MatchedTerms: matched, SQL: fmt.Sprintf("SELECT payload FROM memory_archive WHERE id = '%s'", r.ID)}
+		if r.Source.Scope == "local" {
+			hit.Ref = "local-memory:" + r.ID
+			hit.SQL = fmt.Sprintf("SELECT payload FROM local_memory_documents WHERE id = '%s'", r.ID)
+		}
 		unique := map[string]bool{}
 		for _, m := range memoryCitations.FindAllStringSubmatch(r.Content, 16) {
 			anchor := m[1] + ":" + m[2]

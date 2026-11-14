@@ -531,9 +531,11 @@ If you use Rekal or build on the research, please cite the paper:
 
 Apache-2.0 — see [LICENSE](LICENSE).
 
-### Optional native memory
+### Native memory
 
-Rekal can capture native Markdown notes through the existing checkpoint flow and
-retrieve them through ordinary recall. Capture is off by default; private sources
-are never exported. See [native memory integration](docs/design/native-memory.md)
-for local setup, sharing policy and compatibility. No new command is required.
+Rekal automatically captures Claude project memory through checkpoints and shares
+it through the same push/sync flow as conversations. Personal sources can be
+included in local search without entering the ledger or Git. Set `"memory": false`
+in `.rekal/config.json` to opt out of native capture and local-source indexing.
+See [native memory integration](docs/design/native-memory.md) for custom sources,
+storage boundaries and compatibility.

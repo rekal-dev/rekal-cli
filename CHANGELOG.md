@@ -12,6 +12,14 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ### Added
 
+- Native Claude project memory is captured by default during ordinary
+  checkpoints and found through recall. Missing default directories are quiet;
+  `"memory": false` opts out. Repository notes follow ordinary conversation sharing;
+  explicit personal sources stay only in the disposable local index.
+  Immutable note revisions and tombstones use the existing ledger and wire body;
+  current and historical memory indexes are disposable. Memory-bearing branch writers
+  must all be upgraded before use; older re-exporters can lose unknown frames.
+
 - Original-turn passage embeddings in the disposable index, retaining every
   speaker, assertion timestamp and source turn/byte range. Long turns split
   without losing UTF-8 text; unchanged passages reuse their vectors on append.

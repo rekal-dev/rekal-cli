@@ -161,3 +161,17 @@ func TestAgentInstructions_DetectWriteRefreshRemove(t *testing.T) {
 		t.Fatal("empty .kiro should be pruned on clean")
 	}
 }
+
+func TestAgentInstructions_CurrentReadPath(t *testing.T) {
+	t.Parallel()
+	for _, want := range []string{"rekal query --ref", "more:", "memory notes", "current files"} {
+		if !strings.Contains(rekalAgentLine, want) {
+			t.Errorf("agent entry point missing %q", want)
+		}
+	}
+	for _, obsolete := range []string{"query --session", "rekal find", "+ gates"} {
+		if strings.Contains(rekalAgentLine, obsolete) || strings.Contains(rekalClaudeMDLine, obsolete) {
+			t.Errorf("entry point still prescribes %q", obsolete)
+		}
+	}
+}

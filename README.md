@@ -4,18 +4,14 @@
 
 Ask your agent to Rekal context from your team and past work for the task at hand.
 Across sessions, agents and teammates—with the original sources ready to read.
-Captured with commits. Searchable locally. Shared through Git.
+Rekal captures conversations and native memory-note revisions with commits,
+indexes them locally, and shares eligible project context through Git.
 
 One binary. Local embeddings by default. No hosted memory account required.
 
-[![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
-[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Frekal.dev%2Fdownloads.json)](https://rekal.dev/#downloads)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
-[![arXiv](https://img.shields.io/badge/arXiv-2607.14390-b31b1b)](https://arxiv.org/abs/2607.14390)
 [![License](https://img.shields.io/github/license/rekal-dev/rekal-cli?color=blue)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/hDMj8zHH2)
-[![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
 [Get started](#quick-start) · [Documentation](#documentation) · [Website](https://rekal.dev)
 
@@ -78,5 +74,11 @@ your Git remote; explicitly local notes stay local.
 
 [Get help](https://github.com/rekal-dev/rekal-cli/issues) ·
 [Changelog](CHANGELOG.md) · [Paper and citation](docs/overview.md#citation)
+
+[![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Frekal.dev%2Fdownloads.json)](https://rekal.dev/#downloads)
+[![arXiv](https://img.shields.io/badge/arXiv-2607.14390-b31b1b)](https://arxiv.org/abs/2607.14390)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/hDMj8zHH2)
+[![Stars](https://img.shields.io/github/stars/rekal-dev/rekal-cli?style=social)](https://github.com/rekal-dev/rekal-cli/stargazers)
 
 Apache-2.0 — see [LICENSE](LICENSE).

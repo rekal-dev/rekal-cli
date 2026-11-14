@@ -76,3 +76,26 @@ func firstLine(s string) string {
 	}
 	return s
 }
+
+// New installs must teach the same discovery/read contract as the binary.
+func TestInit_InstalledSkillUsesCurrentInterface(t *testing.T) {
+	env := NewTestEnv(t)
+	env.Init()
+	path := filepath.Join(env.RepoDir, ".claude", "skills", "rekal", "SKILL.md")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"rekal query --ref", "more:", "## Native memory", "Explicitly local notes stay local", "teammates"} {
+		if !strings.Contains(string(content), want) {
+			t.Errorf("installed skill missing %q", want)
+		}
+	}
+	instructions, err := os.ReadFile(filepath.Join(env.RepoDir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(instructions), "+ gates") || !strings.Contains(string(instructions), "`rekal` skill") {
+		t.Errorf("init installed obsolete routing: %s", instructions)
+	}
+}

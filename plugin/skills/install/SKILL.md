@@ -13,10 +13,11 @@ Rekal is git-backed memory of prior AI sessions: why a change was made, what was
 tried, what was rejected. This installs the binary. Setting up a repository is a
 separate step — the `init` skill.
 
-## Ask first
+## Explain the install
 
-The installer downloads a release archive and writes an executable to the user's
-machine. Say that plainly, then wait for an answer.
+The installer downloads the latest release and writes an executable to the
+user’s machine. When the user requests installation, proceed within that
+authorization; otherwise ask before installing.
 
 If the user declines, stop. Say Rekal is not available and answer from the tree.
 Declining is a complete answer.
@@ -49,6 +50,5 @@ edit their own shell profile. Do not edit it for them.
 
 ## Next
 
-The binary is installed but no repository uses it yet. If the user wants memory
-in the current repo, continue with the `init` skill. Ask before running it —
-that is a separate decision about a separate thing.
+The binary is installed but no repository uses it yet. If the user requested
+setup in the current repo, continue with the `init` skill. Otherwise ask before initializing a repository.

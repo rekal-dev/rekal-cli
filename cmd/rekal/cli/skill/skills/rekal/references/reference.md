@@ -29,6 +29,26 @@ against the mention's date, and use SQL date math (`DATE '…' - INTERVAL`,
 The `map.sh` and `wiki-gate.sh` workflow gates remain under
 `$(git rev-parse --show-toplevel)/.claude/skills/rekal/scripts/`.
 
+## Native memory configuration
+
+No setup beyond `rekal init` is needed for Claude project notes. For other
+sources, merge `memory_sources` into the repository's `.rekal/config.json`:
+
+```json
+{"memory_sources": [
+  {"name": "claude-project", "adapter": "claude", "scope": "repo"},
+  {"name": "personal", "adapter": "markdown", "scope": "local",
+   "path": "/absolute/path/to/notes"}
+]}
+```
+
+A nonempty list replaces default discovery; keep the Claude entry if wanted.
+Custom sources with omitted scope are local-only. Personal/account sources are
+not scanned automatically. `scope: local` stays in the local index; `scope: repo`
+creates captured revisions eligible for Git sharing. These settings are
+repo-local, never inherited from global config or synced. `"memory": false`
+stops new note capture and local refresh; retained repo revisions remain readable.
+
 ## Root recall flags
 
 | Flag | Description |

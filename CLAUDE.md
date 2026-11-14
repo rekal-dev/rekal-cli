@@ -895,6 +895,11 @@ for the same place and move `.rekal/` off the store that already exists —
 
 ## Development
 
+`init` installs the embedded search → `query --ref` → `more:` skill and matching
+agent pointers. Reinitializing refreshes these managed assets while preserving
+user instructions and stored history. The plugin init skill describes immediate
+capture, default native notes and local versus Git sharing boundaries.
+
 ### Running Tests
 
 ```bash
@@ -1048,7 +1053,7 @@ hashes under matched retrieval settings; it does not run a QA reader/judge.
    uploads assets to a draft and publishes it. Existing tags cannot move and
    published releases cannot be overwritten. Only publication has contents write.
    The same run publishes; token-created tags do not trigger another workflow.
-4. After verified publication, update README's REKAL_VERSION pin and the website.
+4. After verified publication, verify the latest-release installer and website.
    Full run/retry instructions are in docs/DEVELOPMENT.md.
 
-Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code, `rekal` knowledge for present prose at HEAD, the ledger (`rekal` + gates) for past intent, the map for structure. <!-- managed by rekal -->
+Rekal memory is active here. Use the `rekal` skill to recover relevant context from past work and teammates; read current files for current behavior. <!-- managed by rekal -->

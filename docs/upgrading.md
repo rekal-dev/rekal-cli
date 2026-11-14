@@ -96,3 +96,11 @@ summary quality. See [the recorded test boundaries](research/runs/2026-11-14-loc
 
 This upgrade changes neither ordinary code commit bodies nor the Git transport
 branch arrangement. No force push or rewritten code history is required.
+
+## Publishing after verification
+
+Maintainers can use [Actions → Release](https://github.com/rekal-dev/rekal-cli/actions/workflows/release.yml),
+select main and enter the intended version. The workflow builds and validates
+before creating the tag and publishing the complete release. See the
+[release procedure](DEVELOPMENT.md#36-cutting-a-release-from-a-phone-or-browser).
+Website and installation-pin updates follow verified publication, not dispatch.

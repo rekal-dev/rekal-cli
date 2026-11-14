@@ -12,6 +12,11 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ### Added
 
+- Release workflow accepts an explicit stable version on main, pins the selected
+  commit, validates and builds before creating a missing tag, then uploads assets
+  to a draft before immutable publication. Supports phone/browser dispatch without
+  local Git credentials; refuses conflicting tags and published-release replacement.
+
 - Ordinary search now includes paginated literal conversation matches alongside
   ranked results. Coverage totals explicitly count indexed matching turns.
   A single `query --ref` reads conversations, passages and memory revisions;
@@ -59,9 +64,10 @@ starts at 1.0; it records what 1.0 ships and everything after.
 - Session-wide semantic matches no longer invent a turn-zero evidence pointer.
   Located semantic passages retain ranges; grouped headers identify the child
   transcript a borrowed snippet belongs to.
-- Release dispatch rejects branches and unmerged version tags. Each native
+- Release dispatch rejects unversioned branches, branches other than main and
+  unmerged version tags. Each native
   artifact verifies its version; publication verifies checksums and requires
-  the tag to exist. Changelog lookup follows tag ancestry.
+  the validated tag before publication. Changelog lookup follows tag ancestry.
 
 - Checkpoint caches Copilot and Codex transcript repo metadata by file size and
   nanosecond mtime, including sessions belonging to other repositories. Warm

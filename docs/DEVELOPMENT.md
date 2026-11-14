@@ -224,32 +224,44 @@ All workflows use `ubuntu-latest`. CI and Lint use [jdx/mise-action@v3](https://
 ### 3.5 Release workflow
 
 - **File**: `.github/workflows/release.yml`
-- **Trigger**: Push of a stable `vMAJOR.MINOR.PATCH` tag, or manual dispatch
-  selecting that existing tag. A dispatch on a branch is rejected.
-- **Gate**: The `validate` job runs first: `mise run test:ci` and `mise run lint`.
-- **Ref check**: `scripts/check_release_ref.py` verifies the checkout is the
-  peeled tag commit and that it is merged into `origin/main`.
-- **Build matrix**: Native Linux amd64, Linux arm64 and macOS arm64 builds,
-  each checking its actual `rekal version` output before archiving.
-- **Publish**: Combine and verify the three SHA-256 manifests, generate notes
-  from the previous ancestor tag, and `gh release create --verify-tag`.
-  Runs for the same ref serialize. Existing published assets are not replaced.
+- **Trigger**: Push a stable `vMAJOR.MINOR.PATCH` tag, manually select an existing
+  tag with the version field blank, or select `main` and enter a new version.
+- **Resolve**: `scripts/check_release_ref.py` checks the version and main ancestry,
+  then records one commit SHA. Every build and publication step checks out that
+  exact commit, even if main advances during the run. A new version must exceed
+  existing stable tags; an existing tag must already identify the same commit.
+- **Validate**: License, lint and full unit/integration/binary tests run before builds.
+- **Build**: Native Linux amd64, Linux arm64 and macOS arm64 binaries each verify
+  their version output. All three archives and SHA-256 manifests are required.
+- **Publish**: Only after the builds/checksums pass, create the missing tag without
+  force or verify that the existing remote tag still identifies the checked commit.
+  Create/resume a draft, upload all archives and checksums, then publish. Published
+  releases are never replaced; immutable releases remain enabled.
+- **Permissions**: Validation/build use read access; only publication gets contents
+  write. All release runs share one concurrency group. GitHub may replace an older
+  pending run with a newer pending run; it does not cancel an active release.
 
-### 3.6 Cutting a release
+A tag created with the workflow's `GITHUB_TOKEN` does not start another tag-push
+workflow. This workflow deliberately performs the build and publication itself;
+no personal access token or second workflow dispatch is needed.
 
-1. Ensure `main` is green (CI, Lint, License Check).
-2. Create and push a version tag:
-   ```bash
-   git tag v0.x.y
-   git push origin v0.x.y
-   ```
-3. The Release workflow checks the tag, validates (test:ci + lint), builds and
-   smoke-tests the native artifacts, verifies checksums, then publishes.
-4. Bump `REKAL_VERSION=v…` in README.md's install commands to the new tag. The
-   README pins a version so the install does not depend on GitHub's
-   unauthenticated API budget; a pin nobody bumps quietly ships the old binary
-   to every new user. `mise run check:readme-pin` fails when it is behind the
-   newest release.
+### 3.6 Cutting a release from a phone or browser
+
+1. Open the repository's **Actions → Release → Run workflow**.
+2. Select **main**, enter **v2.0.0** (or the next intended stable version) in the
+   **version** field, and run. This is an instruction to publish a release, not
+   merely to prepare a tag. Review the chosen commit and changes first.
+3. Watch validation, all three builds and publication complete. A validation or
+   build failure creates no new tag. A failure after tag creation may leave a tag
+   and draft; retry the same run to keep the original commit, or select that tag
+   with the version field blank. Never move the tag to a newer main commit.
+4. Verify the published archives and checksums and test the Linux binary version.
+5. Update the website and README installation pin only after verified publication.
+   `mise run check:readme-pin` checks the pin against the latest published release.
+
+The existing terminal route still works: push a stable version tag on a commit
+merged into main. Do not publish an empty release in GitHub's release editor;
+immutable releases must have their assets uploaded while still drafts.
 
 ---
 

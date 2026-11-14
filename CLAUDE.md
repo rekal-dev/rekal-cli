@@ -1039,21 +1039,16 @@ or wire mutation. See `docs/design/passage-evidence.md` and the command spec.
 The `scripts/passage-eval` diagnostic records evidence coverage and context
 hashes under matched retrieval settings; it does not run a QA reader/judge.
 
-1. Ensure main is green (CI, Lint, License Check)
-2. Tag and push:
-   ```bash
-   git tag v0.x.y
-   git push origin v0.x.y
-   ```
-3. Release workflow rejects branch dispatches and tags outside `origin/main`
-   (`scripts/check_release_ref.py`), then validates, builds the three native
-   targets, smoke-checks each binary version, verifies checksums and publishes
-   only the existing tag. Manual runs must select an existing stable version
-   tag. Changelog lookup uses an ancestor tag, not the globally second-largest
-   tag. Concurrent runs for the same ref serialize.
-4. Bump the `REKAL_VERSION=v…` pin in README.md's install commands to the new
-   tag (`mise run check:readme-pin` verifies it). The README names a version so
-   installing never depends on GitHub's 60-an-hour unauthenticated API budget —
-   a pin nobody bumps silently hands every new user the old binary
+1. Review the release commit. In Actions → Release, select main and provide a
+   stable version such as v2.0.0; alternatively push/select an existing tag.
+2. The workflow resolves one SHA, validates license/lint/tests and builds all three
+   native archives at that SHA. Version input is validated, never interpolated as
+   shell code. Branch dispatch without an explicit version remains rejected.
+3. After checksum verification, publication creates a missing tag without force,
+   uploads assets to a draft and publishes it. Existing tags cannot move and
+   published releases cannot be overwritten. Only publication has contents write.
+   The same run publishes; token-created tags do not trigger another workflow.
+4. After verified publication, update README's REKAL_VERSION pin and the website.
+   Full run/retry instructions are in docs/DEVELOPMENT.md.
 
 Rekal memory is active here — before non-trivial work, use the `rekal` skill and route: grep the tree for present-tense code, `rekal` knowledge for present prose at HEAD, the ledger (`rekal` + gates) for past intent, the map for structure. <!-- managed by rekal -->

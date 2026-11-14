@@ -2,27 +2,42 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "New version on main (e.g. v2.0.0); leave blank when selecting an existing tag"
+        required: false
+        type: string
   push:
     tags:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: rekal-release
   cancel-in-progress: false
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ref.outputs.tag }}
+      sha: ${{ steps.ref.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
-      - name: Verify release tag
+      - name: Resolve release version and commit
+        id: ref
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: python3 scripts/check_release_ref.py
+      - name: Verify license
+        run: |
+          test -f LICENSE
+          head -5 LICENSE | grep -q "Apache License"
       - uses: jdx/mise-action@v3
       - name: Build llama.cpp
         run: |
@@ -60,14 +75,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ needs.validate.outputs.sha }}
 
       - name: Fetch LFS objects
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
         run: |
           git lfs install
-          git lfs fetch origin "${{ github.ref }}"
+          git lfs fetch origin "$RELEASE_SHA"
           git lfs checkout
 
       - uses: jdx/mise-action@v3
@@ -94,16 +110,19 @@ jobs:
 
       - name: Build binary
         env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
           CGO_ENABLED: "1"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           go build -ldflags "-s -w -X github.com/rekal-dev/rekal-cli/cmd/rekal/cli.Version=${VERSION}" \
             -o rekal ./cmd/rekal
 
       - name: Verify binary version
-        run: test "$(./rekal version)" = "rekal ${GITHUB_REF_NAME#v}"
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: test "$(./rekal version)" = "rekal ${RELEASE_TAG#v}"
 
       - name: Create archive
         run: |
@@ -120,12 +139,18 @@ jobs:
             rekal_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz.sha256
 
   release:
-    needs: build
+    needs: [validate, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_SHA: ${{ needs.validate.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.validate.outputs.sha }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -136,6 +161,11 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
+          test "$(find . -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 3
+          for target in linux_amd64 linux_arm64 darwin_arm64; do
+            test -s "rekal_${target}.tar.gz"
+            test -s "rekal_${target}.tar.gz.sha256"
+          done
           cat *.sha256 > checksums.txt
           rm -f *.sha256
           sha256sum --check checksums.txt
@@ -154,10 +184,27 @@ jobs:
           # Write to file to avoid delimiter issues
           echo "$CHANGELOG" > /tmp/changelog.txt
 
-      - name: Create release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The tag is created only after validation, all native builds and checksum
+      # verification. GITHUB_TOKEN tag pushes do not launch another workflow;
+      # publication deliberately continues in this same run.
+      - name: Create or verify release tag
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* --verify-tag \
-            --title "${GITHUB_REF_NAME}" \
-            --notes-file /tmp/changelog.txt
+          git fetch origin main --tags
+          python3 scripts/check_release_ref.py
+          python3 scripts/ensure_release_tag.py
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+
+      - name: Publish complete immutable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A retry may resume a draft, but never replaces a published release.
+          if gh release view "$RELEASE_TAG" --json isDraft > /tmp/release.json 2>/dev/null; then
+            python3 -c 'import json; assert json.load(open("/tmp/release.json"))["isDraft"], "release is already published"'
+          else
+            gh release create "$RELEASE_TAG" --draft --verify-tag \
+              --title "$RELEASE_TAG" --notes-file /tmp/changelog.txt
+          fi
+          gh release upload "$RELEASE_TAG" dist/checksums.txt dist/*.tar.gz --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest

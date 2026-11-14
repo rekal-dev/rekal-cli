@@ -31,10 +31,11 @@ class ReleaseRefTests(unittest.TestCase):
         self.git("add", "source.txt")
         self.git("-c", "commit.gpgsign=false", "commit", "-q", "-m", text)
 
-    def check(self, ref):
+    def check(self, ref, **extra):
         return subprocess.run(
             [sys.executable, str(GUARD)], cwd=self.root,
-            env={**self.env, "GITHUB_REF": ref}, capture_output=True, text=True, check=False,
+            env={**self.env, "GITHUB_REF": ref, "GITHUB_EVENT_NAME": "push",
+                 "RELEASE_VERSION": "", "GITHUB_SHA": "", "GITHUB_OUTPUT": "", **extra}, capture_output=True, text=True, check=False,
         )
 
     def test_merged_lightweight_tag(self):
@@ -70,6 +71,72 @@ class ReleaseRefTests(unittest.TestCase):
         result = self.check("refs/tags/v1.0.3")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("checkout does not match", result.stderr)
+
+    def test_main_dispatch_pins_sha_without_creating_tag(self):
+        sha = self.git("rev-parse", "HEAD")
+        output = self.root / "outputs"
+        result = self.check("refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch",
+                            RELEASE_VERSION="v2.0.0", GITHUB_SHA=sha, GITHUB_OUTPUT=str(output))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output.read_text(), f"tag=v2.0.0\nsha={sha}\n")
+        self.assertEqual(self.git("tag", "--list"), "")
+
+    def test_new_version_rejects_wrong_event_branch_sha_and_input(self):
+        sha = self.git("rev-parse", "HEAD")
+        cases = [
+            ("refs/heads/feature", "workflow_dispatch", "v2.0.0", sha),
+            ("refs/heads/main", "push", "v2.0.0", sha),
+            ("refs/heads/main", "workflow_dispatch", "v2.0.0", "0" * 40),
+            ("refs/heads/main", "workflow_dispatch", "v2.0.0; echo unsafe", sha),
+            ("refs/heads/main", "workflow_dispatch", "v2.0.0\nsha=bad", sha),
+            ("refs/heads/main", "workflow_dispatch", "v02.0.0", sha),
+        ]
+        for ref, event, version, expected in cases:
+            with self.subTest(ref=ref, version=version):
+                self.assertNotEqual(self.check(ref, GITHUB_EVENT_NAME=event,
+                    RELEASE_VERSION=version, GITHUB_SHA=expected).returncode, 0)
+
+    def test_main_dispatch_rejects_unmerged_checkout(self):
+        self.commit("not on origin main")
+        result = self.check("refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch", RELEASE_VERSION="v2.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("merged into origin/main", result.stderr)
+
+    def test_retry_same_tag_but_never_move_or_downgrade(self):
+        self.git("tag", "v2.0.0")
+        self.assertEqual(self.check("refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch",
+                                   RELEASE_VERSION="v2.0.0").returncode, 0)
+        self.assertNotEqual(self.check("refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch",
+                                      RELEASE_VERSION="v1.9.0").returncode, 0)
+        self.commit("new main")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        result = self.check("refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch", RELEASE_VERSION="v2.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("never move it", result.stderr)
+
+    def test_remote_tag_creation_retry_and_collision(self):
+        remote = self.root / "remote.git"
+        self.git("init", "--bare", "-q", str(remote))
+        self.git("remote", "add", "origin", str(remote))
+        script = GUARD.with_name("ensure_release_tag.py")
+        sha = self.git("rev-parse", "HEAD")
+        def publish(version="v2.0.0"):
+            return subprocess.run([sys.executable, str(script)], cwd=self.root,
+                env={**self.env, "RELEASE_TAG": version, "RELEASE_SHA": self.git("rev-parse", "HEAD")},
+                capture_output=True, text=True, check=False)
+        result = publish()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(sha, self.git("ls-remote", "origin", "refs/tags/v2.0.0"))
+        self.assertEqual(publish().returncode, 0)
+        self.git("-c", "tag.gpgsign=false", "tag", "-a", "v2.0.1", "-m", "annotated")
+        self.git("push", "origin", "refs/tags/v2.0.1")
+        self.assertEqual(publish("v2.0.1").returncode, 0)
+        self.commit("different commit")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        result = publish()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing to replace", result.stderr)
+        self.assertIn(sha, self.git("ls-remote", "origin", "refs/tags/v2.0.0"))
 
 
 if __name__ == "__main__":

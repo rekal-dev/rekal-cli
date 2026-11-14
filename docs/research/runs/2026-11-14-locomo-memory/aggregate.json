@@ -1,0 +1,79 @@
+{
+  "answering_model": null,
+  "conversations": 10,
+  "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "elapsed_seconds": 584.283484695,
+  "max_content_bytes": 16000,
+  "max_turn_slices": 80,
+  "memory_experiment": true,
+  "memory_policy": "Query-independent extractive notes: up to two complete turns per role/session, longest eligible turns first, each \u003c=800 bytes. Up to 4000 bytes of ranked notes delivered first, remaining total 16000-byte and 80-slice budgets used for raw evidence. No answering model or native Claude distillation.",
+  "model": "nomic-v1.5-c8k-d1",
+  "modes": {
+    "extractive-memory-only": {
+      "questions": 400,
+      "all_supporting_turns_delivered": 67,
+      "supporting_turns_delivered": 142,
+      "supporting_turns_total": 823,
+      "content_bytes": 1442638,
+      "delivered_turn_slices": 0,
+      "memory_bytes": 1442638,
+      "memory_notes": 1155
+    },
+    "passage-extractive-memory": {
+      "questions": 400,
+      "all_supporting_turns_delivered": 225,
+      "supporting_turns_delivered": 471,
+      "supporting_turns_total": 823,
+      "content_bytes": 5467408,
+      "delivered_turn_slices": 27372,
+      "memory_bytes": 1442638,
+      "memory_notes": 1155
+    },
+    "passage-multiple": {
+      "questions": 400,
+      "all_supporting_turns_delivered": 218,
+      "supporting_turns_delivered": 452,
+      "supporting_turns_total": 823,
+      "content_bytes": 4637768,
+      "delivered_turn_slices": 31747,
+      "memory_bytes": 0,
+      "memory_notes": 0
+    },
+    "passage-primary": {
+      "questions": 400,
+      "all_supporting_turns_delivered": 174,
+      "supporting_turns_delivered": 344,
+      "supporting_turns_total": 823,
+      "content_bytes": 1443919,
+      "delivered_turn_slices": 9418,
+      "memory_bytes": 0,
+      "memory_notes": 0
+    },
+    "session-primary": {
+      "questions": 400,
+      "all_supporting_turns_delivered": 177,
+      "supporting_turns_delivered": 348,
+      "supporting_turns_total": 823,
+      "content_bytes": 1434147,
+      "delivered_turn_slices": 9331,
+      "memory_bytes": 0,
+      "memory_notes": 0
+    }
+  },
+  "qa_accuracy": null,
+  "query_framings": 1,
+  "radius": 2,
+  "scope": "Matched retrieval/evidence ablation; no reader or judge is run. Same query vectors, questions, weights and context limits. Session-primary reproduces the former turn-zero fallback for session-only hits.",
+  "session_limit": 5,
+  "weights": {
+    "BM25": 0.35,
+    "LSA": 0.1,
+    "Semantic": 0.55,
+    "SteeringBoost": 1.3,
+    "SummaryBoost": 1.15,
+    "SubagentDownweight": 0.7,
+    "FacetBoost": 0.3,
+    "RecencyBoost": 0.15,
+    "ReachBoost": 0.2
+  }
+}

@@ -42,3 +42,34 @@ filtering. Adversarial questions and questions with no support annotations are
 excluded. Coverage is therefore subject to annotation errors and is not a
 measure of factual answer correctness. Compare actual delivered bytes as well
 as coverage: a common maximum budget does not mean equal context consumption.
+
+## Source-only memory control
+
+Add `--extractive-memory` to include `passage-extractive-memory` and
+`extractive-memory-only`. This tests the shipped keyword memory lookup alongside
+passage retrieval. It is an extractive control, **not Claude native distillation,
+an answering-agent run, or a QA accuracy measurement**.
+
+The note generator receives only sessions and source-ID mappings, never
+questions, gold answers or support annotations. Per session it selects the two
+longest eligible complete turns per role (at most 800 bytes each), restores
+source order, and preserves speaker text, session date and passage reference.
+It archives these excerpts through the same memory index revision projection.
+There are no inferred fact corrections or synthetic summaries.
+
+Each question uses the same query vector and session candidates across arms.
+The augmented arm reads the top five keyword note matches, admitting only whole
+notes that fit a 4,000-byte reservation. Their bytes and source-turn counts are
+deducted from the total 16,000-byte / 80-slice budget before assembling raw
+evidence. Copied complete source turns count toward support delivery. Duplicate
+raw/note text still consumes budget. The memory-only control delivers notes
+without raw evidence. No retrieval policy is tuned using the question's answer.
+
+Memory totals disclose note count and bytes; per-question records also disclose
+source-turn counts. Only IDs, hashes and measurements are written, never raw
+notes or conversations. Keep source data and model files outside result commits.
+
+The raw-stage `lookup_ms` / `evidence_fetch_ms` fields do not include memory
+lookup/read time; do not use them as an end-to-end latency comparison. Likewise,
+`truncated` describes the raw evidence fetch. The note admission policy is
+bounded independently by the declared 4,000-byte ceiling.

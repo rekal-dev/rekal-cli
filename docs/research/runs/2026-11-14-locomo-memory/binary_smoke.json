@@ -1,0 +1,11 @@
+{
+  "commit": "67ae9e39f5c06e0aea8926de718d0c2152344834",
+  "conversation_id": "conv-26",
+  "source_turns": 18,
+  "content_sha256": "6b5958a70592858ff8b005e35e61768287167394618ee9204560f0e427b01db2",
+  "memory_lookup": true,
+  "read_exact": true,
+  "pages": 1,
+  "reindex_ref_stable": true,
+  "historical_read_after_deletion": true
+}

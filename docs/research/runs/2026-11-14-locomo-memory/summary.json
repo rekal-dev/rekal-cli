@@ -1,0 +1,76 @@
+{
+  "product_commit": "67ae9e39f5c06e0aea8926de718d0c2152344834",
+  "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "model_gzip_sha256": "87842dd2df066ff8fb8e2455486c6be3c106b83e045d0af9b65b48997d72a64a",
+  "evaluator_code_sha256": "3b7b6a753dadfa151636e334d6424c32940c45d4ff94e984264feb58972d5c22",
+  "per_question_sha256": "e7a3fea21eddb48a9749e677bf152fe0be2a63d23ea6c24f738ded2a434f1bab",
+  "compressed_sha256": "d2013f8b9910b91fe4b5ab7f32568f347f924a49e153cd43b429a6d42c2c721c",
+  "question_categories": {
+    "temporal": 181,
+    "open-domain": 54,
+    "multi-hop": 158,
+    "single-hop": 7
+  },
+  "annotation_references_unresolved": 5,
+  "questions_with_unresolved_annotations": 5,
+  "sample_questions_in_known_bad_list": 32,
+  "paired_full_support_gains": [
+    [
+      "conv-41",
+      "q11"
+    ],
+    [
+      "conv-42",
+      "q3"
+    ],
+    [
+      "conv-43",
+      "q3"
+    ],
+    [
+      "conv-43",
+      "q18"
+    ],
+    [
+      "conv-47",
+      "q7"
+    ],
+    [
+      "conv-47",
+      "q9"
+    ],
+    [
+      "conv-47",
+      "q13"
+    ],
+    [
+      "conv-49",
+      "q3"
+    ],
+    [
+      "conv-49",
+      "q25"
+    ],
+    [
+      "conv-50",
+      "q19"
+    ]
+  ],
+  "paired_full_support_losses": [
+    [
+      "conv-43",
+      "q29"
+    ],
+    [
+      "conv-44",
+      "q21"
+    ],
+    [
+      "conv-44",
+      "q37"
+    ]
+  ],
+  "answer_model": null,
+  "qa_accuracy": null,
+  "native_claude_distillation": false
+}

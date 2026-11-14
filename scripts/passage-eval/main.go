@@ -4,6 +4,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -11,12 +12,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/db"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/evidence"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/lsa"
+	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/memory"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/nomic"
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 )
@@ -61,6 +64,8 @@ type totals struct {
 	SupportingTotal     int `json:"supporting_turns_total"`
 	ContentBytes        int `json:"content_bytes"`
 	DeliveredTurns      int `json:"delivered_turn_slices"`
+	MemoryBytes         int `json:"memory_bytes"`
+	MemoryNotes         int `json:"memory_notes"`
 }
 
 func digest(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
@@ -76,6 +81,7 @@ func run() error {
 	output := flag.String("out", "/tmp/rekal-passage-eval", "output directory; no source text is written")
 	maxConversations := flag.Int("conversations", 1, "first N conversations (0=all)")
 	questionLimit := flag.Int("questions", 0, "first N supported questions per conversation (0=all)")
+	memoryExperiment := flag.Bool("extractive-memory", false, "also compare source-only extractive notes; not Claude distillation or QA")
 	flag.Parse()
 	if err := os.MkdirAll(*output, 0755); err != nil {
 		return err
@@ -119,6 +125,9 @@ func run() error {
 	}
 	defer model.Close()
 	modes := []string{"session-primary", "passage-primary", "passage-multiple"}
+	if *memoryExperiment {
+		modes = append(modes, "passage-extractive-memory", "extractive-memory-only")
+	}
 	aggregate := map[string]*totals{}
 	for _, mode := range modes {
 		aggregate[mode] = &totals{}
@@ -131,12 +140,12 @@ func run() error {
 	writer := json.NewEncoder(records)
 	started := time.Now()
 	for _, c := range conversations {
-		if err := evaluate(c, rawByID[c.ID], model, *questionLimit, writer, aggregate, modes); err != nil {
+		if err := evaluate(c, rawByID[c.ID], model, *questionLimit, writer, aggregate, modes, *memoryExperiment); err != nil {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "completed %s (%d sessions)\n", c.ID, len(c.Sessions))
 	}
-	report := map[string]interface{}{"dataset_sha256": digest(sourceBytes), "model": nomic.ModelName, "conversations": len(conversations), "weights": search.DefaultWeights(), "query_framings": 1, "session_limit": 5, "radius": 2, "max_content_bytes": 16000, "max_turn_slices": 80, "elapsed_seconds": time.Since(started).Seconds(), "answering_model": nil, "qa_accuracy": nil, "modes": aggregate, "scope": "Matched retrieval/evidence ablation; no reader or judge is run. Same query vectors, questions, weights and context limits. Session-primary reproduces the former turn-zero fallback for session-only hits."}
+	report := map[string]interface{}{"dataset_sha256": digest(sourceBytes), "model": nomic.ModelName, "conversations": len(conversations), "weights": search.DefaultWeights(), "query_framings": 1, "session_limit": 5, "radius": 2, "max_content_bytes": 16000, "max_turn_slices": 80, "elapsed_seconds": time.Since(started).Seconds(), "answering_model": nil, "qa_accuracy": nil, "modes": aggregate, "memory_experiment": *memoryExperiment, "memory_policy": "Query-independent extractive notes: up to two complete turns per role/session, longest eligible turns first, each <=800 bytes. Up to 4000 bytes of ranked notes delivered first, remaining total 16000-byte and 80-slice budgets used for raw evidence. No answering model or native Claude distillation.", "scope": "Matched retrieval/evidence ablation; no reader or judge is run. Same query vectors, questions, weights and context limits. Session-primary reproduces the former turn-zero fallback for session-only hits."}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -144,7 +153,7 @@ func run() error {
 	return os.WriteFile(filepath.Join(*output, "aggregate.json"), append(data, '\n'), 0644)
 }
 
-func evaluate(c conversation, raw rawConversation, model *nomic.Embedder, questionLimit int, writer *json.Encoder, aggregate map[string]*totals, modes []string) error {
+func evaluate(c conversation, raw rawConversation, model *nomic.Embedder, questionLimit int, writer *json.Encoder, aggregate map[string]*totals, modes []string, withMemory bool) error {
 	root, err := os.MkdirTemp("", "rekal-evidence-eval-")
 	if err != nil {
 		return err
@@ -193,6 +202,13 @@ func evaluate(c conversation, raw rawConversation, model *nomic.Embedder, questi
 			}
 			diaByTurn[fmt.Sprintf("%s:%d", sid, i)] = sourceTurns[i].DiaID
 			lengthByDia[sourceTurns[i].DiaID] = len(t.Text)
+		}
+	}
+	memorySupport := map[string][]string{}
+	if withMemory {
+		memorySupport, err = buildExtractiveNotes(d, c.ID, c.Sessions, diaByTurn)
+		if err != nil {
+			return err
 		}
 	}
 	if err := db.CreateFTSIndex(d); err != nil {
@@ -286,8 +302,43 @@ func evaluate(c conversation, raw rawConversation, model *nomic.Embedder, questi
 					anchors = append(anchors, r.Anchors...)
 				}
 			}
+			memoryBytes := 0
+			memoryTurns := 0
+			memoryFull := map[string]bool{}
+			var noteContents []string
+			if mode == "passage-extractive-memory" || mode == "extractive-memory-only" {
+				hits, e := search.SearchMemory(d, search.Filters{Query: q.Text, Limit: 5, LimitExplicit: true}, nil)
+				if e != nil {
+					return e
+				}
+				for _, hit := range hits {
+					var payload string
+					if e := d.QueryRow(hit.SQL).Scan(&payload); e != nil {
+						return e
+					}
+					var revision memory.Revision
+					if e := json.Unmarshal([]byte(payload), &revision); e != nil {
+						return e
+					}
+					if e := revision.Validate(); e != nil {
+						return e
+					}
+					if memoryBytes+len(revision.Content) > 4000 {
+						continue
+					}
+					memoryBytes += len(revision.Content)
+					memoryTurns += len(memorySupport[revision.ID])
+					noteContents = append(noteContents, revision.Content)
+					for _, dia := range memorySupport[revision.ID] {
+						memoryFull[dia] = true
+					}
+				}
+			}
+			if mode == "extractive-memory-only" {
+				anchors = nil
+			}
 			begin = time.Now()
-			assembled, err := evidence.Fetch(d, evidence.Request{Anchors: anchors}, 2, 16000, 80)
+			assembled, err := evidence.Fetch(d, evidence.Request{Anchors: anchors}, 2, 16000-memoryBytes, 80-memoryTurns)
 			if err != nil {
 				return err
 			}
@@ -322,6 +373,9 @@ func evaluate(c conversation, raw rawConversation, model *nomic.Embedder, questi
 					full[dia] = true
 				}
 			}
+			for dia := range memoryFull {
+				full[dia] = true
+			}
 			supportFound, unresolved := 0, 0
 			for _, dia := range q.Extra.Evidence {
 				if _, ok := lengthByDia[dia]; !ok {
@@ -336,19 +390,65 @@ func evaluate(c conversation, raw rawConversation, model *nomic.Embedder, questi
 			a.Questions++
 			a.SupportingTotal += len(q.Extra.Evidence)
 			a.SupportingDelivered += supportFound
-			a.ContentBytes += assembled.ContentBytes
+			a.ContentBytes += assembled.ContentBytes + memoryBytes
+			a.MemoryBytes += memoryBytes
+			a.MemoryNotes += len(noteContents)
 			a.DeliveredTurns += slices
 			if all {
 				a.AllSupport++
 			}
-			contextJSON, err := json.Marshal(assembled.Windows)
+			contextJSON, err := json.Marshal([]interface{}{assembled.Windows, noteContents})
 			if err != nil {
 				return err
 			}
-			if err := writer.Encode(map[string]interface{}{"conversation_id": c.ID, "question_id": q.ID, "category": q.Category, "mode": mode, "support_ids": q.Extra.Evidence, "delivered_turn_ids": full, "unresolved_support_ids": unresolved, "all_support_delivered": all, "content_sha256": digest(contextJSON), "content_bytes": assembled.ContentBytes, "turn_slices": slices, "lookup_ms": lookupMS, "evidence_fetch_ms": fetchMS, "truncated": assembled.Truncated}); err != nil {
+			if err := writer.Encode(map[string]interface{}{"conversation_id": c.ID, "question_id": q.ID, "category": q.Category, "mode": mode, "support_ids": q.Extra.Evidence, "delivered_turn_ids": full, "unresolved_support_ids": unresolved, "all_support_delivered": all, "content_sha256": digest(contextJSON), "content_bytes": assembled.ContentBytes + memoryBytes, "memory_bytes": memoryBytes, "memory_notes": len(noteContents), "memory_turns": memoryTurns, "turn_slices": slices, "lookup_ms": lookupMS, "evidence_fetch_ms": fetchMS, "truncated": assembled.Truncated}); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// buildExtractiveNotes never receives benchmark questions, gold answers or
+// support annotations. Selection is a deliberately simple source-only control;
+// it does not simulate proprietary Claude distillation.
+func buildExtractiveNotes(d *sql.DB, conversationID string, sessions []session, diaByTurn map[string]string) (map[string][]string, error) {
+	support := map[string][]string{}
+	for _, s := range sessions {
+		var candidates []int
+		for i, t := range s.Turns {
+			if len(t.Text) <= 800 {
+				candidates = append(candidates, i)
+			}
+		}
+		sort.SliceStable(candidates, func(i, j int) bool { return len(s.Turns[candidates[i]].Text) > len(s.Turns[candidates[j]].Text) })
+		counts := map[string]int{}
+		var selected []int
+		for _, i := range candidates {
+			role := s.Turns[i].Role
+			if counts[role] < 2 {
+				selected = append(selected, i)
+				counts[role]++
+			}
+		}
+		sort.Ints(selected)
+		if len(selected) == 0 {
+			continue
+		}
+		sid := conversationID + "_" + s.ID
+		var content strings.Builder
+		fmt.Fprintf(&content, "# Conversation excerpts — %s\n", s.Date)
+		var ids []string
+		for _, i := range selected {
+			fmt.Fprintf(&content, "Source: passage:%s:%d-%d\n%s\n", sid, i, i, s.Turns[i].Text)
+			ids = append(ids, diaByTurn[fmt.Sprintf("%s:%d", sid, i)])
+		}
+		r := memory.Revision{Schema: 2, CheckpointID: "benchmark", GitSHA: "benchmark", ObservedAt: "2026-11-14T00:00:00Z", Source: memory.Source{Name: "extractive-control", Adapter: "markdown", Owner: "benchmark@example.com", Profile: "default", Scope: "repo"}, Path: s.ID + ".md", Content: content.String()}
+		r.ID = r.Digest()
+		if err := db.ImportMemoryIndex(d, []memory.Revision{r}); err != nil {
+			return nil, err
+		}
+		support[r.ID] = ids
+	}
+	return support, nil
 }

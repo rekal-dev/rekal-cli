@@ -9,15 +9,7 @@ team—with the original source ready to read. Captured with commits. Searchable
 
 One binary. Local embeddings by default. No hosted memory account required.
 
-> **Rekal 2.0 is available.** [Download v2.0.1](https://github.com/rekal-dev/rekal-cli/releases/tag/v2.0.1)
-> for native project memory and the unified search/read interface.
-> Coming from 1.x? Read the [upgrade guide](docs/upgrading.md) before migrating.
-
-> **Linux compatibility:** v2.0.1 targets Ubuntu 24.04 / GLIBC 2.39 or newer,
-> with the standard C++ and OpenMP runtimes. Older GLIBC and musl systems need a
-> [source build](docs/DEVELOPMENT.md). Upgrade from v2.0.0 on Linux AMD64 to
-> remove its unintended GLIBC 2.43 requirement.
-
+> **
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)

@@ -80,6 +80,9 @@ commands, packages, files, or behavior, update in the same change:
   `REKAL_TEST_BINARY=/absolute/path/to/rekal python3 -m unittest discover -s scripts/tests -p test_binary_contract.py -v`.
   Without that environment variable, only these subprocess tests are skipped.
   Never point fixtures at real agent memory or an external Git remote.
+  The large Unicode read-contract fixture uses a local deterministic embedding
+  endpoint to isolate text behavior from model throughput. Real native retrieval
+  is evaluated separately with `scripts/passage-eval`.
 - Bug fixes should come with the test that fails without them. Several commits
   in this history are named for exactly that.
 

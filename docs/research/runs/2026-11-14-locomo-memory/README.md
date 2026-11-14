@@ -41,6 +41,21 @@ All 2,000 records passed the byte/slice checks. Existing `lookup_ms` and `eviden
 
 An isolated repository captured an excerpt note from the first LoCoMo session through the default native-memory path. Search found it; `query --ref` recovered exact text; reindexing retained its reference; deleting the native file preserved the archived revision. `binary_smoke.json` records booleans and hashes only. This checks the executable's integration path; the aggregate comparison uses isolated index APIs for controlled ablation.
 
+## CI validation boundary
+
+The first result commit's full CI exposed a 60-second timeout while checkpointing
+the binary-contract suite's artificial 300-turn / long-Unicode transcript with
+native embeddings. Checkpoint currently performs native embedding work
+synchronously. The read-contract fixture now uses a local deterministic
+embedding endpoint; its large source text and exact pagination assertions are
+unchanged. The real Nomic LoCoMo experiment above is separate and unchanged.
+
+This resolves the test's coupling to model throughput, not the latency of native
+checkpoint work. Long native-embedding checkpoint latency remains a performance
+limitation to profile; passing the text contract must not be read as a latency
+guarantee. The original failed run is
+[43541841899](https://github.com/rekal-dev/rekal-cli/actions/runs/43541841899).
+
 ## Limits
 
 - Supporting-turn annotations can be incorrect. There are 5 unresolved annotation references across 5 sampled questions.

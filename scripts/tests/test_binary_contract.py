@@ -4,6 +4,8 @@ All homes, agent transcripts, repositories and remotes are disposable synthetic
 fixtures. These tests never read the developer's native agent memory.
 """
 import base64
+import http.server
+import threading
 import datetime
 import json
 import os
@@ -131,6 +133,38 @@ class BinaryContract(unittest.TestCase):
                 self.run_cli(*args, ok=False)
 
     def test_long_unicode_reads_and_literal_location(self):
+        # Exercise text/reference contracts independently of native-model CPU
+        # throughput. A real Nomic retrieval run lives in scripts/passage-eval.
+        # The HTTP endpoint is local and receives only this synthetic fixture.
+        requests = []
+        class Embeddings(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                requests.append(len(payload["input"]))
+                response = json.dumps({"data": [
+                    {"index": i, "embedding": [1.0, 0.0, 0.0, 0.0]}
+                    for i, _ in enumerate(payload["input"])
+                ]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Embeddings)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        def stop_server():
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+        self.addCleanup(stop_server)
+        config = {"embedding": {"endpoint": f"http://127.0.0.1:{server.server_port}/v1",
+                                "model": "binary-contract-fixture", "timeout_seconds": 5}}
+        (self.repo / ".rekal" / "config.json").write_text(json.dumps(config))
         self.texts = [f"item {i}" for i in range(300)]
         self.texts[289] = "retry " + "旧背景 " * 5000 + "retry final decision"
         self.capture()
@@ -149,6 +183,7 @@ class BinaryContract(unittest.TestCase):
         edges = [json.loads(line) for line in (self.repo / ".rekal" / "recall-log.ndjson").read_text().splitlines()]
         drills = [e for e in edges if e["kind"] == "drill" and e["target"] == hit["session_id"]]
         self.assertEqual(len(drills), 2, "passage + session read should log once each, not once per page")
+        self.assertGreater(len(requests), 0, "fixture embedding endpoint was not exercised")
 
     def test_memory_history_local_expiry_and_no_export(self):
         note = self.notes / "decision.md"

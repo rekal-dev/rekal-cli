@@ -136,3 +136,8 @@ and stay comparable.
   since the record already lives in data.db: add a `recall_edges` codec frame
   and a merged-only gating decision. This puts each dev's query text + access
   pattern on the shared branch, a deliberate privacy trade to make later.
+
+
+The common `query --ref` reader records one drill when its first page delivers
+conversation evidence. Following `query --cursor` does not count each page as
+another endorsement. Native note reads do not invent a session association.

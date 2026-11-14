@@ -74,6 +74,12 @@ commands, packages, files, or behavior, update in the same change:
 - **Integration tests** live in `cmd/rekal/cli/integration_test/` behind
   `//go:build integration`, use the `TestEnv` pattern for isolated temp repos,
   and test the public API only.
+- **Binary contract tests** in `scripts/tests/test_binary_contract.py` launch
+  the compiled executable in disposable homes, repos and local Git remotes.
+  `mise run test:ci` builds and runs them. To test a particular build:
+  `REKAL_TEST_BINARY=/absolute/path/to/rekal python3 -m unittest discover -s scripts/tests -p test_binary_contract.py -v`.
+  Without that environment variable, only these subprocess tests are skipped.
+  Never point fixtures at real agent memory or an external Git remote.
 - Bug fixes should come with the test that fails without them. Several commits
   in this history are named for exactly that.
 

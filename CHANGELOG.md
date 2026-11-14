@@ -39,6 +39,16 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ### Fixed
 
+- Default memory-read text now includes owner, source and available commit/
+  checkpoint provenance, matching the structured response.
+- Common reference reads now record the existing session-open signal exactly
+  once per read, without inflating it across continuation pages.
+- CLI help, usage/configuration guides, command specs and shipped skill references
+  agree on the default search/read interface and native memory behavior.
+- CI now exercises the built executable against isolated synthetic repositories,
+  including pagination, argument errors, memory history/local expiry, reindexing
+  and append-only export/sync round trips.
+
 - Session-wide semantic matches no longer invent a turn-zero evidence pointer.
   Located semantic passages retain ranges; grouped headers identify the child
   transcript a borrowed snippet belongs to.

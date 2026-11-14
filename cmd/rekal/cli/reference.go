@@ -165,6 +165,16 @@ func runReferenceRead(cmd *cobra.Command, root, ref, cursor string, jsonOut bool
 			return err
 		}
 		out = referenceOutput{Ref: state.Ref, Kind: "conversation", Evidence: &got}
+		// Preserve the existing opened-session signal through the common reader.
+		// Continuation pages are one logical read, not additional endorsements.
+		if cursor == "" {
+			for _, window := range got.Windows {
+				if len(window.Turns) > 0 {
+					logDrillEdge(root, a.SessionID)
+					break
+				}
+			}
+		}
 		if got.Next != nil {
 			state.Request = got.Next
 			next = &state
@@ -196,7 +206,11 @@ func runReferenceRead(cmd *cobra.Command, root, ref, cursor string, jsonOut bool
 			fmt.Fprintf(w, "[warning: %s]\n", warning)
 		}
 	} else {
-		fmt.Fprintf(w, "scope=%s path=%q observed=%s bytes=%d-%d deleted=%t\n%s\n", out.Source.Scope, out.Path, out.ObservedAt, out.StartByte, out.EndByte, out.Deleted, out.Content)
+		fmt.Fprintf(w, "source=%q owner=%q profile=%q scope=%s path=%q observed=%s bytes=%d-%d deleted=%t\n", out.Source.Name, out.Source.Owner, out.Source.Profile, out.Source.Scope, out.Path, out.ObservedAt, out.StartByte, out.EndByte, out.Deleted)
+		if out.Checkpoint != "" || out.GitSHA != "" {
+			fmt.Fprintf(w, "checkpoint=%s commit=%s\n", out.Checkpoint, out.GitSHA)
+		}
+		fmt.Fprintln(w, out.Content)
 	}
 	if out.Next != "" {
 		fmt.Fprintf(w, "more: rekal query --cursor %s\n", out.Next)

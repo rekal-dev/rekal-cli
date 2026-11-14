@@ -1,14 +1,42 @@
 # rekal (root) — recall
 
-**Role:** Hybrid search over captured sessions. Root invocation is recall — no `search` subcommand. Default stdout is a compact **seed digest** (INJECT / KNOWLEDGE / SILENCE + per-seed confidence and drill pointers) — just enough for the agent to decide what matters. Use `--json` for the structured payload. For full session content, use `rekal query --session <session_id>`.
+**Role:** Hybrid session search, native memory lookup and paginated literal conversation matches. Root invocation is recall — no `search` subcommand. Default stdout is a compact digest (ranked INJECT / KNOWLEDGE / SILENCE recommendations, plus LITERAL and MEMORY blocks when applicable) — just enough for the agent to decide what matters. Use `--json` for the structured payload. Open returned conversation, passage or memory references with `rekal query --ref <reference>`.
 
 **Short forms:** `-n` limit · `-j` json · `-e` explain · `-p` file · `-c` commit · `-a` author · `-A` actor
 
 **Invocation:** `rekal [filters...] [query]`. Subcommands (init, clean, checkpoint, etc.) take precedence when present.
 
-**Progressive loading:** Recall is the first step in a two-step context loading model. The agent calls `rekal <query>` to get lightweight results (snippets + metadata), then calls `rekal query --session <id>` for full turns on the sessions that matter. This keeps token usage tight — the agent controls how much context it loads.
+**Progressive loading:** Recall is the first step in a two-step context loading model. The agent calls `rekal <query>` to get lightweight results (snippets + metadata), then calls `rekal query --ref <reference>` for the source text that matters. This keeps token usage tight — the agent controls how much context it loads.
 
 ---
+
+## Literal coverage and continuation
+
+Every nonempty text query also returns `literal`: `scope`, original `query`,
+`total`, `offset`, `hits` and optional `next`. Each hit includes `ref`,
+`session_id`, `turn`, `role`, `timestamp` and a snippet. Matching is a
+case-insensitive literal substring of the original query; percent/underscore
+are literal characters. Ranked query reformulations do not change this sweep.
+
+Top-level `total` retains its ranked-result meaning; `literal.total` is separate.
+Literal totals count indexed matching turns, not occurrences, facts or events.
+Coverage excludes notes, current files and unsynced history. Results are ordered
+by permanent session ID then turn index, not globally by timestamp. Follow
+`rekal --cursor <next> [--json]` until `next` is absent. A continuation carries
+its original filters and page size; do not add another query or filters.
+Changes to the matching set invalidate the cursor instead of skipping rows.
+
+The default literal page is 20; explicit `--limit` caps it at 100.
+`--limit 0` returns the total with no hits or continuation. Ranked results keep
+their existing per-framing soft limit. Filter-only searches omit literal coverage.
+A literal query is limited to 4096 UTF-8 bytes.
+
+Ranked rows include canonical `ref` values. Short `sN` handles are local display
+aliases and can change after indexing. Use canonical refs for later reads.
+
+Text search exits 0 for useful ranked/prose results or nonempty literal/memory
+hits, and 1 for SILENCE. JSON search exits 0 even for an empty successful result.
+Errors exit 1. A successful continuation exits 0.
 
 ## Preconditions
 
@@ -81,7 +109,7 @@ sessions that touched the file (`files_index` join).
 Knowledge and session scores are **never merged into one ranking** — a file
 hit at HEAD (current truth; next action: Read) and a session hit (history;
 next action: drill) have different epistemic status. The block is additive:
-`results` is byte-identical to pre-knowledge output, and the layer fails
+the knowledge layer does not change session ranking, and the layer fails
 soft (no prose files, or an index.db predating the layer ⇒ no block).
 Capped at 5 file hits.
 

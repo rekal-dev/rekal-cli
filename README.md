@@ -1,5 +1,9 @@
 # Rekal
 
+> This page describes the current main branch. Native memory integration,
+> literal search pagination and `query --ref` are unreleased changes; the
+> v1.0.2 installation does not include them. See the [changelog](CHANGELOG.md) for release status.
+
 **Rekal is a command-line tool that captures your AI coding sessions at every git
 commit, stores them in your repo, and lets any agent recall the reasoning behind
 a past decision — including the approaches that were tried and rejected.**
@@ -238,7 +242,7 @@ $ rekal --json "should webhook retries use a fixed delay?"
 | `rekal index [--include-all\|--include <repo>\|--no-local]` | Rebuild the index DB (atomic temp→rename); optionally fold in cross-repo local sessions |
 | `rekal embed` | Fill missing semantic embeddings (resumable; also started after index/sync) |
 | `rekal log [--limit N]` | Show recent checkpoints |
-| `rekal find "<term>" [role]` | Enumerate every ledger mention of a term (complete, time order) |
+| `rekal find "<term>" [role]` | Advanced unpaged literal matching-turn sweep, ordered by time |
 | `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [--json] [query]` | Hybrid search plus paginated literal conversation matches; `--json` for raw structured results; `--explain` adds per-layer scores |
 | `rekal query --ref <reference> [--json]` | Read a conversation, passage or memory note; follow the returned continuation |
 | `rekal --cursor <cursor>` / `rekal query --cursor <cursor>` | Continue search matches / source reading |
@@ -368,13 +372,10 @@ progressive-loading pattern are in **[docs/usage.md](docs/usage.md)**.
 ### The agent skill
 
 `rekal init` installs one Claude Code skill under `.claude/skills/rekal/`. It is
-a thin route: the agent classifies each question and sends it to one substrate —
-**tree** (grep, now), **knowledge** (prose at HEAD), **ledger** (past
-reasoning), or **map** (structure). For a ledger question, a second step
-classifies the *answer type* and loads exactly one specialist workflow, so
-"how long", "how many", and "when" each get concentrated, non-overlapping
-guidance. Retrieval and navigation are commands in the binary; the skill is
-judgment, not scripts.
+a compact guide to search, read the returned source and follow continuations.
+It distinguishes current files, historical conversations and distilled notes,
+preserving attribution and time. Specialist reasoning workflows remain optional.
+Retrieval mechanics live in the binary; judgment stays with the agent.
 
 Full skill reference: **[docs/usage.md#the-agent-skill](docs/usage.md#the-agent-skill)** ·
 every command and flag: **[docs/commands.md](docs/commands.md)** ·
@@ -393,8 +394,8 @@ store. The databases, transport, and cross-repo recall are covered in
 Rekal is zero-config by default. To tune ranking weights — the hybrid layer
 mix, the facet layer, and the recency / recall-graph reach boosts — or point
 deep embeddings at an OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, TEI),
-there is exactly one file — `.rekal/config.json`, gitignored and local-only,
-never committed. See **[docs/configuration.md](docs/configuration.md)**.
+use `.rekal/config.json`, gitignored and local-only. Ranking and embedding
+settings can inherit machine-wide defaults; memory settings remain repo-local. See **[docs/configuration.md](docs/configuration.md)**.
 
 ## The research
 

@@ -1,12 +1,16 @@
 # rekal query
 
-**Role:** Two modes: raw SQL over the Rekal data model, or session drill-down. The `--session` flag is the second step in progressive context loading — after recall returns snippets, the agent drills into specific sessions for full turns.
+**Role:** Read a returned source with `--ref`. Advanced modes retain raw SQL and session metadata/tool-call access.
 
 **Session drill output** carries a `commits:` block — the commits that conversation produced, abbreviated sha plus subject, capped at 10. It is the reverse of recall's `--commit` filter: commit → session was already possible, session → commit was not, so the drill dead-ended at the reasoning with no pointer to the diff. Subjects are resolved from this clone at query time and are absent for a sha it has not fetched.
 
 **Short forms:** `-q` sql · `-i` index · `-s` session · `-F` full · `-o` offset · `-n` limit · `-r` role · `-j` json
 
-**Invocation:** `rekal query --sql "<sql>"` (explicit SQL mode; a bare positional `rekal query "<sql>"` is accepted as shorthand), `rekal query --index --sql "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]`. `--sql`, a positional statement, and `--session` are mutually exclusive.
+**Primary invocation:** `rekal query --ref <reference> [--json]` or
+`rekal query --cursor <continuation> [--json]`. These cannot be combined with
+SQL, session, role, full, index, offset or limit options.
+
+**Advanced invocation:** `rekal query --sql "<sql>"` (explicit SQL mode; a bare positional `rekal query "<sql>"` is accepted as shorthand), `rekal query --index --sql "<sql>"`, or `rekal query --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]`. `--sql`, a positional statement, and `--session` are mutually exclusive.
 
 ---
 
@@ -16,7 +20,37 @@ See [preconditions.md](../preconditions.md): git repo, init done.
 
 ---
 
-## Two modes
+## Read modes
+
+### Source read (`--ref`, then `--cursor`)
+
+| Reference | Reads |
+| --- | --- |
+| `session:<permanent-id>` | Session turns, starting at turn zero |
+| `passage:<permanent-id>:<start>-<end>[@<byte-start>-<byte-end>]` | Located original evidence |
+| `memory:<revision-id>` | Immutable repository note revision, including historical revisions |
+| `local-memory:<snapshot-id>` | Current local note; refresh rejects changed/removed/disabled snapshots |
+
+Bare permanent session IDs and local aliases such as `s1` are accepted.
+Responses canonicalize aliases; do not persist `sN` as durable identifiers.
+Conversation reads require a populated index (local capture, synced teammates
+and local imports). Rebuild/sync missing history first.
+
+Each page contains at most 16,000 source-text bytes; conversation pages also
+cap delivered slices at 80. UTF-8 boundaries are preserved. Metadata is extra;
+these are byte limits, not token limits. Passages accept at most 256 turns;
+whole-session reads advance through bounded segments automatically.
+
+Text prints the source and citations plus a copyable `more:` command. JSON
+returns `ref`, `kind`, either `evidence` or memory metadata/`content`, and an
+optional opaque `next` string. Pass that string to `query --cursor`; it is not
+the `evidence.next` request object or the root search cursor.
+
+Memory text and JSON include source/owner, path, observation timestamp, byte bounds and
+repository checkpoint/commit when available. Local snapshots have no invented
+commit. A read does not rewrite ledger history. Continuations may fail if their
+source window changes; repeat the original read. A session read fixes its final
+turn at the first page, so later appends require a fresh read.
 
 ### SQL mode (`--sql "<statement>"`, or a bare positional statement)
 

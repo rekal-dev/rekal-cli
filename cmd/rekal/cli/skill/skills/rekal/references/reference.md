@@ -6,14 +6,19 @@ If `rekal` is missing: `export PATH="$HOME/.local/bin:$PATH"`.
 
 ## Commands
 
-Every read command prints **compact agent-readable text by default**; add
-`--json` only when a program must parse it. Retrieval and navigation are all
+Read commands print **compact agent-readable text by default**; where supported,
+add `--json` when a program must parse it. Legacy `find` is text-only. Retrieval and navigation are all
 `rekal` subcommands — no scripts, no pipes:
 
 - `rekal "<q>"` — recall → seed digest. One call auto-widens: it fuses several
   deterministic reformulations (keyword-only, clause splits, temporal) so a
   single query returns the widened result.
-- `rekal find "<term>" [role]` — complete, time-ordered mention sweep.
+- Search also returns literal matching-turn totals and a continuation. Follow
+  `rekal --cursor <cursor>`; literal coverage excludes notes, files and synonyms.
+- `rekal query --ref <reference>` — common bounded conversation/passage/memory
+  read. Follow `rekal query --cursor <cursor>` for more source text. Save canonical
+  references, not local `sN` aliases. Local note refs can expire after edits.
+- `rekal find "<term>" [role]` — advanced unpaged chronological literal sweep.
 - `rekal query --session <id>` / `rekal query --sql "…"` — drill / SQL, text by
   default.
 
@@ -32,7 +37,8 @@ The `map.sh` and `wiki-gate.sh` workflow gates remain under
 | `--commit <sha>` | Filter by git commit SHA |
 | `--author <email>` | Filter by author email |
 | `--actor <human\|agent>` | Filter by actor type |
-| `-n`, `--limit <n>` | Max results (default 20; `0` = empty set; negative rejected) |
+| `-n`, `--limit <n>` | Ranked results per framing (soft bound); literal page cap 100, default 20. `0` = no hits; literal total remains |
+| `--cursor <cursor>` | Continue literal matches with original filters; only add `--json` |
 | `--explain` | Adds `layers` + `related` (file-sharing sessions) |
 | `--json` | Raw structured JSON instead of the default seed digest (machine consumers) |
 

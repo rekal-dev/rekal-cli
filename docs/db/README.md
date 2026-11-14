@@ -5,7 +5,9 @@
 > page is the column-by-column detail.
 
 
-Data DB (`.rekal/data.db`) is the source of truth. Append-only, never rebuilt. Committed to the rekal orphan branch for sharing via push/sync.
+Data DB (`.rekal/data.db`) is the source of truth. Append-only, never rebuilt.
+Eligible rows are encoded into the wire body on the Rekal orphan branch for
+sharing via push/sync; the database file itself is not committed.
 
 Engine: DuckDB.
 
@@ -13,7 +15,7 @@ Engine: DuckDB.
 
 ## `sessions`
 
-One row per captured Claude Code session. Inserted by `rekal checkpoint`. Deduplicated by `session_hash` — if the hash matches an existing row, checkpoint skips it.
+One row per captured agent session. Inserted by `rekal checkpoint`. Deduplicated by `session_hash` — if the hash matches an existing row, checkpoint skips it.
 
 ```sql
 CREATE TABLE IF NOT EXISTS sessions (
@@ -515,3 +517,19 @@ call it marks most of a small corpus anyway. Ranking only either way —
 deliberately excluded from the silence gate, because popular is not the same as
 relevant. Counts follow `session_supersedes`, so collapsing a duplicate does not
 reset a well-used conversation to zero.
+
+
+## Native memory tables
+
+Data schema version 2 adds `memory_revisions`. Columns are `id`,
+`checkpoint_id`, `source_id`, `path`, `observed_at`, `shared`, `deleted`,
+`content` and `payload`. The payload preserves the validated revision, source
+metadata, Git SHA and original Markdown. `shared` is a legacy-compatible
+publication field; current source configuration uses repo/local scope.
+
+The disposable index projects repository revisions into `memory_archive` and
+current notes into `memory_documents`. Explicit personal notes live only in
+`local_memory_documents`; they never enter `memory_revisions`.
+Use `query --ref` for a bounded source read instead of depending on table shape.
+See [native memory](../design/native-memory.md) for timestamp semantics and
+[compatibility](../compatibility.md) for writer/downgrade restrictions.

@@ -13,7 +13,8 @@ it does not prove completeness.
 - Duplicate mentions of one event are removed without collapsing distinct
   repeated events. A stated expected count does not force membership.
 
-Useful operations include `rekal find` on a stable entity and SQL for
+Useful operations include ordinary search literal pages on a stable entity,
+`query --ref` to read each source, advanced `rekal find` and SQL for
 chronology, counting, or analytical sets; read both speakers and relevant
 captions, links, quoted lists, and uptake turns. Page until empty when claiming
 completeness.

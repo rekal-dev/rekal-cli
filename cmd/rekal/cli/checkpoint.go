@@ -30,6 +30,11 @@ from the agent's session directory, deduplicates by content hash, and inserts
 into .rekal/data.db. Each checkpoint is linked to the current HEAD commit and
 records which files were changed.
 
+Claude project memory notes are captured by default as immutable revisions.
+Changed notes and confirmed deletions append history; explicit local-only sources
+stay in the index. Set "memory": false in .rekal/config.json to stop new native
+memory capture. Existing repository history is preserved.
+
 Normally runs automatically via the post-commit hook installed by 'rekal init'.
 Run manually to capture a session without committing.
 

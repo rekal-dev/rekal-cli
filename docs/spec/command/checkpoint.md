@@ -1,6 +1,6 @@
 # rekal checkpoint
 
-**Role:** Capture the current session after a commit. Invoked by the post-commit hook; can also be run manually. Incrementally updates the index for newly captured sessions.
+**Role:** Capture current sessions and repository memory after a commit. Invoked by the post-commit hook; can also be run manually. Incrementally updates the index for newly captured sessions.
 
 **Invocation:** `rekal checkpoint`.
 
@@ -12,6 +12,15 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 
 ---
 
+## Native memory
+
+Default Claude project notes are captured through the same checkpoint. Changed
+notes and deletion markers append immutable revisions; unchanged files are a
+no-op. A memory-only change can produce a checkpoint with no sessions. Explicit
+local sources never enter the ledger. Capture failures warn without dropping
+transcripts. See [native memory](../../design/native-memory.md) for configuration
+and the distinction between a missing directory and a confirmed deleted note.
+
 ## What checkpoint does
 
 1. **Run shared preconditions** — Git root, init done.
@@ -19,7 +28,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 3. **Check for changes** — For each matching session file, compare size + SHA-256 hash against `checkpoint_state`. Codex compressed rollouts hash decoded JSONL bytes and share the plain rollout's checkpoint key so compression/resume preserves append identity. Skip unchanged captures.
 4. **Dedup by content hash** — Check `sessions.session_hash` to skip already-imported sessions.
 5. **Parse transcript** — Extract conversation turns and tool calls from session JSON. Skip sessions with no turns and no tool calls.
-5b. **Skip harness / bench pollution** — If `session.SkipCapture` is true, do not write the session (BUG 6). Triggers: `REKAL_BENCH` or `REKAL_SKIP_CHECKPOINT` set; transcript cwd under a bench tree (`scripts/bench`, `rekal-bench`); human turns matching RekalBench `gen_queries.py` prompt fingerprints. Same guard applies to cross-repo local import. See [scripts/bench/README.md](../../scripts/bench/README.md).
+5b. **Skip harness / bench pollution** — If `session.SkipCapture` is true, do not write the session (BUG 6). Triggers: `REKAL_BENCH` or `REKAL_SKIP_CHECKPOINT` set; transcript cwd under a bench tree (`scripts/bench`, `rekal-bench`); human turns matching RekalBench `gen_queries.py` prompt fingerprints. Same guard applies to cross-repo local import. See [scripts/bench/README.md](../../../scripts/bench/README.md).
 6. **Write to data DB:**
    - Insert session row (`sessions` table) with ULID, content hash, actor type, email, branch, timestamp.
    - Insert turn rows (`turns` table) with role, content, timestamp.

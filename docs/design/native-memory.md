@@ -96,18 +96,17 @@ became true. Local snapshot hashes exclude observation time so an unchanged file
 does not acquire a new reference at every search.
 
 Ordinary recall returns bounded keyword memory hits with source/scope labels,
-revision references and SQL drills through the existing `query --index --sql`
-path. Local drills target `local_memory_documents`; repository drills target
-`memory_archive`. Sessions retain their existing ranking. At most five memory
+revision references opened by `rekal query --ref <reference>`. Reads are bounded
+and return a continuation for long notes. Advanced SQL can still target
+`local_memory_documents` or `memory_archive`. Sessions retain their existing ranking. At most five memory
 notes and bounded UTF-8 snippets are returned. Author, commit, path and limit
 filters apply; local notes have no invented checkpoint/commit association.
 Actor-filtered queries exclude memory.
 
 Explicit `SESSION:tTURN:bytesSTART-END` citations expose pointers to existing
 evidence reads. They are unverified citations, not proof of support. No session
-links are inferred from a memory checkpoint. A common `query --ref` reader is a
-proposal, not part of this implementation. Semantic memory embeddings and
-cross-type ranking are also not implemented.
+links are inferred from a memory checkpoint. The common `query --ref` reader is implemented for memory, conversations and
+passages. Semantic memory embeddings and cross-type ranking are not implemented.
 
 ## Compatibility
 

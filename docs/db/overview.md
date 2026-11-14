@@ -14,7 +14,7 @@ detail.
 Everything corrective — collapsing duplicates, reclassifying roles, ranking —
 happens in `index.db`, because the ledger only ever gains rows.
 
-## What `.tables` shows
+## Example core tables (additional tables depend on version and features)
 
 ```
 $ duckdb .rekal/data.db -c ".tables"
@@ -36,6 +36,15 @@ and `rekal query --index --sql "…"` reads `index.db`, both read-only.
 `merge_gate_cache` is created on demand, so it is absent until the first push.
 Tables ending `_fts_*` may also appear: those are DuckDB's own FTS internals,
 built by `PRAGMA create_fts_index`. Ignore them; they are not part of the model.
+
+Current native-memory tables are `data.db.memory_revisions` (append-only
+repository observations), `index.db.memory_archive` (historical repository
+projection), `memory_documents` (current repository notes), and
+`local_memory_documents` (current personal snapshots only). Local note contents
+never enter the ledger or wire. Rebuilding the index re-reads available local
+files; it cannot restore deleted local notes. Passage retrieval additionally uses
+`session_passages`, `session_passage_state` and `passage_embeddings`; discovery caches are disposable.
+See [native memory](../design/native-memory.md) for boundaries and schema versions.
 
 ## How the two relate
 

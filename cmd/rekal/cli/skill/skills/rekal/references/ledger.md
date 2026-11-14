@@ -1,17 +1,18 @@
 # LEDGER — reasoning over past intent
 
 The ledger holds what *was*: the sessions where problems were explored,
-alternatives rejected, decisions made. You reach it two ways, chosen by the
-shape of the question:
+alternatives rejected, decisions made. The default path is search followed by
+`query --ref`. Advanced tools remain useful for particular questions:
 
 - **Pointed episode** ("why did we…", "what did X say about…") → `rekal` recall,
   printed as a seed digest. Recall finds the loudest match.
 - **Analytical / complete-set / temporal** ("how many…", "all of…", "in what
   order…") → `rekal query` SQL. SQL enumerates the whole set.
 
-Recall answers "which episode matches this phrase?"; SQL answers "what does the
-whole record say?" Pick before you spend a token. Cite session / turn / commit
-with every claim.
+Search returns ranked leads plus paginated literal matching turns. Literal
+coverage is exact-query and index-scoped, not a census of related facts. Follow
+continuations and read sources before drawing conclusions. SQL remains available
+for structured analysis. Cite session / turn / commit with every claim.
 
 ## Runbook — shape → first move → watch for
 
@@ -21,7 +22,7 @@ below carry the depth when the first move isn't enough.
 | Question shape | First move | Watch for |
 |---|---|---|
 | Pointed episode — why / what did X say | `rekal "<q>"`; drill top seed at `t<n>`; weak? re-search a genuinely different angle | premise mismatch; near-miss entity in the answer |
-| Complete-set — all / every / how many / which of N | `rekal find "<term>"` sweep, drill each mention | stopping early; instance vs class; the other speaker's uptake |
+| Complete-set — all / every / how many / which of N | `rekal "<term>"` literal pages, read refs; find/SQL if useful | stopping early; instance vs class; the other speaker's uptake |
 | Temporal — when / before / after / how long | resolve the relative phrase against the mention's date; SQL window on `ts` (`BETWEEN`, never `LIKE` — `ts` is TIMESTAMP) | event time ≠ mention time; the record's edge is not "now" |
 | Whose-fact — my / I / their | drill to the assertion turn ("my X is", "I bought") | discussed / suggested ≠ owned |
 | False-premise suspicion | drill the premise subject before answering | fabricating the asserted fact; answering a corrected question |

@@ -1,5 +1,9 @@
 # Using Rekal
 
+> This page describes the current main branch. Native memory integration,
+> literal search pagination and `query --ref` are unreleased changes; the
+> v1.0.2 installation does not include them. See the [changelog](../CHANGELOG.md) for release status.
+
 This is the operational guide: how the two databases fit together, what
 travels over git and what stays local, how agents query, and how the skill
 routes. For the marketing overview and quick start, see the
@@ -107,83 +111,63 @@ unaffected — the store is just its own `.rekal/`.
 
 ## How your agent uses it
 
-The agent controls how much context it loads: search first, drill down
-progressively, load full sessions only when needed.
+Search, read the returned source, then follow a continuation when needed.
 
-| Agent does | Rekal does |
-|------------|------------|
-| `rekal "auth middleware"` | Hybrid search (BM25 + LSA + deep embed + facets) plus a separate `knowledge` block for prose at HEAD; returns a seed digest (INJECT/KNOWLEDGE/SILENCE + per-seed `conf` and a drill pointer), or structured `confidence` / `mass` JSON with `--json` |
-| `rekal find "auth middleware"` | Complete, time-ordered enumeration of every ledger mention — for "all / every / how many" asks |
-| `rekal query --session <id> --offset N --limit 5` | Readable window of turns around the relevant part (`--json` for one object; `has_more` for pagination) |
-| `rekal query --session <id> --role human` | Returns only human turns — cheapest way to understand session intent |
-| `rekal query --session <id> --full` | Returns everything: turns, tool calls, files touched — only when the agent needs full detail |
-| `rekal --file src/billing/ "discount"` | Scoped search filtered by file path |
-| `rekal --commit <sha>` | Finds the session(s) that produced a commit — the anchor for change provenance |
-| `rekal --explain "…"` | Adds per-layer scores and related-session joins (JSON shape; pair with `--json`) |
-| `rekal query --session <id> --role human_steering` | Returns only the mid-course corrections — the highest-signal turns for intent and preferences |
-| `rekal query --session <id> --role summary` | Returns the harness-written compaction distillations — the cheapest overview of a long session |
-| `rekal query --sql "SELECT …"` | Analytical / temporal SQL → TSV rows (`--json` for NDJSON; `--index` for index DB) |
-| `rekal embed` | Fill missing semantic vectors (also started in the background after `index` / `sync`) |
-| `rekal sync` (optional, at session start) | Pulls team context before the agent starts working |
+| Agent does | Rekal returns |
+| --- | --- |
+| `rekal "auth middleware"` | Ranked sessions, memory notes, current prose pointers, plus literal matching conversation turns |
+| `rekal query --ref <reference>` | Bounded original conversation/passage text or a memory revision |
+| `rekal --cursor <cursor>` | Next page of literal conversation matches |
+| `rekal query --cursor <cursor>` | Next page of source text |
+| Add `--json` | Structured output instead of readable text |
+| Add search `--file`, `--commit`, `--author`, `--actor` | Narrow conversation search; memory filter rules are documented below |
 
-```bash
-# Agent touches src/billing/ — first, recall prior context
-rekal --file src/billing/ "discount logic"
+Literal totals count indexed turns containing the exact case-insensitive query,
+not every related fact, mention occurrence or synonym. They exclude memory notes,
+current files and unsynced history. Follow all pages for an exhaustive literal
+sweep, then judge and deduplicate the evidence. A changed matching set invalidates
+its cursor. Filter-only searches omit the literal block.
 
-# Agent finds a relevant session, drills into the matching turn
-rekal query --session 01JNQX... --offset 10 --limit 5
+Returned references use permanent source IDs. Short `sN` aliases can move when
+the index changes. Repository memory revisions remain historical sources;
+local-memory snapshots expire when edited, removed or disabled. Current prose
+paths should be read from the working repository; a historical note is not proof
+of current code behavior.
 
-# Agent loads full detail only if needed
-rekal query --session 01JNQX... --full
-```
+`--limit` is a per-framing soft bound for ranked sessions and a literal page
+size capped at 100. `--limit 0` returns no literal hits/continuation but still
+reports the total. Native memory returns at most five keyword matches (also
+bounded by an explicit limit); author, path and commit filters apply, while an
+actor filter excludes memory. Knowledge pointers keep their existing independent
+filter behavior. See [recall](spec/command/recall.md) and
+[source reads](spec/command/query.md) for exact output contracts.
+
+Advanced tools remain available: `find` for an unpaged chronological literal
+sweep with a role filter; `query --session` for session metadata, tool calls,
+role filters and explicit turn offsets; SQL for analysis; `evidence` for
+multiple anchors and adjustable windows. They are optional, not extra steps
+required before reading a search result.
+
+## Native memory
+
+Claude project memory is captured by default at checkpoints and shared through
+ordinary push/sync. Explicit personal sources use `scope: local` and remain
+only in the disposable index. `"memory": false` stops new capture/local refresh,
+without erasing repository history. Configuration, observation timestamps,
+deletion behavior and upgrade constraints are in
+[native memory](design/native-memory.md) and [configuration](configuration.md).
 
 ## The agent skill
 
-The raw commands above are the interface; the **skill** is the playbook.
-`rekal init` installs one Claude Code skill under `.claude/skills/rekal/` — a
-thin route (substrate triage + silence + dispatch) plus on-demand `references/`
-and a couple of built-in gate `scripts/` (progressive disclosure). Retrieval and
-navigation are commands in the binary, not scripts. The agent never picks among
-skills; it classifies the question, routes to one substrate, and loads only the
-module it needs. For a question that belongs to the past-reasoning **ledger**, a
-second step classifies the *answer type* and loads exactly one specialist
-workflow — so a "how long", a "how many", and a "when" each get concentrated,
-non-overlapping guidance. Design detail:
-[`design/skill-router.md`](design/skill-router.md).
+`rekal init` installs one Claude Code skill under `.claude/skills/rekal/`.
+It teaches search → read → continue, source attribution and evidence checks.
+The agent decides whether the result answers the question. Specialist reasoning
+references, SQL, map and wiki helpers remain available on demand; there is no
+mandatory substrate classifier or answer-type routing gate.
 
-```mermaid
-flowchart TB
-    tip["SKILL.md route<br/>always loaded, thin"]
-    tip --> triage{"Which substrate?"}
-    triage -->|Tree now| grep["grep / read HEAD"]
-    triage -->|Knowledge| readk["rekal '&lt;q&gt;' → Read HEAD prose"]
-    triage -->|Map| mapf["map.sh fresh → map.md"]
-    triage -->|Ledger / past reasoning| gate{"Answer type?"}
-    gate -->|duration| w1["workflows/duration.md"]
-    gate -->|count / set| w2["workflows/complete-set.md"]
-    gate -->|event time| w3["workflows/event-time.md"]
-    gate -->|inference| w4["workflows/inference.md"]
-    gate -->|fact / why| w5["workflows/point-fact.md"]
-```
-
-| Home | What |
-|-------|------|
-| **Route** (`SKILL.md`) | Thin. Decide substrate: **tree** (grep, now) / **knowledge** (prose at HEAD) / **ledger** (past) / **map**. For a ledger question, classify the answer type and route to exactly one workflow. Trusts reasoning; silence when memory is the wrong tool. |
-| **Commands** (in the binary) | `rekal "<q>"` (seed digest: INJECT/KNOWLEDGE/SILENCE + per-seed confidence), `rekal find` (complete-set sweep), `rekal query --session`/`--sql` (drill / analytical). Compact text by default, `--json` for machines. |
-| **Knowledge** (`references/`) | Rich, on demand: `ledger.md` (reasoning over the past — recall, widen, time-axis, enumeration, why-arcs, provenance, analytical SQL) · `references/workflows/` (five answer-type specialists: duration, complete-set, event-time, inference, point-fact) · map · wiki · flags/SQL. `Read` one and stop. |
-| **Gates** (`scripts/`) | The two workflow gates that remain scripts: `map.sh` (fresh/watermark), `wiki-gate.sh`. |
-
-```mermaid
-flowchart LR
-    j["rekal '&lt;q&gt;'"] --> dg["seed digest"]
-    dg -->|confident episode| i["INJECT + per-seed conf<br/>even if knowledge present"]
-    dg -->|else + knowledge| k["KNOWLEDGE — Read HEAD"]
-    dg -->|else| s["SILENCE"]
-```
-
-Skills are versioned with the binary. After you upgrade, run `rekal init` once
-to refresh them (it leaves your data untouched; legacy `rekal-*` dirs are
-removed).
+Skills are versioned with the binary. After upgrading, run `rekal init` to
+refresh the installed skill without changing captured history. Older router
+designs remain documented as historical designs, not the current default flow.
 
 ### Starting from Claude Code — the plugin
 

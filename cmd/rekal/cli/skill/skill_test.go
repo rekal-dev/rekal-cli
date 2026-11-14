@@ -86,12 +86,12 @@ func TestSkill_ContentHashes(t *testing.T) {
 
 	want := map[string]string{
 		"SKILL.md":                             "d28bfacc76634af2503544f9cf7d25dcd0cf59a1073e685cba08897b71ba2b2f",
-		"references/ledger.md":                 "032b086c88fb09d101dc78c4660a742dd07a2e8af6ada1d6e32ebf8b75275bed",
+		"references/ledger.md":                 "6bbf7fba54424c5bc258862a90b494ce9de794a8686ba4f5462dbd851c152ca8",
 		"references/map.md":                    "9434758a67fcded223659227b0e62c02a9c3a8b6a4f9cb005df00fa02ccbc950",
 		"references/wiki.md":                   "ce117f95ffd1f0d8d70b3d0c1d3401b641f1ef0ca3beb9a1d3812d4c65bc86a1",
-		"references/reference.md":              "ce3129a199577abbfc23b04063db46b8dc409657af8dfdca0ec62b32bbcfd357",
+		"references/reference.md":              "7636164380d0ad786d0d91566773106343fc3cc6d07b19b529abaac4794744e8",
 		"references/workflows/duration.md":     "9fc5acd4920405c5a2e0b69d9cdd9efd9d6247e6c31b7fcdc096c8b2d589949f",
-		"references/workflows/complete-set.md": "ec228f7937c58847116ec0e3cab9e411a245edd4a442f007dc197fdd20b3322d",
+		"references/workflows/complete-set.md": "808b67286aa7e1b6ddc8cf9e6d529cc513d9d9d7fe6f67608cebb2330061a5ff",
 		"references/workflows/event-time.md":   "2e9624e231da7928e348e9e9e5bbc19da1706bd47f18ca233d8e7d21f80b2ed5",
 		"references/workflows/inference.md":    "6299b568adeea38007a29862d7cc1ba321c8f89987a299ad96e425a2f9225e9c",
 		"references/workflows/point-fact.md":   "673e7071db9195c0f95fb4a08d9f7e4b7d23bb8f8b450c28a251d20fa444f826",

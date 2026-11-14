@@ -1,5 +1,8 @@
 # rekal evidence
 
+Advanced multi-anchor reading. For a single search result, use
+`rekal query --ref <reference>` and its returned continuation.
+
 Fetch original evidence from several locations in one bounded call. The agent
 chooses what to fetch; the command handles expansion, deduplication, citations
 and pagination. Data remains local and the ledger is never modified.

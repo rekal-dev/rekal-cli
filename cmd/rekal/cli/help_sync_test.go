@@ -43,6 +43,10 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 			name: "root",
 			mustHave: []string{
 				"seed digest",
+				"LITERAL",
+				"MEMORY",
+				"--cursor",
+				"query --ref",
 				"rekal find",
 				"rekal embed",
 				"--json",
@@ -54,6 +58,9 @@ func TestHelpSync_OutputDefaults(t *testing.T) {
 			cmdPath: []string{"query"},
 			mustHave: []string{
 				"readable turn transcript",
+				"--ref",
+				"--cursor",
+				"Local-memory references expire",
 				"TSV by default",
 				"NDJSON with --json",
 				"JSON instead of the default text/TSV",

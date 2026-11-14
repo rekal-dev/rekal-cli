@@ -143,7 +143,12 @@ Note: turns.ts is a TIMESTAMP, not text. "ts LIKE '2023-05%'" raises a Binder
 error; use ts BETWEEN TIMESTAMP '2023-05-01' AND TIMESTAMP '2023-06-01', or
 CAST(ts AS VARCHAR) LIKE '2023-05%'. turns_ft.ts is a VARCHAR holding the same
 instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
-		Example: `  # Short forms — the compact way to drill a seed from a digest
+		Example: `  # Default: read a returned reference, then follow its continuation
+  rekal query --ref passage:SESSION_ID:12-15
+  rekal query --ref memory:REVISION_ID --json
+  rekal query --cursor CONTINUATION
+
+  # Advanced session metadata and explicit offsets
   rekal query -s s35                      # readable turns
   rekal query -s s35 -o 260 -n 5          # a window around turn 262
   rekal query -s s35 -r human_steering    # only what the human typed

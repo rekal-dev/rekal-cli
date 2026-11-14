@@ -1,7 +1,7 @@
 # Configuration
 
-Rekal is zero-config by default. When you do want to tune it, there is exactly
-one file: `.rekal/config.json` — gitignored, local to the machine, never
+Rekal is zero-config by default. Repository settings live in
+`.rekal/config.json` — gitignored, local to the machine, never
 committed, pushed, or synced.
 
 ```json
@@ -29,6 +29,33 @@ committed, pushed, or synced.
 A local `.rekal/config.json` deep-merges over an optional global
 `~/.config/rekal/config.json` (honoring `$REKAL_CONFIG_HOME` then
 `$XDG_CONFIG_HOME`); precedence is local → global → built-in defaults.
+
+## Native memory
+
+Claude project memory capture is on by default. At checkpoint time, notes become
+repository revisions and follow ordinary push/sync. Personal/account sources are
+not automatically scanned. Add them explicitly with `scope: local` to keep them
+only in the disposable local index.
+
+`memory` and `memory_sources` are repo-local: they do not inherit from global
+configuration and are never synced. `"memory": false` stops new native capture
+and local refresh; historical repository notes remain readable.
+
+```json
+{
+  "memory_sources": [
+    {"name": "claude-project", "adapter": "claude", "scope": "repo"},
+    {"name": "personal", "adapter": "markdown", "scope": "local",
+     "path": "/absolute/path/to/personal/notes"}
+  ]
+}
+```
+
+A nonempty source list replaces default discovery. Custom sources with omitted
+scope are local-only. Paths can be absolute or relative to the primary worktree.
+The Claude adapter can omit its path to use the conventional project directory.
+See [native memory](design/native-memory.md) for size limits, source identities,
+deletion semantics and compatibility. Merge these keys with existing settings.
 
 ## `weights`
 

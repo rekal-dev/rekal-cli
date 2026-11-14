@@ -1,6 +1,8 @@
 # Skill router — one thin route, three homes
 
-> **Historical / superseded for retrieval.** The Python gates this doc describes
+> **Historical / superseded for retrieval and routing.** The current skill
+> defaults to search → query --ref → continuation; specialist workflows are optional.
+> The Python gates this doc describes
 > (`scripts/route.py`, `view.py`, etc.) were folded into the binary — recall
 > returns a seed digest from `digest.go`, drill/SQL/find are `rekal` commands,
 > and relative dates are agent reasoning + SQL (no `when` command). What still

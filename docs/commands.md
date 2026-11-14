@@ -1,6 +1,10 @@
 # Command reference
 
-Every command, every flag, and which of the four substrates each one reaches.
+> This page describes the current main branch. Native memory integration,
+> literal search pagination and `query --ref` are unreleased changes; the
+> v1.0.2 installation does not include them. See the [changelog](../CHANGELOG.md) for release status.
+
+Command flags and source types for search, reading and lifecycle operations.
 Per-command behavioural specs live in [`spec/command/`](spec/command/); this
 page is the flat reference you scan when you already know what you want.
 
@@ -9,10 +13,10 @@ page is the flat reference you scan when you already know what you want.
 
 ---
 
-## The four routes
+## Sources and the default read path
 
-Rekal answers from four different places. Picking the wrong one is the most
-expensive mistake available, because three of them will still return something.
+Use `rekal "<query>"`, then `rekal query --ref <returned-reference>`.
+Source types help interpret evidence; they do not require separate routing.
 
 | Substrate | Question it answers | Reach it with |
 |---|---|---|
@@ -21,9 +25,9 @@ expensive mistake available, because three of them will still return something.
 | **Ledger** | What did we decide, try, reject — and why? | `rekal "<q>"`, `rekal find`, `rekal query` |
 | **Map** | How is the repo structured? | `rekal query --sql` over `files_index` |
 
-Only the **ledger** holds intent. The tree holds present-tense fact, and it is
-always cheaper to grep than to recall. Rekal's own skill (`SKILL.md`, shipped
-inside the binary) routes this automatically for agents.
+Native memory notes are distilled claims returned alongside conversations.
+Current files establish present code behavior; historical sources explain past
+intent. The skill teaches search/read and leaves source judgment to the agent.
 
 A session's **commit message** — subject and body — is folded into its facet
 document, so wording that only ever appeared in a commit still points at the
@@ -40,11 +44,12 @@ every clone already has it.
 
 Recall is the **default action**, not a subcommand — the usage line is
 `rekal [filters...] [query]`. There is no `rekal recall`. It returns the **seed
-digest** (a compact ranked verdict), not raw rows.
+digest** with ranked context, memory notes and literal conversation coverage.
 
 | Flag | Short | Default | Meaning |
 |---|---|---|---|
-| `--limit` | `-n` | 20 | Results per framing. `0` = none, negative rejected. Soft: the RRF-fused union across framings may exceed it |
+| `--limit` | `-n` | 20 | Ranked results per framing (soft fused bound); literal page size capped at 100. `0` returns no hits; literal total remains |
+| `--cursor` | — | — | Continue literal matches with original query/filters; only `--json` may be added |
 | `--json` | `-j` | off | Raw structured JSON instead of the digest |
 | `--explain` | `-e` | off | Per-layer scores + related-session joins (needs `--json`; warns and is otherwise a no-op without it) |
 | `--file` | `-p` | — | Filter by file path (regex) |
@@ -52,9 +57,15 @@ digest** (a compact ranked verdict), not raw rows.
 | `--author` | `-a` | — | Filter by author email |
 | `--actor` | `-A` | — | Filter by actor type (`human`\|`agent`) |
 
-**Exit code 1 means SILENCE** — Rekal found nothing it can stand behind. That
-is a real answer, not an error. Treat it as "the ledger does not know", and go
-look at the tree.
+Text search exits 1 on SILENCE or a command error. Nonempty literal or memory
+hits make the result useful even when ranked confidence is weak. JSON search
+exits 0 for an empty successful result; errors still exit 1. Silence is not proof
+that the historical fact is absent.
+
+Literal matches count indexed turns containing the exact case-insensitive query.
+The block reports total, returned hits and an optional continuation. It excludes
+notes, files, unsynced history and synonyms. Page until no continuation remains
+for that literal sweep; changed matching sets require restarting.
 
 **A query whose first word matches a command name** (`log`, `push`, `sync`,
 `find`, `init`, `clean`, `index`, `embed`, `checkpoint`, `version`, `query`)
@@ -75,7 +86,8 @@ Digest header: `INJECT top=0.71 gap=0.21 15 seeds`
   unlike the max-normalized `score` used for ranking.
 - `gap` — `top` minus the runner-up's confidence. Only load-bearing in the
   middle band: `top ≥ 0.25` passes on its own; `0.20–0.25` needs `gap ≥ 0.02`;
-  below `0.20` is silence. One clearly-best answer is signal, several bunched
+  below `0.20` suppresses the ranked INJECT block. Literal/memory hits can still
+  make the response useful. One clearly-best answer is signal, several bunched
   together is noise.
 - `[reached N× drilled M×· "query"]` — usage history. `reached` is how often
   search surfaced this memory (the engine quoting itself — high on any small
@@ -89,18 +101,25 @@ keyword+LSA only. Re-run with backoff for full quality.
 
 ### `rekal find "<term>" [role]` — enumeration
 
-Complete, time-ordered sweep over every turn. No ranking, no silence gate, no
-cutoff. Use it when you need *all* occurrences and recall's top-N would lie by
-omission — counting, auditing, "did we ever mention X". `role` is optional:
+Advanced, unpaged, time-ordered literal sweep over matching turns. Ordinary
+search already includes paginated literal coverage; use find for its chronological
+text output or role filter. It counts matching turns, not occurrences or facts. `role` is optional:
 `human`, `assistant`, `human_steering`, `summary`.
 
-### `rekal query` — drill-down and SQL
+### `rekal query` — source reading, advanced sessions and SQL
 
-Two mutually exclusive modes. `--sql`, a bare positional statement, and
-`--session` cannot be combined.
+Default flow: `query --ref <reference>`, then `query --cursor <next>` when
+needed. A page holds up to 16,000 source-text bytes and 80 conversation slices;
+UTF-8 is preserved. Metadata adds bytes. Repository memory refs are historical;
+local snapshot refs can expire. See [query spec](spec/command/query.md).
+
+Reference/cursor reads cannot be combined with legacy session/SQL options.
+`--sql`, a bare positional statement, and `--session` remain mutually exclusive.
 
 | Flag | Short | Default | Meaning |
 |---|---|---|---|
+| `--ref` | — | — | Read a canonical source ref or session alias |
+| `--cursor` | — | — | Continue a source read |
 | `--session` | `-s` | — | Drill into one session by short handle (`s3`) or ULID |
 | `--sql` | `-q` | — | SQL SELECT to run (a bare positional is accepted as shorthand) |
 | `--index` | `-i` | off | Run SQL against `index.db` instead of `data.db` |
@@ -130,7 +149,7 @@ rekal query -i -q "SELECT count(*) FROM turns_ft"
 | Command | What it does |
 |---|---|
 | `rekal init` | Bootstrap: store, hooks, orphan branch, skill, one CLAUDE.md line. Re-running refreshes managed assets. |
-| `rekal checkpoint` | Capture the session against the current commit. Runs automatically via post-commit; no-ops during a rebase. |
+| `rekal checkpoint` | Capture sessions and repository memory against the current commit. Runs automatically via post-commit; no-ops during a rebase. |
 | `rekal index` | Rebuild `index.db` from `data.db`. Structural only — vectors fill via background `rekal embed`. |
 | `rekal embed` | Fill missing semantic vectors in budgeted bites. Resumable, safe to interrupt. |
 | `rekal log` | Recent checkpoints. `--limit` / `-n`, default 20. |

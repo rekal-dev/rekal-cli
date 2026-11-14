@@ -14,7 +14,8 @@ import (
 const readingTheDigest = `
 
 Reading the seed digest:
-  Recall answers with one header line, then one line per session it found.
+  Search returns ranked context plus literal conversation matches and memory notes.
+  Follow a returned reference with rekal query --ref <reference>.
 
     INJECT top=0.87 gap=0.24 20 seeds
       s35 conf=0.87 t262 [reached 9× drilled 2×· "rebase capture"] "Now the integration test proving…"
@@ -29,12 +30,19 @@ Reading the seed digest:
     gap=        top minus the runner-up, so one clear answer reads apart from a tie
 
   Seed line
-    s35         short id for this call; pass it to 'rekal query -s s35'
+    s35         local alias; may move after reindex. Save returned canonical refs.
     conf=0.87   absolute confidence — judge relevance from this plus the snippet
-    t262        turn index of the match; drill around it with -o 260 -n 5
+    t262        turn index of the match; open the returned passage reference
     [reached…]  usage history: how often search surfaced it, how often an agent
                 opened it. A drill is the load-bearing signal; surfacing is not.
 
+  LITERAL     matching indexed turns for the exact case-insensitive substring
+                returned/total show coverage; follow 'more:' to continue.
+                Counts turns, not facts; excludes notes, files and unsynced history.
+  MEMORY      a repository revision or local-only snapshot; read its ref.
+  Both can appear without INJECT. Nonempty literal/memory hits exit 0.
+  Search pages: rekal --cursor <cursor>
+  Source pages: rekal query --cursor <cursor>
   The verdict is a recommendation, not a decision. You judge.
 
 Filters and flags (short forms are the cheapest to type and to emit):
@@ -44,11 +52,13 @@ Filters and flags (short forms are the cheapest to type and to emit):
   -A, --actor <type>    human or agent
   -n, --limit <int>     Results per framing (default 20; 0 = none). Soft:
                         the fused union across framings may exceed it.
-                        Note: 'query -n' means the opposite — there, 0 = no limit
+                        Literal pages use this limit (cap 100); 0 shows totals only.
+                        Legacy 'query --session -n 0' means unlimited; --ref is bounded.
   -j, --json            Raw structured JSON instead of the digest
   -e, --explain         Per-layer scores and related sessions (needs --json)
 
-  Filters combine, and they narrow the session search only — the KNOWLEDGE
+  Filters combine, and narrow session/literal search. Memory applies author, path,
+  commit and limit filters; --actor excludes memory. The KNOWLEDGE
   line is prose at HEAD and ignores them.
 
   A query whose first word matches a command name (log, push, sync, find,
@@ -60,8 +70,11 @@ Filters and flags (short forms are the cheapest to type and to emit):
 Workflow:
   rekal "keyword"                Search sessions → seed digest (-j for raw)
   rekal -p auth "token refresh"  Filter by file path
-  rekal find "auth middleware"   Every ledger mention of a term (complete, time order)
-  rekal query -s <id>            Drill into a session (readable turns; -j for raw)
+  rekal query --ref <reference>  Read a returned conversation, passage or memory
+  rekal --cursor <cursor>       Continue literal search matches
+  rekal query --cursor <cursor> Continue source text
+  rekal find "auth middleware"   Advanced unpaged, time-ordered literal sweep
+  rekal query -s <id>            Advanced session metadata and turn access
   rekal query -s <id> -F         Include tool calls and files
   rekal query "SELECT ..."       Raw SQL → TSV rows (complete-set / temporal / analytical;
                                  -j for NDJSON; see 'rekal query --help' for schema)

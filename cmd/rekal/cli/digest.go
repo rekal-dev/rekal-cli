@@ -10,11 +10,9 @@ import (
 	"github.com/rekal-dev/rekal-cli/cmd/rekal/cli/search"
 )
 
-// digest is the in-binary port of the skill's route.py: it turns a recall
-// result into the agent-facing seed digest (INJECT / KNOWLEDGE / SILENCE +
-// per-seed `conf=`), byte-identical to route.py. Labels are recommendations,
-// not decisions — a super-low, env-overridable confidence floor only
-// machine-silences the empty/near-zero case; the agent weighs `conf=`.
+// digest renders ranked recommendations plus literal coverage and memory hits.
+// Ranked confidence gates are environment-overridable; literal and memory hits
+// remain visible independently. The agent decides what the evidence supports.
 
 const (
 	digestWindow       = 20

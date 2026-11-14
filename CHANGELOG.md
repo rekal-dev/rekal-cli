@@ -14,6 +14,9 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ### Fixed
 
+- Coordinate index replacement with live readers and writers so background
+  embedding cannot replay an old WAL against a rebuilt index.
+
 - Keep embedded semantic retrieval working on hosts that deny Unix sockets using
   a pipe-connected child worker. Native model crashes remain isolated; ordinary
   hosts continue to reuse the warm daemon.

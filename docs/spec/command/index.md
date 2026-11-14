@@ -1,6 +1,6 @@
 # rekal index
 
-**Role:** Full rebuild of the local index from retained history, current prose and available configured local sources. Builds into `index.db.rebuilding`, then atomically renames over the live index only on success — a failed rebuild leaves the previous index untouched. The ledger stays unchanged; local-only snapshots require their native source files.
+**Role:** Full rebuild of the local index from retained history, current prose and available configured local sources. Builds into `index-rebuilding-*.db`, then waits for live index handles to close and atomically renames over the live index only on success — a failed rebuild leaves the previous index untouched. The ledger stays unchanged; local-only snapshots require their native source files.
 
 **Invocation:** `rekal index`.
 
@@ -16,7 +16,7 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 
 1. **Run shared preconditions** — Git root, init done.
 2. **Open index DB** — Load FTS extension.
-3. **Open a fresh temp index** — Create schema in `index.db.rebuilding` (empty file; nothing to drop). The live `index.db` is not opened for write until the final rename.
+3. **Open a fresh temp index** — Create schema in `index-rebuilding-*.db` (empty file; nothing to drop). The live `index.db` is not opened for write until the final rename.
 4. **Populate from data DB** — Attach `data.db` read-only and bulk-insert:
    - `turns_ft` — All turns from `data_db.turns`
    - `tool_calls_index` — All tool calls from `data_db.tool_calls`

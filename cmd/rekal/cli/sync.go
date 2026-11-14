@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -124,7 +125,14 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	// comment in index_cmd.go: the old in-place drop-then-repopulate could
 	// leave index.db half-built if interrupted mid-rebuild).
 	livePath := db.IndexPath(gitRoot)
-	tmpPath := livePath + ".rebuilding"
+	temp, err := os.CreateTemp(filepath.Dir(livePath), "index-rebuilding-*.db")
+	if err != nil {
+		return fmt.Errorf("create rebuild path: %w", err)
+	}
+	tmpPath := temp.Name()
+	if err := temp.Close(); err != nil {
+		return err
+	}
 	_ = os.Remove(tmpPath)
 	_ = os.Remove(tmpPath + ".wal")
 
@@ -137,6 +145,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 		indexDB.Close()
 		if !rebuildOK {
 			_ = os.Remove(tmpPath)
+			_ = os.Remove(tmpPath + ".wal")
 		}
 	}()
 
@@ -295,7 +304,7 @@ func runSyncTeam(cmd *cobra.Command, gitRoot string) error {
 	if err := indexDB.Close(); err != nil {
 		return fmt.Errorf("close rebuilt index: %w", err)
 	}
-	if err := os.Rename(tmpPath, livePath); err != nil {
+	if err := db.ReplaceIndex(tmpPath, livePath); err != nil {
 		return fmt.Errorf("replace index db: %w", err)
 	}
 	rebuildOK = true

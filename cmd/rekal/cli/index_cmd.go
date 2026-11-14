@@ -199,10 +199,17 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	w := cmd.ErrOrStderr()
 
 	livePath := db.IndexPath(gitRoot)
-	tmpPath := livePath + ".rebuilding"
+	temp, err := os.CreateTemp(filepath.Dir(livePath), "index-rebuilding-*.db")
+	if err != nil {
+		return fmt.Errorf("create rebuild path: %w", err)
+	}
+	tmpPath := temp.Name()
+	if err := temp.Close(); err != nil {
+		return err
+	}
 
-	// Clear any leftover temp file (and its WAL, if DuckDB left one behind)
-	// from a previous interrupted rebuild before starting a fresh one.
+	// DuckDB must create the file itself. A unique path prevents concurrent
+	// rebuilds from deleting or opening one another's temporary database.
 	_ = os.Remove(tmpPath)
 	_ = os.Remove(tmpPath + ".wal")
 
@@ -219,6 +226,7 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 		indexDB.Close()
 		if !rebuildOK {
 			_ = os.Remove(tmpPath)
+			_ = os.Remove(tmpPath + ".wal")
 		}
 	}()
 
@@ -347,7 +355,7 @@ func runIndex(cmd *cobra.Command, gitRoot string) error {
 	if err := indexDB.Close(); err != nil {
 		return fmt.Errorf("close rebuilt index: %w", err)
 	}
-	if err := os.Rename(tmpPath, livePath); err != nil {
+	if err := db.ReplaceIndex(tmpPath, livePath); err != nil {
 		return fmt.Errorf("replace index db: %w", err)
 	}
 	rebuildOK = true

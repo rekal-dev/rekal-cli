@@ -108,7 +108,7 @@ func openDSN(dsn, path string) (*sql.DB, error) {
 		// The single-writer lock conflict can surface either at sql.Open (the
 		// go-duckdb connector opens the file eagerly) or at Ping — handle both
 		// through one retry path.
-		db, err := sql.Open("duckdb", dsn)
+		db, err := openCoordinated(dsn, path)
 		if err == nil {
 			if err = db.Ping(); err == nil {
 				// DuckDB + go-duckdb are not safe with database/sql's default

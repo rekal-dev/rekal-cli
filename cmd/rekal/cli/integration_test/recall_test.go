@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,11 +75,9 @@ func TestIndex_FailedRebuildLeavesLiveIndexIntact(t *testing.T) {
 	}
 
 	// No leftover temp file from the failed rebuild.
-	tmpPath := db.IndexPath(env.RepoDir) + ".rebuilding"
-	if _, err := os.Stat(tmpPath); err == nil {
-		t.Errorf("expected no leftover temp file at %s after a failed rebuild", tmpPath)
-	} else if !os.IsNotExist(err) {
-		t.Errorf("unexpected error stat-ing temp file: %v", err)
+	leftovers, err := filepath.Glob(filepath.Join(filepath.Dir(db.IndexPath(env.RepoDir)), "index-rebuilding-*.db*"))
+	if err != nil || len(leftovers) != 0 {
+		t.Fatalf("leftover rebuild files: %v, error: %v", leftovers, err)
 	}
 }
 

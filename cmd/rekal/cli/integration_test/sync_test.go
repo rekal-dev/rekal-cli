@@ -3,7 +3,7 @@
 package integration
 
 import (
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -83,10 +83,8 @@ func TestSync_Team_FailedRebuildLeavesNoTempFile(t *testing.T) {
 		t.Fatalf("expected sync's rebuild to fail after corrupting data.db, but it succeeded\nstderr: %s", stderr)
 	}
 
-	tmpPath := db.IndexPath(env.RepoDir) + ".rebuilding"
-	if _, err := os.Stat(tmpPath); err == nil {
-		t.Errorf("expected no leftover temp file at %s after a failed sync rebuild", tmpPath)
-	} else if !os.IsNotExist(err) {
-		t.Errorf("unexpected error stat-ing temp file: %v", err)
+	leftovers, err := filepath.Glob(filepath.Join(filepath.Dir(db.IndexPath(env.RepoDir)), "index-rebuilding-*.db*"))
+	if err != nil || len(leftovers) != 0 {
+		t.Fatalf("leftover rebuild files: %v, error: %v", leftovers, err)
 	}
 }

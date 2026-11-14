@@ -222,7 +222,7 @@ func TestHelpSync_SpecPhrasesMatchDefaults(t *testing.T) {
 		{
 			rel: "docs/spec/command/index.md",
 			mustHave: []string{
-				"index.db.rebuilding",
+				"index-rebuilding-*.db",
 				"atomically",
 			},
 			mustNot: []string{"Drop and recreate all index tables"},

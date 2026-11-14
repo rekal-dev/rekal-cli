@@ -382,10 +382,9 @@ func TestIndex_KnowledgeAlwaysBuiltFresh(t *testing.T) {
 	if err := runIndex(cmd, dir); err != nil {
 		t.Fatalf("runIndex: %v", err)
 	}
-	if _, err := os.Stat(db.IndexPath(dir) + ".rebuilding"); err == nil {
-		t.Fatal("leftover index.db.rebuilding after successful rebuild")
-	} else if !os.IsNotExist(err) {
-		t.Fatalf("stat rebuilding: %v", err)
+	leftovers, err := filepath.Glob(filepath.Join(filepath.Dir(db.IndexPath(dir)), "index-rebuilding-*.db*"))
+	if err != nil || len(leftovers) != 0 {
+		t.Fatalf("leftover rebuild files: %v, error: %v", leftovers, err)
 	}
 
 	live, err := db.OpenIndex(dir)

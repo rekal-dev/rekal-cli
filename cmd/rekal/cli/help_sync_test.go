@@ -234,6 +234,10 @@ func TestHelpSync_SpecPhrasesMatchDefaults(t *testing.T) {
 		},
 		{
 			rel: "README.md",
+			mustHave: []string{"docs/overview.md", "docs/commands.md"},
+		},
+		{
+			rel: "docs/overview.md",
 			mustHave: []string{
 				"`rekal find",
 				"`rekal embed`",

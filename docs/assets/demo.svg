@@ -34,8 +34,7 @@
 <text x="40" y="422" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Committed · context captured by Rekal</text>
 </g>
 <g class="row" style="animation-delay:11s">
-<text x="40" y="466" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Merged + pushed · eligible context shared</text>
-<text x="40" y="490" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >through Git</text>
+<text x="40" y="466" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Context shared with the team through Git</text>
 </g>
 <rect x="560" y="100" width="520" height="482" rx="12" fill="#0c0c12" stroke="#2d2d38"/>
 <circle cx="580" cy="124" r="4" fill="#fb7185"/>
@@ -49,8 +48,8 @@
 <text x="580" y="242" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:13.75s">exports, then add date filters.</text>
 </g>
 <g class="row" style="animation-delay:17s">
-<text x="580" y="286" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >Rekal · sync shared history → search → read</text>
-<text x="580" y="310" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >Alex’s session</text>
+<text x="580" y="286" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >Found Alex’s export context in the team’s</text>
+<text x="580" y="310" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >shared history.</text>
 </g>
 <g class="row" style="animation-delay:19s">
 <text x="580" y="354" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >Alex chose UTC for reconciliation, excluded</text>
@@ -63,5 +62,5 @@
 <g class="row" style="animation-delay:25s">
 <text x="580" y="490" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Date filters added · tests pass</text>
 </g>
-<text x="28" y="614" fill="#9292a3" font-size="14" font-family="DejaVu Sans Mono,monospace" >Illustrative agent sessions · setup first · capture → merge/push → sync</text>
+<text x="28" y="614" fill="#9292a3" font-size="14" font-family="DejaVu Sans Mono,monospace" >Ask your agent. It finds the context and does the work. · Illustrative sessions</text>
 </svg>

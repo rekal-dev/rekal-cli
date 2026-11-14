@@ -27,7 +27,7 @@
       {
         "at": 11,
         "kind": "status",
-        "text": "Merged + pushed · eligible context shared through Git"
+        "text": "Context shared with the team through Git"
       }
     ]
   },
@@ -44,7 +44,7 @@
       {
         "at": 17,
         "kind": "tool",
-        "text": "Rekal · sync shared history → search → read Alex’s session"
+        "text": "Found Alex’s export context in the team’s shared history."
       },
       {
         "at": 19,

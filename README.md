@@ -20,10 +20,6 @@ One binary. Local embeddings by default. No hosted memory account required.
 
 ## Get context. Then get to work.
 
-After setup, ask your coding agent:
-
-> Please Rekal the context around invoice exports, then add date filters.
-
 [![Alex builds invoice exports with Claude Code; Sam uses that context in Codex to add date filters](docs/assets/demo.svg)](https://rekal.dev/#demo)
 
 Your agent finds relevant context from your team and past work, reads the

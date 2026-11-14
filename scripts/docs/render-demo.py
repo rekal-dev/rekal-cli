@@ -42,6 +42,6 @@ for col, person in enumerate(story):
         parts.append("</g>")
         y += 20
     assert y < 585, y
-text(28, 614, "Illustrative agent sessions · setup first · capture → merge/push → sync", "#9292a3", 14)
+text(28, 614, "Ask your agent. It finds the context and does the work. · Illustrative sessions", "#9292a3", 14)
 parts.append("</svg>")
 Path("docs/assets/demo.svg").write_text("\n".join(parts)+"\n")

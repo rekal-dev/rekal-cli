@@ -92,6 +92,7 @@ type Related struct {
 
 // Result is a single search result for JSON output.
 type Result struct {
+	Ref       string `json:"ref,omitempty"`
 	SessionID string `json:"session_id"`
 	// Sid is the query-time short handle (s1, s2, …) derived from
 	// index.db via ROW_NUMBER() OVER (ORDER BY session_id). Agents should
@@ -195,7 +196,8 @@ type SessionDetail struct {
 }
 
 type Output struct {
-	Memories []MemoryHit `json:"memories,omitempty"`
+	Literal  *LiteralPage `json:"literal,omitempty"`
+	Memories []MemoryHit  `json:"memories,omitempty"`
 	// Knowledge holds the knowledge layer's file hits — what the repo's
 	// prose files at HEAD currently say about the query, as pointers, with
 	// provenance edges into sessions (docs/design/knowledge-layer.md).

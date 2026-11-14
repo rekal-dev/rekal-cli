@@ -197,6 +197,9 @@ func writeDigestRows(b *strings.Builder, results []search.Result) {
 		}
 		fmt.Fprintf(b, "  %s conf=%.2f %s%s \"%s\"\n",
 			sid, r.Confidence, pointer, reachHint(r.Reached), digestSnippet(r.Snippet))
+		if r.Ref != "" {
+			fmt.Fprintf(b, "    read: rekal query --ref %s\n", r.Ref)
+		}
 		if len(r.Anchors) > 1 || (len(r.Anchors) == 1 && (r.Anchors[0].StartByte > 0 || r.Anchors[0].EndByte > 0)) {
 			var refs []string
 			for _, a := range r.Anchors {
@@ -230,8 +233,20 @@ func formatDigest(out *search.Output) (string, int) {
 	warming := out.Semantic != nil && out.Semantic.Retryable
 
 	finish := func(code int) (string, int) {
+		if out.Literal != nil {
+			fmt.Fprintf(&b, "LITERAL returned=%d total=%d scope=%q\n", len(out.Literal.Hits), out.Literal.Total, out.Literal.Scope)
+			for _, h := range out.Literal.Hits {
+				fmt.Fprintf(&b, "  ref=%s role=%s %q\n", h.Ref, h.Role, h.Snippet)
+			}
+			if out.Literal.Next != "" {
+				fmt.Fprintf(&b, "  more: rekal --cursor %s\n", out.Literal.Next)
+			}
+			if len(out.Literal.Hits) > 0 {
+				code = 0
+			}
+		}
 		for _, m := range out.Memories {
-			fmt.Fprintf(&b, "MEMORY ref=%s source=%q scope=%q path=%q matched_terms=%d\n  %q\n  query --index --sql %q\n", m.Ref, m.Source.Name, m.Source.Scope, m.Path, m.MatchedTerms, m.Snippet, m.SQL)
+			fmt.Fprintf(&b, "MEMORY ref=%s source=%q scope=%q path=%q matched_terms=%d\n  %q\n  rekal query --ref %s\n", m.Ref, m.Source.Name, m.Source.Scope, m.Path, m.MatchedTerms, m.Snippet, m.Ref)
 			if len(m.Anchors) > 0 {
 				fmt.Fprintf(&b, "  anchors=%s (explicit citations, unverified)\n", strings.Join(m.Anchors, ","))
 			}
@@ -270,7 +285,7 @@ func formatDigest(out *search.Output) (string, int) {
 	if reason == "" {
 		reason = "below_gate"
 	}
-	if len(out.Memories) == 0 {
+	if len(out.Memories) == 0 && (out.Literal == nil || len(out.Literal.Hits) == 0) {
 		fmt.Fprintf(&b, "SILENCE reason=%s\n", reason)
 	}
 	return finish(1)

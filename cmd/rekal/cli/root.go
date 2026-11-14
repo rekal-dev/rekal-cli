@@ -104,6 +104,7 @@ func resolveRecallLimit(cmd *cobra.Command, flag int) (limit int, explicit bool,
 // NewRootCmd returns the root command for the rekal CLI.
 func NewRootCmd() *cobra.Command {
 	var (
+		cursorFlag   string
 		fileFilter   string
 		commitFilter string
 		authorFilter string
@@ -119,7 +120,7 @@ func NewRootCmd() *cobra.Command {
 		Long:  "Rekal gives your agent precise memory — the exact context it needs for what it's working on." + readingTheDigest,
 		Example: `  # Ask why something is the way it is, then read the conversation behind it
   rekal "why is the ledger append-only"
-  rekal query -s s35 -o 260 -n 5
+  rekal query --ref passage:SESSION_ID:260-264
 
   # Narrow to one file's history, or to the work behind one commit
   rekal -p "cmd/rekal/cli/push.go" "force flag"
@@ -155,7 +156,7 @@ func NewRootCmd() *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If no args and no filters, show help.
-			if len(args) == 0 && fileFilter == "" && commitFilter == "" &&
+			if cursorFlag == "" && len(args) == 0 && fileFilter == "" && commitFilter == "" &&
 				authorFilter == "" && actorFilter == "" {
 				return cmd.Help()
 			}
@@ -166,6 +167,12 @@ func NewRootCmd() *cobra.Command {
 				return err
 			}
 
+			if cursorFlag != "" {
+				if len(args) > 0 || fileFilter != "" || commitFilter != "" || authorFilter != "" || actorFilter != "" || cmd.Flags().Changed("limit") || explainFlag {
+					return fmt.Errorf("--cursor carries its original query and filters; use it alone with optional --json")
+				}
+				return runLiteralContinuation(cmd, gitRoot, cursorFlag, jsonFlag)
+			}
 			limit, explicit, err := resolveRecallLimit(cmd, limitFlag)
 			if err != nil {
 				fmt.Fprintln(cmd.ErrOrStderr(), err)
@@ -201,6 +208,7 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&cursorFlag, "cursor", "", "Continue the literal matches from a previous search")
 	// Recall filter flags on root command.
 	cmd.Flags().StringVarP(&fileFilter, "file", "p", "", "Filter by file path (regex)")
 	cmd.Flags().StringVarP(&commitFilter, "commit", "c", "", "Filter by git commit SHA")

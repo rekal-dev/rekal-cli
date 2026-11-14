@@ -239,7 +239,9 @@ $ rekal --json "should webhook retries use a fixed delay?"
 | `rekal embed` | Fill missing semantic embeddings (resumable; also started after index/sync) |
 | `rekal log [--limit N]` | Show recent checkpoints |
 | `rekal find "<term>" [role]` | Enumerate every ledger mention of a term (complete, time order) |
-| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [--json] [query]` | Hybrid search → seed digest by default; `--json` for raw structured results; `--explain` adds per-layer scores |
+| `rekal [--file <re>] [--commit <sha>] [--author <email>] [--actor human\|agent] [-n N] [--explain] [--json] [query]` | Hybrid search plus paginated literal conversation matches; `--json` for raw structured results; `--explain` adds per-layer scores |
+| `rekal query --ref <reference> [--json]` | Read a conversation, passage or memory note; follow the returned continuation |
+| `rekal --cursor <cursor>` / `rekal query --cursor <cursor>` | Continue search matches / source reading |
 | `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full] [--json]` | Drill into a session — readable turns by default; `--json` for one object |
 | `rekal query --sql "<sql>" [--index] [--json]` | Raw SQL → TSV by default; `--json` for NDJSON |
 
@@ -358,7 +360,7 @@ Day-to-day: commit and push as normal. Everything else is automatic.
 ### What your agent does
 
 Your agent recalls with `rekal "<query>"` — the compact seed digest it acts on
-directly — and drills into any session with `rekal query --session <id>`,
+directly — and reads returned sources with `rekal query --ref <reference>`,
 controlling how much context it loads: search first, drill progressively, full
 sessions only when needed. The complete command surface and the
 progressive-loading pattern are in **[docs/usage.md](docs/usage.md)**.

@@ -107,3 +107,20 @@ that is what a `0.x` is for. The append-only store and wire designs are not new
 at 1.0 — schema migration on open and skip-unknown frame decoding have been in
 the codebase throughout — but they were never written down as a promise until
 now, and this page is where they become one.
+
+## Planned major search interface
+
+The unreleased interface uses ordinary search for ranked context plus literal
+conversation enumeration, and `rekal query --ref` for bounded source reads.
+Default text output changes; JSON adds `ref` and `literal` fields. Existing
+`find`, session queries, SQL and evidence commands remain supported.
+
+This interface change does not rewrite commits, append to commit bodies, or
+require a force push. Canonical references use session IDs and memory revision
+IDs, not disposable `sN` numbering. Rebuilding the index from the same retained
+sources preserves these references. Local note snapshots may expire.
+
+No special reindex is required solely for search/read routing. An absent or stale
+index still needs normal rebuilding/sync; this change does not automatically
+backfill historical passage vectors. Memory wire compatibility and the need to
+upgrade all memory-bearing branch writers remain separate requirements.

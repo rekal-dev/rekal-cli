@@ -439,6 +439,13 @@ func runRecall(cmd *cobra.Command, gitRoot string, filters search.Filters, jsonC
 		out.Memories = hits
 	}
 
+	search.AttachReadReferences(out.Results)
+	if literal, err := search.LiteralMatches(indexDB, filters, ""); err != nil {
+		return fmt.Errorf("literal coverage unavailable: %w", err)
+	} else {
+		out.Literal = literal
+	}
+
 	// L1 recall citation graph. Read the reach hint FIRST (the state before
 	// this call, so a session's own recall never inflates the number shown
 	// now), attach it to the surfaced seeds, THEN spool this recall's edges for

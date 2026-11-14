@@ -12,6 +12,14 @@ starts at 1.0; it records what 1.0 ships and everything after.
 
 ### Added
 
+- Ordinary search now includes paginated literal conversation matches alongside
+  ranked results. Coverage totals explicitly count indexed matching turns.
+  A single `query --ref` reads conversations, passages and memory revisions;
+  bounded reads return continuations and canonical source IDs. The agent skill
+  defaults to search/read rather than requiring separate retrieval routes.
+  Existing advanced commands remain available. This changes default text output
+  and adds JSON fields; it is intended for the next major interface release.
+
 - Native Claude project memory is captured by default during ordinary
   checkpoints and found through recall. Missing default directories are quiet;
   `"memory": false` opts out. Repository notes follow ordinary conversation sharing;

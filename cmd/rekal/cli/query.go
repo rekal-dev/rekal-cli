@@ -30,20 +30,27 @@ func logDrillEdge(gitRoot, sessionID string) {
 
 func newQueryCmd() *cobra.Command {
 	var (
-		useIndex  bool
-		sessionID string
-		sqlFlag   string
-		full      bool
-		offset    int
-		limit     int
-		role      string
-		jsonFlag  bool
+		reference  string
+		readCursor string
+		useIndex   bool
+		sessionID  string
+		sqlFlag    string
+		full       bool
+		offset     int
+		limit      int
+		role       string
+		jsonFlag   bool
 	)
 
 	cmd := &cobra.Command{
-		Use:   "query [--sql \"<statement>\" | <sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]]",
-		Short: "Run raw SQL or drill into a session",
-		Long: `Run raw SQL against the data or index DB, or drill into a specific session.
+		Use:   "query [--ref <reference> | --cursor <continuation> | --sql \"<statement>\" | <sql> | --session <id> [--full] [--offset N] [--limit N] [--role human|assistant|human_steering|summary]]",
+		Short: "Read a returned reference; advanced session and SQL access",
+		Long: `Read a search result with --ref. Conversations, passages and memory notes use
+the same bounded read path. Follow --cursor when a response returns more.
+Returned references use permanent source IDs; sN handles are local aliases.
+Local-memory references expire when the local note changes.
+
+Advanced: run raw SQL against the data or index DB, or drill into a session.
 
 Session drill-down (--session) prints a readable turn transcript by default
 (compact text an agent can act on). Add --json for a single JSON object,
@@ -193,6 +200,12 @@ instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
 				return err
 			}
 
+			if reference != "" || readCursor != "" {
+				if len(args) > 0 || sessionID != "" || sqlFlag != "" || useIndex || full || cmd.Flags().Changed("offset") || cmd.Flags().Changed("limit") || role != "" {
+					return fmt.Errorf("--ref/--cursor is a bounded source read; do not combine with session or SQL options")
+				}
+				return runReferenceRead(cmd, gitRoot, reference, readCursor, jsonFlag)
+			}
 			// SQL statement comes from explicit --sql or the positional
 			// shorthand — never both.
 			sqlStmt := sqlFlag
@@ -230,6 +243,8 @@ instant as text, so compare it as text (or CAST it to TIMESTAMP first).`,
 		},
 	}
 
+	cmd.Flags().StringVar(&reference, "ref", "", "Read a returned source reference (session, passage or memory)")
+	cmd.Flags().StringVar(&readCursor, "cursor", "", "Continue a bounded source read")
 	cmd.Flags().StringVarP(&sqlFlag, "sql", "q", "", "SQL SELECT statement to run (explicit SQL mode; a bare positional statement is accepted as shorthand)")
 	cmd.Flags().BoolVarP(&useIndex, "index", "i", false, "Run SQL against the index DB instead of the data DB")
 	cmd.Flags().StringVarP(&sessionID, "session", "s", "", "Show session conversation by short handle (s3) or ULID")

@@ -14,7 +14,7 @@ import (
 )
 
 // ledgerWorkflows are the five answer-type specialist workflows, in the exact
-// order the SKILL.md routing gate must list them (ordered, exclusive routing).
+// order the SKILL.md optional workflow list must list them (stable documentation order).
 var ledgerWorkflows = []string{
 	"references/workflows/duration.md",
 	"references/workflows/complete-set.md",
@@ -34,8 +34,7 @@ func rekalSkill(t *testing.T) Skill {
 }
 
 // TestSkill_LedgerWorkflowGate verifies the progressive answer-type routing: the
-// five workflow files are embedded, SKILL.md routes to them in order (ordered,
-// exclusive), the final-answer contract is present, and the contradictory
+// five workflow files are embedded, SKILL.md routes to them in order (stable order), the final-answer contract is present, and the contradictory
 // "keep relative phrases relative" advice is gone.
 func TestSkill_LedgerWorkflowGate(t *testing.T) {
 	t.Parallel()
@@ -53,11 +52,11 @@ func TestSkill_LedgerWorkflowGate(t *testing.T) {
 	for _, w := range ledgerWorkflows {
 		idx := strings.Index(s.Content, w)
 		if idx < 0 {
-			t.Errorf("SKILL.md routing gate does not reference %s", w)
+			t.Errorf("SKILL.md optional workflow list does not reference %s", w)
 			continue
 		}
 		if strings.Count(s.Content, w) != 1 {
-			t.Errorf("SKILL.md references %s %d times, want exactly 1 (exclusive routing)", w, strings.Count(s.Content, w))
+			t.Errorf("SKILL.md references %s %d times, want exactly 1 (one link per workflow)", w, strings.Count(s.Content, w))
 		}
 		if idx <= prev {
 			t.Errorf("SKILL.md lists %s out of order (index %d after %d)", w, idx, prev)
@@ -86,7 +85,7 @@ func TestSkill_ContentHashes(t *testing.T) {
 	s := rekalSkill(t)
 
 	want := map[string]string{
-		"SKILL.md":                             "2fcfa663b3e9da9f303fcb7e5e0a1a6c9ad13eadfa6549e2eeb922c9416e90bd",
+		"SKILL.md":                             "d28bfacc76634af2503544f9cf7d25dcd0cf59a1073e685cba08897b71ba2b2f",
 		"references/ledger.md":                 "032b086c88fb09d101dc78c4660a742dd07a2e8af6ada1d6e32ebf8b75275bed",
 		"references/map.md":                    "9434758a67fcded223659227b0e62c02a9c3a8b6a4f9cb005df00fa02ccbc950",
 		"references/wiki.md":                   "ce117f95ffd1f0d8d70b3d0c1d3401b641f1ef0ca3beb9a1d3812d4c65bc86a1",

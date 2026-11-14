@@ -85,12 +85,16 @@ cmake -B build \
   -DLLAMA_METAL=ON \          # macOS only — omit on Linux
   -DLLAMA_BUILD_TESTS=OFF \
   -DLLAMA_BUILD_EXAMPLES=OFF \
-  -DLLAMA_BUILD_SERVER=OFF \
+  -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF \
   -DBUILD_SHARED_LIBS=OFF \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc) --target llama --target ggml --target common
 cd ../..
 ```
+
+`LLAMA_OPENSSL=OFF` excludes llama.cpp’s unused HTTPS downloader. Rekal loads
+the bundled model from a local file; its Go HTTP embedding backend uses Go TLS
+and is unaffected. This also avoids host OpenSSL API drift in native builds.
 
 On Linux without GPU, omit `-DLLAMA_METAL=ON`. The nomic package gracefully degrades on unsupported platforms — if the build isn't available, embeddings are skipped and search falls back to BM25 + LSA.
 

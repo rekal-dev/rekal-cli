@@ -58,7 +58,8 @@ rekal clean
 - Removes the marker-tagged `CLAUDE.md` sentence (deleting the file only if
   nothing else remains)
 
-No residue. If you want to start over, run `clean` then `init`.
+This deletes local captured history. It does not retract remote branches or
+teammates' copies. Back up required local history before starting over.
 
 ```bash
 rekal version
@@ -73,11 +74,14 @@ Rekal keeps two local DuckDB databases in `.rekal/`. The split is deliberate —
 thin on the wire, rich on the machine.
 
 - **`data.db`** — the shared truth. Append-only. Sessions, turns, tool calls,
-  checkpoints, files touched — every branch, merged or not. This is the only
+  checkpoints, files touched and repository memory revisions — every branch,
+  merged or not. Local bookkeeping also lives here but is not exported. This is the only
   source `rekal push` encodes from (filtered to merged work — see below), and
-  what `rekal query` reads.
+  what advanced SQL reads by default. The common reference reader also uses
+  indexed source projections, including synced history and local notes.
 - **`index.db`** — local intelligence. Full-text indexes, vector embeddings,
-  file co-occurrence graphs, knowledge chunks. Never synced. Rebuilt anytime
+  file co-occurrence graphs, knowledge chunks, repository note projections and
+  explicitly configured local-note snapshots. Never synced. Rebuilt anytime
   with `rekal index`. This is what powers `rekal "<query>"` search.
 
 ## Orphan branches and what gets shared
@@ -85,7 +89,8 @@ thin on the wire, rich on the machine.
 Rekal data lives on git orphan branches named `rekal/<email>`. These branches
 have no common ancestor with your code branches — they never appear in your
 project history, never affect merges, and never clutter your working tree.
-Standard `git push`/`git fetch` move the data.
+Rekal's pre-push hook publishes eligible records; `rekal sync` fetches and
+imports teammate branches. A plain fetch alone does not rebuild the index.
 
 Your local databases keep **every** branch — full fidelity, nothing gated. The
 wire is different: `rekal push` shares a session only when its code **landed on

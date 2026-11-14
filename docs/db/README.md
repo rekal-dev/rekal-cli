@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 
 ## `checkpoints`
 
-One row per checkpoint commit on the orphan branch. The `id` is the commit SHA on `rekal/<email>` — this is the checkpoint ID.
+One row per capture checkpoint. The `id` is a generated ULID; `git_sha` is
+the associated code commit, independent of transport-branch commits.
 
 ```sql
 CREATE TABLE IF NOT EXISTS checkpoints (
@@ -121,7 +122,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 
 | Column | Description |
 |--------|-------------|
-| `id` | Commit SHA on the `rekal/<email>` orphan branch. The checkpoint ID |
+| `id` | Generated ULID for this checkpoint |
 | `git_sha` | HEAD commit SHA of the **main repo** at checkpoint time |
 | `git_branch` | Active branch of the main repo at checkpoint time |
 | `user_email` | Git `user.email` |
@@ -167,9 +168,17 @@ CREATE TABLE IF NOT EXISTS checkpoint_sessions (
 
 ---
 
+## Native memory (unreleased main)
+
+`memory_revisions` holds immutable repository note observations and deletion
+markers. Eligible revisions are encoded on the wire with their checkpoint.
+Current local-only notes live exclusively in `index.db.local_memory_documents`.
+See [the database map](overview.md) and [native memory](../design/native-memory.md)
+for projection, source identity and downgrade boundaries.
+
 ## Local-only tables
 
-These four live in `data.db` but are **never encoded onto the wire**. Nothing
+These examples live in `data.db` but are **never encoded onto the wire**. Nothing
 in `transport/` reads them, and that is deliberate — see
 [SECURITY.md](../../SECURITY.md).
 

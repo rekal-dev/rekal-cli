@@ -19,20 +19,27 @@ advisory unless you ask us not to.
 
 ## Supported versions
 
-Rekal is pre-1.0. Only the **latest release** receives security fixes. Upgrade
+Only the **latest release** receives security fixes. Unreleased main is a
+development target, not a published security release. Upgrade
 before reporting against an older tag.
 
 ## The security model
 
-Rekal has no server, no API, no account, and no telemetry. It does not phone
-home — not even crash reports. The data touches two places: the local
-filesystem and the git remote you already trust with your source code.
+Rekal requires no hosted memory service or account and does not collect usage
+telemetry. Default capture and embeddings run locally. Git push/sync transfer
+eligible records through the configured Git remote. Release-update checks contact
+GitHub without sending conversation text. Opt-in HTTP embeddings send source text
+to the explicitly configured endpoint; that endpoint's handling is outside the
+local-only default.
 
-There is nothing to breach because there is nothing to connect to.
+Repository memory notes on unreleased main follow the same redaction and export
+gate as conversations. Explicit local note sources stay in `index.db` and never
+enter the ledger or wire. The gate concerns commit ancestry, not the semantic
+sensitivity of a note: a note associated with a merged commit may still mention
+private or unrelated work. See [native memory](docs/design/native-memory.md).
 
-That shape means most classes of vulnerability common to memory systems do not
-apply here. The classes that *do* apply are specific, and they mostly concern
-one thing: **material reaching the wire that should have stayed local.**
+Important attack surfaces include parsing untrusted records, protecting local
+files and preventing material intended to stay local from reaching the wire.
 
 ## In scope
 
@@ -55,6 +62,8 @@ format is append-only. Anything that reaches it is durable and distributed.
   index-only and structurally unpushable. A path that lets imported material
   reach `data.db` would put *other repositories'* conversations on this repo's
   shared branch.
+- **Local-note leakage.** Explicit local memory sources reaching `data.db`,
+  checkpoint revisions or wire frames. Local note search must remain index-only.
 - **Local-only records reaching the wire.** `recall_edges`,
   `checkpoint_state` and `merge_gate_cache` are deliberately never wired. `recall_edges` holds query
   text and access patterns; exporting it would publish what each developer

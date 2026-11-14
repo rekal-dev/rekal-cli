@@ -31,8 +31,10 @@ Single binary. Everything embedded — CLI, database engine, embedding model, co
 - Language: Go 1.25.6
 
 Two databases in `.rekal/`:
-- `data.db` — immutable source of truth. Append-only. Pushed to git.
-- `index.db` — local derived index. Rebuilt from data.db. Never pushed.
+- `data.db` — captured history plus local bookkeeping. Eligible history is encoded
+  into Git wire frames; the database file itself is never pushed.
+- `index.db` — local derived index over retained history, current prose and
+  available configured local notes. Never pushed.
 
 This split is a direct consequence of the soul: thin on the wire, rich on the machine.
 

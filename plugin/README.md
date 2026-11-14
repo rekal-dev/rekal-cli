@@ -1,65 +1,34 @@
 # Rekal Memory
 
-Code has git. Every line, every change, every author — recorded forever. The
-reasoning behind the code has nothing.
+**Carry the reasoning forward.** Rekal gives coding agents a Git-linked record
+of earlier decisions, rejected approaches and source evidence across sessions.
 
-Your agent starts every session blank. It reads the code. It does not know why
-the code looks that way, what was tried last week, or which approach the team
-already explored and abandoned.
+Capture supports Claude Code, Cursor, Codex, Gemini, Copilot, Kiro and OpenCode.
+The binary captures conversations at commit time and shares eligible records on
+`rekal/<email>` branches. Search locally, then read the relevant source. The agent
+interprets the evidence; Rekal does not generate an answer on its behalf.
 
-Rekal is the ledger for that. Four ideas, in order.
+This plugin installs the published binary. Native Claude project-note capture,
+literal pagination and the common `query --ref` reader are **unreleased main**
+features, not part of v1.0.2. See the [release status](../CHANGELOG.md).
 
-## Save the transcript
+## Agent memory and original evidence
 
-The session is the record. Rekal writes it raw and append-only.
+Main can capture existing Claude project memory notes alongside conversations.
+Notes remain attributed revisions; they do not replace captured transcript text.
+Rekal does not control distillation or write back into native agent files.
+Explicit personal sources remain local to the search index.
 
-No summaries. No distillation. Nothing derived. A summary is a lossy guess about
-what will matter later, made before anyone knows the question — and it rots
-quietly while you trust it. The transcript does not rot. It is what was actually
-said.
+## Git transport, local retrieval
 
-Immutable once written. Nobody edits it, nobody deletes it. That is what makes it
-worth sharing: if anyone could edit the record, nobody could trust it.
+The default embedding model ships inside the binary. No hosted memory service
+is required. Git transport uses your remote; optional HTTP embeddings send text
+to the endpoint you configure. Release checks contact GitHub without sending
+conversation text. See [security boundaries](../SECURITY.md).
 
-## Agent agnostic
-
-The transcript is the substrate, not one vendor's memory format.
-
-Rekal reads sessions from Claude Code, Cursor, Codex, Gemini, Copilot, Kiro, and
-OpenCode, and answers from all of them together. Switch agents next quarter and
-the ledger is still yours.
-
-## Reason at query time
-
-Maintained memory layers answer from summaries built before anyone asked the
-question, and need a consolidation pipeline kept healthy. Rekal has neither.
-
-Nothing is precomputed into "memories." Retrieval, ranking, routing, judgment —
-all of it runs when you ask, against the real record.
-
-This is lazy evaluation applied to memory. Nothing is derived until a question
-needs it, so nothing derived can be stale. The index is a disposable accelerator
-over the ledger; delete it and one command rebuilds it from truth.
-
-The skill orients your agent and hands it the record. It does not script the
-steps. Tools remove toil, never thought — the judgment stays with the agent, and
-gets better as the agent does.
-
-## Git is the transport
-
-No server. No account. No external memory service. Nothing to operate, nothing to
-breach, because there is nothing to connect to.
-
-Embedding is local. The model ships inside the binary, embeddings are computed on
-your machine and stored in `.rekal/`, and they never travel. Semantic search with
-no tier to run or pay for.
-
-Memory travels the way code travels: `git push`. Merged work reaches your team.
-Unmerged work stays on your machine. The store is two files in `.rekal/`.
-
-Thin on the wire, rich on the machine — strip what git already has, compress what
-remains, compute indexes and embeddings locally and never ship them. Recall runs
-on your machine, median around 150 ms.
+Repository records follow a merged-commit export gate. Local search indexes and
+personal-note snapshots are not published. See [usage](../docs/usage.md) and
+[upgrade compatibility](../docs/upgrading.md).
 
 ## Install
 
@@ -79,7 +48,8 @@ Both also fire on their own when a `rekal` command reports `command not found` o
 `not initialized`.
 
 Requires git, macOS or Linux. After that, commit as normal — a post-commit hook
-captures the session. `rekal clean` removes everything, with no residue.
+captures the session. `rekal clean` removes local setup and its store; it does
+not retract copies already published to Git or held by teammates.
 
 ## What this plugin is
 

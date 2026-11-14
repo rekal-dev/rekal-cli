@@ -95,6 +95,8 @@ Returns the full conversation for a specific session. This is the progressive lo
 
 | Flag | Meaning |
 |------|--------|
+| `--ref <reference>` | Read a returned conversation, passage or memory reference |
+| `--cursor <continuation>` | Continue a source read using its opaque `next` value |
 | `--sql <statement>` | SQL SELECT to run (explicit SQL mode). A bare positional statement is accepted as shorthand; the two are mutually exclusive, and both are mutually exclusive with `--session` |
 | `--index` | Run SQL against the **index DB** instead of the data DB |
 | `--session <id>` | Show session conversation by ID (drill-down mode) |
@@ -119,6 +121,7 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `files_touched` | Files changed per checkpoint (id, checkpoint_id, file_path, change_type) |
 | `checkpoint_sessions` | Junction: checkpoint_id → session_id |
 | `checkpoint_state` | Incremental state cache (file_path, byte_size, file_hash) |
+| `memory_revisions` | Immutable repository note observations with checkpoint, source, path, observed time and revision payload |
 | `recall_edges` | L1 recall citation graph (id, ts, kind, query, target_session_id); one row per session reached (kind `recall`/`drill`). Local-only — never pushed/synced |
 
 **Index DB** (`--index`):
@@ -131,6 +134,9 @@ Returns the full conversation for a specific session. This is the progressive lo
 | `session_facets` | Session metadata (session_id, user_email, git_branch, actor_type, agent_id, captured_at, turn_count, tool_call_count, file_count, checkpoint_id, git_sha, parent_session_id, team_name, workflow_name, agent_type, description, spawn_depth, origin, facet_text) |
 | `file_cooccurrence` | Files that change together (file_a, file_b, count) |
 | `session_embeddings` | LSA + Nomic vectors (session_id, embedding, model, generated_at); models `lsa-v1`, `nomic-v1.5-c8k` |
+| `session_passages` / `passage_embeddings` | Original source ranges and derived semantic vectors |
+| `memory_archive` / `memory_documents` | Repository note history and current-note projection |
+| `local_memory_documents` | Current snapshots of explicitly configured local notes; never exported |
 | `knowledge_chunks` | Heading-anchored prose sections of tracked files at HEAD (id, path, anchor, breadcrumb, start_line, end_line, content, content_hash, blob_sha) |
 | `knowledge_embeddings` | Chunk vectors (content_hash, model, embedding) |
 | `session_reach` | L1 reach aggregate derived from data.db.recall_edges (target_session_id, reach_count, last_query, last_ts) |
@@ -157,7 +163,7 @@ rekal query --session 01JNQX... --role human --limit 3 # first 3 human turns
 
 # Raw SQL
 rekal query "SELECT id, git_sha, user_email FROM checkpoints ORDER BY ts DESC LIMIT 5"
-rekal query "SELECT session_id, file_path FROM files_touched WHERE file_path LIKE '%auth%'"
+rekal query --index "SELECT session_id, file_path FROM files_index WHERE file_path LIKE '%auth%'"
 rekal query --index "SELECT file_a, file_b, count FROM file_cooccurrence WHERE file_a = 'src/auth/middleware.go' ORDER BY count DESC LIMIT 10"
 rekal query --index "SELECT session_id, user_email, turn_count FROM session_facets WHERE actor_type = 'human'"
 

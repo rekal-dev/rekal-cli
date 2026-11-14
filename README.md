@@ -4,13 +4,15 @@
 > literal search pagination and `query --ref` are unreleased changes; the
 > v1.0.2 installation does not include them. See the [changelog](CHANGELOG.md) for release status.
 
-**Rekal is a command-line tool that captures your AI coding sessions at every git
-commit, stores them in your repo, and lets any agent recall the reasoning behind
-a past decision — including the approaches that were tried and rejected.**
+**Carry the reasoning forward.**
 
-**Once that work merges, it travels to your teammates over the same `git push`
-and `git fetch` you already run — so their agents start from your reasoning, not
-from nothing. No server, no account, no memory service in the middle.**
+Rekal gives your coding agents a shared record of decisions, rejected approaches
+and project memory, linked to the code they helped create. Find the relevant
+context, read the original evidence, and continue the work across sessions,
+agents and teammates.
+
+Capture at commit time. Search locally. Share eligible context through Git.
+No hosted memory service required.
 
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
@@ -22,36 +24,45 @@ from nothing. No server, no account, no memory service in the middle.**
 
 [Quick start](#quick-start) · [Commands](#commands-reference) · [How it works](#how-it-works) · [Team memory](#team-memory) · [Benchmarks](#benchmarks) · [Docs](#documentation) · [Paper](https://arxiv.org/abs/2607.14390) · [Discord](https://discord.gg/hDMj8zHH2)
 
-📄 **Research published:** ["Why Git Is the Memory Solution for the Agentic Development Lifecycle"](https://arxiv.org/abs/2607.14390) on arXiv (2607.14390)
+## Why Rekal
 
-> **Memory that lives in git — shared by your team, personally adaptive as you recall.** Works with Claude Code, Cursor, Copilot, Codex, Gemini, Kiro, and OpenCode.
+Your next agent should be able to recover why the code looks this way, what was
+already tried, and which constraints still matter. Rekal preserves captured
+conversation text alongside Git checkpoints and makes it searchable on demand.
 
-![Two terminals: Dana commits a 37-turn session about webhook delivery and pushes it; Sam, on another machine, syncs and his agent answers that a fixed retry delay was already rejected](docs/assets/demo.svg)
+- **Continue earlier work:** find decisions and rejected alternatives before
+  repeating the investigation.
+- **Follow the evidence:** read attributed passages and associated commits;
+  native memory notes remain identifiable as notes.
+- **Share through Git:** repository context follows the merged-commit export
+  gate. Personal sources explicitly configured as local stay in the local index.
+- **Keep control:** local embeddings by default, a rebuildable search index and
+  no required memory service. Optional remote embeddings are explicit configuration.
 
-Every AI session settles decisions: why this approach, what got tried and thrown away. Then the session ends and that reasoning is gone. Rekal captures it at every commit, stores it **raw** in git, indexes and embeds it **locally in the background**, and shares it across your team when the work merges. There is no memory SaaS and no external memory service. Embedding is local, and the whole store is a `.rekal/` directory in your repo. Your agent recalls the conversation behind any change: the reasoning, the dead-ends already ruled out, the exact decision, in ~7.5K context tokens and a few seconds, from git.
+Session capture supports Claude Code, Cursor, Copilot, Codex, Gemini, Kiro and
+OpenCode. Native note discovery currently defaults to **Claude project memory**;
+other Markdown note sources need configuration. These are different capabilities.
 
-- **Know *why*, not just *what*** — the conversation behind every change, not just the diff.
-- **Stop re-deciding** — dead-ends already ruled out stay ruled out; nobody re-proposes them.
-- **Team memory in git** — and *only* merged work: an unmerged spike never leaves your machine.
-- **Personalised & adaptive** — as *you* recall, the memories you keep returning to get a usage hint and a small ranking boost. On your machine only, never synced.
-- **Scrubbed before it's stored** — transcripts pass through secret redaction (pattern + entropy) and home-path anonymization before they reach the database, let alone the wire.
+![Two terminals: Dana commits a session about webhook delivery and pushes it; Sam syncs and recovers why fixed-delay retries were rejected](docs/assets/demo.svg)
 
-## Why not just…?
+### Works with the memory you already use
 
-| Instead of | The gap | Rekal |
-|---|---|---|
-| a `MEMORY.md` / `CLAUDE.md` notes file | rots, hand-maintained, tied to one branch | captured automatically at every commit, immutable, branch-aware |
-| a hosted memory layer (Mem0, Zep, Letta) | a service and a vector tier to operate, your transcripts on someone else's box, memories distilled lossily up front | nothing to operate, nothing leaves the machine, raw sessions kept whole and reasoned over at query time |
-| editor/agent memory (Cursor, Copilot, Claude Code) | per-user, per-tool, ephemeral, no team history | team-wide persistent memory, travels with the repo, one ledger every agent reads |
-| a RAG index over your repo | indexes the code, the artifact, not the argument that produced it | indexes the conversation: the rejected options and the reason they lost |
-| `git log` / `git blame` | tell you *what* changed, never *why* | the conversation and reasoning behind the change |
+Agent notes are useful working context. Rekal can preserve repository note
+revisions and retrieve them alongside the conversations; it does not replace the
+agent's note-writing process or write back to its native files. The agent chooses
+what evidence to read and what to conclude.
+
+Git remains the transport and commit anchor. A merged commit makes associated
+records eligible for sharing; it does not prove that every captured statement is
+about merged work. Read the [sharing boundaries](docs/design/native-memory.md)
+before enabling repository capture for additional sources.
 
 ## Quick start
 
 **Requirements:** git, and macOS on Apple Silicon or Linux (x86-64 / arm64).
 Nothing else — no runtime, no Python, no API key, no service to run.
 
-> **Status: 1.0.** The store format, wire format, command surface and exit
+> **Published baseline: v1.0.2.** The store format, wire format, command surface and exit
 > codes are covered by the version number, and breaking any of them now
 > requires a major version. [docs/compatibility.md](docs/compatibility.md)
 > states exactly what that covers and what it deliberately does not —
@@ -175,61 +186,51 @@ A decision was settled in an earlier session: webhook retries use exponential
 backoff, not a fixed delay. A later agent — different session, no memory of that
 — is about to propose the fixed delay again. It asks first.
 
-Three terms carry the output. A **seed** is one candidate session, with `conf=`
-its absolute confidence that it answers your query. The header line is a
-**verdict** — `INJECT` (read this memory), `KNOWLEDGE` (read prose at HEAD
-instead), or `SILENCE` (memory isn't the tool here). `t14` is the turn to drill
-into.
+The basic interaction is **search, then read**. This example describes the
+unreleased main-branch interface; install from source to try it today.
 
-```console
-$ rekal "should webhook retries use a fixed delay?"
-```
-```text
-INJECT top=0.81 gap=0.28 2 seeds
-  s14 conf=0.81 t14 [reached 3× drilled 1×· "webhook retry policy"] "no, a fixed 5s delay stampedes the downstream on recovery. Use exponential backoff with jitter…"
-  s31 conf=0.53 t9 "we capped retries at 5 attempts then dead-letter — anything past that never lands…"
+```bash
+rekal "should webhook retries use a fixed delay?"
 ```
 
-Compact text by default — the whole answer in two lines, each seed keyed by a
-short handle (`s14`) you pass straight to the next command.
+Search returns ranked conversation leads, matching memory notes, current prose
+pointers and a paginated list of literal conversation matches. Conversation and
+memory results carry a copyable read command:
 
-`[reached 3× drilled 1×· …]` is your personal recall graph: search has surfaced
-this memory three times and an agent actually opened it once, most often for
-"webhook retry policy". The two numbers are different evidence — surfacing is
-the ranker's own past output, opening is an agent's judgment — so a high reach
-with no drills means "the ranker keeps offering this", not "people read this".
-Local-only, never pushed.
-
-The agent gets the decision **and the reason the alternative was rejected**, sourced from the human's own mid-course correction, before it wastes a round re-proposing it. It drills in for the full reasoning with one more call, passing the short handle straight through:
-
-```console
-$ rekal query -s s14 --role human_steering
+```bash
+rekal query --ref <returned-reference>
 ```
 
-Everything defaults to text an agent can act on directly; add `--json` when a program needs to parse it — the same result carries `score` (rank within the set, max-normalized), absolute `confidence`, and raw BM25 `mass`, so a silence gate can reject a query that is merely the best of a weak set:
+Follow the printed `more:` command for another page. Search continuations use
+`rekal --cursor`; source-read continuations use `rekal query --cursor`. Add
+`--json` to either command for structured output.
 
-```console
-$ rekal --json "should webhook retries use a fixed delay?"
-```
-```json
-{
-  "query": "should webhook retries use a fixed delay?",
-  "mode": "hybrid",
-  "total": 2,
-  "results": [
-    {
-      "session_id": "01JNQX8F2K9M", "sid": "s14",
-      "score": 0.87, "confidence": 0.81, "mass": 5.4,
-      "snippet": "no, a fixed 5s delay stampedes the downstream on recovery. Use exponential backoff with jitter…",
-      "snippet_turn_index": 14,
-      "snippet_role": "human_steering",
-      "session": { "author": "dev@team.dev", "branch": "feat/webhooks", "commit": "a1b2c3d" }
-    }
-  ]
-}
-```
+The agent can recover both the decision and why alternatives were rejected.
+A reference identifies the source, not a generated answer. Notes can contain
+mistakes; a historical decision is not proof of current code behavior.
+
+`INJECT`, `KNOWLEDGE` and `SILENCE` describe ranked recommendations. Literal and
+memory blocks can still provide useful sources. Short handles such as `s14` are
+local conveniences; keep the canonical reference for durable citations. A
+ranked result's default reference opens its first anchor; advanced `rekal evidence`
+can combine multiple anchors. See [the read contract](docs/spec/command/query.md).
 
 ## Commands reference
+
+The everyday read path matches the installed agent skill:
+
+| Task | Command |
+|---|---|
+| Find relevant context | `rekal "<query>"` |
+| Read a returned source | `rekal query --ref <reference>` |
+| Read more | Follow the returned `more:` command |
+| Structured output | Add `--json` |
+
+Setup and sharing: `rekal init`, normal commits/pushes, and `rekal sync` for
+teammate context. See [usage](docs/usage.md) for storage and sharing boundaries.
+
+<details>
+<summary>Advanced filters, administration and SQL</summary>
 
 | Command | Description |
 |---------|-------------|
@@ -249,22 +250,29 @@ $ rekal --json "should webhook retries use a fixed delay?"
 | `rekal query --session <id> [--role <r>] [--offset N] [--limit N] [--full] [--json]` | Drill into a session — readable turns by default; `--json` for one object |
 | `rekal query --sql "<sql>" [--index] [--json]` | Raw SQL → TSV by default; `--json` for NDJSON |
 
-Full details: [docs/spec/command/](docs/spec/command/).
+These tools are available when the task needs them. SQL is for explicit
+analysis/debugging; it is not required to use memory. `rekal find` and
+`rekal evidence` remain advanced interfaces. The basic path is search/read.
+
+</details>
+
+Full details: [docs/commands.md](docs/commands.md) and
+[per-command specs](docs/spec/command/).
 
 ## What makes Rekal different
 
-These are consequences of the design, not features bolted on. The reasoning
-behind each one is in [SOUL.md](SOUL.md).
+- **Git-linked context.** Captured conversations and repository note revisions
+  are anchored to commits and transported on dedicated Git branches.
+- **Original evidence remains available.** Rekal does not replace captured turns
+  with generated summaries. Existing agent notes are additional, attributed sources.
+- **Local retrieval by default.** Full-text search and embedded semantic models
+  run locally. An explicitly configured HTTP embedding endpoint receives text.
+- **One binary, on-demand reads.** No separate database service; search returns
+  leads and bounded reads fetch source text as needed.
+- **Personal recall signals.** Local reach/drill hints describe your prior use;
+  they are never published as team conversation history.
 
-- **One immutable source of truth, and a disposable index.** Your sessions land in an append-only `data.db` **raw** — no LLM pre-summarization, no lossy "memory" distillation. The derived `index.db` (full-text + embeddings) is a pure function of that ledger, so it can never drift the way a separate memory store does: a rebuild always reconciles it, and because it's disposable the heavy passes run in the background, hard-timeboxed, and your commit never waits. Thin on the wire, rich on the machine.
-- **Local embedding, no external memory service.** Embeddings are computed by an on-device model; retrieval (lexical, graph, and deep semantic) runs on your machine. No memory SaaS, no vector-DB tier, no session text leaving the box (unless you explicitly point embeddings at a remote endpoint).
-- **Personalised, adaptive recall graph.** Every recall links a session to the query that reached it — on *your* machine only (never pushed or synced). Well-trodden memories surface with a `[reached N×]` hint and, by default, rank a little higher (`reach_boost`). Self-activating; inert until *you* accumulate edges. See [docs/design/recall-graph.md](docs/design/recall-graph.md).
-- **Intent in git.** Not in a separate system, not behind someone else's service. Orphan branches, full history, travels with the repo. No servers, no APIs, no telemetry.
-- **Single binary.** Everything embedded — database, embeddings, inference engine, compression. Zero setup. Just `rekal init` and commit.
-- **Provenance.** Every answer traces back: the turn, the session, the commit it produced, the reasoning it captured. Full graph.
-- **Agent-first output.** A compact text digest built for an agent to act on: verdict, per-seed confidence, drill pointers, with structured JSON one `--json` away. Silence gates and confidence thresholds, not prose.
-
-The full version: [SOUL.md](SOUL.md).
+The design principles are in [SOUL.md](SOUL.md).
 
 ## Team memory
 
@@ -290,7 +298,7 @@ with your code, so it never touches your history, merges, or working tree.
   ledger, **rotate the credential first** — see [SECURITY.md](SECURITY.md) for
   the remedy and the threat model.
 
-Team memory is the shared session ledger. The recall graph is separate:
+Team memory includes eligible captured conversations and repository note revisions. The recall graph is separate:
 personal and local — it adapts to *your* access patterns and never rides the
 wire. Full workflow: **[docs/usage.md](docs/usage.md)**.
 
@@ -313,38 +321,14 @@ Design: [docs/design/knowledge-layer.md](docs/design/knowledge-layer.md).
 ## How it works
 
 ```mermaid
-flowchart LR
-    subgraph capture ["Capture"]
-        A["AI Session"] -->|"rekal checkpoint<br/>(post-commit)"| B[("data.db<br/>append-only")]
-    end
-
-    subgraph transport ["Transport"]
-        B -->|"rekal push"| C["Wire Format<br/>zstd + varint interning"]
-        C -->|"git push<br/>rekal/&lt;email&gt;"| D[("Remote<br/>orphan branch")]
-    end
-
-    subgraph index ["Index"]
-        B -->|"rekal index"| E[("index.db<br/>local-only")]
-        D -->|"rekal sync"| E
-        E --- F["BM25 FTS"]
-        E --- G["LSA Embeddings"]
-        E --- N["Deep Embeddings"]
-        E --- H["Co-occurrence"]
-        E --- I["Facets"]
-        E --- KN["Knowledge chunks"]
-    end
-
-    subgraph query ["Query"]
-        J["rekal 'keyword'"] -->|"hybrid + knowledge"| E
-        E -->|"seed digest (text)<br/>conf · mass · --json"| K["Agent"]
-        K -->|"rekal query<br/>--session &lt;id&gt;"| B
-        B -->|"full conversation"| K
-    end
-
-    style capture fill:#fff5f5,stroke:#e94560,color:#333
-    style transport fill:#f0fdf4,stroke:#22c55e,color:#333
-    style index fill:#f0f4ff,stroke:#3b82f6,color:#333
-    style query fill:#faf5ff,stroke:#a855f7,color:#333
+flowchart TD
+    A["Sessions and repository notes"] --> B["Checkpoint ledger"]
+    B --> C["Local search index"]
+    D["Explicit local notes and current repo prose"] --> C
+    B --> E["Merged-commit gate and Git transport"]
+    E --> F["Teammate sync"]
+    F --> C
+    C --> G["Agent searches and reads sources"]
 ```
 
 The flow: commit → capture → push → sync → recall.
@@ -383,9 +367,10 @@ design: [docs/design/skill-router.md](docs/design/skill-router.md).
 
 ### Under the hood
 
-Two local DuckDB databases keep the split clean: `data.db` (append-only truth,
-the only thing pushed) and `index.db` (rebuildable local intelligence — FTS,
-embeddings, the recall graph, knowledge chunks). Linked git worktrees share one
+Two local DuckDB databases keep the split clean: `data.db` holds captured history
+and local bookkeeping; eligible history is encoded into wire frames, not uploaded
+as a database file. `index.db` holds rebuildable search projections, embeddings,
+current prose and explicitly configured local notes. Linked git worktrees share one
 store. The databases, transport, and cross-repo recall are covered in
 **[docs/usage.md](docs/usage.md)**.
 
@@ -411,31 +396,27 @@ your own history at zero annotation cost. See [docs/research/](docs/research/) f
 
 ### Benchmarks
 
-On two public long-term-memory benchmarks, Rekal reaches strong answer
-quality with **no memory layers and no external memory service** — retrieval
-runs locally over git. The answering agent is **GPT-5 Sol**; Rekal supplies the
-memory, the model supplies the answer:
+These are **previously reported results**, not a fresh evaluation of unreleased
+main or a measured old-versus-new release comparison. The historical answering
+agent was GPT-5 Sol. Different reader models, judges, samples and context budgets
+prevent a direct ranking against other projects' published scores.
 
-| Benchmark | Accuracy | Recall@20 | Context tokens/query | Agent turns/query | Time/query (agent) |
-|---|---|---|---|---|---|
-| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 | a few seconds |
-| LongMemEval | 86.60% | 99% | ~10.5K | 6.6 | a few seconds |
+| Historical benchmark | Reported answer accuracy | Reported Recall@20 | Context tokens/query | Agent turns/query |
+|---|---:|---:|---:|---:|
+| LoCoMo | 90.57% | 98.61% | ~7.5K | 5.9 |
+| LongMemEval | 86.60% | 99% | ~10.5K | 6.6 |
 
-| Additional metric (LoCoMo) | Result |
-|---|---|
-| Recall@10 | 93.60% |
-| Recall@5 | 86.44% |
-| Official F1 | 63.0 |
-| Typical answer output | ~78–80 tokens |
-| L1 / L2 memory layers | None |
-| External memory service | None |
+LoCoMo also reported Recall@10 of 93.60%, Recall@5 of 86.44%, and answer F1 of
+63.0. Answer scores, retrieval recall and evidence coverage are separate metrics.
+See the [run procedure](docs/research/RUN.md) and [benchmark harness](scripts/bench/).
+These historical runs did not evaluate native memory integration.
 
-These runs use the **shipped skill** in the loop, not a hand-tuned harness, so
-accuracy tracks the answering model and climbs toward the Top-20 recall ceiling
-as the right seeds get surfaced. Reproduce them — or run the self-labeling
-benchmark on your own history at zero annotation cost — with the harness in
-[`scripts/bench/`](scripts/bench/); the full run sequence is
-[docs/research/RUN.md](docs/research/RUN.md).
+**Unreleased evidence diagnostic (14 November 2026):** on a 400-question LoCoMo
+sample, multiple passages delivered every annotated supporting turn for 54.50%
+of questions; passages plus extractive notes reached 56.25%, using 17.9% more
+source text. This is **complete evidence coverage, not answer accuracy**. It used
+no answering model, judge or Claude distillation. The session-primary control
+was a simulation, not a v1.0.2 binary execution. [Results, tested commit and limits](docs/research/runs/2026-11-14-locomo-memory/README.md).
 
 **Local store, wire & recall latency** (Rekal's own coding sessions, Apple M4 —
 6 Claude transcripts / 14 sessions, 473 turns; pure `rekal`, no answering model):
@@ -451,29 +432,48 @@ benchmark on your own history at zero annotation cost — with the harness in
 | LoCoMo synthetic recall | median ~350 ms (p95 ~400 ms) |
 | In-process search | ~76 ms |
 
-Time/query in the accuracy table is end-to-end agent answering; these rows are
-retrieval and footprint alone. Wire reduction is vs the raw agent transcript
-(strip tool outputs / file bodies / JSONL chrome, then zstd) — see [SOUL.md](SOUL.md).
-Local DBs stay rich on the machine; only the wire is thin.
+The footprint and latency rows above are historical measurements on the named
+corpus and machine, not guarantees for every repository or the current release
+candidate. Wire reduction compares encoded transport with raw transcript files;
+local databases retain richer search structures.
 
-**The trade we make on purpose.** Rekal never distills your sessions into lossy
-"memories." The ledger stays raw and append-only; the index is a disposable
-accelerator that a one-command rebuild reconciles back to it. So nothing is
-pre-baked and nothing can rot — the reasoning happens at query time, over the
-real record, and the one expensive write-time step runs in the background,
-hard-timeboxed, so your commit never waits. The cost is that answering is not
-free; the payoff is memory that is always fresh and never needs maintaining.
-And the ask itself becomes the next session, so that reasoning is captured too.
+Checkpoint currently performs some embedding work synchronously. Large native
+transcripts can make a commit hook slow. Background `rekal embed` fills missing
+vectors after index/sync; it does not make checkpoint latency disappear.
 
-Token estimates are the visible context produced during the enhanced
-hard-question runs.
+## Native memory
+
+On unreleased main, Claude project notes are discovered at checkpoint time by
+default. The first successful scan captures a baseline; later scans append changed
+revisions or deletion markers. Repository notes follow normal push/sync and the
+merged-commit gate. Explicit local sources remain index-only and have no retained
+history once their native files are gone.
+
+Set `"memory": false` in `.rekal/config.json` to stop new native capture and local
+note indexing. This does not erase previously captured or published repository
+notes. [Configuration and boundaries](docs/design/native-memory.md).
+
+## Upgrading
+
+The installation commands above remain pinned to **v1.0.2**. The proposed next
+major release is **v2.0**; it has not been published. Main's new search/read
+interface and memory behavior are documented for source-build testing.
+
+Read the [upgrade guide](docs/upgrading.md) before opening an existing store or
+sharing memory-bearing branches with older clients. No force push or code-commit
+rewrite is required. Upgrade every writer of a memory-bearing branch.
 
 ## Documentation
+
+Current usage and command specs describe main. Research papers, dated runs and
+experimental prototypes record their own scope; they are not feature promises.
+
 
 | Guide | What's in it |
 |---|---|
 | [docs/usage.md](docs/usage.md) | The two databases, orphan branches & merged-work-only sharing, worktrees, the full agent command surface, the skill, cross-repo recall |
 | [docs/configuration.md](docs/configuration.md) | `.rekal/config.json` — ranking weights, embedding backends, API-key handling |
+| [docs/upgrading.md](docs/upgrading.md) | v1.0.2 to unreleased main: storage, writers, references and reindexing |
 | [docs/compatibility.md](docs/compatibility.md) | What the version number promises: store, wire, flags, exit codes — and what is deliberately not covered |
 | [CHANGELOG.md](CHANGELOG.md) | What changed, release by release |
 | [docs/spec/command/](docs/spec/command/) | Per-command reference specs |
@@ -533,12 +533,3 @@ If you use Rekal or build on the research, please cite the paper:
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
-
-### Native memory
-
-Rekal automatically captures Claude project memory through checkpoints and shares
-it through the same push/sync flow as conversations. Personal sources can be
-included in local search without entering the ledger or Git. Set `"memory": false`
-in `.rekal/config.json` to opt out of native capture and local-source indexing.
-See [native memory integration](docs/design/native-memory.md) for custom sources,
-storage boundaries and compatibility.

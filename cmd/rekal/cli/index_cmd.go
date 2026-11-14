@@ -23,8 +23,9 @@ func newIndexCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "index",
-		Short: "Rebuild the index DB from the data DB",
-		Long: `Rebuild the index DB (.rekal/index.db) from the data DB.
+		Short: "Rebuild the local search index from available sources",
+		Long: `Rebuild the index DB (.rekal/index.db) from retained history, current repository
+prose and available configured local sources.
 
 Builds into a temporary file and atomically replaces the live index only
 after the rebuild succeeds — a failed or interrupted rebuild leaves the
@@ -35,10 +36,13 @@ previous index untouched. The index is local-only and never synced. It contains:
   - File co-occurrence graph
   - Tool call indexes
   - Knowledge layer chunks (prose files at HEAD) + FTS
+  - Repository memory history/current notes and local-only note snapshots
+  - Original-turn passages with source ranges
 
-Deep-semantic vectors (HTTP/nomic session embeddings and knowledge chunk
+Deep-semantic vectors (HTTP/nomic session, passage and knowledge chunk
 vectors) continue in the background via 'rekal embed' after the structural
-rebuild — they are network-bound and already soft-fail. Run 'rekal embed'
+rebuild. The default backend is local; a configured HTTP backend uses the
+network. Embedding failures leave structural results usable. Run 'rekal embed'
 by hand to finish or resume.
 
 Rebuild when the index is out of date or after importing new data.

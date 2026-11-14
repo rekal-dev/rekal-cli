@@ -83,7 +83,7 @@ Flags (short forms first — they are what an agent should emit):
   --offset/--limit/--role require --session. Short ids (s35) come from the
   digest of the most recent recall; a ULID always works.
 
-Full queryable schema (FTS-internal tables — dict/docs/fields/stats/stopwords/
+Selected queryable tables (FTS-internal tables — dict/docs/fields/stats/stopwords/
 terms — and state tables — schema_meta/checkpoint_state/index_state — are engine
 internals; ignore them).
 
@@ -101,6 +101,8 @@ DATA DB SCHEMA (.rekal/data.db):
                   exported
   files_touched   id, checkpoint_id, file_path, change_type
   checkpoint_sessions  checkpoint_id, session_id
+  memory_revisions  Immutable repository note observations: id, checkpoint_id,
+                    source_id, path, observed_at, shared, deleted, content, payload
   recall_edges    id, ts, kind, query, target_session_id
                   (L1 recall citation graph: one row per session reached
                   (kind='recall'|'drill'). Local-only — never pushed/synced)
@@ -122,12 +124,10 @@ INDEX DB SCHEMA (.rekal/index.db):
                        end_byte, content, content_hash (index-only)
   passage_embeddings   passage_id, model, embedding, generated_at
                        PK: (passage_id, model). Filled by rekal embed
-  memory_revisions     Immutable native-note revisions (data DB): id,
-                       checkpoint_id, source_id, path, observed_at, shared,
-                       deleted, content, payload
-  memory_archive       Local + team revision history (index DB), same columns
-  memory_documents     Current native notes (index DB): id, source_id, path,
-                       content, payload
+  memory_archive       Repository + team revision history, same columns as
+                       data.db.memory_revisions
+  memory_documents     Current repository notes: id, source_id, path, content, payload
+  local_memory_documents  Current local-only snapshots, same columns; never exported
 
   knowledge_chunks     id, path, anchor, breadcrumb, start_line, end_line,
                        content, content_hash, blob_sha

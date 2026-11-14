@@ -18,12 +18,12 @@ rekal-cli/
 │       ├── preconditions.go   # Shared checks (git root, init)
 │       ├── init.go            # rekal init
 │       ├── clean.go           # rekal clean
-│       ├── checkpoint.go      # rekal checkpoint (stub)
-│       ├── push.go            # rekal push (stub)
-│       ├── index_cmd.go       # rekal index (stub)
-│       ├── log.go             # rekal log (stub)
-│       ├── query.go           # rekal query (stub)
-│       ├── sync.go            # rekal sync (stub)
+│       ├── checkpoint.go      # rekal checkpoint
+│       ├── push.go            # rekal push
+│       ├── index_cmd.go       # rekal index
+│       ├── log.go             # rekal log
+│       ├── query.go           # rekal query
+│       ├── sync.go            # rekal sync
 │       ├── version.go         # Version constant
 │       ├── versioncheck/      # Auto-update notification
 │       ├── db/                # DuckDB backend (open, close, schema)
@@ -67,7 +67,7 @@ mise install                    # Install Go and golangci-lint per mise.toml
 
 #### Building llama.cpp (required for nomic embeddings)
 
-The nomic embedding package uses CGO bindings to llama.cpp. On supported platforms (darwin/arm64, linux/amd64), you need to build the native libraries once:
+The nomic embedding package uses CGO bindings to llama.cpp. On supported platforms (darwin/arm64, linux/amd64, linux/arm64), you need to build the native libraries once:
 
 ```bash
 # Prerequisites: cmake, clang/gcc

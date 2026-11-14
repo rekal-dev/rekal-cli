@@ -28,8 +28,10 @@ store.
 Frames on a `rekal/<email>` branch carry a magic string and a format version.
 The branch is append-only: publishing adds frames and never rewrites the body,
 and no code path force-pushes. A reader tolerates frames it was not built for
-by skipping them, so a teammate on an older binary keeps working while you
-upgrade. Changing the meaning of an existing frame field is breaking.
+by skipping them, which permits partial reading but does not guarantee lossless
+re-export by an older writer. For native memory, upgrade every writer of a
+memory-bearing branch: an old full rebuild can omit unknown records. Changing
+the meaning of an existing frame field is breaking.
 
 ### Command and flag surface
 
@@ -46,8 +48,8 @@ Agents branch on these, so they are a contract:
 
 | Code | Meaning |
 |---|---|
-| `0` | `INJECT` or `KNOWLEDGE` — something worth reading was found |
-| `1` | `SILENCE` — nothing above the floor, or a runtime error |
+| `0` | Useful ranked/prose results; unreleased main also succeeds for nonempty literal or memory results |
+| `1` | No useful text-search results, or a runtime error |
 
 ### Default output shape
 
@@ -69,9 +71,11 @@ improves.
 These change in any release, including patches.
 
 - **`index.db`** — the schema, its tables and its contents. It is a disposable
-  derivative of `data.db`: its schema is migrated on open, an empty index is
-  rebuilt inline, and `rekal index` regenerates the whole thing from the
-  ledger. Never back it up; never depend on its shape.
+  projection of retained ledgers, current repository prose and configured local
+  sources. Its schema is migrated on open; an empty index is rebuilt inline.
+  `rekal index` regenerates it from available sources. Keep native local-note
+  files if you need their contents: deleting them removes the rebuild source.
+  Never depend on the index schema as a stable interface.
 - **The SQL schema reachable through `rekal query --sql`.** That command is raw
   read-only access to the databases, offered for analysis and debugging. Table
   and column names are documented in `--help` and in
@@ -108,7 +112,7 @@ at 1.0 — schema migration on open and skip-unknown frame decoding have been in
 the codebase throughout — but they were never written down as a promise until
 now, and this page is where they become one.
 
-## Planned major search interface
+## Planned v2.0 search interface (unreleased)
 
 The unreleased interface uses ordinary search for ranked context plus literal
 conversation enumeration, and `rekal query --ref` for bounded source reads.
@@ -123,4 +127,5 @@ sources preserves these references. Local note snapshots may expire.
 No special reindex is required solely for search/read routing. An absent or stale
 index still needs normal rebuilding/sync; this change does not automatically
 backfill historical passage vectors. Memory wire compatibility and the need to
-upgrade all memory-bearing branch writers remain separate requirements.
+upgrade all memory-bearing branch writers remain separate requirements. Follow
+the [upgrade guide](upgrading.md); the version proposal does not indicate a release.

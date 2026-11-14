@@ -37,6 +37,13 @@ starts at 1.0; it records what 1.0 ships and everything after.
 - A matched LoCoMo evidence-delivery diagnostic recording source turn IDs,
   context hashes, text bytes and latency independently of QA accuracy.
 
+### Changed
+
+- Documentation now leads with Git-linked reasoning continuity and the default
+  search/read path. Release status, note-sharing boundaries, upgrade steps and
+  benchmark metric definitions are explicit. Removed unsupported guarantees
+  about checkpoint latency, absence of memory integration and absence of network calls.
+
 ### Fixed
 
 - Default memory-read text now includes owner, source and available commit/

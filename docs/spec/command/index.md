@@ -1,6 +1,6 @@
 # rekal index
 
-**Role:** Full rebuild of the index DB from the data DB. Builds into `index.db.rebuilding`, then atomically renames over the live index only on success — a failed rebuild leaves the previous index untouched. Safe to run anytime — no data loss; data DB is source of truth.
+**Role:** Full rebuild of the local index from retained history, current prose and available configured local sources. Builds into `index.db.rebuilding`, then atomically renames over the live index only on success — a failed rebuild leaves the previous index untouched. The ledger stays unchanged; local-only snapshots require their native source files.
 
 **Invocation:** `rekal index`.
 
@@ -29,6 +29,9 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 6a. **Resolve commit messages** — `PopulateCommitMessages` reads each anchored session's `git_sha` and fills `session_facets.commit_message` with the commit's full message (subject and body) from this clone, in one batched `git log`. Index-only: the message is never stored in `data.db` and never crosses the wire, since every clone already has it — teammates get the signal for zero added bytes, and a SHA this clone has not fetched simply yields no text.
 6b. **Build facet documents + facet FTS index** — `PopulateFacetText` rebuilds `session_facets.facet_text` (distinct tool paths + command prefixes + steering text, and the commit message from step 6a; capped; derived from the index's own tables, so cross-repo imports are covered) after the import step, then the guarded facet FTS index is created — skipped entirely when no session has facet material.
 6c. **Build the knowledge layer (structural)** — Chunk the repo's tracked prose files at HEAD into `knowledge_chunks` + guarded knowledge FTS. Watermarked by commit SHA. Non-fatal. Chunk *vectors* are **not** filled here — see step 10. See [knowledge-layer design](../../design/knowledge-layer.md).
+6d. **Memory and passage projections** — Retain repository memory revisions and
+current notes, refresh configured local-only snapshots from native files, and
+build source-range passages. Personal snapshots are not historical archives.
 7. **LSA pass** — Build LSA model from session content (only if 2+ sessions), store embeddings in `session_embeddings` with model `lsa-v1`. Local and synchronous.
 8. **Write index state** — Record `session_count`, `turn_count`, `embedding_dim`, `last_indexed_at`.
 9. **Atomic rename** — Replace live `index.db` with the rebuilt temp file.
@@ -38,7 +41,10 @@ See [preconditions.md](../preconditions.md): must be in a git repository and ini
 
 ## Safe and idempotent
 
-The index DB can be deleted at any time; `rekal index` rebuilds it completely. No data is lost — the data DB is never modified.
+`rekal index` rebuilds from available sources without modifying ledger history.
+Local-only notes and imported sessions must still exist at their native sources;
+rebuilding cannot recover deleted files. Prefer rebuilding over deleting the live
+index first, so a failed rebuild leaves the previous index usable.
 
 After upgrading from versions that deleted/reinserted complete sessions during
 incremental capture, run `rekal index` once to reclaim existing index bloat. New
@@ -65,8 +71,9 @@ Imported sessions are stored in the index only, never in `data.db`, so they are 
 ## When to run
 
 - After sync (sync runs index automatically for `--self` mode; team mode rebuilds inline).
-- When index is missing or corrupted (`rm .rekal/index.db && rekal index`).
-- After manual edits to data DB.
+- When the index is missing or stale (`rekal index`).
+- After upgrading, to reclaim index bloat and refresh derived projections.
+  Do not edit captured ledger rows manually.
 
 ---
 

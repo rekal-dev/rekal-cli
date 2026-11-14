@@ -50,6 +50,13 @@ and the distinction between a missing directory and a confirmed deleted note.
 
 ---
 
+## Latency
+
+Incremental checkpoint embedding work is synchronous, including trunk sessions
+and bounded passage/knowledge batches. The post-commit hook can wait on that
+work. Background `rekal embed` after index/sync does not eliminate this cost.
+The long-transcript native latency remains a known performance limitation.
+
 ## No flags
 
 No user-facing flags. Same behaviour when invoked by the hook or manually.

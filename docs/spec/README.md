@@ -1,5 +1,8 @@
 # Rekal CLI — Spec
 
+These specs describe unreleased main. See [upgrade guidance](../upgrading.md)
+for the differences from the published v1.0.2 binary.
+
 Experience and behaviour per command. One file per command under `command/`.
 
 **Shared:** [preconditions.md](preconditions.md) — how all commands (except init and clean) check git repo and init.

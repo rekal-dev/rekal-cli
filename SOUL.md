@@ -20,7 +20,8 @@ This is not a feature of Rekal. This is the first reason Rekal exists.
 
 An AI agent starts every session blank. It reads the code. It does not know why the code looks the way it does. It does not know what was tried and rejected last week. It does not know that the team already explored and abandoned the approach it's about to suggest.
 
-Humans have institutional memory — imperfect, fading, but real. Agents have none.
+Humans have institutional memory — imperfect, fading, but real. Agents may keep
+notes, but continuity across sessions, tools and teammates still needs a record.
 
 Rekal gives agents memory. Not general knowledge. Not search results. Recall — the precise prior context for the problem the agent is working on right now, delivered in structured form, bounded to a token budget, scored by relevance.
 
@@ -35,7 +36,7 @@ This is not a feature of Rekal. This is the second reason Rekal exists.
 - Immutable. Immutability is the foundation of a ledger and the basis of trust. If anyone can edit the record, no one can trust it. If no one can trust it, there is no basis for sharing. Append-only is not a technical constraint — it is what makes the whole system work.
 - Intent lives next to the code. The code says what. The intent says why. They belong together — not in separate systems, not behind someone else's service.
 - Thin on the wire, rich on the machine. Git is the transport and every byte costs. Strip what git already has, compress what remains. Indexes, embeddings, search — all computed locally. When there's a trade-off between wire size and local compute, local compute wins every time.
-- Secure by design. The data never leaves git and the local machine. No servers. No APIs. No telemetry. The security model is simple: there is nothing to breach because there is nothing to connect to.
+- Secure by design. Local capture and embeddings by default. No required hosted memory service and no usage telemetry. Git transport and explicitly configured external embeddings have clear boundaries; release checks send no conversation text.
 - Simple. Zero dependencies. Single binary, everything embedded. Nothing to install, nothing to configure, nothing to break.
 - Transparent. The user sees everything that was created and can remove all of it. One command to install, one command to uninstall. No sticky tape allowed.
 - Agent first. The agent is the consumer. Every decision — output format, query interface, context loading, invisibility, ease of setup — favors the agent. Humans benefit as a side effect.
@@ -138,7 +139,7 @@ Real decisions where the beliefs broke the tie.
 | Immutable | Append-only wire format | No byte is ever modified after written. Immutability is a structural guarantee, not a policy. |
 | Intent next to code | Git orphan branch transport | Share context through standard git push/fetch. No sync server. Works with any remote. |
 | Thin on the wire | 99% payload reduction | A 2–10 MB session becomes ~300 bytes. Strip everything git already has. Indexes and embeddings computed locally. A year of team context fits in 200 KB. |
-| Secure by design | No external calls | Embedding model ships inside the binary. No API keys. No accounts. Data touches only git and the local filesystem. |
+| Secure by design | Local embeddings by default | Model ships inside the binary. No required API key or memory account. Optional HTTP embeddings and Git sharing are explicit boundaries. |
 | Simple | Single binary, embedded everything | Database engine, embedding model, compression dictionary — all inside one file. Download it and you're done. |
-| Transparent | Clean install/uninstall | `init` creates `.rekal/` and a hook. `clean` removes both completely. No hidden state anywhere else on the system. |
+| Transparent | Clean install/uninstall | `init` creates local storage, hooks and agent setup. `clean` removes repository setup; remote copies require separate Git management. |
 | Agent first | Hybrid ranked search, agent-readable output | Three-signal ranking. Agent controls the token budget. Compact agent-readable text by default (cheapest for an LLM to reason over), structured JSON on opt-in for programs — the agent is the reader; not human formatting. |

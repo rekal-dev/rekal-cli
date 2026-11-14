@@ -53,7 +53,7 @@ After setup, just ask your coding agent:
 
 > Please Rekal the context around invoice exports, then add date filters.
 
-![Animated agent terminals: Alex builds CSV export; Sam recalls Alex’s context and adds date filters](docs/assets/demo.svg)
+[![Animated agent terminals: Alex builds CSV export; Sam recalls Alex’s context and adds date filters](docs/assets/demo.svg)](https://rekal.dev/#demo)
 
 Alex builds the feature with Claude Code. Sam extends it with Codex.
 Rekal carries the captured context through their existing Git remote.

@@ -1,0 +1,24 @@
+name: Demo consistency
+
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/docs/**', 'docs/assets/demo.svg', '.github/workflows/demo.yml']
+  pull_request:
+    paths: ['scripts/docs/**', 'docs/assets/demo.svg', '.github/workflows/demo.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python3 scripts/docs/render-demo.py
+      - name: Require generated SVG to match the story
+        run: git diff --exit-code -- docs/assets/demo.svg

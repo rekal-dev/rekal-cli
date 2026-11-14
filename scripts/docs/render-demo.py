@@ -1,45 +1,47 @@
-"""Render a terminal walkthrough using synthetic project context."""
+"""Render an animated, synthetic agent handoff; no captured user data."""
+import json
+import textwrap
 from html import escape
 from pathlib import Path
 
-lines = [
-    ("# New feature: export invoices as CSV", "#a6a6b4"),
-    ('$ rekal "invoice export conventions"', "#22d3ee"),
-    ("", ""),
-    ("  Memory       exports.md", "#a79bff"),
-    ("  Stream rows. Keep large exports out of memory.", "#e8e8ec"),
-    ("  Conversation Invoice export design", "#a79bff"),
-    ("  Use UTC timestamps. Exclude internal account IDs.", "#e8e8ec"),
-    ("  ref: passage:demo-export:12-14", "#9292a3"),
-    ("", ""),
-    ("$ rekal query --ref passage:demo-export:12-14", "#22d3ee"),
-    ("", ""),
-    ("  [12] Export timestamps in UTC for reconciliation.", "#e8e8ec"),
-    ("  [13] Keep internal account IDs out of the CSV.", "#e8e8ec"),
-    ("  [14] Stream rows so large exports stay bounded.", "#e8e8ec"),
-    ("", ""),
-    ("# Build the feature with that context. Run the tests.", "#a6a6b4"),
-    ('$ git commit -m "Add invoice CSV export"', "#22d3ee"),
-    ("# Rekal checkpoints supported sessions and project notes.", "#a6a6b4"),
-]
-parts = [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="720" viewBox="0 0 1000 720" role="img" aria-labelledby="title desc">',
-    '<title id="title">New feature. Context ready.</title>',
-    '<desc id="desc">A terminal walkthrough: search existing project memory before adding invoice CSV export, read an original source, then build and commit. Synthetic content and abbreviated output.</desc>',
-    '<rect x="1" y="1" width="998" height="718" rx="18" fill="#0c0c12" stroke="#2d2d38"/>',
-    '<path d="M1 57H999" stroke="#2d2d38"/>',
-]
-for x, color in [(30, "#fb7185"), (54, "#fbbf24"), (78, "#34d399")]:
-    parts.append(f'<circle cx="{x}" cy="29" r="6" fill="{color}"/>')
+story = json.loads(Path(__file__).with_name("demo-story.json").read_text())
+parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="640" viewBox="0 0 1100 640" role="img" aria-labelledby="title desc">',
+'<title id="title">Carry the context forward.</title>',
+'<desc id="desc">Alex builds invoice CSV export with Claude Code and shares eligible context through Git. Later Sam asks Codex to Rekal that context and add date filters. Animated illustrative sessions, not a recorded run.</desc>',
+'''<style>
+.row{animation:reveal .2s both}
+.typed{animation:typing 1s steps(38,end) both}
+@keyframes reveal{from{opacity:0}to{opacity:1}}
+@keyframes typing{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@media(prefers-reduced-motion:reduce){.row,.typed{animation:none!important;opacity:1;clip-path:none}}
+</style>''',
+'<rect width="1100" height="640" rx="16" fill="#08080a"/>']
 
-def text(x, y, value, size=21, color="#e8e8ec"):
-    parts.append(f'<text x="{x}" y="{y}" fill="{color}" font-size="{size}" font-family="DejaVu Sans Mono,monospace">{escape(value)}</text>')
+def text(x, y, value, color="#e8e8ec", size=17, attrs=""):
+    parts.append(f'<text x="{x}" y="{y}" fill="{color}" font-size="{size}" font-family="DejaVu Sans Mono,monospace" {attrs}>{escape(value)}</text>')
 
-text(118, 36, "rekal / your-project", 17, "#9292a3")
-text(32, 100, "New feature. Context ready.", 26)
-for i, (line, color) in enumerate(lines):
-    if line:
-        text(32, 147 + i * 28, line, 21, color)
-text(32, 692, "Illustrative terminal output · synthetic context · already captured history", 15, "#9292a3")
+text(28, 40, "Carry the context forward.", size=25)
+text(28, 72, "Two teammates. Different agents. Shared context.", "#9292a3", 16)
+for col, person in enumerate(story):
+    x = 20 + col * 540
+    parts.append(f'<rect x="{x}" y="100" width="520" height="482" rx="12" fill="#0c0c12" stroke="#2d2d38"/>')
+    for n, color in enumerate(["#fb7185", "#fbbf24", "#34d399"]):
+        parts.append(f'<circle cx="{x+20+n*17}" cy="124" r="4" fill="{color}"/>')
+    text(x+78, 130, f'{person["name"]} / {person["agent"]}', size=16)
+    parts.append(f'<path d="M{x} 148h520" stroke="#2d2d38"/>')
+    text(x+20, 181, person["label"].upper(), "#a79bff", 14)
+    y = 218
+    for row in person["rows"]:
+        color = {"prompt":"#22d3ee", "answer":"#e8e8ec", "tool":"#a79bff", "status":"#6ee7b7"}[row["kind"]]
+        value = ("> " if row["kind"] == "prompt" else "") + row["text"]
+        parts.append(f'<g class="row" style="animation-delay:{row["at"]}s">')
+        for line_no, line in enumerate(textwrap.wrap(value, width=45)):
+            attrs = f'class="typed" style="animation-delay:{row["at"]+line_no*.75}s"' if row["kind"] == "prompt" else ""
+            text(x+20, y, line, color, 17, attrs)
+            y += 24
+        parts.append("</g>")
+        y += 20
+    assert y < 585, y
+text(28, 614, "Illustrative agent sessions · setup first · capture → merge/push → sync", "#9292a3", 14)
 parts.append("</svg>")
-Path("docs/assets/demo.svg").write_text("\n".join(parts) + "\n")
+Path("docs/assets/demo.svg").write_text("\n".join(parts)+"\n")

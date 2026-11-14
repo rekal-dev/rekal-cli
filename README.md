@@ -33,18 +33,20 @@ One binary. Local embeddings by default. No hosted memory account required.
 - **Follow the evidence.** Read captured conversation passages and attributed note
   revisions. Compare historical reasoning with current project files and tests.
 
-## New feature. Context ready.
+## Build on your team’s context
 
-Start with what your project already knows. Search past work, open the source,
-then build with the constraints in view.
+After setup, just ask your coding agent:
 
-![Terminal demo: find invoice export context, read its source, then build and commit](docs/assets/demo.svg)
+> Please Rekal the context around invoice exports, then add date filters.
 
-Rekal checkpoints supported sessions and project notes when you commit.
-The next session or agent can pick up that context.
+![Animated agent terminals: Alex builds CSV export; Sam recalls Alex’s context and adds date filters](docs/assets/demo.svg)
 
-*Synthetic context and abbreviated output; this example assumes captured history.*
-[Try the terminal demo](https://rekal.dev/#demo).
+Alex builds the feature with Claude Code. Sam extends it with Codex.
+Rekal carries the captured context through their existing Git remote.
+Your agent handles the search and source reading.
+
+*Animated illustration with synthetic content, not a recorded run.*
+[Play the interactive demo](https://rekal.dev/#demo).
 
 Session adapters support **Claude Code, Cursor, Copilot, Codex, Gemini, Kiro and
 OpenCode**. Native note discovery defaults to **Claude project memory**; other

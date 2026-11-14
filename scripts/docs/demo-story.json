@@ -1,0 +1,66 @@
+[
+  {
+    "name": "Alex",
+    "agent": "Claude Code",
+    "label": "Build the feature",
+    "rows": [
+      {
+        "at": 0,
+        "kind": "prompt",
+        "text": "Add invoice CSV export. Use UTC timestamps and keep internal account IDs private."
+      },
+      {
+        "at": 4,
+        "kind": "answer",
+        "text": "I’ll use UTC for reconciliation and stream rows to keep large exports bounded."
+      },
+      {
+        "at": 6,
+        "kind": "answer",
+        "text": "CSV export added. UTC timestamps, no internal IDs. Tests pass."
+      },
+      {
+        "at": 9,
+        "kind": "status",
+        "text": "Committed · context captured by Rekal"
+      },
+      {
+        "at": 11,
+        "kind": "status",
+        "text": "Merged + pushed · eligible context shared through Git"
+      }
+    ]
+  },
+  {
+    "name": "Sam",
+    "agent": "Codex",
+    "label": "Extend it later",
+    "rows": [
+      {
+        "at": 13,
+        "kind": "prompt",
+        "text": "Please Rekal the context around invoice exports, then add date filters."
+      },
+      {
+        "at": 17,
+        "kind": "tool",
+        "text": "Rekal · sync shared history → search → read Alex’s session"
+      },
+      {
+        "at": 19,
+        "kind": "answer",
+        "text": "Alex chose UTC for reconciliation, excluded internal IDs and streamed rows."
+      },
+      {
+        "at": 22,
+        "kind": "answer",
+        "text": "I’ll check the code and add UTC date filters, preserving those constraints."
+      },
+      {
+        "at": 25,
+        "kind": "status",
+        "text": "Date filters added · tests pass"
+      }
+    ]
+  }
+]

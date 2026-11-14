@@ -65,7 +65,7 @@ separate capabilities.
 ### From a shell
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | REKAL_VERSION=v2.0.1 bash
+curl -fsSL https://raw.githubusercontent.com/rekal-dev/rekal-cli/main/scripts/install.sh | bash
 cd your-project
 rekal init
 # Work and commit normally. The hook captures supported sessions.
@@ -78,8 +78,8 @@ inference engine ship together. No separate model download or database service.
 
 [Inspect the installer](scripts/install.sh) or download an archive and
 `checksums.txt` from [Releases](https://github.com/rekal-dev/rekal-cli/releases).
-Set `REKAL_VERSION` on the **bash process**, as above, to skip latest-version API
-lookup. Source builds require the native dependencies in the
+The installer downloads the latest release and verifies its checksum.
+Source builds require the native dependencies in the
 [development guide](docs/DEVELOPMENT.md); `go install` alone is insufficient.
 
 ### From Claude Code

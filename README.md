@@ -20,7 +20,7 @@ One binary. Local embeddings by default. No hosted memory account required.
 
 ## Get context. Then get to work.
 
-[![Alex builds invoice exports with Claude Code; Sam uses that context in Codex to add date filters](docs/assets/demo.svg)](https://rekal.dev/#demo)
+[![Illustrative conversations: Alex builds invoice exports with Claude Code; Sam uses that context in Codex to add date filters](docs/assets/demo.gif)](https://rekal.dev/#demo)
 
 Your agent finds relevant context from your team and past work, reads the
 sources and uses what matters for the job.

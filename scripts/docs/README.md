@@ -7,9 +7,13 @@ After editing the story, run from the repository root:
 
 ```sh
 python3 scripts/docs/render-demo.py
+# GIF rendering needs CairoSVG and Pillow.
+python3 scripts/docs/render-demo-gif.py
 ```
 
-Commit the story and `docs/assets/demo.svg` together. Demo consistency CI checks
+Commit the story, renderers and generated files in `docs/assets/` together.
+The README uses a looping GIF rendered from the SVG, showing one conversation
+at a time for mobile readability. Install CairoSVG and Pillow to regenerate it. Demo consistency CI checks
 that the generated SVG matches. The README image links to the interactive demo.
 
 The website checks out this repository and imports the story during deployment.

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="640" viewBox="0 0 1100 640" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="760" viewBox="0 0 1100 760" role="img" aria-labelledby="title desc">
 <title id="title">Carry the context forward.</title>
 <desc id="desc">Alex builds invoice CSV export with Claude Code and shares eligible context through Git. Later Sam asks Codex to Rekal that context and add date filters. Animated illustrative sessions, not a recorded run.</desc>
 <style>
@@ -8,10 +8,10 @@
 @keyframes typing{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 @media(prefers-reduced-motion:reduce){.row,.typed{animation:none!important;opacity:1;clip-path:none}}
 </style>
-<rect width="1100" height="640" rx="16" fill="#08080a"/>
+<rect width="1100" height="760" rx="16" fill="#08080a"/>
 <text x="28" y="40" fill="#e8e8ec" font-size="25" font-family="DejaVu Sans Mono,monospace" >Carry the context forward.</text>
 <text x="28" y="72" fill="#9292a3" font-size="16" font-family="DejaVu Sans Mono,monospace" >Two teammates. Different agents. Shared context.</text>
-<rect x="20" y="100" width="520" height="482" rx="12" fill="#0c0c12" stroke="#2d2d38"/>
+<rect x="20" y="100" width="520" height="600" rx="12" fill="#0c0c12" stroke="#2d2d38"/>
 <circle cx="40" cy="124" r="4" fill="#fb7185"/>
 <circle cx="57" cy="124" r="4" fill="#fbbf24"/>
 <circle cx="74" cy="124" r="4" fill="#34d399"/>
@@ -19,24 +19,29 @@
 <path d="M20 148h520" stroke="#2d2d38"/>
 <text x="40" y="181" fill="#a79bff" font-size="14" font-family="DejaVu Sans Mono,monospace" >BUILD THE FEATURE</text>
 <g class="row" style="animation-delay:0s">
-<text x="40" y="218" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:0.0s">&gt; Add invoice CSV export. Use UTC timestamps</text>
-<text x="40" y="242" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:0.75s">and keep internal account IDs private.</text>
+<text x="40" y="218" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >YOU</text>
+<text x="40" y="238" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:0.0s">Add invoice CSV export. Use UTC timestamps</text>
+<text x="40" y="262" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:0.75s">and keep internal account IDs private.</text>
 </g>
 <g class="row" style="animation-delay:4s">
-<text x="40" y="286" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >I’ll use UTC for reconciliation and stream</text>
-<text x="40" y="310" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >rows to keep large exports bounded.</text>
+<text x="40" y="306" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >CLAUDE CODE</text>
+<text x="40" y="326" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >I’ll use UTC for reconciliation and stream</text>
+<text x="40" y="350" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >rows to keep large exports bounded.</text>
 </g>
 <g class="row" style="animation-delay:6s">
-<text x="40" y="354" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >CSV export added. UTC timestamps, no internal</text>
-<text x="40" y="378" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >IDs. Tests pass.</text>
+<text x="40" y="394" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >CLAUDE CODE</text>
+<text x="40" y="414" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >CSV export added. UTC timestamps, no internal</text>
+<text x="40" y="438" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >IDs. Tests pass.</text>
 </g>
 <g class="row" style="animation-delay:9s">
-<text x="40" y="422" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Committed · context captured by Rekal</text>
+<text x="40" y="482" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >PROJECT UPDATE</text>
+<text x="40" y="502" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Committed · context captured by Rekal</text>
 </g>
 <g class="row" style="animation-delay:11s">
-<text x="40" y="466" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Context shared with the team through Git</text>
+<text x="40" y="546" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >PROJECT UPDATE</text>
+<text x="40" y="566" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Context shared with the team through Git</text>
 </g>
-<rect x="560" y="100" width="520" height="482" rx="12" fill="#0c0c12" stroke="#2d2d38"/>
+<rect x="560" y="100" width="520" height="600" rx="12" fill="#0c0c12" stroke="#2d2d38"/>
 <circle cx="580" cy="124" r="4" fill="#fb7185"/>
 <circle cx="597" cy="124" r="4" fill="#fbbf24"/>
 <circle cx="614" cy="124" r="4" fill="#34d399"/>
@@ -44,23 +49,28 @@
 <path d="M560 148h520" stroke="#2d2d38"/>
 <text x="580" y="181" fill="#a79bff" font-size="14" font-family="DejaVu Sans Mono,monospace" >EXTEND IT LATER</text>
 <g class="row" style="animation-delay:13s">
-<text x="580" y="218" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:13.0s">&gt; Please Rekal the context around invoice</text>
-<text x="580" y="242" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:13.75s">exports, then add date filters.</text>
+<text x="580" y="218" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >YOU</text>
+<text x="580" y="238" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:13.0s">Please Rekal the context around invoice</text>
+<text x="580" y="262" fill="#22d3ee" font-size="17" font-family="DejaVu Sans Mono,monospace" class="typed" style="animation-delay:13.75s">exports, then add date filters.</text>
 </g>
 <g class="row" style="animation-delay:17s">
-<text x="580" y="286" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >Found Alex’s export context in the team’s</text>
-<text x="580" y="310" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >shared history.</text>
+<text x="580" y="306" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >CODEX</text>
+<text x="580" y="326" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >Found Alex’s export context in the team’s</text>
+<text x="580" y="350" fill="#a79bff" font-size="17" font-family="DejaVu Sans Mono,monospace" >shared history.</text>
 </g>
 <g class="row" style="animation-delay:19s">
-<text x="580" y="354" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >Alex chose UTC for reconciliation, excluded</text>
-<text x="580" y="378" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >internal IDs and streamed rows.</text>
+<text x="580" y="394" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >CODEX</text>
+<text x="580" y="414" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >Alex chose UTC for reconciliation, excluded</text>
+<text x="580" y="438" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >internal IDs and streamed rows.</text>
 </g>
 <g class="row" style="animation-delay:22s">
-<text x="580" y="422" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >I’ll check the code and add UTC date filters,</text>
-<text x="580" y="446" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >preserving those constraints.</text>
+<text x="580" y="482" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >CODEX</text>
+<text x="580" y="502" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >I’ll check the code and add UTC date filters,</text>
+<text x="580" y="526" fill="#e8e8ec" font-size="17" font-family="DejaVu Sans Mono,monospace" >preserving those constraints.</text>
 </g>
 <g class="row" style="animation-delay:25s">
-<text x="580" y="490" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Date filters added · tests pass</text>
+<text x="580" y="570" fill="#9292a3" font-size="11" font-family="DejaVu Sans Mono,monospace" >PROJECT UPDATE</text>
+<text x="580" y="590" fill="#6ee7b7" font-size="17" font-family="DejaVu Sans Mono,monospace" >Date filters added · tests pass</text>
 </g>
-<text x="28" y="614" fill="#9292a3" font-size="14" font-family="DejaVu Sans Mono,monospace" >Ask your agent. It finds the context and does the work. · Illustrative sessions</text>
+<text x="28" y="734" fill="#9292a3" font-size="14" font-family="DejaVu Sans Mono,monospace" >Ask your agent. It finds the context and does the work. · Illustrative sessions</text>
 </svg>

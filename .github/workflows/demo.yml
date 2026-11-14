@@ -3,9 +3,9 @@ name: Demo consistency
 on:
   push:
     branches: [main]
-    paths: ['scripts/docs/**', 'docs/assets/demo.svg', '.github/workflows/demo.yml']
+    paths: ['scripts/docs/**', 'docs/assets/demo*', '.github/workflows/demo.yml']
   pull_request:
-    paths: ['scripts/docs/**', 'docs/assets/demo.svg', '.github/workflows/demo.yml']
+    paths: ['scripts/docs/**', 'docs/assets/demo*', '.github/workflows/demo.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,3 +22,11 @@ jobs:
       - run: python3 scripts/docs/render-demo.py
       - name: Require generated SVG to match the story
         run: git diff --exit-code -- docs/assets/demo.svg
+      - name: Check mobile animation generation inputs
+        run: |
+          python3 - <<'PYCODE'
+          import hashlib, json
+          from pathlib import Path
+          for path, expected in json.loads(Path('docs/assets/demo-manifest.json').read_text()).items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == expected, f'Regenerate demo GIF: {path}'
+          PYCODE

@@ -9,6 +9,7 @@ Captured with commits. Searchable locally. Shared through Git.
 One binary. Local embeddings by default. No hosted memory account required.
 
 [![Website](https://img.shields.io/badge/website-rekal.dev-0ea5e9)](https://rekal.dev)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Frekal.dev%2Fdownloads.json)](https://rekal.dev/#downloads)
 [![Release](https://img.shields.io/github/v/release/rekal-dev/rekal-cli?color=22d3ee)](https://github.com/rekal-dev/rekal-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rekal-dev/rekal-cli/ci.yml?branch=main&label=ci)](https://github.com/rekal-dev/rekal-cli/actions/workflows/ci.yml)
 [![arXiv](https://img.shields.io/badge/arXiv-2607.14390-b31b1b)](https://arxiv.org/abs/2607.14390)

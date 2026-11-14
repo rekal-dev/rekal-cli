@@ -1,0 +1,24 @@
+name: Download metrics
+on:
+  schedule:
+    - cron: '43 1 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/download-metrics.py
+      - .github/workflows/download-metrics.yml
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read release asset counters
+        run: python3 scripts/download-metrics.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: download-metrics-${{ github.run_id }}
+          path: download-metrics.json
+          retention-days: 90

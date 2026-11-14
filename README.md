@@ -125,6 +125,7 @@ continuations are separate; copy the printed command.
 <summary>Advanced retrieval and administration</summary>
 
 Use `rekal find <query> [--json]` for explicit literal conversation search.
+Use `rekal embed` to fill missing embeddings after indexing or syncing.
 
 Filters, session queries, `evidence`, SQL, index rebuilds and embedding
 administration remain available. They are not required for ordinary memory use.

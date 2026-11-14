@@ -1,26 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="790" viewBox="0 0 1000 790" role="img" aria-labelledby="title desc">
-<title id="title">Carry the context forward.</title>
-<desc id="desc">Illustrative three-step workflow: Dana captures a retry decision, Sam syncs and searches with Codex, then reads its original source. Synthetic content, abbreviated results.</desc>
-<rect width="1000" height="790" rx="20" fill="#08080a"/>
-<text x="35" y="48" fill="#e8e8ec" font-size="28" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">Carry the context forward.</text>
-<text x="35" y="81" fill="#8a8a94" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Git-backed memory for the decisions behind your code.</text>
-<rect x="25" y="110" width="950" height="189" rx="12" fill="#101015" stroke="#2d2d38"/>
-<text x="47" y="141" fill="#a79bff" font-size="17" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">01  KEEP THE DECISION</text>
-<text x="47" y="169" fill="#91919e" font-size="14" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Dana / Claude Code / yesterday</text>
-<text x="47" y="206" fill="#22d3ee" font-size="19" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">$ git commit -m &quot;Add jitter to webhook retries&quot;</text>
-<text x="47" y="240" fill="#c7c7d1" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Fixed delays synchronized failing deliveries.</text>
-<text x="47" y="267" fill="#c7c7d1" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Capture the discussion and project note at checkpoint.</text>
-<rect x="25" y="317" width="950" height="189" rx="12" fill="#101015" stroke="#2d2d38"/>
-<text x="47" y="348" fill="#a79bff" font-size="17" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">02  FIND IT AGAIN</text>
-<text x="47" y="376" fill="#91919e" font-size="14" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Sam / Codex / today</text>
-<text x="47" y="413" fill="#22d3ee" font-size="19" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">$ rekal &quot;why do webhook retries use jitter?&quot;</text>
-<text x="47" y="447" fill="#c7c7d1" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">After rekal sync: find conversation leads and matching notes.</text>
-<text x="47" y="474" fill="#c7c7d1" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Choose a source reference returned by search.</text>
-<rect x="25" y="524" width="950" height="189" rx="12" fill="#101015" stroke="#2d2d38"/>
-<text x="47" y="555" fill="#a79bff" font-size="17" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">03  READ BEFORE CHANGING</text>
-<text x="47" y="583" fill="#91919e" font-size="14" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Sam / Codex / same task</text>
-<text x="47" y="620" fill="#22d3ee" font-size="19" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">$ rekal query --ref &lt;returned-reference&gt;</text>
-<text x="47" y="654" fill="#c7c7d1" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Read why jitter was chosen and which constraints mattered.</text>
-<text x="47" y="681" fill="#c7c7d1" font-size="17" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Then check today&#x27;s implementation and tests.</text>
-<text x="35" y="755" fill="#91919e" font-size="15" font-weight="400" font-family="ui-monospace,Menlo,Consolas,monospace">Illustrative workflow / synthetic content / abbreviated results</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="720" viewBox="0 0 1000 720" role="img" aria-labelledby="title desc">
+<title id="title">New feature. Context ready.</title>
+<desc id="desc">A terminal walkthrough: search existing project memory before adding invoice CSV export, read an original source, then build and commit. Synthetic content and abbreviated output.</desc>
+<rect x="1" y="1" width="998" height="718" rx="18" fill="#0c0c12" stroke="#2d2d38"/>
+<path d="M1 57H999" stroke="#2d2d38"/>
+<circle cx="30" cy="29" r="6" fill="#fb7185"/>
+<circle cx="54" cy="29" r="6" fill="#fbbf24"/>
+<circle cx="78" cy="29" r="6" fill="#34d399"/>
+<text x="118" y="36" fill="#9292a3" font-size="17" font-family="DejaVu Sans Mono,monospace">rekal / your-project</text>
+<text x="32" y="100" fill="#e8e8ec" font-size="26" font-family="DejaVu Sans Mono,monospace">New feature. Context ready.</text>
+<text x="32" y="147" fill="#a6a6b4" font-size="21" font-family="DejaVu Sans Mono,monospace"># New feature: export invoices as CSV</text>
+<text x="32" y="175" fill="#22d3ee" font-size="21" font-family="DejaVu Sans Mono,monospace">$ rekal &quot;invoice export conventions&quot;</text>
+<text x="32" y="231" fill="#a79bff" font-size="21" font-family="DejaVu Sans Mono,monospace">  Memory       exports.md</text>
+<text x="32" y="259" fill="#e8e8ec" font-size="21" font-family="DejaVu Sans Mono,monospace">  Stream rows. Keep large exports out of memory.</text>
+<text x="32" y="287" fill="#a79bff" font-size="21" font-family="DejaVu Sans Mono,monospace">  Conversation Invoice export design</text>
+<text x="32" y="315" fill="#e8e8ec" font-size="21" font-family="DejaVu Sans Mono,monospace">  Use UTC timestamps. Exclude internal account IDs.</text>
+<text x="32" y="343" fill="#9292a3" font-size="21" font-family="DejaVu Sans Mono,monospace">  ref: passage:demo-export:12-14</text>
+<text x="32" y="399" fill="#22d3ee" font-size="21" font-family="DejaVu Sans Mono,monospace">$ rekal query --ref passage:demo-export:12-14</text>
+<text x="32" y="455" fill="#e8e8ec" font-size="21" font-family="DejaVu Sans Mono,monospace">  [12] Export timestamps in UTC for reconciliation.</text>
+<text x="32" y="483" fill="#e8e8ec" font-size="21" font-family="DejaVu Sans Mono,monospace">  [13] Keep internal account IDs out of the CSV.</text>
+<text x="32" y="511" fill="#e8e8ec" font-size="21" font-family="DejaVu Sans Mono,monospace">  [14] Stream rows so large exports stay bounded.</text>
+<text x="32" y="567" fill="#a6a6b4" font-size="21" font-family="DejaVu Sans Mono,monospace"># Build the feature with that context. Run the tests.</text>
+<text x="32" y="595" fill="#22d3ee" font-size="21" font-family="DejaVu Sans Mono,monospace">$ git commit -m &quot;Add invoice CSV export&quot;</text>
+<text x="32" y="623" fill="#a6a6b4" font-size="21" font-family="DejaVu Sans Mono,monospace"># Rekal checkpoints supported sessions and project notes.</text>
+<text x="32" y="692" fill="#9292a3" font-size="15" font-family="DejaVu Sans Mono,monospace">Illustrative terminal output · synthetic context · already captured history</text>
 </svg>

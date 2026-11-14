@@ -33,27 +33,18 @@ One binary. Local embeddings by default. No hosted memory account required.
 - **Follow the evidence.** Read captured conversation passages and attributed note
   revisions. Compare historical reasoning with current project files and tests.
 
-## A decision should survive the handoff
+## New feature. Context ready.
 
-Yesterday, Dana and Claude Code rejected fixed-delay webhook retries: they made
-failing deliveries arrive together. Today, Sam opens Codex to change the retry
-logic. The code shows jitter. Rekal helps recover **why it is there**.
+Start with what your project already knows. Search past work, open the source,
+then build with the constraints in view.
 
-![Three-step walkthrough: capture the retry decision, find it with another agent, then read its source](docs/assets/demo.svg)
+![Terminal demo: find invoice export context, read its source, then build and commit](docs/assets/demo.svg)
 
-1. **Keep the decision.** Commit normally. Rekal checkpoints supported sessions
-   and project notes; eligible records travel after merge and push.
-2. **Find it again.** Sam runs `rekal sync`, then
-   `rekal "why do webhook retries use jitter?"`. Search returns conversation
-   leads and matching notes.
-3. **Read before changing.** Copy a returned reference into
-   `rekal query --ref <returned-reference>`. Inspect the original reasoning,
-   then check the current implementation and tests.
+Rekal checkpoints supported sessions and project notes when you commit.
+The next session or agent can pick up that context.
 
-*This is an illustrative scenario with synthetic content and abbreviated results,
-not a recorded CLI run. A note does not automatically link to the exact
-conversation that produced it.* [Try the interactive walkthrough](https://rekal.dev).
-
+*Synthetic context and abbreviated output; this example assumes captured history.*
+[Try the terminal demo](https://rekal.dev/#demo).
 
 Session adapters support **Claude Code, Cursor, Copilot, Codex, Gemini, Kiro and
 OpenCode**. Native note discovery defaults to **Claude project memory**; other

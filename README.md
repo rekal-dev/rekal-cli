@@ -46,12 +46,12 @@ Supports macOS ARM64, Linux AMD64 and Linux ARM64.
 The PATH line is for Bash/Zsh; in Fish, use `fish_add_path "$HOME/.local/bin"`.
 
 Work with your agent, then commit normally to capture the context.
-Already have local sessions? Run `rekal checkpoint`. For shared team history,
-run `rekal sync`. Then ask your agent about your actual project—the example
-above shows the pattern. An empty history will have nothing to recall.
+Already have local sessions? After first  `rekal init`, your agent will br able to search context in your past conversations history across local memories and other seissions from other agents. For shared team history,
+run `rekal sync`. Then ask your agent to rekal team cotext or specific team member.
+
 
 Rekal stores context locally. Eligible project records can be shared through
-your Git remote; explicitly local notes stay local.
+your Git remote on normal commit and push vis orphaned branche with custom configurations.
 [Setup and sharing details](docs/overview.md) · [Privacy and security](SECURITY.md)
 
 ## Documentation

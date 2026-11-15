@@ -50,16 +50,6 @@ Already have local sessions? Run `rekal checkpoint`. For shared team history,
 run `rekal sync`. Then ask your agent about your actual project—the example
 above shows the pattern. An empty history will have nothing to recall.
 
-### From Claude Code
-
-```text
-/plugin marketplace add rekal-dev/rekal-cli
-/plugin install rekal@rekal-dev
-```
-
-Run `/rekal:install` once per machine and `/rekal:init` in each repository,
-then work and commit as usual.
-
 Rekal stores context locally. Eligible project records can be shared through
 your Git remote; explicitly local notes stay local.
 [Setup and sharing details](docs/overview.md) · [Privacy and security](SECURITY.md)
